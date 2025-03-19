@@ -8,5 +8,6 @@ urlpatterns = [
 
     # home page
     path('home/', views.home_page, name='home_page'),
+    path('logout/', views.logout_request, name='logout_request'),
 
 ]
