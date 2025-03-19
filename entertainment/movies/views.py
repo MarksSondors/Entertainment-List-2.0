@@ -63,5 +63,7 @@ class TMDBSearchView(APIView):
         }
 
         movies = MoviesService().search_movies(**params)
+        sorted_movies = sorted(movies['results'], key=lambda x: x['popularity'], reverse=True)
+        movies['results'] = sorted_movies
         return Response(movies, status=status.HTTP_200_OK)
 
