@@ -13,7 +13,8 @@ class CustomUser(AbstractUser):
 
 class Genre(models.Model):
     name = models.CharField(max_length=100)
-    tmdb_id = models.IntegerField(unique=True)
+    tmdb_id = models.IntegerField(blank=True, null=True)
+
 
     def __str__(self):
         return self.name
