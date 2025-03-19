@@ -25,6 +25,13 @@ class Genre(models.Model):
     def __str__(self):
         return self.name
 
+class Country(models.Model):
+    name = models.CharField(max_length=100)
+    iso_3166_1 = models.CharField(max_length=2)
+
+    def __str__(self):
+        return self.name
+
 class Person(models.Model):
     name = models.CharField(max_length=100)
     bio = models.TextField(blank=True, null=True)
@@ -35,6 +42,9 @@ class Person(models.Model):
     is_director = models.BooleanField(default=False)
     is_producer = models.BooleanField(default=False)
     is_writer = models.BooleanField(default=False)
+
+    imdb_id = models.CharField(max_length=20, blank=True, null=True)
+    tmdb_id = models.IntegerField(blank=True, null=True)
 
     def __str__(self):
         return self.name
