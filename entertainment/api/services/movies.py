@@ -23,7 +23,6 @@ class MoviesService(BaseService):
             'region': region,
             'year': year
         }
-        # Remove None values from params
         params = {key: value for key, value in params.items() if value is not None}
         return self._get('search/movie', params=params)
     
