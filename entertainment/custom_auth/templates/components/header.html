@@ -1,7 +1,11 @@
-{% load static %}
+{% load heroicons %}
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
+        <!-- Sidebar toggle button -->
+        <button class="btn btn-dark me-3" id="sidebarToggle">
+            {% heroicon_outline 'bars-3' %}
+        </button>
         <a class="navbar-brand" href="#">Entertainment List</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>

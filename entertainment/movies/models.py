@@ -22,10 +22,10 @@ class Movie(models.Model):
     # foreign keys
     genres = models.ManyToManyField(Genre)
     countries = models.ManyToManyField(Country)
-    directors = models.ManyToManyField(Person, related_name='directors')
-    writers = models.ManyToManyField(Person, related_name='writers')
-    producers = models.ManyToManyField(Person, related_name='producers')
-    cast = models.ManyToManyField(Person, related_name='cast')
+    directors = models.ManyToManyField(Person, related_name='directors', blank=True, null=True)
+    writers = models.ManyToManyField(Person, related_name='writers', blank=True, null=True)
+    producers = models.ManyToManyField(Person, related_name='producers', blank=True, null=True)
+    cast = models.ManyToManyField(Person, related_name='cast', blank=True, null=True)
     keywords = models.ManyToManyField(Keyword)
 
     def __str__(self):
