@@ -1,5 +1,5 @@
 # tmdb
-from entertainment.api.base import BaseService
+from api.base import BaseService
 from decouple import config
 
 
