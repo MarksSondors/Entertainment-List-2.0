@@ -1,5 +1,5 @@
 from django.db import models
-from custom_auth.models import Genre, Country, Person
+from custom_auth.models import Genre, Country, Person, Keyword
 # Create your models here.
 
 class Movie(models.Model):
@@ -24,6 +24,7 @@ class Movie(models.Model):
     writers = models.ManyToManyField(Person, related_name='writers')
     producers = models.ManyToManyField(Person, related_name='producers')
     cast = models.ManyToManyField(Person, related_name='cast')
+    keywords = models.ManyToManyField(Keyword)
 
     def __str__(self):
         return self.title
