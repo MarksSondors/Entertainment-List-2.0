@@ -32,6 +32,13 @@ class Country(models.Model):
     def __str__(self):
         return self.name
 
+class Keyword(models.Model):
+    name = models.CharField(max_length=100)
+    tmdb_id = models.IntegerField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
 class Person(models.Model):
     name = models.CharField(max_length=100)
     bio = models.TextField(blank=True, null=True)
