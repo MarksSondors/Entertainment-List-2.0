@@ -1,9 +1,10 @@
 from django.urls import path
 from . import views
+from .views import TMDBSearchView
 
 urlpatterns = [
-    path('add_movie/', views.create_movie_page, name='add_movie'),
+    path('add', views.create_movie_page, name='add_movie'),
 
-    # requests
-    path('search/', views.tmdb_search, name='tmdb_search'),
+    # API
+    path('search/', TMDBSearchView.as_view(), name='tmdb_search'),
 ]

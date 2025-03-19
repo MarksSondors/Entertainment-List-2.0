@@ -17,6 +17,8 @@ class Movie(models.Model):
     rating = models.FloatField()
     trailer = models.URLField(blank=True, null=True)
 
+    is_anime = models.BooleanField(default=False)
+
     # foreign keys
     genres = models.ManyToManyField(Genre)
     countries = models.ManyToManyField(Country)

@@ -32,5 +32,8 @@ class MoviesService(BaseService):
     def get_movie_credits(self, movie_id):
         return self._get(f'movie/{movie_id}/credits')
     
-    def get_images(self, movie_id):
+    def get_similar_movies(self, movie_id):
+        return self._get(f'movie/{movie_id}/similar')
+    
+    def get_movie_images(self, movie_id):
         return self._get(f'movie/{movie_id}/images')
