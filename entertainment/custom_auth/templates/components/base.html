@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Entertainment List{% endblock %}</title>
+    {% load django_bootstrap5 %}
+    {% load static %}
+    {% bootstrap_css %}
+    {% bootstrap_javascript %}
+</head>
+<body>
+    <!-- Navbar -->
+    {% include 'components/navbar.html' %}
+
+    <div class="container">
+        <div class="row">
+            <!-- Sidebar -->
+            <aside class="col-md-3">
+                {% include 'components/sidebar.html' %}
+            </aside>
+
+            <!-- Main Content -->
+            <main class="col-md-9">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    {% include 'components/footer.html' %}
+</body>
+</html>
