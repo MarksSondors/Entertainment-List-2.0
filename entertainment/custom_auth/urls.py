@@ -7,6 +7,6 @@ urlpatterns = [
     path('login/', views.login_request, name='login_request'),
 
     # home page
-    path('home/', views.home_page, name='home'),
+    path('home/', views.home_page, name='home_page'),
 
 ]
