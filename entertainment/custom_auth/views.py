@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout  # Import the logout function
 # Create your views here.
+# import services
+from api.services.movies import MoviesService
 
 def login_page(request):
     if request.user.is_authenticated:
@@ -26,8 +28,14 @@ def logout_request(request):
 
 def home_page(request):
     if request.user.is_authenticated:
+        popular_movies = MoviesService().get_popular_movies()
+        # edit down the data to only include the first 5 movies and add url to the image
+        popular_movies = sorted(popular_movies['results'], key=lambda x: x['popularity'], reverse=True)[:5]
+        for movie in popular_movies:
+            movie['poster_path'] = f"https://image.tmdb.org/t/p/w500{movie['poster_path']}"
         context = {
-            'user': request.user
+            'user': request.user,
+            'popular_movies': popular_movies
         }
         return render(request, 'home_page.html', context)
     else:

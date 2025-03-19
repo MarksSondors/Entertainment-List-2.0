@@ -11,16 +11,27 @@ class MoviesService(BaseService):
         )
 
     def get_popular_movies(self):
-        return self._get('/movie/popular', use_bearer=True)
+        return self._get('movie/popular')
     
-    def search_movies(self, query):
-        return self._get('/search/movie', params={'query': query}, use_bearer=True)
+    def search_movies(self, query, include_adult=False, language='en-US', page=1, primary_release_year=None, region='US', year=None):
+        params = {
+            'query': query,
+            'include_adult': include_adult,
+            'language': language,
+            'page': page,
+            'primary_release_year': primary_release_year,
+            'region': region,
+            'year': year
+        }
+        # Remove None values from params
+        params = {key: value for key, value in params.items() if value is not None}
+        return self._get('search/movie', params=params)
     
     def get_movie_details(self, movie_id):
-        return self._get(f'/movie/{movie_id}', use_bearer=True)
+        return self._get(f'movie/{movie_id}')
     
     def get_movie_credits(self, movie_id):
-        return self._get(f'/movie/{movie_id}/credits', use_bearer=True)
+        return self._get(f'movie/{movie_id}/credits')
     
     def get_images(self, movie_id):
-        return self._get(f'/movie/{movie_id}/images', use_bearer=True)
+        return self._get(f'movie/{movie_id}/images')
