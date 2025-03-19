@@ -3,3 +3,5 @@ python-decouple==3.8
 Pillow==11.1.0
 django-bootstrap5==25.1
 requests==2.32.3
+djangorestframework==3.15.2
+drf-spectacular==0.28.0

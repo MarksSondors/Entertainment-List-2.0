@@ -40,6 +40,9 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'django_bootstrap5',
+    'rest_framework',
+    'drf_spectacular',
+
 
     # Custom apps
     'custom_auth',  # user info and tables which are not unique to other apps
@@ -49,6 +52,17 @@ INSTALLED_APPS = [
     'music',
     'games',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Enterainment API',
+    'DESCRIPTION': 'API for all things entertainment',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
