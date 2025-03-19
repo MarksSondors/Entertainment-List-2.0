@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.conf import settings
 # Create your models here.
 
 
@@ -7,6 +8,11 @@ class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='profile_pictures/', blank=True, null=True)
+
+    def get_profile_picture(self):
+        if self.profile_picture:
+            return self.profile_picture.url
+        return 'https://www.gravatar.com/avatar/'
 
     def __str__(self):
         return self.username
@@ -24,7 +30,7 @@ class Person(models.Model):
     bio = models.TextField(blank=True, null=True)
     date_of_birth = models.DateField()
     date_of_death = models.DateField(blank=True, null=True)
-    profile_picture = models.ImageField(upload_to='profile_pictures/', blank=True, null=True)
+    profile_picture = models.URLField(blank=True, null=True)
     is_actor = models.BooleanField(default=False)
     is_director = models.BooleanField(default=False)
     is_producer = models.BooleanField(default=False)
