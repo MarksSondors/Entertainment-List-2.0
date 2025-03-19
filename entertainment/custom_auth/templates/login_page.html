@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    {% load django_bootstrap5 %}
+    {% load static %}
+    {% bootstrap_css %}
+    {% bootstrap_javascript %}
+</head>
+<body>
+    <div class="container d-flex justify-content-end align-items-center vh-100">
+        <div class="card shadow-sm p-4" style="width: 100%; max-width: 400px; background-color: rgba(255, 255, 255, 0.5); border: 1px solid #ccc;">
+            <h1 class="text-center mb-4">Login</h1>
+            <form method="post" action="{% url 'login_page' %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" id="username" name="username" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" id="password" name="password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Login</button>
+            </form>
+        </div>
+    </div>
+</body>
+<style>
+    body {
+        background-image: url('/static/images/background-auth.gif');
+        background-size: cover;
+        height: 100vh;
+    }
+</style>
+</html>

@@ -1,2 +1,4 @@
-django>=5.1.7
-python-decouple>=3.8
+django==5.1.7
+python-decouple==3.8
+Pillow==11.1.0
+django-bootstrap5==25.1
