@@ -16,12 +16,12 @@
 
         <div class="row">
             <!-- Sidebar Container -->
-            <div id="sidebar-container" class="col-md-2">
+            <div id="sidebar-container" class="col-md-1">
                 {% include 'components/sidebar.html' %}
             </div>
 
             <!-- Main Content -->
-            <div id="main-container" class="col-md-10">
+            <div id="main-container" class="col-md-11">
                 {% block content %}{% endblock %}
             </div>
         </div>
@@ -40,11 +40,11 @@
                   sidebarContainer.classList.toggle("d-none");
                   // Adjust main content width when sidebar is hidden/shown
                   if (sidebarContainer.classList.contains("d-none")) {
-                      mainContainer.classList.remove("col-md-10");
+                      mainContainer.classList.remove("col-md-11");
                       mainContainer.classList.add("col-md-12");
                   } else {
                       mainContainer.classList.remove("col-md-12");
-                      mainContainer.classList.add("col-md-10");
+                      mainContainer.classList.add("col-md-11");
                   }
               });
           }
