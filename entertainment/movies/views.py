@@ -11,6 +11,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 from .models import Movie
 from .models import Country, Genre, Person, Keyword
 from .serializers import MovieSerializer
+from .parsers import create_movie
 # Create your views here.
 
 def create_movie_page(request):
@@ -87,70 +88,19 @@ class MovieViewSet(viewsets.ViewSet):
         movie_id = request.data.get('id')
         if not movie_id:
             return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Fetch movie details from TMDB API using the provided ID
-        movie_details = MoviesService().get_movie_details(movie_id)
-        if not movie_details:
-            return Response({"error": "Movie not found in TMDB"}, status=status.HTTP_404_NOT_FOUND)
-
-        # Extract poster and backdrop URLs
-        poster_url = request.data.get('poster')
-        backdrop_url = request.data.get('backdrop')
-
-        # Create or get related countries, genres, and people
-        countries = movie_details.get('production_countries', [])
-        genres = movie_details.get('genres', [])
-        people = MoviesService().get_movie_credits(movie_id).get('cast', [])[:5]
-        print(genres)
-
-        country_instances = []
-        for country in countries:
-            country_instance, _ = Country.objects.get_or_create(
-            iso_3166_1=country.get('iso_3166_1'),
-            defaults={'name': country.get('name')}
-            )
-            country_instances.append(country_instance)
-
-        genre_instances = []
-        for genre in genres:
-            genre_instance, _ = Genre.objects.get_or_create(
-                tmdb_id=genre.get('id'),
-                defaults={'name': genre.get('name')}
-            )
-            genre_instances.append(genre_instance)
         
-        keywords = MoviesService().get_movie_keywords(movie_id).get('keywords', [])
-        keyword_instances = []
-        for keyword in keywords:
-            keyword_instance, _ = Keyword.objects.get_or_create(
-                tmdb_id=keyword.get('id'),
-                defaults={'name': keyword.get('name')}
-            )
-            keyword_instances.append(keyword_instance)
+        if Movie.objects.filter(tmdb_id=movie_id).exists():
+            return Response({"error": "Movie already exists"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        movie_poster = request.data.get('poster')
+        movie_backdrop = request.data.get('backdrop')
 
-        # Create a new movie instance with the fetched details
-        movie_data = {
-            'title': movie_details.get('title'),
-            'original_title': movie_details.get('original_title'),
-            'poster': poster_url,
-            'backdrops': {'backdrop': backdrop_url},
-            'release_date': movie_details.get('release_date'),
-            'tmdb_id': movie_details.get('id'),
-            'runtime': movie_details.get('runtime'),
-            'plot': movie_details.get('overview'),
-            'rating': movie_details.get('vote_average'),
-            'trailer': movie_details.get('videos', {}).get('results', [{}])[0].get('key') if movie_details.get('videos', {}).get('results') else None,
-            'genres': [genre.pk for genre in genre_instances],
-            'countries': [country.pk for country in country_instances],
-            'keywords': [keyword.pk for keyword in keyword_instances]
-        }
-        serializer = MovieSerializer(data=movie_data)
-        if serializer.is_valid():
-            movie = serializer.save()
-            movie.countries.set(country_instances)
-            movie.genres.set(genre_instances)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        movie = create_movie(movie_id, movie_poster, movie_backdrop)
+        if not movie:
+            return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+            
+        return Response(MovieSerializer(movie).data, status=status.HTTP_201_CREATED)
     
     @extend_schema(
         summary="Get Movie",

@@ -42,16 +42,17 @@ class Keyword(models.Model):
 class Person(models.Model):
     name = models.CharField(max_length=100)
     bio = models.TextField(blank=True, null=True)
-    date_of_birth = models.DateField()
+    date_of_birth = models.DateField(blank=True, null=True)
     date_of_death = models.DateField(blank=True, null=True)
     profile_picture = models.URLField(blank=True, null=True)
     is_actor = models.BooleanField(default=False)
     is_director = models.BooleanField(default=False)
     is_producer = models.BooleanField(default=False)
     is_writer = models.BooleanField(default=False)
+    is_composer = models.BooleanField(default=False)
 
     imdb_id = models.CharField(max_length=20, blank=True, null=True)
-    tmdb_id = models.IntegerField(blank=True, null=True)
+    tmdb_id = models.IntegerField(unique=True, blank=True, null=True)
 
     def __str__(self):
         return self.name
