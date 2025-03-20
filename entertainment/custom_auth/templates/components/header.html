@@ -1,30 +1,26 @@
+<!-- filepath: entertainment/custom_auth/templates/components/header.html -->
 {% load heroicons %}
-
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-        <!-- Sidebar toggle button -->
-        <button class="btn btn-dark me-3" id="sidebarToggle">
-            {% heroicon_outline 'bars-3' %}
-        </button>
-        <a class="navbar-brand" href="#">Entertainment List</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <img src="{{ user.get_profile_picture }}" alt="" width="32" height="32" class="rounded-circle me-2">
-                        {{ user.username }}
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                        <li><a class="dropdown-item" href="#">Profile</a></li>
-                        <li><a class="dropdown-item" href="#">Settings</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{% url 'logout_request' %}">Logout</a></li>
-                    </ul>
-                </li>
+{% load static %}
+<nav class="navbar navbar-expand-md navbar-dark bg-dark">
+    <a class="navbar-brand p-2 d-flex align-items-center" href="#">
+        <img src="{% static 'images/logo.png' %}" alt="Logo" width="32" height="32" class="me-2">
+        Entertainment List
+    </a>
+    <button id="sidebarToggle" class="btn btn-dark" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle sidebar">
+      {% heroicon_outline 'bars-3' %}
+    </button>
+    <ul class="navbar-nav ms-auto">
+        <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <img src="{{ user.get_profile_picture }}" alt="" width="32" height="32" class="rounded-circle me-2">
+                {{ user.username }}
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                <li><a class="dropdown-item" href="#">Profile</a></li>
+                <li><a class="dropdown-item" href="#">Settings</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="{% url 'logout_request' %}">Logout</a></li>
             </ul>
-        </div>
-    </div>
+        </li>
+    </ul>
 </nav>
