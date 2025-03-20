@@ -7,10 +7,10 @@ class Movie(models.Model):
     original_title = models.CharField(max_length=100)
 
     poster = models.URLField()
-    backdrops = models.JSONField()
+    backdrop = models.URLField()
 
     release_date = models.DateField()
-    tmdb_id = models.IntegerField()
+    tmdb_id = models.IntegerField(unique=True)
 
     runtime = models.IntegerField()
     plot = models.TextField()
@@ -22,10 +22,11 @@ class Movie(models.Model):
     # foreign keys
     genres = models.ManyToManyField(Genre)
     countries = models.ManyToManyField(Country)
-    directors = models.ManyToManyField(Person, related_name='directors', blank=True, null=True)
-    writers = models.ManyToManyField(Person, related_name='writers', blank=True, null=True)
-    producers = models.ManyToManyField(Person, related_name='producers', blank=True, null=True)
-    cast = models.ManyToManyField(Person, related_name='cast', blank=True, null=True)
+    directors = models.ManyToManyField(Person, related_name='directors', blank=True)
+    writers = models.ManyToManyField(Person, related_name='writers', blank=True)
+    producers = models.ManyToManyField(Person, related_name='producers', blank=True)
+    cast = models.ManyToManyField(Person, related_name='cast', blank=True)
+    composer = models.ManyToManyField(Person, related_name='sound', blank=True)
     keywords = models.ManyToManyField(Keyword)
 
     def __str__(self):

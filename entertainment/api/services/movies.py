@@ -40,3 +40,6 @@ class MoviesService(BaseService):
     
     def get_movie_images(self, movie_id):
         return self._get(f'movie/{movie_id}/images')
+    
+    def get_person_details(self, person_id):
+        return self._get(f'person/{person_id}')
