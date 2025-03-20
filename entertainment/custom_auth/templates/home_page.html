@@ -1,66 +1,13 @@
 {% extends "components/base.html" %}
+{% load static %}
+
 {% block content %}
-    <header class="bg-primary text-white text-center py-5">
-        <div class="container">
-            <h1>Welcome to Entertainment List</h1>
-            <p class="lead">Your one-stop solution to manage your favorite movies, shows, and more!</p>
-            <a href="#" class="btn btn-light btn-lg">Get Started</a>
-        </div>
-    </header>
-
-    <section class="py-5">
-        <div class="container">
-            <div class="row text-center">
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Movies</h5>
-                            <p class="card-text">Track and organize your favorite movies.</p>
-                            <a href="#" class="btn btn-primary">Explore</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">TV Shows</h5>
-                            <p class="card-text">Keep up with your favorite TV shows.</p>
-                            <a href="#" class="btn btn-primary">Discover</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Books</h5>
-                            <p class="card-text">Manage your reading list effortlessly.</p>
-                            <a href="#" class="btn btn-primary">Browse</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="py-5 bg-light">
-        <div class="container">
-            <h2 class="text-center mb-4">Popular Movies</h2>
-            <div class="row">
-                {% for movie in popular_movies %}
-                    <div class="col-md-3 mb-4">
-                        <div class="card">
-                            <img src="{{ movie.poster_path }}" class="card-img-top" alt="{{ movie.title }}">
-                            <div class="card-body">
-                                <h5 class="card-title">{{ movie.title }}</h5>
-                                <p class="card-text">{{ movie.overview|default:"No description available." }}</p>
-                                <p class="card-text"><small class="text-muted">Release Date: {{ movie.release_date }}</small></p>
-                                <p class="card-text"><small class="text-muted">Rating: {{ movie.vote_average }}</small></p>
-                            </div>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
-    </section>
-
+    <hr width="80%" size="1">
+    <img src="{% static 'images/frontend-logo.png' %}" alt="Entertainment List Logo" style="display: block; margin-left: auto; margin-right: auto; width: 25%;" />
+    <hr width="80%" size="1">
+    <h1 class="pt-5" style="color: #5e9ca0; text-align: center;"><span style="background-color: #ff00ff; color: #ffffff;">Welcome to <span style="color: #0000ff;">Entertainment</span> List!</span></h1>    <div style="text-align: center;">
+    <hr width="80%" size="1">
+    <img src="https://www.heavensgate.com/img/redalrt3.gif" alt="Alert Image" />
+    <hr width="80%" size="1">
+    <p style="text-align: center; color: #00ffff; background-color: #000000;">Whether the latest cinematic universe has a "definitive ranking" or not is irrelevant from our perspective. However, its evolution is joyously significant to us at Entertainment List. The joy is that our dedicated platform has made it clear to us that this moment is the "marker" we've been waiting for—the time to fully immerse ourselves in managing our favorite movies, shows, and more, all in one place. Our years of fragmented watchlists and scattered streaming services are finally coming to a conclusion—"graduation" into seamless entertainment organization. We are happily prepared to embrace this new era and go forward with Entertainment List's crew!<img src="https://html-online.com/editorfiles/tiny/plugins/emoticons/img/smiley-cool.gif" alt="cool" /><img src="https://html-online.com/editorfiles/tiny/plugins/emoticons/img/smiley-embarassed.gif" alt="embarassed" /><img src="https://html-online.com/editorfiles/tiny/plugins/emoticons/img/smiley-yell.gif" alt="yell" /></p>
 {% endblock %}

@@ -1,41 +1,19 @@
-<div id="sidebar" class="bg-dark text-white">
-    <ul class="list-unstyled p-3">
-        <li><a href="#" class="text-white text-decoration-none">Home</a></li>
-        <li><a href="#" class="text-white text-decoration-none">Movies</a></li>
-        <li><a href="#" class="text-white text-decoration-none">TV Shows</a></li>
-        <li><a href="#" class="text-white text-decoration-none">Music</a></li>
-        <li><a href="#" class="text-white text-decoration-none">Games</a></li>
-    </ul>
+<div id="sidebar" class="collapse show px-sm-2 px-0 bg-dark">
+    <div class="d-flex flex-column align-items-center align-items-sm-start px-3 pt-2 text-white min-vh-100">
+        <ul class="list-unstyled ps-0">
+            <li class="mb-1">
+                <button class="btn btn-toggle rounded text-white" data-bs-toggle="collapse" data-bs-target="#collection-collapse">
+                    MY COLLECTION
+                </button>
+                <div class="collapse show" id="collection-collapse">
+                    <ul class="btn-toggle-nav list-unstyled pb-1 dropdown-nav">
+                        <li><a href="#" class="nav-link rounded">My Reviews</a></li>
+                        <li><a href="#" class="nav-link rounded">My Movies</a></li>
+                        <li><a href="#" class="nav-link rounded">My TV Shows</a></li>
+                        <li><a href="#" class="nav-link rounded">My Anime</a></li>
+                    </ul>
+                </div>
+            </li>
+        </ul>
+    </div>
 </div>
-<style>
-#sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: 250px;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-    z-index: 1040;
-}
-
-#sidebar.active {
-    transform: translateX(0);
-}
-
-body.sidebar-active {
-    padding-left: 250px;
-    transition: padding-left 0.3s ease;
-}
-</style>
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    const sidebar = document.getElementById("sidebar");
-    const sidebarToggle = document.getElementById("sidebarToggle");
-
-    sidebarToggle.addEventListener("click", function () {
-        sidebar.classList.toggle("active");
-        document.body.classList.toggle("sidebar-active");
-    });
-});
-</script>
