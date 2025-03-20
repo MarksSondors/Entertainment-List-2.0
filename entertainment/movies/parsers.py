@@ -95,7 +95,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None):
             person_instance.is_director = person_instance.is_director or True
             person_instance.save()
             directors.append(person_instance)
-        elif person.get('department') == 'Writing' and (person.get('job') == 'Original Story' or person.get('job') == 'Screenplay'):
+        elif person.get('department') == 'Writing' and (person.get('job') == 'Original Story' or person.get('job') == 'Screenplay' or person.get('job') == 'Writer' or person.get('job') == 'Story'):
             person_details = MoviesService().get_person_details(person.get('id'))
             person_instance, created = Person.objects.get_or_create(
                 tmdb_id=person_details.get('id'),
