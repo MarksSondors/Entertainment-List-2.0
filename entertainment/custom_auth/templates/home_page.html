@@ -80,26 +80,57 @@
             </div>
         </div>
     </div>
-        <div class="col window" style="width: 30%;">
+        <div class="row" style="display: flex; justify-content: space-between; width: 100%; margin: auto;">
+            <div class="col window" style="width: 45%;">
             <div class="title-bar">
                 <div class="title-bar-text">cmd.exe</div>
                 <div class="title-bar-controls">
-                    <button aria-label="Minimize"></button>
-                    <button aria-label="Maximize"></button>
-                    <button aria-label="Close"></button>
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
                 </div>
             </div>
             <div class="window-body" style="background-color: black; color: lime; font-family: monospace; padding: 10px;">
                 <p>Microsoft&#10094;R&#10095; Windows DOS 
                 &#10094;C&#10095; Copyright Microsoft Corp 1990-2001.
-                <br>C:&#92;WINDOWS&#92;SYSTEM32> python get_reviews.py </p>
-                <div style="overflow-y: auto; max-height: 150px; padding: 5px; border: 1px solid lime;">
-                    <p>Recent Reviews:</p>
-                    <p>> john_doe: "Amazing movie, a must-watch!" <br> Movie: Inception <br> Rating: 5/5 <br> Created At: 2023-10-01</p>
-                    <p>> jane_smith: "Not my cup of tea, but well-made." <br> Movie: Titanic <br> Rating: 3/5 <br> Created At: 2023-10-02</p>
-                    <p>> movie_buff99: "A cinematic masterpiece, 10/10!" <br> Movie: The Godfather <br> Rating: 5/5 <br> Created At: 2023-10-03</p>
-                    <p>> casual_viewer: "It was okay, nothing special." <br> Movie: Avatar <br> Rating: 2/5 <br> Created At: 2023-10-04</p>
-                    <p>> critic101: "Overhyped, but still enjoyable." <br> Movie: The Dark Knight <br> Rating: 4/5 <br> Created At: 2023-10-05</p>
+                <br>C:&#92;WINDOWS&#92;SYSTEM32> get_reviews.exe </p>
+                <div style="overflow-y: auto; padding: 5px; border: 1px solid lime;">
+                <p>Recent Reviews:</p>
+                <p>> john_doe: "Amazing movie, a must-watch!" <br> Movie: Inception <br> Rating: 5/5 <br> Created At: 2023-10-01</p>
+                <p>> jane_smith: "Not my cup of tea, but well-made." <br> Movie: Titanic <br> Rating: 3/5 <br> Created At: 2023-10-02</p>
+                <p>> movie_buff99: "A cinematic masterpiece, 10/10!" <br> Movie: The Godfather <br> Rating: 5/5 <br> Created At: 2023-10-03</p>
+                <p>> casual_viewer: "It was okay, nothing special." <br> Movie: Avatar <br> Rating: 2/5 <br> Created At: 2023-10-04</p>
+                <p>> critic101: "Overhyped, but still enjoyable." <br> Movie: The Dark Knight <br> Rating: 4/5 <br> Created At: 2023-10-05</p>
                 </div>
+            </div>
+            </div>
+            <div class="col window" style="width: 45%;">
+            <div class="title-bar">
+                <div class="title-bar-text">Popular Movies</div>
+                <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="window-body">
+                <fieldset>
+                <legend>Top 4 Popular Movies</legend>
+                <ul class="tree-view">
+                    {% for movie in popular_movies %}
+                    <li>
+                        <a href="#">
+                        <img src="{{ movie.poster_path }}" alt="{{ movie.title }}" style="width: 50px; height: auto; margin-right: 10px;">
+                        {{ movie.title }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                </fieldset>
+            </div>
+            <div class="status-bar">
+                <div class="status-bar-field">Ready</div>
+            </div>
+            </div>
         </div>
 {% endblock %}
