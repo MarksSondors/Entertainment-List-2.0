@@ -43,6 +43,20 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'heroicons',
+    'wagtail.contrib.forms',
+    'wagtail.contrib.redirects',
+    'wagtail.embeds',
+    'wagtail.sites',
+    'wagtail.users',
+    'wagtail.snippets',
+    'wagtail.documents',
+    'wagtail.images',
+    'wagtail.search',
+    'wagtail.admin',
+    'wagtail',
+
+    'modelcluster',
+    'taggit',
 
 
     # Custom apps
@@ -73,7 +87,19 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    # wagtail
+    'wagtail.contrib.redirects.middleware.RedirectMiddleware',
 ]
+
+
+# wagtail settings
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10_000
+WAGTAIL_SITE_NAME = 'Entertainment List'
+WAGTAILADMIN_BASE_URL = 'localhost:8000/admin'
+WAGTAILDOCS_EXTENSIONS = ['csv', 'docx', 'key', 'odt', 'pdf', 'pptx', 'rtf', 'txt', 'xlsx', 'zip']
+
+
 
 ROOT_URLCONF = 'entertainment.urls'
 

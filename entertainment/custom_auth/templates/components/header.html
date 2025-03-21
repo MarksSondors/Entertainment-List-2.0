@@ -1,26 +1,29 @@
 <!-- filepath: entertainment/custom_auth/templates/components/header.html -->
 {% load heroicons %}
 {% load static %}
-<nav class="navbar navbar-expand-md navbar-dark bg-dark">
-    <a class="navbar-brand p-2 d-flex align-items-center" href="#">
-        <img src="{% static 'images/logo.png' %}" alt="Logo" width="32" height="32" class="me-2">
-        Entertainment List
+<nav class="navbar navbar-expand-md navbar-dark title-bar" style="background-color: #c0c0c0; border: 2px outset #ffffff; padding: 4px;">
+    <a class="navbar-brand p-2 d-flex align-items-center" href="#" style="color: black; text-decoration: none;">
+        <img src="{% static 'images/logo.png' %}" alt="Logo" width="32" height="32" class="me-2" />
+        <span style="font-size: 18px; color: white;">Entertainment List</span>
     </a>
-    <button id="sidebarToggle" class="btn btn-dark" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle sidebar">
-      {% heroicon_outline 'bars-3' %}
+    <button id="sidebarToggle" class="maximize" aria-controls="sidebar" aria-expanded="false" aria-label="Maximize" style="background-color: #e0e0e0; border: 2px outset #ffffff; padding: 2px 8px; font-size: 12px; cursor: pointer;">
+        Sidebar
     </button>
-    <ul class="navbar-nav ms-auto">
-        <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                <img src="{{ user.get_profile_picture }}" alt="" width="32" height="32" class="rounded-circle me-2">
-                {{ user.username }}
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                <li><a class="dropdown-item" href="#">Profile</a></li>
-                <li><a class="dropdown-item" href="#">Settings</a></li>
-                <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="{% url 'logout_request' %}">Logout</a></li>
-            </ul>
+    <ul class="navbar-nav ms-auto" style="list-style: none; margin: 0; padding: 4px; display: flex; align-items: center;">
+        <li style="margin-left: 10px;">
+            <select class="" aria-label="User menu" style="background-color: #ffffff; border: 2px inset #c0c0c0; font-size: 14px; color: #000000; width: 200px; height: 30px;">
+                <option selected style="color: #000000;">{{ user.username }}</option>
+                <option value="profile" style="color: #000000;">Profile</option>
+                <option value="settings" style="color: #000000;">Settings</option>
+                <option value="logout" style="color: #000000;">Logout</option>
+            </select>
         </li>
     </ul>
+    <script>
+        document.querySelector('select[aria-label="User menu"]').addEventListener('change', function() {
+            if (this.value === 'logout') {
+                window.location.href = "{% url 'logout_request' %}";
+            }
+        });
+    </script>
 </nav>

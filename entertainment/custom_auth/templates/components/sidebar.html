@@ -1,19 +1,27 @@
-<div id="sidebar" class="collapse show px-sm-2 px-0 bg-dark">
-    <div class="d-flex flex-column align-items-center align-items-sm-start px-3 pt-2 text-white min-vh-100">
-        <ul class="list-unstyled ps-0">
-            <li class="mb-1">
-                <button class="btn btn-toggle rounded text-white" data-bs-toggle="collapse" data-bs-target="#collection-collapse">
-                    MY COLLECTION
-                </button>
-                <div class="collapse show" id="collection-collapse">
-                    <ul class="btn-toggle-nav list-unstyled pb-1 dropdown-nav">
-                        <li><a href="#" class="nav-link rounded">My Reviews</a></li>
-                        <li><a href="#" class="nav-link rounded">My Movies</a></li>
-                        <li><a href="#" class="nav-link rounded">My TV Shows</a></li>
-                        <li><a href="#" class="nav-link rounded">My Anime</a></li>
-                    </ul>
-                </div>
-            </li>
+<div id="sidebar" class="px-3 pt-2 min-vh-100" style="background-color: #008080; border: 2px outset #ffffff; font-family: 'MS Sans Serif', sans-serif;">
+    <div class="">
+        <div class="title-bar" style="background-color: #dfdfdf; width: 100%;">
+            <div class="title-bar-text">MY COLLECTION</div>
+            <div class="title-bar-controls">
+            <button aria-label="Minimize" class="minimize" onclick="toggleVisibility('collection-collapse')"></button>
+            <button aria-label="Close" class="close"></button>
+            </div>
+        </div>
+        <ul id="collection-collapse" style="display: block; background-color: #dfdfdf; width: 100%;">
+            <li><a href="#">My Reviews</a></li>
+            <li><a href="#">My Movies</a></li>
+            <li><a href="#">My TV Shows</a></li>
+            <li><a href="#">My Anime</a></li>
         </ul>
+        <script>
+            function toggleVisibility(id) {
+                const element = document.getElementById(id);
+                if (element.style.display === "none") {
+                    element.style.display = "block";
+                } else {
+                    element.style.display = "none";
+                }
+            }
+        </script>
     </div>
 </div>
