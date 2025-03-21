@@ -2,12 +2,65 @@
 {% load static %}
 
 {% block content %}
-    <hr width="80%" size="1">
-    <img src="{% static 'images/frontend-logo.png' %}" alt="Entertainment List Logo" style="display: block; margin-left: auto; margin-right: auto; width: 25%;" />
-    <hr width="80%" size="1">
-    <h1 class="pt-5" style="color: #5e9ca0; text-align: center;"><span style="background-color: #ff00ff; color: #ffffff;">Welcome to <span style="color: #0000ff;">Entertainment</span> List!</span></h1>    <div style="text-align: center;">
-    <hr width="80%" size="1">
-    <img src="https://www.heavensgate.com/img/redalrt3.gif" alt="Alert Image" />
-    <hr width="80%" size="1">
-    <p style="text-align: center; color: #00ffff; background-color: #000000;">Whether the latest cinematic universe has a "definitive ranking" or not is irrelevant from our perspective. However, its evolution is joyously significant to us at Entertainment List. The joy is that our dedicated platform has made it clear to us that this moment is the "marker" we've been waiting for—the time to fully immerse ourselves in managing our favorite movies, shows, and more, all in one place. Our years of fragmented watchlists and scattered streaming services are finally coming to a conclusion—"graduation" into seamless entertainment organization. We are happily prepared to embrace this new era and go forward with Entertainment List's crew!<img src="https://html-online.com/editorfiles/tiny/plugins/emoticons/img/smiley-cool.gif" alt="cool" /><img src="https://html-online.com/editorfiles/tiny/plugins/emoticons/img/smiley-embarassed.gif" alt="embarassed" /><img src="https://html-online.com/editorfiles/tiny/plugins/emoticons/img/smiley-yell.gif" alt="yell" /></p>
+    <div class="window" style="width: 80%; margin: auto;">
+        <div class="title-bar">
+            <div class="title-bar-text">main.exe</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="field-row-stacked" style="text-align: center;">
+                <img src="{% static 'images/frontend-logo.png' %}" alt="Entertainment List Logo" style="width: 25%;" />
+                <h1 style="color: #5e9ca0;">
+                    <span style="background-color: #ff00ff; color: #ffffff;">Welcome to <span style="color: #0000ff;">Entertainment</span> List!</span>
+                </h1>
+                <hr>
+                <img src="https://www.heavensgate.com/img/redalrt3.gif" alt="Alert Image" />
+                <p style="color: #00ffff; background-color: #000000;">
+                    Whether the latest cinematic universe has a "definitive ranking" or not is irrelevant from our perspective. However, its evolution is joyously significant to us at Entertainment List. The joy is that our dedicated platform has made it clear to us that this moment is the "marker" we've been waiting for—the time to fully immerse ourselves in managing our favorite movies, shows, and more, all in one place.
+                </p>
+            </div>
+            <fieldset>
+                <legend>Actions</legend>
+                <ul class="tree-view">
+                    <li>
+                        <a href="">
+                            <img src="https://web.archive.org/web/19990129025527im_/http://www.geocities.com/NapaValley/2022/rib88x31.gif" alt="Add Movie to Watchlist">
+                            Add Movie to Watchlist
+                        </a>
+                    </li>
+                    <li>
+                        <a href="">
+                            <img src="https://anlucas.neocities.org/bookmark_this_page.gif" alt="View Watchlist">
+                            View Your Watchlist
+                        </a>
+                    </li>
+                    <li>
+                        <a href="">
+                            <img src="https://cyber.dabamos.de/88x31/88-31-banner.gif" alt="Search Movies">
+                            Search for Movies
+                        </a>
+                    </li>
+                    <li>
+                        <a href="">
+                            <img src="https://anlucas.neocities.org/got_html.gif" alt="Get Recommendations">
+                            Get Movie Recommendations
+                        </a>
+                    </li>
+                    <li>
+                        <a href="">
+                            <img src="https://cyber.dabamos.de/88x31/88ibet.gif" alt="Manage Account">
+                            Manage Your Account
+                        </a>
+                    </li>
+                </ul>
+            </fieldset>
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Ready</div>
+        </div>
+    </div>
 {% endblock %}
