@@ -15,14 +15,29 @@ body {
     </div>
     <div style="flex-grow: 1;">
         <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
-            <h1 style="margin: 0; font-size: 18px;">{{ movie.title }}</h1>
+            <h1 style="margin: 0; font-size: 18px;">{{ movie.title }} {% if movie.title != movie.original_title %} ({{ movie.original_title }}){% endif %}
+            </h1>
         </div>
         <div style="background-color: white; padding: 10px; border: 2px inset;">
             <p><strong>Plot:</strong> {{movie.plot}}</p>
             <p><strong>Release Year:</strong> {{movie.release_date|date:"Y"}}</p>
-            <p><strong>Genre:</strong> {{ movie.genres.all|join:", " }}</p>
+            <p><strong>Genre:</strong> 
+                {% for genre in movie.genres.all %}
+                    <a href="genre" style="text-decoration: none; color: black;">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </p>
             <p><strong>Rating:</strong> {{ movie.rating }}</p>
-            <p><strong>Runtime:</strong> {{ movie.runtime }} minutes</p>
+            <p><strong>Runtime:</strong> {{ movie.minutes_to_hours }}</p>
+            <p><strong>Country:</strong> 
+                {% for country in movie.countries.all %}
+                    <a href="country" style="text-decoration: none; color: black;">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </p>
+            <p><strong>Keywords:</strong>
+                {% for keyword in movie.keywords.all %}
+                    <a href="keyword" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </p>
         </div>
         <div style="margin-top: 10px;">
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openTrailerModal()">Watch Trailer</button>
