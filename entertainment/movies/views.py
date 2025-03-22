@@ -20,7 +20,8 @@ def create_movie_page(request):
 def movie_page(request, movie_id):
     movie_db = Movie.objects.filter(tmdb_id=movie_id).first()
     if not movie_db:
-        pass
+        create_movie(movie_id)
+        movie_db = Movie.objects.filter(tmdb_id=movie_id).first()
     context = {
         'movie': movie_db
     }
