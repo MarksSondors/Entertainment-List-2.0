@@ -17,6 +17,15 @@ from .parsers import create_movie
 def create_movie_page(request):
     return render(request, 'create_movie.html')
 
+def movie_page(request, movie_id):
+    movie_db = Movie.objects.filter(tmdb_id=movie_id).first()
+    if not movie_db:
+        pass
+    context = {
+        'movie': movie_db
+    }
+    return render(request, 'movie_page.html', context)
+
 
 class TMDBSearchView(APIView):
     authentication_classes = [SessionAuthentication, BasicAuthentication]
@@ -127,3 +136,22 @@ class MovieViewSet(viewsets.ViewSet):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+class PopularMoviesView(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Get Popular Movies",
+        description="Retrieve the top 5 popular movies with poster URLs.",
+        responses={200: OpenApiExample("Popular Movies", value=[
+            {"title": "Movie 1", "poster_path": "https://image.tmdb.org/t/p/w500/path_to_poster1"},
+            {"title": "Movie 2", "poster_path": "https://image.tmdb.org/t/p/w500/path_to_poster2"},
+        ])}
+    )
+    def get(self, request):
+        popular_movies = MoviesService().get_popular_movies()
+        popular_movies = sorted(popular_movies['results'], key=lambda x: x['popularity'], reverse=True)[:5]
+        for movie in popular_movies:
+            movie['poster_path'] = f"https://image.tmdb.org/t/p/w500{movie['poster_path']}"
+        return Response(popular_movies, status=status.HTTP_200_OK)

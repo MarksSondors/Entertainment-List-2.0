@@ -16,15 +16,15 @@
     <!-- Header -->
     {% include 'components/header.html' %}
 
-        <div class="row"> 
+        <div class="row g-0"> 
             <!-- Sidebar Container -->
-            <div id="sidebar-container" class="col-md-2" style="padding-top: 0px; padding-bottom: 0px; padding-left: 0px; padding-right: 0px;">
-                {% include 'components/sidebar.html' %}
+            <div id="sidebar-container" class="col-md-2">
+          {% include 'components/sidebar.html' %}
             </div>
 
             <!-- Main Content -->
-            <div id="main-container" class="col-md-10" style="padding-top: 0px; padding-bottom: 0px; padding-left: 0px; padding-right: 0px;">
-                {% block content %}{% endblock %}
+            <div id="main-container" class="col-md-10">
+          {% block content %}{% endblock %}
             </div>
         </div>
 
@@ -44,14 +44,10 @@
             if (sidebarContainer.classList.contains("d-none")) {
               mainContainer.classList.remove("col-md-10");
               mainContainer.classList.add("col-md-12");
-              mainContainer.style.padding = ""; // Reset to default padding
             } else {
               mainContainer.classList.remove("col-md-12");
               mainContainer.classList.add("col-md-10");
-              mainContainer.style.paddingTop = "0px";
-              mainContainer.style.paddingBottom = "0px";
-              mainContainer.style.paddingLeft = "0px";
-              mainContainer.style.paddingRight = "0px";
+
             }
           });
         }

@@ -159,3 +159,14 @@ STATICFILES_DIRS = [
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Caching configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',  # In-memory cache
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+# Optional: Cache timeout for views (default is 300 seconds if not specified in cache_page)
+CACHE_MIDDLEWARE_SECONDS = 900  # 15 minutes
