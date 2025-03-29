@@ -1,0 +1,565 @@
+{% comment %} movie_search_modal.html {% endcomment %}
+
+<div id="movie-search-modal" class="modal" style="display: none;">
+        <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <!-- Modal Header -->
+                <div class="title-bar">
+                        <div class="title-bar-text" id="modal-title">Add Movie</div>
+                        <div class="title-bar-controls">
+                                <button aria-label="Close" id="close-modal-btn"></button>
+                        </div>
+                </div>
+                
+                <!-- Modal Body -->
+                <div class="window-body">
+                        <!-- Stage 1: Search and Select -->
+                        <div id="modal-stage-1">
+                                <!-- Search Input -->
+                                <div id="tmdb-search-form" style="display: flex; align-items: center; margin-bottom: 10px;">
+                                        <label for="query">Search:</label>
+                                        <input type="text" id="query" name="query" style="margin: 0 10px; flex-grow: 1;" placeholder="Enter movie title">
+                                        <button id="search-button">Search</button>
+                                </div>
+                                
+                                <!-- Results Section -->
+                                <div style="margin-top: 15px;">
+                                        <fieldset>
+                                                <legend>Search Results</legend>
+                                                <div style="overflow-y: auto; max-height: 300px; border: 2px inset; background-color: white; padding: 5px; margin-bottom: 10px;">
+                                                        <ul id="results-list" class="tree-view" style="height: 100%; width: 100%;"></ul>
+                                                </div>
+                                                <div>
+                                                        <p><strong>Total Results:</strong> <span id="total-results">0</span></p>
+                                                        <p><strong>Page:</strong> <span id="current-page">0</span> of <span id="total-pages">0</span></p>
+                                                        <div style="display: flex; gap: 10px;">
+                                                                <button id="prev-button" disabled>Previous</button>
+                                                                <button id="next-button" disabled>Next</button>
+                                                        </div>
+                                                </div>
+                                        </fieldset>
+                                </div>
+                                
+                                <!-- Navigation Buttons -->
+                                <div style="text-align: right; margin-top: 15px;">
+                                        <button id="to-stage-2-btn" disabled>Next: Edit Details</button>
+                                </div>
+                        </div>
+                        
+                        <!-- Stage 2: Edit Movie Details -->
+                        <div id="modal-stage-2" style="display: none;">
+                                <form method="post" id="add-movie-form" enctype="multipart/form-data">
+                                        {% csrf_token %}
+                                        <input type="hidden" id="tmdb_id" name="tmdb_id">
+                                        
+                                        <!-- Movie Preview -->
+                                        <div style="display: flex; margin-bottom: 15px; gap: 15px;">
+                                                <div style="flex: 1; text-align: center;">
+                                                        <h4>Poster</h4>
+                                                        <img id="movie-poster-preview" src="" alt="Movie poster" style="max-width: 100%; height: 200px; cursor: pointer;" onclick="openPosterSelectionModal()">
+                                                        <div style="margin-top: 5px;">
+                                                                <button type="button" onclick="openPosterSelectionModal()">Browse TMDB Posters</button>
+                                                        </div>
+                                                        <input type="hidden" id="default-poster-path" name="default_poster_path">
+                                                </div>
+                                                <div style="flex: 1; text-align: center;">
+                                                        <h4>Backdrop</h4>
+                                                        <img id="movie-backdrop-preview" src="" alt="Movie backdrop" style="max-width: 100%; height: 200px; cursor: pointer;" onclick="openBackdropSelectionModal()">
+                                                        <div style="margin-top: 5px;">
+                                                                <button type="button" onclick="openBackdropSelectionModal()">Browse TMDB Backdrops</button>
+                                                        </div>
+                                                        <input type="hidden" id="default-backdrop-path" name="default_backdrop_path">
+                                                </div>
+                                        </div>
+                                        
+                                        <!-- Movie Details -->
+                                        <div class="field-row-stacked" style="margin-bottom: 15px;">
+                                                        <label for="title">Title:</label>
+                                                        <input type="text" id="title" name="title" required readonly style="width: 100%;">
+                                        </div>
+                                        
+                                        <div class="field-row-stacked" style="margin-bottom: 15px;">
+                                                        <label for="release_date">Release Date:</label>
+                                                        <input type="text" id="release_date" name="release_date" required readonly style="width: 100%;">
+                                        </div>
+                                        
+                                        <div class="field-row-stacked" style="margin-bottom: 15px;">
+                                                        <label for="description">Description:</label>
+                                                        <input type="text" id="description" name="description" required readonly style="width: 100%;">
+                                        </div>
+                                        
+                                        <!-- Additional Options -->
+                                        <div style="margin-bottom: 15px;">
+                                            <div class="field-row">
+                                                <input type="checkbox" id="is_anime" name="is_anime">
+                                                <label for="is_anime">This is an anime movie</label>
+                                            </div>
+                                            <div class="field-row">
+                                                <input type="checkbox" id="add_to_watchlist" name="add_to_watchlist" checked>
+                                                <label for="add_to_watchlist">Add to my watchlist</label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Navigation Buttons -->
+                                        <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+                                                <button type="button" id="back-to-stage-1-btn">Back to Search</button>
+                                                <button type="button" id="submit-movie-btn">Add Movie</button>
+                                        </div>
+                                </form>
+                        </div>
+                </div>
+        </div>
+</div>
+
+<!-- Loading Screen -->
+<div id="loading-screen-modal" class="modal" style="display: none; z-index: 1200;">
+    <div class="modal-content window" style="width: 300px;">
+        <div class="title-bar">
+            <div class="title-bar-text">Adding Movie</div>
+        </div>
+        <div class="window-body" style="text-align: center; padding: 20px;">
+            <p>Adding movie to your list...</p>
+            <div class="progress-indicator">
+                <span class="progress-indicator-bar"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add success/error message dialog -->
+<div id="message-dialog" class="modal" style="display: none; z-index: 1200;">
+        <div class="modal-content window" style="width: 400px;">
+                <div class="title-bar">
+                        <div class="title-bar-text" id="dialog-title">Message</div>
+                        <div class="title-bar-controls">
+                                <button aria-label="Close" onclick="closeMessageDialog()"></button>
+                        </div>
+                </div>
+                <div class="window-body">
+                        <p id="dialog-message"></p>
+                        <div style="text-align: right; margin-top: 15px;">
+                                <button onclick="closeMessageDialog()">OK</button>
+                        </div>
+                </div>
+        </div>
+</div>
+
+<!-- Poster Selection Modal -->
+<div id="poster-selection-modal" class="modal" style="display: none; z-index: 1100;">
+        <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <div class="title-bar">
+                        <div class="title-bar-text">Select Poster</div>
+                        <div class="title-bar-controls">
+                                <button aria-label="Close" onclick="closePosterSelectionModal()"></button>
+                        </div>
+                </div>
+                <div class="window-body">
+                        <div id="poster-loading" style="text-align: center; padding: 20px;">
+                                <p>Loading posters...</p>
+                        </div>
+                        <div id="poster-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
+                                <!-- Posters will be loaded here -->
+                        </div>
+                </div>
+        </div>
+</div>
+
+<!-- Backdrop Selection Modal -->
+<div id="backdrop-selection-modal" class="modal" style="display: none; z-index: 1100;">
+        <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <div class="title-bar">
+                        <div class="title-bar-text">Select Backdrop</div>
+                        <div class="title-bar-controls">
+                                <button aria-label="Close" onclick="closeBackdropSelectionModal()"></button>
+                        </div>
+                </div>
+                <div class="window-body">
+                        <div id="backdrop-loading" style="text-align: center; padding: 20px;">
+                                <p>Loading backdrops...</p>
+                        </div>
+                        <div id="backdrop-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px;">
+                                <!-- Backdrops will be loaded here -->
+                        </div>
+                </div>
+        </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+                let allResults = [];
+                let currentPage = 1;
+                let totalPages = 0;
+                let selectedMovie = null;
+                
+                // Modal Control Functions
+                function openModal() {
+                                $("#movie-search-modal").show();
+                }
+                
+                function closeModal() {
+                                $("#movie-search-modal").hide();
+                                resetModal();
+                }
+                
+                // Message Dialog Functions
+                function showMessage(title, message, isError = false) {
+                                $("#dialog-title").text(title);
+                                $("#dialog-message").text(message);
+                                $("#dialog-message").css("color", isError ? "red" : "black");
+                                $("#message-dialog").show();
+                }
+                
+                function closeMessageDialog() {
+                                $("#message-dialog").hide();
+                }
+                
+                function resetModal() {
+                                // Reset stage
+                                $("#modal-stage-1").show();
+                                $("#modal-stage-2").hide();
+                                
+                                // Reset search
+                                $("#query").val("");
+                                $("#results-list").empty();
+                                
+                                // Reset form
+                                $("#add-movie-form")[0].reset();
+                                selectedMovie = null;
+                                $("#to-stage-2-btn").prop("disabled", true);
+                }
+                
+                function goToStage2() {
+                                if (!selectedMovie) return;
+                                
+                                // Fill form with selected movie data
+                                $("#tmdb_id").val(selectedMovie.id);
+                                $("#title").val(selectedMovie.title);
+                                $("#release_date").val(selectedMovie.release_date || '');
+                                $("#description").val(selectedMovie.overview || '');
+                                
+                                // Set preview images
+                                if (selectedMovie.poster_path) {
+                                                $("#movie-poster-preview").attr("src", `https://image.tmdb.org/t/p/w500${selectedMovie.poster_path}`);
+                                                $("#default-poster-path").val(selectedMovie.poster_path);
+                                }
+                                
+                                if (selectedMovie.backdrop_path) {
+                                                $("#movie-backdrop-preview").attr("src", `https://image.tmdb.org/t/p/w500${selectedMovie.backdrop_path}`);
+                                                $("#default-backdrop-path").val(selectedMovie.backdrop_path);
+                                }
+                                
+                                // Switch stages
+                                $("#modal-stage-1").hide();
+                                $("#modal-stage-2").show();
+                                $("#modal-title").text("Edit Movie Details");
+                }
+                
+                function goToStage1() {
+                                $("#modal-stage-2").hide();
+                                $("#modal-stage-1").show();
+                                $("#modal-title").text("Add Movie");
+                }
+                
+                // Poster Selection Modal Functions
+                function openPosterSelectionModal() {
+                                if (!selectedMovie) return;
+                                $("#poster-grid").empty();
+                                $("#poster-loading").show();
+                                $("#poster-selection-modal").show();
+                                fetchMovieImages(selectedMovie.id);
+                }
+                
+                function closePosterSelectionModal() {
+                                $("#poster-selection-modal").hide();
+                }
+                
+                // Backdrop Selection Modal Functions
+                function openBackdropSelectionModal() {
+                                if (!selectedMovie) return;
+                                $("#backdrop-grid").empty();
+                                $("#backdrop-loading").show();
+                                $("#backdrop-selection-modal").show();
+                                fetchMovieImages(selectedMovie.id);
+                }
+                
+                function closeBackdropSelectionModal() {
+                                $("#backdrop-selection-modal").hide();
+                }
+                
+                // Fetch movie images from TMDB
+                function fetchMovieImages(movieId) {
+                                $.ajax({
+                                                url: "{% url 'movie_images' %}",
+                                                method: "GET",
+                                                data: { movie_id: movieId },
+                                                success: function(response) {
+                                                                const data = JSON.parse(response);
+                                                                // Load posters
+                                                                $("#poster-loading").hide();
+                                                                if (data.posters && data.posters.length > 0) {
+                                                                                data.posters.forEach(poster => {
+                                                                                                const imgElement = $('<img>', {
+                                                                                                                src: `https://image.tmdb.org/t/p/w200${poster.file_path}`,
+                                                                                                                alt: 'Movie poster',
+                                                                                                                style: 'width: 100%; cursor: pointer; border: 2px solid transparent;',
+                                                                                                                'data-path': poster.file_path
+                                                                                                }).click(function() {
+                                                                                                                // Select this poster
+                                                                                                                $("#poster-grid img").css('border', '2px solid transparent');
+                                                                                                                $(this).css('border', '2px solid #000080');
+                                                                                                                $("#movie-poster-preview").attr("src", `https://image.tmdb.org/t/p/w500${poster.file_path}`);
+                                                                                                                $("#default-poster-path").val(poster.file_path);
+                                                                                                                closePosterSelectionModal();
+                                                                                                });
+                                                                                                $("#poster-grid").append(imgElement);
+                                                                                });
+                                                                } else {
+                                                                                $("#poster-grid").html("<p>No posters available.</p>");
+                                                                }
+                                                                
+                                                                // Load backdrops
+                                                                $("#backdrop-loading").hide();
+                                                                if (data.backdrops && data.backdrops.length > 0) {
+                                                                                data.backdrops.forEach(backdrop => {
+                                                                                                const imgElement = $('<img>', {
+                                                                                                                src: `https://image.tmdb.org/t/p/w300${backdrop.file_path}`,
+                                                                                                                alt: 'Movie backdrop',
+                                                                                                                style: 'width: 100%; cursor: pointer; border: 2px solid transparent;',
+                                                                                                                'data-path': backdrop.file_path
+                                                                                                }).click(function() {
+                                                                                                                // Select this backdrop
+                                                                                                                $("#backdrop-grid img").css('border', '2px solid transparent');
+                                                                                                                $(this).css('border', '2px solid #000080');
+                                                                                                                $("#movie-backdrop-preview").attr("src", `https://image.tmdb.org/t/p/w500${backdrop.file_path}`);
+                                                                                                                $("#default-backdrop-path").val(backdrop.file_path);
+                                                                                                                closeBackdropSelectionModal();
+                                                                                                });
+                                                                                                $("#backdrop-grid").append(imgElement);
+                                                                                });
+                                                                } else {
+                                                                                $("#backdrop-grid").html("<p>No backdrops available.</p>");
+                                                                }
+                                                },
+                                                error: function() {
+                                                                $("#poster-loading").hide();
+                                                                $("#backdrop-loading").hide();
+                                                                $("#poster-grid").html("<p>Failed to load images. Please try again.</p>");
+                                                                $("#backdrop-grid").html("<p>Failed to load images. Please try again.</p>");
+                                                }
+                                });
+                }
+
+                function renderResults() {
+                                $('#results-list').empty();
+                                allResults.forEach(function(movie) {
+                                                const listItem = $('<li></li>');
+                                                const poster = movie.poster_path
+                                                                ? `<img src="https://image.tmdb.org/t/p/w200${movie.poster_path}" 
+                                                                         alt="${movie.title} poster" style="width: 50px; height: auto; vertical-align: middle; margin-right: 10px;">`
+                                                                : '';
+                                                listItem.html(`${poster}<span>${movie.title} (${movie.release_date || 'N/A'})</span>`);
+                                                listItem.on('click', function() {
+                                                                selectedMovie = movie;
+                                                                $("#to-stage-2-btn").prop("disabled", false);
+                                                                
+                                                                // Highlight selected item
+                                                                $('#results-list li').removeClass('selected');
+                                                                $(this).addClass('selected');
+                                                });
+                                                $('#results-list').append(listItem);
+                                });
+                }
+
+                function updatePagination(response) {
+                                $('#total-results').text(response.total_results);
+                                totalPages = response.total_pages;
+                                $('#current-page').text(currentPage);
+                                $('#total-pages').text(totalPages);
+
+                                $('#prev-button').prop('disabled', currentPage <= 1);
+                                $('#next-button').prop('disabled', currentPage >= totalPages);
+                }
+
+                function fetchResults(query, page) {
+                                $.ajax({
+                                                url: "{% url 'tmdb_search' %}",
+                                                method: "GET",
+                                                data: { query: query, page: page },
+                                                success: function(response) {
+                                                                allResults = response.results; 
+                                                                renderResults();
+                                                                updatePagination(response);
+                                                },
+                                                error: function() {
+                                                                alert('An error occurred while searching for movies.');
+                                                }
+                                });
+                }
+
+                // Submit movie to API
+                function submitMovie() {
+                                const movieId = $("#tmdb_id").val();
+                                const posterPath = $("#default-poster-path").val();
+                                const backdropPath = $("#default-backdrop-path").val();
+                                const isAnime = $("#is_anime").is(':checked');
+                                const addToWatchlist = $("#add_to_watchlist").is(':checked');
+                                
+                                if (!movieId) {
+                                                showMessage("Error", "Movie ID is missing", true);
+                                                return;
+                                }
+                                
+                                // Create data object
+                                const movieData = {
+                                                id: movieId,
+                                                poster: posterPath,
+                                                backdrop: backdropPath,
+                                                is_anime: isAnime,
+                                                add_to_watchlist: addToWatchlist
+                                };
+                                
+                                // Get CSRF token from the form
+                                const csrfToken = $("input[name=csrfmiddlewaretoken]").val();
+                                
+                                // Show loading screen
+                                $("#loading-screen-modal").show();
+                                
+                                // Submit to API
+                                $.ajax({
+                                                url: "{% url 'movies-list' %}",
+                                                method: "POST",
+                                                data: JSON.stringify(movieData),
+                                                contentType: "application/json",
+                                                headers: {
+                                                                "X-CSRFToken": csrfToken
+                                                },
+                                                success: function(response) {
+                                                                // Hide loading screen
+                                                                $("#loading-screen-modal").hide();
+                                                                showMessage("Success", "Movie added successfully!");
+                                                                closeModal();
+                                                },
+                                                error: function(xhr) {
+                                                                // Hide loading screen
+                                                                $("#loading-screen-modal").hide();
+                                                                let errorMsg = "Failed to add movie.";
+                                                                if (xhr.responseJSON && xhr.responseJSON.error) {
+                                                                                errorMsg = xhr.responseJSON.error;
+                                                                }
+                                                                showMessage("Error", errorMsg, true);
+                                                }
+                                });
+                }
+
+                $(document).ready(function() {
+                                // Modal control
+                                $("#close-modal-btn").on("click", closeModal);
+                                
+                                // Stage navigation
+                                $("#to-stage-2-btn").on("click", goToStage2);
+                                $("#back-to-stage-1-btn").on("click", goToStage1);
+                                
+                                // Form submission
+                                $("#submit-movie-btn").on("click", submitMovie);
+                                
+                                // Prevent default form submission
+                                $("#add-movie-form").on("submit", function(e) {
+                                                e.preventDefault();
+                                                submitMovie();
+                                });
+                                
+                                // Search functionality
+                                $('#query').on('input', function() {
+                                                const query = $('#query').val();
+                                                if (query.length > 2) {
+                                                                currentPage = 1;
+                                                                fetchResults(query, currentPage);
+                                                } else {
+                                                                $('#results-list').empty();
+                                                                $('#total-results').text('0');
+                                                                $('#current-page').text('0');
+                                                                $('#total-pages').text('0');
+                                                }
+                                });
+
+                                $('#search-button').on('click', function() {
+                                                const query = $('#query').val();
+                                                if (query.length > 2) {
+                                                                currentPage = 1;
+                                                                fetchResults(query, currentPage);
+                                                }
+                                });
+
+                                $('#prev-button').on('click', function() {
+                                                if (currentPage > 1) {
+                                                                currentPage--;
+                                                                fetchResults($('#query').val(), currentPage);
+                                                }
+                                });
+
+                                $('#next-button').on('click', function() {
+                                                if (currentPage < totalPages) {
+                                                                currentPage++;
+                                                                fetchResults($('#query').val(), currentPage);
+                                                }
+                                });
+                });
+</script>
+
+<style>
+.modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.7);
+                z-index: 1000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+}
+
+.modal-content {
+                position: relative;
+                margin: auto;
+}
+
+.selected {
+                background-color: #000080;
+                color: white;
+}
+
+#poster-grid img:hover, #backdrop-grid img:hover {
+                border: 2px solid #000080 !important;
+}
+
+.progress-indicator {
+    width: 100%;
+    height: 20px;
+    background-color: #fff;
+    border: 2px inset #c0c0c0;
+    margin-top: 15px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-indicator-bar {
+    display: block;
+    height: 100%;
+    background-color: #000080;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 40%;
+    animation: progress-animation 1.5s infinite linear;
+}
+
+@keyframes progress-animation {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 100%;
+    }
+}
+</style>

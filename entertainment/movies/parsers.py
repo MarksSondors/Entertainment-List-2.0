@@ -2,7 +2,7 @@ from custom_auth.models import *
 from api.services.movies import MoviesService
 from django.contrib.contenttypes.models import ContentType
 
-def create_movie(movie_id, movie_poster=None, movie_backdrop=None):
+def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False):
     movie_details = MoviesService().get_movie_details(movie_id, append_to_response='videos,credits,keywords')
     if not movie_details:
         return None
@@ -25,6 +25,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None):
         'description': movie_details.get('overview'),
         'rating': movie_details.get('vote_average'),
         'trailer': trailer_link,
+        'is_anime': is_anime,
     }
     
     # Create genres, countries and keywords as before

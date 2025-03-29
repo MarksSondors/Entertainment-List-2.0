@@ -14,4 +14,5 @@ urlpatterns = [
     # API
     path('search/', TMDBSearchView.as_view(), name='tmdb_search'),
     path('popular/', cache_page(60 * 60)(PopularMoviesView.as_view()), name='popular_movies'),
+    path('images/', views.MovieImagesView.as_view(), name='movie_images'),
 ] + router.urls
