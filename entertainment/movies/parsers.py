@@ -14,6 +14,12 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     trailer_key = youtube_videos[0].get('key') if youtube_videos else None
     trailer_link = f'https://www.youtube.com/embed/{trailer_key}' if trailer_key else None
 
+    if is_anime == True:
+        production_countries = movie_details.get('production_countries', [])
+        is_anime = any(country.get('iso_3166_1') == 'JP' for country in production_countries)
+    else:
+        is_anime = False
+
     movie_dict = {
         'title': movie_details.get('title'),
         'original_title': movie_details.get('original_title'),
