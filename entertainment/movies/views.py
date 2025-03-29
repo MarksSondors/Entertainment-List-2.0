@@ -8,8 +8,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
+import json
+
 from custom_auth.models import Movie
-from .models import Country, Genre, Person, Keyword
 from .serializers import MovieSerializer
 from .parsers import create_movie
 # Create your views here.
@@ -105,7 +106,16 @@ class MovieViewSet(viewsets.ViewSet):
         movie_poster = request.data.get('poster')
         movie_backdrop = request.data.get('backdrop')
 
-        movie = create_movie(movie_id, movie_poster, movie_backdrop)
+        is_anime = request.data.get('is_anime', False)
+        add_to_watchlist = request.data.get('add_to_watchlist', False)
+
+        # if movie_poster or movie_backdrop is added add the url https://image.tmdb.org/t/p/original to the front
+        if movie_poster:
+            movie_poster = f"https://image.tmdb.org/t/p/original{movie_poster}"
+        if movie_backdrop:
+            movie_backdrop = f"https://image.tmdb.org/t/p/original{movie_backdrop}"
+
+        movie = create_movie(movie_id, movie_poster, movie_backdrop, is_anime, add_to_watchlist)
         if not movie:
             return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
         
@@ -156,3 +166,25 @@ class PopularMoviesView(APIView):
         for movie in popular_movies:
             movie['poster_path'] = f"https://image.tmdb.org/t/p/w500{movie['poster_path']}"
         return Response(popular_movies, status=status.HTTP_200_OK)
+    
+class MovieImagesView(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Get Movie Pictures",
+        description="gives the movie posters and backdrops in the create movie page.",
+        parameters=[
+            OpenApiParameter(name="movie_id", description="ID of the movie to retrieve pictures for", required=True, type=int),
+        ]
+    )
+    def get(self, request):
+        movie_id = request.GET.get('movie_id')
+        if not movie_id:
+            return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        movie = MoviesService().get_movie_images(movie_id)
+        if not movie:
+            return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(json.dumps(movie), status=status.HTTP_200_OK)
