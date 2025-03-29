@@ -13,6 +13,11 @@ import json
 from custom_auth.models import Movie
 from .serializers import MovieSerializer
 from .parsers import create_movie
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.decorators import login_required
+from custom_auth.models import Watchlist, Genre
+from django.http import JsonResponse
+
 # Create your views here.
 
 def create_movie_page(request):
@@ -27,6 +32,61 @@ def movie_page(request, movie_id):
         'movie': movie_db
     }
     return render(request, 'movie_page.html', context)
+
+@login_required
+def watchlist_page(request):
+    """Display the user's watchlist with filtering options."""
+    
+    # Get watchlist items
+    watchlist_items = request.user.get_watchlist()
+    
+    # Handle filters
+    media_type = request.GET.get('media_type')
+    genre_id = request.GET.get('genre')
+    sort_by = request.GET.get('sort_by', '-date_added')  # Default sort by date added
+    
+    # Apply filters if provided
+    if media_type:
+        content_type = ContentType.objects.get(model=media_type.lower())
+        watchlist_items = watchlist_items.filter(content_type=content_type)
+    
+    if genre_id:
+        # Filter items by genre (need to handle GenericForeignKey relationship)
+        filtered_items = []
+        for item in watchlist_items:
+            if hasattr(item.media, 'genres') and item.media.genres.filter(id=genre_id).exists():
+                filtered_items.append(item.id)
+        watchlist_items = watchlist_items.filter(id__in=filtered_items)
+    
+    # Apply sorting
+    if sort_by == 'title':
+        # Sort by title (need custom sorting for GenericForeignKey)
+        watchlist_items = sorted(watchlist_items, key=lambda x: x.media.title)
+    elif sort_by == '-title':
+        watchlist_items = sorted(watchlist_items, key=lambda x: x.media.title, reverse=True)
+    elif sort_by == 'release_date':
+        watchlist_items = sorted(watchlist_items, key=lambda x: getattr(x.media, 'release_date', '1900-01-01'))
+    elif sort_by == '-release_date':
+        watchlist_items = sorted(watchlist_items, key=lambda x: getattr(x.media, 'release_date', '1900-01-01'), reverse=True)
+    # Default sorting by date_added is handled by the model's Meta ordering
+    
+    # Get only the genres that are in the watchlist items
+    genre_ids = set()
+    for item in watchlist_items:
+        if hasattr(item.media, 'genres'):
+            genre_ids.update(item.media.genres.values_list('id', flat=True))
+    genres = Genre.objects.filter(id__in=genre_ids).distinct()
+    
+    context = {
+        'watchlist_items': watchlist_items,
+        'genres': genres,
+        'current_media_type': media_type,
+        'current_genre': genre_id,
+        'current_sort': sort_by,
+        'view_type': request.GET.get('view_type', 'grid')  # Default to grid view
+    }
+    
+    return render(request, 'watchlist_page.html', context)
 
 
 class TMDBSearchView(APIView):

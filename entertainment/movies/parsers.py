@@ -66,6 +66,14 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     movie.genres.set(genre_instances)
     movie.countries.set(country_instances)
     movie.keywords.set(keyword_instances)
+
+    # Add to watchlist if specified
+    if add_to_watchlist:
+        Watchlist.objects.create(
+            user_id=1,
+            content_type=ContentType.objects.get_for_model(movie),
+            object_id=movie.id
+        )
     
     # Get the movie's content type for MediaPerson
     movie_content_type = ContentType.objects.get_for_model(movie)
