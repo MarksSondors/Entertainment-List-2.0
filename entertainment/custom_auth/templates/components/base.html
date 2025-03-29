@@ -16,42 +16,16 @@
     <!-- Header -->
     {% include 'components/header.html' %}
 
-        <div class="row g-0"> 
-            <!-- Sidebar Container -->
-            <div id="sidebar-container" class="col-md-2">
-          {% include 'components/sidebar.html' %}
-            </div>
-
-            <!-- Main Content -->
-            <div id="main-container" class="col-md-10">
-          {% block content %}{% endblock %}
+    <!-- Main Content -->
+    <div class="container-fluid">
+        <div class="row g-0">
+            <div id="main-container" class="col-12">
+                {% block content %}{% endblock %}
             </div>
         </div>
+    </div>
 
     <!-- Footer -->
 
-    <!-- Sidebar Toggle Script -->
-    <script>
-      document.addEventListener("DOMContentLoaded", function () {
-        const sidebarToggle = document.getElementById("sidebarToggle");
-        const sidebarContainer = document.getElementById("sidebar-container");
-        const mainContainer = document.getElementById("main-container");
-
-        if (sidebarToggle) {
-          sidebarToggle.addEventListener("click", function () {
-            sidebarContainer.classList.toggle("d-none");
-            // Adjust main content width and padding when sidebar is hidden/shown
-            if (sidebarContainer.classList.contains("d-none")) {
-              mainContainer.classList.remove("col-md-10");
-              mainContainer.classList.add("col-md-12");
-            } else {
-              mainContainer.classList.remove("col-md-12");
-              mainContainer.classList.add("col-md-10");
-
-            }
-          });
-        }
-      });
-    </script>
 </body>
 </html>
