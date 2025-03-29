@@ -10,17 +10,39 @@ body {
 }
 </style>
 
-<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.8); color: black; padding: 20px; border: 2px solid black; display: flex; align-items: flex-start; gap: 20px; margin-top: 20px; margin-bottom: 20px; margin-left: 20px; margin-right: 20px;">
+<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; display: flex; align-items: flex-start; gap: 20px; margin-top: 20px; margin-bottom: 20px; margin-left: 20px; margin-right: 20px;">
     <div style="flex-shrink: 0;">
-        <img src="{{ movie.poster }}" alt="The Matrix Poster" style="width: 150px; border: 2px solid black;">
+        <img src="{{ movie.poster }}" alt="{{ movie.title }} Poster" style="width: 200px; border: 2px solid black; cursor: pointer;" onclick="openPosterModal()">
+
+        <div id="posterModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; max-width: 90%; max-height: 90%;">
+            <div class="title-bar">
+            <div class="title-bar-text">{{ movie.title }} Poster</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" onclick="closePosterModal()"></button>
+            </div>
+            </div>
+            <div style="padding: 10px; text-align: center;">
+            <img src="{{ movie.poster }}" alt="{{ movie.title }} Poster" style="max-width: 100%; max-height: 80vh;">
+            </div>
+        </div>
+
+        <script>
+            function openPosterModal() {
+            document.getElementById('posterModal').style.display = 'block';
+            }
+
+            function closePosterModal() {
+            document.getElementById('posterModal').style.display = 'none';
+            }
+        </script>
     </div>
     <div style="flex-grow: 1;">
         <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
             <h1 style="margin: 0; font-size: 18px;">{{ movie.title }} {% if movie.title != movie.original_title %} ({{ movie.original_title }}){% endif %}
             </h1>
         </div>
-        <div style="background-color: white; padding: 10px; border: 2px inset;">
-            <p><strong>Plot:</strong> {{movie.plot}}</p>
+        <div style="background-color: rgba(255, 255, 255, 0.86); padding: 10px; border: 2px inset;">
+            <p><strong>Plot:</strong> {{movie.description}}</p>
             <p><strong>Release Year:</strong> {{movie.release_date|date:"Y"}}</p>
             <p><strong>Genre:</strong> 
                 {% for genre in movie.genres.all %}
@@ -32,6 +54,13 @@ body {
             <p><strong>Country:</strong> 
                 {% for country in movie.countries.all %}
                     <a href="country" style="text-decoration: none; color: black;">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </p>
+            <p><strong>Director:</strong> 
+                {% for director in movie.directors %}
+                    <a href="#" style="text-decoration: none; color: black;">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}
+                {% empty %}
+                    Unknown
                 {% endfor %}
             </p>
             <p><strong>Keywords:</strong>
@@ -51,7 +80,7 @@ body {
                     </div>
                 </div>
                 <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
-                    <iframe id="trailerVideo" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="https://www.youtube.com/embed/m8e-FF8MsqU" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    <iframe id="trailerVideo" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="{{movie.trailer}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                 </div>
             </div>
 
@@ -69,6 +98,7 @@ body {
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">Add to Watchlist</button>
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">Add to Database</button>
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openReviewModal()">Write a Review</button>
+            <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openCastModal()">Cast</button>
 
             <div id="reviewModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 300px;">
                 <div class="title-bar">
@@ -83,6 +113,37 @@ body {
                 <div style="text-align: right;">
                     <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="submitReview()">Submit</button>
                     <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="closeReviewModal()">Cancel</button>
+                </div>
+            </div>
+
+            <div id="castModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 400px;">
+                <div class="title-bar">
+                    <div class="title-bar-text">Cast</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Close" onclick="closeCastModal()"></button>
+                    </div>
+                </div>
+                <div style="padding: 10px; background-color: white; max-height: 70vh; overflow-y: auto;">
+                    <h3 style="margin: 5px 0; font-size: 16px;">Actors</h3>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        {% for actor in movie.cast %}
+                        <li style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <img src="{{ actor.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" alt="{{ actor.name }}" style="width: 75px; object-fit: cover; border: 2px solid black; margin-right: 10px;">
+                            <div>
+                                <div><a href="#" style="text-decoration: none; color: black;">{{ actor.name }}</a></div>
+                                <div style="font-size: 0.9em; color: #666;">
+                                    {% for media_person in movie.get_media_persons %}
+                                        {% if media_person.person.id == actor.id and media_person.character_name %}
+                                            as {{ media_person.character_name }}
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </li>
+                        {% empty %}
+                        <li>No cast information available</li>
+                        {% endfor %}
+                    </ul>
                 </div>
             </div>
 
@@ -102,47 +163,93 @@ body {
                     console.log('Review:', reviewText);
                     closeReviewModal();
                 }
+                
+                function openCastModal() {
+                    document.getElementById('castModal').style.display = 'block';
+                }
+                
+                function closeCastModal() {
+                    document.getElementById('castModal').style.display = 'none';
+                }
             </script>
         </div>
     </div>
 </div>
 
-<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: #E0E0E0; color: black; padding: 20px; border: 2px solid black; margin-top: 20px; margin-bottom: 20px; margin-left: 20px; margin-right: 20px;">
+<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: #E0E0E0; color: black; padding: 20px; border: 2px solid black; margin: 20px;">
     <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
-        <h2 style="margin: 0; font-size: 18px;">Cast and Crew</h2>
+        <h2 style="margin: 0; font-size: 18px;">User Reviews</h2>
     </div>
-    <div style="background-color: white; padding: 10px; border: 2px inset;">
-        <h3 style="margin: 0; font-size: 16px;">Director</h3>
-        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-            <img src="https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRNvLMLO20JpXgZN5SEspg0T5yqbxMgGqhT4Vw4zmab2XWnEX93F1QiP30TeWa49O9FjwOw-nYdOIJJYk8U-rhTXQ" alt="The Wachowskis" style=" height: 50px; border: 2px solid black; margin-right: 10px;">
-            <a href="#" style="text-decoration: none; color: black;">The Wachowskis</a>
-        </div>
-        <h3 style="margin: 0; font-size: 16px; margin-top: 10px;">Actors</h3>
-        <ul style="margin: 0; padding-left: 20px;">
-            <li style="display: flex; align-items: center; margin-bottom: 10px;">
-                <img src="https://via.placeholder.com/50" alt="Keanu Reeves" style="width: 50px; height: 50px; border: 2px solid black; margin-right: 10px;">
-                <a href="#" style="text-decoration: none; color: black;">Keanu Reeves as Neo</a>
-            </li>
-            <li style="display: flex; align-items: center; margin-bottom: 10px;">
-                <img src="https://via.placeholder.com/50" alt="Laurence Fishburne" style="width: 50px; height: 50px; border: 2px solid black; margin-right: 10px;">
-                <a href="#" style="text-decoration: none; color: black;">Laurence Fishburne as Morpheus</a>
-            </li>
-            <li style="display: flex; align-items: center; margin-bottom: 10px;">
-                <img src="https://via.placeholder.com/50" alt="Carrie-Anne Moss" style="width: 50px; height: 50px; border: 2px solid black; margin-right: 10px;">
-                <a href="#" style="text-decoration: none; color: black;">Carrie-Anne Moss as Trinity</a>
-            </li>
-            <li style="display: flex; align-items: center; margin-bottom: 10px;">
-                <img src="https://via.placeholder.com/50" alt="Hugo Weaving" style="width: 50px; height: 50px; border: 2px solid black; margin-right: 10px;">
-                <a href="#" style="text-decoration: none; color: black;">Hugo Weaving as Agent Smith</a>
-            </li>
-        </ul>
-        <h3 style="margin: 0; font-size: 16px; margin-top: 10px;">Executive Producers</h3>
-        <ul style="margin: 0; padding-left: 20px;">
-            <li style="display: flex; align-items: center; margin-bottom: 10px;">
-                <img src="https://via.placeholder.com/50" alt="Joel Silver" style="width: 50px; height: 50px; border: 2px solid black; margin-right: 10px;">
-                <a href="#" style="text-decoration: none; color: black;">Joel Silver</a>
-            </li>
-        </ul>
+    <div class="sunken-panel" style="background-color: white; border: 2px inset; padding: 10px; height: 300px; overflow-y: auto;">
+        <table class="interactive" style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background-color: #C3C3C3;">
+                    <th style="text-align: left; padding: 4px;">User</th>
+                    <th style="text-align: center; padding: 4px;">Rating</th>
+                    <th style="text-align: left; padding: 4px;">Review</th>
+                    <th style="text-align: right; padding: 4px;">Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">MovieBuff42</td>
+                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">9/10</td>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">Absolutely brilliant film. The cinematography and script were outstanding.</td>
+                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">Jan 15, 2023</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">CinemaFan</td>
+                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">7/10</td>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">Good movie overall, but the pacing was a bit off in the middle section.</td>
+                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">Mar 22, 2023</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">FilmCritic101</td>
+                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">10/10</td>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">A masterpiece! One of the best films I've seen in years. The acting was superb.</td>
+                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">Apr 5, 2023</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">ScreenWriter</td>
+                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">6/10</td>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">Decent effort but fell short of expectations. The third act needed work.</td>
+                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">May 17, 2023</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">PopcornLover</td>
+                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">8/10</td>
+                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">Really enjoyed it! Great entertainment value and solid performances all around.</td>
+                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">Jun 30, 2023</td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 </div>
+
+<script>
+    document.querySelectorAll('table.interactive').forEach(element => {
+        element.addEventListener('click', (event) => {
+            const highlightedClass = 'highlighted';
+            const isRow = element => element.tagName === 'TR' && element.parentElement.tagName === 'TBODY';
+            const newlySelectedRow = event.composedPath().find(isRow);
+            const previouslySelectedRow = Array.from(newlySelectedRow.parentElement.children)
+                .filter(isRow).find(element => element.classList.contains(highlightedClass));
+                
+            if(previouslySelectedRow){
+                previouslySelectedRow.classList.toggle(highlightedClass);
+            }
+
+            if (newlySelectedRow) {
+                newlySelectedRow.classList.toggle(highlightedClass);
+            }
+        })
+    });
+</script>
+
+<style>
+    .interactive tr.highlighted {
+        background-color: #000080;
+        color: white;
+    }
+</style>
 {% endblock %}

@@ -26,8 +26,11 @@ class MoviesService(BaseService):
         params = {key: value for key, value in params.items() if value is not None}
         return self._get('search/movie', params=params)
     
-    def get_movie_details(self, movie_id):
-        return self._get(f'movie/{movie_id}')
+    def get_movie_details(self, movie_id, append_to_response=None):
+        params = {}
+        if append_to_response:
+            params['append_to_response'] = append_to_response
+        return self._get(f'movie/{movie_id}', params=params)
     
     def get_movie_credits(self, movie_id):
         return self._get(f'movie/{movie_id}/credits')
