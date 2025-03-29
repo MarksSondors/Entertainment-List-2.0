@@ -6,9 +6,21 @@
         <img src="{% static 'images/logo.png' %}" alt="Logo" width="32" height="32" class="me-2" />
         <span style="font-size: 18px; color: white;">Entertainment List</span>
     </a>
-    <button id="sidebarToggle" class="maximize" aria-controls="sidebar" aria-expanded="false" aria-label="Maximize" style="background-color: #e0e0e0; border: 2px outset #ffffff; padding: 2px 8px; font-size: 12px; cursor: pointer;">
-        Sidebar
-    </button>
+    
+    <!-- Collection Menu -->
+    <div class="dropdown ms-3">
+        <button class="dropdown-toggle" type="button" id="collectionDropdown" data-bs-toggle="dropdown" aria-expanded="false"
+            style="background-color: #e0e0e0; border: 2px outset #ffffff; padding: 2px 8px; font-size: 14px; cursor: pointer;">
+            MY COLLECTION
+        </button>
+        <ul class="dropdown-menu" aria-labelledby="collectionDropdown" style="background-color: #dfdfdf; border: 2px outset #ffffff;">
+            <li><a class="dropdown-item" href="#">My Reviews</a></li>
+            <li><a class="dropdown-item" href="#">My Movies</a></li>
+            <li><a class="dropdown-item" href="#">My TV Shows</a></li>
+            <li><a class="dropdown-item" href="#">My Books</a></li>
+        </ul>
+    </div>
+    
     <ul class="navbar-nav ms-auto" style="list-style: none; margin: 0; padding: 4px; display: flex; align-items: center;">
         <li style="margin-left: 10px;">
             <select class="" aria-label="User menu" style="background-color: #ffffff; border: 2px inset #c0c0c0; font-size: 14px; color: #000000; width: 200px; height: 30px;">
