@@ -64,7 +64,7 @@ class MovieAdmin(admin.ModelAdmin):
     search_fields = ('title', 'original_title')
     list_filter = ('genres', 'countries', 'release_date')
     filter_horizontal = ('genres', 'countries', 'keywords')
-    readonly_fields = ('display_directors', 'display_writers', 'display_producers', 
+    readonly_fields = ('display_directors', 'display_writers', 
                       'display_cast', 'display_composers', 'minutes_to_hours')
     inlines = [MediaPersonInline]
     
@@ -75,10 +75,6 @@ class MovieAdmin(admin.ModelAdmin):
     def display_writers(self, obj):
         return self._format_people_list(obj.writers)
     display_writers.short_description = "Writers"
-    
-    def display_producers(self, obj):
-        return self._format_people_list(obj.producers)
-    display_producers.short_description = "Producers"
     
     def display_cast(self, obj):
         cast = obj.get_media_persons(role="Actor")
