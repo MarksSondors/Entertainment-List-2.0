@@ -1,0 +1,145 @@
+<!-- filepath: c:\Users\Marks Sondors\Desktop\Personal projects\Entertainment-List-2.0\entertainment\movies\templates\watchlist_page.html -->
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}My Watchlist | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">My Watchlist</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <!-- Filter Section -->
+            <form method="get" action="{% url 'watchlist_page' %}" class="mb-4">
+                <div class="field-row">
+                    <label for="title">Title:</label>
+                    <input type="text" id="title" name="title" value="{{ filter_title }}" placeholder="Search titles...">
+                    
+                    <label for="genre" class="ms-3">Genre:</label>
+                    <select id="genre" name="genre">
+                        <option value="" {% if not current_genre %}selected{% endif %}>All Genres</option>
+                        {% for genre in genres %}
+                        <option value="{{ genre.id }}" {% if current_genre == genre.name %}selected{% endif %}>{{ genre.name }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <label for="sort_by" class="ms-3">Sort By:</label>
+                    <select id="sort_by" name="sort_by">
+                        <option value="date_added" {% if current_sort == 'date_added' %}selected{% endif %}>Date Added</option>
+                        <option value="title" {% if current_sort == 'title' %}selected{% endif %}>Title</option>
+                        <option value="release_date" {% if current_sort == 'release_date' %}selected{% endif %}>Release Date</option>
+                    </select>
+                    
+                    <label for="view_type" class="ms-3">View:</label>
+                    <div class="btn-group" role="group">
+                        <input type="radio" name="view_type" id="grid" value="grid" {% if view_type == 'grid' %}checked{% endif %}>
+                        <label for="grid">Grid</label>
+                        <input type="radio" name="view_type" id="table" value="table" {% if view_type == 'table' %}checked{% endif %}>
+                        <label for="table">Table</label>
+                    </div>
+                    
+                    <button type="submit" class="ms-2">Apply Filters</button>
+                    <a href="{% url 'watchlist_page' %}" class="ms-2 btn">Reset</a>
+                </div>
+            </form>
+
+            {% if watchlist_items %}
+                <!-- Grid View -->
+                {% if view_type == 'grid' %}
+                <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                    {% for item in watchlist_items %}
+                    <div class="col">
+                        <div class="card h-100">
+                            {% if item.media.poster %}
+                            <img src="{{ item.media.poster }}" class="card-img-top" alt="{{ item.media.title }}">
+                            {% else %}
+                            <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
+                                <span>No Image</span>
+                            </div>
+                            {% endif %}
+                            <div class="card-body">
+                                <h5 class="card-title">{{ item.media.title }}</h5>
+                                <p class="card-text">
+                                    {% if item.media.release_date %}
+                                    <small class="text-muted">{{ item.media.release_date|date:"Y" }}</small>
+                                    {% endif %}
+                                </p>
+                                <div class="mt-2">
+                                    <a href="{% url 'movie_page' item.media.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                </div>
+                            </div>
+                            <div class="card-footer text-muted">
+                                <small>Added on {{ item.date_added|date:"M d, Y" }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Table View -->
+                {% else %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Release Date</th>
+                                <th>Genres</th>
+                                <th>Rating</th>
+                                <th>Date Added</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in watchlist_items %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'movie_page' item.media.tmdb_id %}">{{ item.media.title }}</a>
+                                </td>
+                                <td>{{ item.media.release_date|date:"M d, Y" }}</td>
+                                <td>
+                                    {% for genre in item.media.genres.all %}
+                                    <span class="badge bg-secondary">{{ genre.name }}</span>
+                                    {% endfor %}
+                                </td>
+                                <td>{{ item.media.rating }} / 10</td>
+                                <td>{{ item.date_added|date:"M d, Y" }}</td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{% url 'movie_page' item.media.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
+                                        <button type="button" class="btn btn-sm btn-danger">Remove</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="alert alert-info">
+                    Your watchlist is empty! <a href="{% url 'add_movie' %}">Add some movies</a> to get started.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    // JavaScript to automatically submit the form when view type changes
+    document.getElementById('grid').addEventListener('change', function() {
+        this.form.submit();
+    });
+    
+    document.getElementById('table').addEventListener('change', function() {
+        this.form.submit();
+    });
+</script>
+{% endblock %}

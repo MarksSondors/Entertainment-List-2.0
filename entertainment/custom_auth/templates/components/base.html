@@ -10,14 +10,46 @@
     {% bootstrap_css %}
     {% bootstrap_javascript %}
     <link rel="stylesheet" href="https://unpkg.com/98.css" />
-
+    <style>
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            body {
+                background-size: cover;
+                background-attachment: fixed;
+            }
+            
+            .window {
+                width: 100% !important;
+                margin-bottom: 15px;
+            }
+            
+            .field-row, .field-row-stacked {
+                flex-direction: column;
+            }
+            
+            .field-row > *, .field-row-stacked > * {
+                margin-bottom: 8px;
+                width: 100%;
+            }
+            
+            button, input, select {
+                min-height: 38px; /* Larger touch targets */
+            }
+            
+            /* Improve modal experience on mobile */
+            .modal-content {
+                width: 95% !important;
+                max-width: none !important;
+            }
+        }
+    </style>
 </head>
 <body background="https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Bucephala-albeola-010.jpg/220px-Bucephala-albeola-010.jpg">
     <!-- Header -->
     {% include 'components/header.html' %}
 
     <!-- Main Content -->
-    <div class="container-fluid">
+    <div class="container-fluid px-0">
         <div class="row g-0">
             <div id="main-container" class="col-12">
                 {% block content %}{% endblock %}

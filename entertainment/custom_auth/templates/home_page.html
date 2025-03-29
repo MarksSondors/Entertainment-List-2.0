@@ -2,151 +2,176 @@
 {% load static %}
 
 {% block content %}
-    <div class="row" style="display: flex; justify-content: space-between; width: 100%; margin: auto;">
-        <div class="col window" style="width: 30%;">
-            <div class="title-bar">
-                <div class="title-bar-text">main.exe</div>
-                <div class="title-bar-controls">
-                    <button aria-label="Minimize"></button>
-                    <button aria-label="Maximize"></button>
-                    <button aria-label="Close"></button>
+    <!-- Top row windows -->
+    <div class="row px-2 py-2">
+        <div class="col-12 col-md-6 mb-3">
+            <div class="window" style="width: 100%;">
+                <div class="title-bar">
+                    <div class="title-bar-text">main.exe</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
                 </div>
-            </div>
-            <div class="window-body">
-                <div class="field-row-stacked" style="text-align: center;">
-                    <img src="{% static 'images/frontend-logo.png' %}" alt="Entertainment List Logo" style="width: 25%;" />
-                    <h1 style="color: #5e9ca0;">
-                        <span style="background-color: #ff00ff; color: #ffffff;">Welcome to <span style="color: #0000ff;">Entertainment</span> List!</span>
-                    </h1>
-                    <img src="https://www.heavensgate.com/img/redalrt3.gif" alt="Alert Image" />
-                    <p style="color: #00ffff; background-color: #000000;">
-                        Whether the latest cinematic universe has a "definitive ranking" or not is irrelevant from our perspective. However, its evolution is joyously significant to us at Entertainment List. The joy is that our dedicated platform has made it clear to us that this moment is the "marker" we've been waiting for—the time to fully immerse ourselves in managing our favorite movies, shows, and more, all in one place.
-                    </p>
+                <div class="window-body">
+                    <div class="field-row-stacked" style="text-align: center;">
+                        <img src="{% static 'images/frontend-logo.png' %}" alt="Entertainment List Logo" style="width: 25%; max-width: 100px;" />
+                        <h1 style="color: #5e9ca0; font-size: clamp(18px, 5vw, 24px);">
+                            <span style="background-color: #ff00ff; color: #ffffff;">Welcome to <span style="color: #0000ff;">Entertainment</span> List!</span>
+                        </h1>
+                        <img src="https://www.heavensgate.com/img/redalrt3.gif" alt="Alert Image" style="max-width: 100%;" />
+                        <p style="color: #00ffff; background-color: #000000; padding: 10px; font-size: 14px;">
+                            Whether the latest cinematic universe has a "definitive ranking" or not is irrelevant from our perspective. However, its evolution is joyously significant to us at Entertainment List. The joy is that our dedicated platform has made it clear to us that this moment is the "marker" we've been waiting for—the time to fully immerse ourselves in managing our favorite movies, shows, and more, all in one place.
+                        </p>
+                    </div>
                 </div>
-            </div>
-            <div class="status-bar">
-                <div class="status-bar-field">Ready</div>
+                <div class="status-bar">
+                    <div class="status-bar-field">Ready</div>
+                </div>
             </div>
         </div>
 
-        <div class="col window" style="width: 30%;">
-            <div class="title-bar">
-                <div class="title-bar-text">Actions</div>
-                <div class="title-bar-controls">
-                    <button aria-label="Minimize"></button>
-                    <button aria-label="Maximize"></button>
-                    <button aria-label="Close"></button>
+        <div class="col-12 col-md-6 mb-3">
+            <div class="window" style="width: 100%;">
+                <div class="title-bar">
+                    <div class="title-bar-text">Actions</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
                 </div>
-            </div>
-            <div class="window-body">
-                <fieldset>
-                    <legend>Actions</legend>
-                    <ul class="tree-view">
-                        <li>
-                            <a href="javascript:void(0);" onclick="openModal()">
-                                <img src="https://web.archive.org/web/19990129025527im_/http://www.geocities.com/NapaValley/2022/rib88x31.gif" alt="Add Movie to Watchlist">
-                                Add Movie
-                            </a>
-                        </li>
-                        <li>
-                            <a href="">
-                                <img src="https://anlucas.neocities.org/bookmark_this_page.gif" alt="View Watchlist">
-                                View Your Watchlist
-                            </a>
-                        </li>
-                        <li>
-                            <a href="">
-                                <img src="https://cyber.dabamos.de/88x31/88-31-banner.gif" alt="Search Movies">
-                                Search for Movies
-                            </a>
-                        </li>
-                        <li>
-                            <a href="">
-                                <img src="https://anlucas.neocities.org/got_html.gif" alt="Get Recommendations">
-                                Get Movie Recommendations
-                            </a>
-                        </li>
-                        <li>
-                            <a href="">
-                                <img src="https://cyber.dabamos.de/88x31/88ibet.gif" alt="Manage Account">
-                                Manage Your Account
-                            </a>
-                        </li>
-                    </ul>
-                </fieldset>
-            </div>
-            <div class="status-bar">
-                <div class="status-bar-field">Ready</div>
+                <div class="window-body">
+                    <fieldset>
+                        <legend>Actions</legend>
+                        <ul class="tree-view">
+                            <li>
+                                <a href="javascript:void(0);" onclick="openModal()" style="display: flex; align-items: center; padding: 5px 0;">
+                                    <img src="https://web.archive.org/web/19990129025527im_/http://www.geocities.com/NapaValley/2022/rib88x31.gif" alt="Add Movie to Watchlist" style="max-width: 88px; margin-right: 10px;">
+                                    <span>Add Movie</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{% url 'watchlist_page' %}" style="display: flex; align-items: center; padding: 5px 0;">
+                                    <img src="https://anlucas.neocities.org/bookmark_this_page.gif" alt="View Watchlist" style="max-width: 88px; margin-right: 10px;">
+                                    <span>View Your Watchlist</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="" style="display: flex; align-items: center; padding: 5px 0;">
+                                    <img src="https://cyber.dabamos.de/88x31/88-31-banner.gif" alt="Search Movies" style="max-width: 88px; margin-right: 10px;">
+                                    <span>Search for Movies</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="" style="display: flex; align-items: center; padding: 5px 0;">
+                                    <img src="https://anlucas.neocities.org/got_html.gif" alt="Get Recommendations" style="max-width: 88px; margin-right: 10px;">
+                                    <span>Get Movie Recommendations</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="" style="display: flex; align-items: center; padding: 5px 0;">
+                                    <img src="https://cyber.dabamos.de/88x31/88ibet.gif" alt="Manage Account" style="max-width: 88px; margin-right: 10px;">
+                                    <span>Manage Your Account</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </fieldset>
+                </div>
+                <div class="status-bar">
+                    <div class="status-bar-field">Ready</div>
+                </div>
             </div>
         </div>
     </div>
-        <div class="row" style="display: flex; justify-content: space-between; width: 100%; margin: auto;">
-            <div class="col window" style="width: 45%;">
-            <div class="title-bar">
-                <div class="title-bar-text">cmd.exe</div>
-                <div class="title-bar-controls">
-                <button aria-label="Minimize"></button>
-                <button aria-label="Maximize"></button>
-                <button aria-label="Close"></button>
+
+    <!-- Bottom row windows -->
+    <div class="row px-2 pb-3">
+        <div class="col-12 col-md-6 mb-3">
+            <div class="window" style="width: 100%;">
+                <div class="title-bar">
+                    <div class="title-bar-text">cmd.exe</div>
+                    <div class="title-bar-controls">
+                    <button aria-label="Minimize"></button>
+                    <button aria-label="Maximize"></button>
+                    <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body" style="background-color: black; color: lime; font-family: monospace; padding: 10px;">
+                    <p>Microsoft&#10094;R&#10095; Windows DOS 
+                    &#10094;C&#10095; Copyright Microsoft Corp 1990-2001.
+                    <br>C:&#92;WINDOWS&#92;SYSTEM32> get_reviews.exe </p>
+                    <div style="overflow-y: auto; max-height: 200px; padding: 5px; border: 1px solid lime;">
+                        <p>Recent Reviews:</p>
+                        <p>> john_doe: "Amazing movie, a must-watch!" <br> Movie: Inception <br> Rating: 5/5 <br> Created At: 2023-10-01</p>
+                        <p>> jane_smith: "Not my cup of tea, but well-made." <br> Movie: Titanic <br> Rating: 3/5 <br> Created At: 2023-10-02</p>
+                        <p>> movie_buff99: "A cinematic masterpiece, 10/10!" <br> Movie: The Godfather <br> Rating: 5/5 <br> Created At: 2023-10-03</p>
+                        <p>> casual_viewer: "It was okay, nothing special." <br> Movie: Avatar <br> Rating: 2/5 <br> Created At: 2023-10-04</p>
+                        <p>> critic101: "Overhyped, but still enjoyable." <br> Movie: The Dark Knight <br> Rating: 4/5 <br> Created At: 2023-10-05</p>
+                    </div>
                 </div>
             </div>
-            <div class="window-body" style="background-color: black; color: lime; font-family: monospace; padding: 10px;">
-                <p>Microsoft&#10094;R&#10095; Windows DOS 
-                &#10094;C&#10095; Copyright Microsoft Corp 1990-2001.
-                <br>C:&#92;WINDOWS&#92;SYSTEM32> get_reviews.exe </p>
-                <div style="overflow-y: auto; padding: 5px; border: 1px solid lime;">
-                <p>Recent Reviews:</p>
-                <p>> john_doe: "Amazing movie, a must-watch!" <br> Movie: Inception <br> Rating: 5/5 <br> Created At: 2023-10-01</p>
-                <p>> jane_smith: "Not my cup of tea, but well-made." <br> Movie: Titanic <br> Rating: 3/5 <br> Created At: 2023-10-02</p>
-                <p>> movie_buff99: "A cinematic masterpiece, 10/10!" <br> Movie: The Godfather <br> Rating: 5/5 <br> Created At: 2023-10-03</p>
-                <p>> casual_viewer: "It was okay, nothing special." <br> Movie: Avatar <br> Rating: 2/5 <br> Created At: 2023-10-04</p>
-                <p>> critic101: "Overhyped, but still enjoyable." <br> Movie: The Dark Knight <br> Rating: 4/5 <br> Created At: 2023-10-05</p>
+        </div>
+        
+        <div class="col-12 col-md-6 mb-3">
+            <div class="window" style="width: 100%;">
+                <div class="title-bar">
+                    <div class="title-bar-text">Popular Movies</div>
+                    <div class="title-bar-controls">
+                    <button aria-label="Minimize"></button>
+                    <button aria-label="Maximize"></button>
+                    <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body">
+                    <fieldset>
+                    <legend>Top 5 Popular Movies</legend>
+                
+                    <ul id="popular_movies_block" class="tree-view">
+                        <!-- Movies will be dynamically loaded here -->
+                    </ul>
+                    </fieldset>
+                </div>
+                <div class="status-bar">
+                    <div class="status-bar-field">Ready</div>
                 </div>
             </div>
-            </div>
-            <div class="col window" style="width: 45%;">
-            <div class="title-bar">
-                <div class="title-bar-text">Popular Movies</div>
-                <div class="title-bar-controls">
-                <button aria-label="Minimize"></button>
-                <button aria-label="Maximize"></button>
-                <button aria-label="Close"></button>
-                </div>
-            </div>
-            <div class="window-body">
-                <fieldset>
-                <legend>Top 5 Popular Movies</legend>
-            
-                <ul id="popular_movies_block" class="tree-view">
-                    <!-- Movies will be dynamically loaded here -->
-                </ul>
-                </fieldset>
-            </div>
-            <div class="status-bar">
-                <div class="status-bar-field">Ready</div>
-            </div>
-            </div>
-            <script>
-                fetch('/movies/popular/')
-                    .then(response => response.json())
-                    .then(data => {
-                        const movieList = document.getElementById('popular_movies_block');
-                        movieList.innerHTML = '';
-                        data.forEach(movie => {
-                            const listItem = document.createElement('li');
-                            listItem.innerHTML = `
-                                <a href="#">
-                                    <img src="${movie.poster_path}" alt="${movie.title}" style="width: 50px; height: auto; margin-right: 10px;">
-                                    ${movie.title}
-                                </a>
-                            `;
-                            movieList.appendChild(listItem);
-                        });
-                    })
-                    .catch(error => console.error('Error fetching popular movies:', error));
-            </script>
         </div>
     </div>
 
     {% include 'movie_search_modal.html' %}
+    
+    <style>
+        @media (max-width: 768px) {
+            .tree-view li a {
+                flex-wrap: wrap;
+                padding: 10px 0;
+            }
+            
+            .tree-view li a img {
+                margin-bottom: 5px;
+            }
+        }
+    </style>
+    
+    <script>
+        fetch('/movies/popular/')
+            .then(response => response.json())
+            .then(data => {
+                const movieList = document.getElementById('popular_movies_block');
+                movieList.innerHTML = '';
+                data.forEach(movie => {
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `
+                        <a href="#" style="display: flex; align-items: center; padding: 5px 0;">
+                            <img src="${movie.poster_path}" alt="${movie.title}" style="width: 50px; height: auto; margin-right: 10px;">
+                            <span>${movie.title}</span>
+                        </a>
+                    `;
+                    movieList.appendChild(listItem);
+                });
+            })
+            .catch(error => console.error('Error fetching popular movies:', error));
+    </script>
 {% endblock %}

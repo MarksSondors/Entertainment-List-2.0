@@ -2,40 +2,60 @@
 {% load heroicons %}
 {% load static %}
 <nav class="navbar navbar-expand-md navbar-dark title-bar" style="background-color: #c0c0c0; border: 2px outset #ffffff; padding: 4px;">
-    <a class="navbar-brand p-2 d-flex align-items-center" href="{% url 'home_page' %}" style="color: black; text-decoration: none;">
-        <img src="{% static 'images/logo.png' %}" alt="Logo" width="32" height="32" class="me-2" />
-        <span style="font-size: 18px; color: white;">Entertainment List</span>
-    </a>
-    
-    <!-- Collection Menu -->
-    <div class="dropdown ms-3">
-        <button class="dropdown-toggle" type="button" id="collectionDropdown" data-bs-toggle="dropdown" aria-expanded="false"
-            style="background-color: #e0e0e0; border: 2px outset #ffffff; padding: 2px 8px; font-size: 14px; cursor: pointer;">
-            MY COLLECTION
+    <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center" href="{% url 'home_page' %}" style="color: black; text-decoration: none;">
+            <img src="{% static 'images/logo.png' %}" alt="Logo" width="32" height="32" class="me-2" />
+            <span style="font-size: 16px; color: white;">Entertainment List</span>
+        </a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" 
+                style="background-color: #e0e0e0; border: 2px outset #ffffff; padding: 2px 5px;">
+            <span class="navbar-toggler-icon"></span>
         </button>
-        <ul class="dropdown-menu" aria-labelledby="collectionDropdown" style="background-color: #dfdfdf; border: 2px outset #ffffff;">
-            <li><a class="dropdown-item" href="#">My Reviews</a></li>
-            <li><a class="dropdown-item" href="#">My Movies</a></li>
-            <li><a class="dropdown-item" href="#">My TV Shows</a></li>
-            <li><a class="dropdown-item" href="#">My Books</a></li>
-        </ul>
+        
+        <div class="collapse navbar-collapse" id="navbarContent">
+            <!-- Collection Menu -->
+            <div class="dropdown ms-md-3 mt-2 mt-md-0">
+                <button class="dropdown-toggle w-100" type="button" id="collectionDropdown" data-bs-toggle="dropdown" aria-expanded="false"
+                    style="background-color: #e0e0e0; border: 2px outset #ffffff; padding: 2px 8px; font-size: 14px; cursor: pointer;">
+                    MY COLLECTION
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="collectionDropdown" style="background-color: #dfdfdf; border: 2px outset #ffffff;">
+                    <li><a class="dropdown-item" href="#">My Reviews</a></li>
+                    <li><a class="dropdown-item" href="#">My Movies</a></li>
+                    <li><a class="dropdown-item" href="#">My TV Shows</a></li>
+                    <li><a class="dropdown-item" href="#">My Books</a></li>
+                </ul>
+            </div>
+            
+            <div class="ms-auto mt-2 mt-md-0">
+                <select id="userMenu" class="form-select" style="background-color: #e0e0e0; border: 2px outset #ffffff; padding: 2px 8px; font-size: 14px; cursor: pointer; width: auto; min-width: 120px;">
+                    <option selected>{{ user.username }}</option>
+                    <option value="profile">Profile</option>
+                    <option value="settings">Settings</option>
+                    <option value="logout">Logout</option>
+                </select>
+            </div>
+        </div>
     </div>
-    
-    <ul class="navbar-nav ms-auto" style="list-style: none; margin: 0; padding: 4px; display: flex; align-items: center;">
-        <li style="margin-left: 10px;">
-            <select class="" aria-label="User menu" style="background-color: #ffffff; border: 2px inset #c0c0c0; font-size: 14px; color: #000000; width: 200px; height: 30px;">
-                <option selected style="color: #000000;">{{ user.username }}</option>
-                <option value="profile" style="color: #000000;">Profile</option>
-                <option value="settings" style="color: #000000;">Settings</option>
-                <option value="logout" style="color: #000000;">Logout</option>
-            </select>
-        </li>
-    </ul>
-    <script>
-        document.querySelector('select[aria-label="User menu"]').addEventListener('change', function() {
-            if (this.value === 'logout') {
-                window.location.href = "{% url 'logout_request' %}";
-            }
-        });
-    </script>
 </nav>
+
+<!-- Add JavaScript at the end of the file to handle select changes -->
+<script>
+    document.getElementById('userMenu').addEventListener('change', function() {
+        const selectedValue = this.value;
+        
+        if (selectedValue === 'logout') {
+            window.location.href = "{% url 'logout_request' %}";
+        } else if (selectedValue === 'profile') {
+            window.location.href = "{% url 'logout_request' %}"; // Update with profile URL when available
+        } else if (selectedValue === 'settings') {
+            window.location.href = "{% url 'logout_request' %}"; // Update with settings URL when available
+        }
+        
+        // Reset to username option after navigation starts
+        setTimeout(() => {
+            this.selectedIndex = 0;
+        }, 100);
+    });
+</script>

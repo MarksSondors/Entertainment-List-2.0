@@ -19,6 +19,14 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username
+        
+    def get_watchlist(self):
+        """Get all items in the user's watchlist."""
+        return self.watchlist_items.all()
+    
+    def get_reviews(self):
+        """Get all reviews by the user."""
+        return self.reviews.all()
 
 class Genre(models.Model):
     name = models.CharField(max_length=100)
@@ -158,4 +166,55 @@ class MediaPerson(models.Model):
 
     class Meta:
         ordering = ['order']
+        
+class Watchlist(models.Model):
+    """Model for tracking media items a user wants to watch."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='watchlist_items')
+    
+    # Generic foreign key to allow different media types
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    media = GenericForeignKey('content_type', 'object_id')
+    
+    # Tracking information
+    date_added = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-date_added']
+        # Ensure a user can't add the same item twice
+        unique_together = ['user', 'content_type', 'object_id']
+        
+    def __str__(self):
+        return f"{self.user.username}'s watchlist - {self.media}"
+
+class Review(models.Model):
+    """Model for user reviews of media items."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reviews')
+    
+    # Generic foreign key to allow different media types
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    media = GenericForeignKey('content_type', 'object_id')
+    
+    # Review content
+    rating = models.FloatField()
+    review_text = models.TextField(blank=True, null=True)
+    date_reviewed = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-date_reviewed']
+        unique_together = ['user', 'content_type', 'object_id']
+        
+    def __str__(self):
+        return f"{self.user.username}'s review of {self.media} - {self.rating}/10"
+    
+    def save(self, *args, **kwargs):
+        # Remove from watchlist when reviewed
+        Watchlist.objects.filter(
+            user=self.user,
+            content_type=self.content_type,
+            object_id=self.object_id
+        ).delete()
+        
+        super().save(*args, **kwargs)
 
