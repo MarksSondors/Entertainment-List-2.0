@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
-from .models import Movie
+from custom_auth.models import Movie
 from .models import Country, Genre, Person, Keyword
 from .serializers import MovieSerializer
 from .parsers import create_movie

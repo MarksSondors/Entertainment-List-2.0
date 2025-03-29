@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Movie
+from custom_auth.models import Movie
 
 class MovieSerializer(serializers.ModelSerializer):
     class Meta:
