@@ -102,7 +102,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None):
         
         # Skip if not one of our supported roles
         if (department == 'Directing' and job != 'Director') or \
-           (department == 'Writing' and job not in ['Original Story', 'Screenplay', 'Writer', 'Story']) or \
+           (department == 'Writing' and job not in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel']) or \
            (department == 'Sound' and job != 'Original Music Composer'):
             continue
         
@@ -123,12 +123,21 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None):
         role = job
         if job == 'Director':
             person_instance.is_director = True
-        elif job in ['Original Story', 'Screenplay', 'Writer', 'Story']:
-            person_instance.is_writer = True
-            if job == 'Original Story':
+        elif job in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel']:
+            if job == 'Writer':
+                person_instance.is_writer = True
+            if job == 'Story':
                 person_instance.is_story = True
+            if job == 'Original Story':
+                person_instance.is_original_story = True
             if job == 'Screenplay':
                 person_instance.is_screenwriter = True
+            if job == 'Novel':
+                person_instance.is_novelist = True
+            if job == 'Comic Book':
+                person_instance.is_comic_artist = True
+            if job == 'Graphic Novel':
+                person_instance.is_graphic_novelist = True
         elif job == 'Original Music Composer':
             person_instance.is_original_music_composer = True
         

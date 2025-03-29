@@ -8,7 +8,9 @@ class BaseService:
         self.base_url = base_url
 
     def _get(self, endpoint, params=None):
-        url = f'{self.base_url}/{endpoint}'
+        # Ensure endpoint doesn't start with a slash to avoid double slashes
+        endpoint = endpoint.lstrip('/') 
+        url = f'{self.base_url.rstrip("/")}/{endpoint}'
         headers = {}
         if self.bearer_token:
             headers['Authorization'] = f'Bearer {self.bearer_token}'
@@ -16,5 +18,10 @@ class BaseService:
             params = params or {}
             params['api_key'] = self.api_key
         print(url)
-        response = requests.get(url, params=params, headers=headers)
-        return response.json()
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            response.raise_for_status()  # Raises exception for 4XX/5XX responses
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Request error: {e}")
+            raise
