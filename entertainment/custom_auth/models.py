@@ -117,42 +117,63 @@ class Movie(Media):
         hours = self.runtime // 60
         minutes = self.runtime % 60
         return f"{hours}h {minutes}m"
-    
+
     def get_media_persons(self, role=None):
         """Get all MediaPerson objects related to this movie."""
-        content_type = ContentType.objects.get_for_model(self)
-        query = MediaPerson.objects.filter(content_type=content_type, object_id=self.id)
+        query = MediaPerson.objects.filter(
+            content_type_id=ContentType.objects.get_for_model(self.__class__).id,
+            object_id=self.id
+        ).select_related('person')
+        
         if role:
             query = query.filter(role=role)
         return query
     
     @property
+    def _get_content_type_id(self):
+        """Cache content type ID to avoid repeated lookups."""
+        if not hasattr(self, '_content_type_id'):
+            self._content_type_id = ContentType.objects.get_for_model(self.__class__).id
+        return self._content_type_id
+    
+    def _get_persons_by_role(self, role_filter):
+        """Base method for retrieving persons by role."""
+        return Person.objects.filter(
+            mediaperson__content_type_id=self._get_content_type_id,
+            mediaperson__object_id=self.id,
+            **role_filter
+        ).distinct()
+    
+    @property
     def directors(self):
         """Get all directors of this movie."""
-        return [media_person.person for media_person in self.get_media_persons(role="Director")]
+        return self._get_persons_by_role({'mediaperson__role': "Director"})
     
     @property
     def writers(self):
         """Get all writers of this movie."""
-        writer_roles = ["Writer", "Screenplay", "Original Story", "Story"]
-        content_type = ContentType.objects.get_for_model(self)
-        query = MediaPerson.objects.filter(content_type=content_type, object_id=self.id, role__in=writer_roles)
-        return [media_person.person for media_person in query]
+        return self._get_persons_by_role({
+            'mediaperson__role__in': ["Writer", "Screenplay", "Original Story", "Story"]
+        })
     
     @property
     def producers(self):
         """Get all producers of this movie."""
-        return [media_person.person for media_person in self.get_media_persons(role="Executive Producer")]
+        return self._get_persons_by_role({'mediaperson__role': "Executive Producer"})
     
     @property
     def cast(self):
-        """Get all cast members of this movie."""
-        return [media_person.person for media_person in self.get_media_persons(role="Actor")]
+        """Get all cast members of this movie with their character names."""
+        return MediaPerson.objects.select_related('person').filter(
+            content_type_id=self._get_content_type_id,
+            object_id=self.id,
+            role="Actor"
+        ).order_by('order')
     
     @property
     def composers(self):
         """Get all composers of this movie."""
-        return [media_person.person for media_person in self.get_media_persons(role="Original Music Composer")]
+        return self._get_persons_by_role({'mediaperson__role': "Original Music Composer"})
 
 class MediaPerson(models.Model):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)

@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404
 from api.services.movies import MoviesService
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, viewsets
@@ -23,11 +23,18 @@ from django.http import JsonResponse
 def create_movie_page(request):
     return render(request, 'create_movie.html')
 
+@login_required
 def movie_page(request, movie_id):
-    movie_db = Movie.objects.filter(tmdb_id=movie_id).first()
-    if not movie_db:
-        create_movie(movie_id)
-        movie_db = Movie.objects.filter(tmdb_id=movie_id).first()
+    try:
+        movie_db = Movie.objects.prefetch_related(
+            'genres', 
+            'countries', 
+            'keywords'
+        ).get(tmdb_id=movie_id)
+    except Movie.DoesNotExist:
+        movie_db = create_movie(movie_id)
+        if not movie_db:
+            raise Http404(f"Movie with ID {movie_id} could not be created")
     context = {
         'movie': movie_db
     }
