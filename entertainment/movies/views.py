@@ -44,6 +44,7 @@ def watchlist_page(request):
     media_type = request.GET.get('media_type')
     genre_id = request.GET.get('genre')
     sort_by = request.GET.get('sort_by', '-date_added')  # Default sort by date added
+    filter_title = request.GET.get('title', '')  # Get title filter parameter
     
     # Apply filters if provided
     if media_type:
@@ -55,6 +56,14 @@ def watchlist_page(request):
         filtered_items = []
         for item in watchlist_items:
             if hasattr(item.media, 'genres') and item.media.genres.filter(id=genre_id).exists():
+                filtered_items.append(item.id)
+        watchlist_items = watchlist_items.filter(id__in=filtered_items)
+    
+    # Filter by title if provided
+    if filter_title:
+        filtered_items = []
+        for item in watchlist_items:
+            if hasattr(item.media, 'title') and filter_title.lower() in item.media.title.lower():
                 filtered_items.append(item.id)
         watchlist_items = watchlist_items.filter(id__in=filtered_items)
     
@@ -83,6 +92,7 @@ def watchlist_page(request):
         'current_media_type': media_type,
         'current_genre': genre_id,
         'current_sort': sort_by,
+        'filter_title': filter_title,  # Add title filter to context
         'view_type': request.GET.get('view_type', 'grid')  # Default to grid view
     }
     
@@ -130,6 +140,26 @@ class TMDBSearchView(APIView):
 
         movies = MoviesService().search_movies(**params)
         sorted_movies = sorted(movies['results'], key=lambda x: x['popularity'], reverse=True)
+        
+        # Add a field to show if movie is already in database
+        existing_movie_ids = Movie.objects.filter(
+            tmdb_id__in=[movie['id'] for movie in sorted_movies]
+        ).values_list('tmdb_id', flat=True)
+        
+        # Get the user's watchlist movie IDs
+        user_watchlist = Watchlist.objects.filter(
+            user=request.user,
+            content_type=ContentType.objects.get_for_model(Movie)
+        ).values_list('object_id', flat=True)
+        
+        user_watchlist_tmdb_ids = Movie.objects.filter(
+            id__in=user_watchlist
+        ).values_list('tmdb_id', flat=True)
+        
+        for movie in sorted_movies:
+            movie['in_database'] = movie['id'] in existing_movie_ids
+            movie['in_watchlist'] = movie['id'] in user_watchlist_tmdb_ids
+            
         movies['results'] = sorted_movies
         return Response(movies, status=status.HTTP_200_OK)
 
