@@ -197,15 +197,27 @@ class MovieViewSet(viewsets.ViewSet):
         if not movie_id:
             return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
         
+        add_to_watchlist = request.data.get('add_to_watchlist', False)
+
         if Movie.objects.filter(tmdb_id=movie_id).exists():
+            if add_to_watchlist:
+                # Add to watchlist if it already exists
+                content_type = ContentType.objects.get_for_model(Movie)
+                watchlist_item, created = Watchlist.objects.get_or_create(
+                    user=request.user,
+                    content_type=content_type,
+                    object_id=Movie.objects.filter(tmdb_id=movie_id).first().id,
+                )
+                if created:
+                    return Response({"message": "Movie added to watchlist"}, status=status.HTTP_201_CREATED)
+                else:
+                    return Response({"message": "Movie already in watchlist"}, status=status.HTTP_200_OK)
             return Response({"error": "Movie already exists"}, status=status.HTTP_400_BAD_REQUEST)
         
         movie_poster = request.data.get('poster')
         movie_backdrop = request.data.get('backdrop')
 
         is_anime = request.data.get('is_anime', False)
-        add_to_watchlist = request.data.get('add_to_watchlist', False)
-
         # if movie_poster or movie_backdrop is added add the url https://image.tmdb.org/t/p/original to the front
         if movie_poster:
             movie_poster = f"https://image.tmdb.org/t/p/original{movie_poster}"
