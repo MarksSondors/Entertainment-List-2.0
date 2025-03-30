@@ -100,19 +100,28 @@ body {
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openReviewModal()">Write a Review</button>
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openCastModal()">Cast</button>
 
-            <div id="reviewModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 300px;">
+            <div id="reviewModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #C3C3C3; border: 2px solid black; z-index: 1000; width: 350px;">
                 <div class="title-bar">
                     <div class="title-bar-text">Write a Review</div>
                     <div class="title-bar-controls">
                         <button aria-label="Close" onclick="closeReviewModal()"></button>
                     </div>
                 </div>
-                <label for="rating" style="font-family: 'MS Sans Serif';">Rating:</label>
-                <input type="range" id="rating" name="rating" min="1" max="10" style="width: 100%; margin-bottom: 10px;">
-                <textarea id="reviewText" name="reviewText" rows="4" style="width: 100%; font-family: 'MS Sans Serif'; margin-bottom: 10px;" placeholder="Write your review here..."></textarea>
-                <div style="text-align: right;">
-                    <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="submitReview()">Submit</button>
-                    <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="closeReviewModal()">Cancel</button>
+                <div style="padding: 15px; background-color: #C3C3C3;">
+                    <div style="background-color: white; border: 2px inset; padding: 10px; margin-bottom: 10px;">
+                        <label for="watchDate" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Date Watched:</label>
+                        <input type="date" id="watchDate" name="watchDate" style="width: 100%; font-family: 'MS Sans Serif'; margin-bottom: 10px; border: 2px inset; padding: 5px;" value="{% now 'Y-m-d' %}">
+                        
+                        <label for="rating" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Rating: <span id="ratingValue">5</span>/10</label>
+                        <input type="range" id="rating" name="rating" min="1" max="10" value="5" style="width: 100%; margin-bottom: 10px;">
+                        
+                        <label for="reviewText" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Review:</label>
+                        <textarea id="reviewText" name="reviewText" rows="4" style="width: 100%; font-family: 'MS Sans Serif'; margin-bottom: 5px; border: 2px inset; padding: 5px;" placeholder="Write your review here..."></textarea>
+                    </div>
+                    <div style="text-align: right;">
+                        <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="submitReview()">Submit</button>
+                        <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="closeReviewModal()">Cancel</button>
+                    </div>
                 </div>
             </div>
 
@@ -148,6 +157,9 @@ body {
             <script>
                 function openReviewModal() {
                     document.getElementById('reviewModal').style.display = 'block';
+                    document.getElementById('rating').value = 5;
+                    document.getElementById('ratingValue').textContent = 5;
+                    document.getElementById('reviewText').value = '';
                 }
 
                 function closeReviewModal() {
@@ -159,9 +171,13 @@ body {
                     const reviewText = document.getElementById('reviewText').value;
                     console.log('Rating:', rating);
                     console.log('Review:', reviewText);
+                    
+                    // TODO: Add AJAX call to submit review to server
+                    
                     closeReviewModal();
+                    // Optional: Show success message
                 }
-                
+
                 function openCastModal() {
                     document.getElementById('castModal').style.display = 'block';
                 }
@@ -169,6 +185,15 @@ body {
                 function closeCastModal() {
                     document.getElementById('castModal').style.display = 'none';
                 }
+
+                document.addEventListener('DOMContentLoaded', function() {
+                    const ratingSlider = document.getElementById('rating');
+                    const ratingValue = document.getElementById('ratingValue');
+                    
+                    ratingSlider.addEventListener('input', function() {
+                        ratingValue.textContent = this.value;
+                    });
+                });
             </script>
         </div>
     </div>
