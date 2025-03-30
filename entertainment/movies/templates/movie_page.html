@@ -126,17 +126,15 @@ body {
                 <div style="padding: 10px; background-color: white; max-height: 70vh; overflow-y: auto;">
                     <h3 style="margin: 5px 0; font-size: 16px;">Actors</h3>
                     <ul style="margin: 0; padding-left: 20px;">
-                        {% for actor in movie.cast %}
+                        {% for cast_member in movie.cast %}
                         <li style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <img src="{{ actor.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" alt="{{ actor.name }}" style="width: 75px; object-fit: cover; border: 2px solid black; margin-right: 10px;">
+                            <img src="{{ cast_member.person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" alt="{{ cast_member.person.name }}" style="width: 75px; object-fit: cover; border: 2px solid black; margin-right: 10px;">
                             <div>
-                                <div><a href="#" style="text-decoration: none; color: black;">{{ actor.name }}</a></div>
+                                <div><a href="#" style="text-decoration: none; color: black;">{{ cast_member.person.name }}</a></div>
                                 <div style="font-size: 0.9em; color: #666;">
-                                    {% for media_person in movie.get_media_persons %}
-                                        {% if media_person.person.id == actor.id and media_person.character_name %}
-                                            as {{ media_person.character_name }}
-                                        {% endif %}
-                                    {% endfor %}
+                                    {% if cast_member.character_name %}
+                                        as {{ cast_member.character_name }}
+                                    {% endif %}
                                 </div>
                             </div>
                         </li>

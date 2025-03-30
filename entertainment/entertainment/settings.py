@@ -28,6 +28,10 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=lambda v: v.split(','))
 
+INTERNAL_IPS = [
+    '127.0.0.1'
+]
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -43,6 +47,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'heroicons',
+    "debug_toolbar",
+
 
     # Custom apps
     'custom_auth',  # user info and tables which are not unique to other apps
@@ -60,7 +66,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Enterainment API',
     'DESCRIPTION': 'API for all things entertainment',
-    'VERSION': '1.0.0',
+    'VERSION': '0.0.2',
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
@@ -72,6 +78,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    "debug_toolbar.middleware.DebugToolbarMiddleware",
 
 ]
 
