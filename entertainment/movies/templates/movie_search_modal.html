@@ -349,25 +349,46 @@
                 }
 
                 function renderResults() {
-                                $('#results-list').empty();
-                                allResults.forEach(function(movie) {
-                                                const listItem = $('<li></li>');
-                                                const poster = movie.poster_path
-                                                                ? `<img src="https://image.tmdb.org/t/p/w200${movie.poster_path}" 
-                                                                         alt="${movie.title} poster" style="width: 50px; height: auto; vertical-align: middle; margin-right: 10px;">`
-                                                                : '';
-                                                listItem.html(`${poster}<span>${movie.title} (${movie.release_date || 'N/A'})</span>`);
-                                                listItem.on('click', function() {
-                                                                selectedMovie = movie;
-                                                                $("#to-stage-2-btn").prop("disabled", false);
-                                                                
-                                                                // Highlight selected item
-                                                                $('#results-list li').removeClass('selected');
-                                                                $(this).addClass('selected');
-                                                });
-                                                $('#results-list').append(listItem);
-                                });
-                }
+    $('#results-list').empty();
+    allResults.forEach(function(movie) {
+        const listItem = $('<li></li>');
+        const poster = movie.poster_path
+            ? `<img src="https://image.tmdb.org/t/p/w200${movie.poster_path}" 
+                 alt="${movie.title} poster" style="width: 50px; height: auto; vertical-align: middle; margin-right: 10px;">`
+            : '';
+        
+        // Create database status indicators
+        let statusIndicators = '';
+        if (movie.in_database) {
+            statusIndicators += `<span class="status-pill in-database">
+                <a href="/movies/${movie.id}/" class="status-link">View Movie</a>
+            </span>`;
+        }
+        if (movie.in_watchlist) {
+            statusIndicators += `<span class="status-pill in-watchlist">
+                <a href="/watchlist/movies/" class="status-link">In Watchlist</a>
+            </span>`;
+        }
+        
+        listItem.html(`
+            <div class="movie-result">
+                ${poster}
+                <span class="movie-title">${movie.title} (${movie.release_date || 'N/A'})</span>
+                <div class="movie-status">${statusIndicators}</div>
+            </div>
+        `);
+        
+        listItem.on('click', function() {
+            selectedMovie = movie;
+            $("#to-stage-2-btn").prop("disabled", false);
+            
+            // Highlight selected item
+            $('#results-list li').removeClass('selected');
+            $(this).addClass('selected');
+        });
+        $('#results-list').append(listItem);
+    });
+}
 
                 function updatePagination(response) {
                                 $('#total-results').text(response.total_results);
@@ -561,5 +582,48 @@
     100% {
         width: 100%;
     }
+}
+
+.movie-result {
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 5px 0;
+}
+
+.movie-title {
+    flex-grow: 1;
+}
+
+.movie-status {
+    display: flex;
+    gap: 5px;
+    margin-left: 10px;
+}
+
+.status-pill {
+    font-size: 12px;
+    padding: 2px 8px;
+    border: 1px solid #808080;
+    background: #d4d0c8;
+    white-space: nowrap;
+    border-radius: 0px;
+}
+
+.in-database {
+    border-color: #008000;
+}
+
+.in-watchlist {
+    border-color: #000080;
+}
+
+.status-link {
+    color: #000080;
+    text-decoration: none;
+}
+
+.status-link:hover {
+    text-decoration: underline;
 }
 </style>
