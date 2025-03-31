@@ -53,9 +53,10 @@
                                 </a>
                             </li>
                             <li>
-                                <a href="javascript:void(0);" onclick="" style="display: flex; align-items: center; padding: 5px 0;">
+                                <a href="javascript:void(0);" onclick="openTVShowModal()" style="display: flex; align-items: center; padding: 5px 0;">
                                     <img src="https://liseklucian.neocities.org/buttons/bandwith_conservation_society.gif" alt="Add TV Show" style="max-width: 88px; margin-right: 10px;">
                                     <span>Add TV Show</span>
+                                </a>
                             </li>
                             <li>
                                 <a href="javascript:void(0);" onclick="" style="display: flex; align-items: center; padding: 5px 0;">
@@ -158,6 +159,7 @@
     </div>
 
     {% include 'movie_search_modal.html' %}
+    {% include 'tv_show_search_modal.html' %}
     
     <style>
         @media (max-width: 768px) {

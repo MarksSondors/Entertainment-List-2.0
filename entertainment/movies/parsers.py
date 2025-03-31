@@ -94,6 +94,9 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
                 'imdb_id': person_details.get('imdb_id')
             }
         )
+
+        person_instance.is_actor = True
+        person_instance.save()
         
         # Create MediaPerson for cast member
         MediaPerson.objects.create(

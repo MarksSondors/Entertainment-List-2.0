@@ -47,6 +47,9 @@ def watchlist_page(request):
     # Get watchlist items
     watchlist_items = request.user.get_watchlist()
     
+    # get only movies for now
+    watchlist_items = watchlist_items.filter(content_type=ContentType.objects.get_for_model(Movie))
+    
     # Handle filters
     media_type = request.GET.get('media_type')
     genre_id = request.GET.get('genre')

@@ -1,0 +1,626 @@
+{% comment %} tv_show_search_modal.html {% endcomment %}
+
+<div id="tv-show-search-modal" class="modal" style="display: none;">
+    <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+        <!-- Modal Header -->
+        <div class="title-bar">
+            <div class="title-bar-text" id="tv-show-modal-title">Add TV Show</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" id="tv-show-close-modal-btn"></button>
+            </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body">
+            <!-- Stage 1: Search and Select -->
+            <div id="tv-show-modal-stage-1">
+                <!-- Search Input -->
+                <div id="tv-show-tmdb-search-form" style="display: flex; align-items: center; margin-bottom: 10px;">
+                    <label for="tv-show-query">Search:</label>
+                    <input type="text" id="tv-show-query" name="tv-show-query" style="margin: 0 10px; flex-grow: 1;" placeholder="Enter movie title">
+                    <button id="tv-show-search-button">Search</button>
+                </div>
+                <!-- Results Section -->
+                <div style="margin-top: 15px;">
+                    <fieldset>
+                        <legend>Search Results</legend>
+                        <div style="overflow-y: auto; max-height: 300px; border: 2px inset; background-color: white; padding: 5px; margin-bottom: 10px;">
+                            <ul id="tv-show-results-list" class="tree-view" style="height: 100%; width: 100%;"></ul>
+                        </div>
+                        <div>
+                            <p><strong>Total Results:</strong> <span id="tv-show-total-results">0</span></p>
+                            <p><strong>Page:</strong> <span id="current-page">0</span> of <span id="total-pages">0</span></p>
+                            <div style="display: flex; gap: 10px;">
+                                <button id="tv-show-prev-button" disabled>Previous</button>
+                                <button id="tv-show-next-button" disabled>Next</button>
+                            </div>
+                        </div>
+                    </fieldset>
+                </div>
+                <!-- Navigation Buttons -->
+                <div style="text-align: right; margin-top: 15px;">
+                    <button id="tv-show-to-stage-2-btn" disabled>Next: Edit Details</button>
+                </div>
+            </div>
+
+            <!-- Stage 2: Edit TV Show Details -->
+            <div id="tv-show-modal-stage-2" style="display: none;">
+                <form method="post" id="add-tv-show-form" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" id="tv-show-tmdb_id" name="tmdb_id">
+                    
+                    <!-- TV Show Preview -->
+                    <div style="display: flex; margin-bottom: 15px; gap: 15px;">
+                        <div style="flex: 1; text-align: center;">
+                            <h4>Poster</h4>
+                            <img id="tv-show-poster-preview" src="" alt="TV show poster" style="max-width: 100%; height: 200px; cursor: pointer;" onclick="openTVShowPosterSelectionModal()">
+                            <div style="margin-top: 5px;">
+                                <button type="button" onclick="openTVShowPosterSelectionModal()">Browse TMDB Posters</button>
+                            </div>
+                            <input type="hidden" id="tv-show-default-poster-path" name="default_poster_path">
+                        </div>
+                        <div style="flex: 1; text-align: center;">
+                            <h4>Backdrop</h4>
+                            <img id="tv-show-backdrop-preview" src="" alt="TV show backdrop" style="max-width: 100%; height: 200px; cursor: pointer;" onclick="openTVShowBackdropSelectionModal()">
+                            <div style="margin-top: 5px;">
+                                <button type="button" onclick="openTVShowBackdropSelectionModal()">Browse TMDB Backdrops</button>
+                            </div>
+                            <input type="hidden" id="tv-show-default-backdrop-path" name="default_backdrop_path">
+                        </div>
+                    </div>
+                    
+                    <!-- TV Show Details -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <label for="title">Title:</label>
+                        <input type="text" id="tv-show-title" name="title" required readonly style="width: 100%;">
+                    </div>
+                    
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <label for="first_air_date">First Air Date:</label>
+                        <input type="text" id="tv-show-first_air_date" name="first_air_date" required readonly style="width: 100%;">
+                    </div>
+                    
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <label for="description">Description:</label>
+                        <input type="text" id="tv-show-description" name="description" required readonly style="width: 100%;">
+                    </div>
+                    
+                    <!-- Additional Options -->
+                    <div style="margin-bottom: 15px;">
+                        <div class="field-row">
+                            <input type="checkbox" id="tv-show-is_anime" name="is_anime">
+                            <label for="tv_show-is_anime">This is an anime series</label>
+                        </div>
+                        <div class="field-row">
+                            <input type="checkbox" id="tv-show-add_to_watchlist" name="add_to_watchlist" checked>
+                            <label for="tv_show-add_to_watchlist">Add to my watchlist</label>
+                        </div>
+                    </div>
+                    
+                    <!-- Navigation Buttons -->
+                    <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+                        <button type="button" id="tv-show-back-to-stage-1-btn">Back to Search</button>
+                        <button type="button" id="tv-show-submit-btn">Add TV Show</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Screen for TV Shows -->
+<div id="tv-show-loading-screen-modal" class="modal" style="display: none; z-index: 1200;">
+    <div class="modal-content window" style="width: 300px;">
+        <div class="title-bar">
+            <div class="title-bar-text">Adding TV Show</div>
+        </div>
+        <div class="window-body" style="text-align: center; padding: 20px;">
+            <p>Adding TV show to your list...</p>
+            <div class="progress-indicator">
+                <span class="progress-indicator-bar"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add success/error message dialog for TV Shows -->
+<div id="tv-show-message-dialog" class="modal" style="display: none; z-index: 1200;">
+    <div class="modal-content window" style="width: 400px;">
+        <div class="title-bar">
+            <div class="title-bar-text" id="tv-show-dialog-title">Message</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" onclick="closeTVShowMessageDialog()"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <p id="tv-show-dialog-message"></p>
+            <div style="text-align: right; margin-top: 15px;">
+                <button onclick="closeTVShowMessageDialog()">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TV Show Poster Selection Modal -->
+<div id="tv-show-poster-selection-modal" class="modal" style="display: none; z-index: 1100;">
+    <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+        <div class="title-bar">
+            <div class="title-bar-text">Select TV Show Poster</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" onclick="closeTVShowPosterSelectionModal()"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div id="tv-show-poster-loading" style="text-align: center; padding: 20px;">
+                <p>Loading posters...</p>
+            </div>
+            <div id="tv-show-poster-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
+                <!-- TV Show Posters will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TV Show Backdrop Selection Modal -->
+<div id="tv-show-backdrop-selection-modal" class="modal" style="display: none; z-index: 1100;">
+    <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+        <div class="title-bar">
+            <div class="title-bar-text">Select TV Show Backdrop</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" onclick="closeTVShowBackdropSelectionModal()"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div id="tv-show-backdrop-loading" style="text-align: center; padding: 20px;">
+                <p>Loading backdrops...</p>
+            </div>
+            <div id="tv-show-backdrop-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px;">
+                <!-- TV Show Backdrops will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    let allTVResults = [];
+    let tvCurrentPage = 1;
+    let tvTotalPages = 0;
+    let selectedTVShow = null;
+    
+    // Modal Control Functions
+    function openTVShowModal() {
+        $("#tv-show-search-modal").show();
+    }
+    
+    function closeTVShowModal() {
+        $("#tv-show-search-modal").hide();
+        resetTVShowModal();
+    }
+    
+    // Message Dialog Functions
+    function showTVShowMessage(title, message, isError = false) {
+        $("#tv-show-dialog-title").text(title);
+        $("#tv-show-dialog-message").text(message);
+        $("#tv-show-dialog-message").css("color", isError ? "red" : "black");
+        $("#tv-show-message-dialog").show();
+    }
+    
+    function closeTVShowMessageDialog() {
+        $("#tv-show-message-dialog").hide();
+    }
+    
+    function resetTVShowModal() {
+        // Reset stage
+        $("#tv-show-modal-stage-1").show();
+        $("#tv-show-modal-stage-2").hide();
+        
+        // Reset search
+        $("#tv-show-query").val("");
+        $("#tv-show-results-list").empty();
+        
+        // Reset form
+        $("#add-tv-show-form")[0].reset();
+        selectedTVShow = null;
+        $("#tv-show-to-stage-2-btn").prop("disabled", true);
+    }
+    
+    function goToTVShowStage2() {
+        if (!selectedTVShow) return;
+        
+        // Fill form with selected TV show data
+        $("#tv-show-tmdb_id").val(selectedTVShow.id);
+        $("#tv-show-title").val(selectedTVShow.name);
+        $("#tv-show-first_air_date").val(selectedTVShow.first_air_date || '');
+        $("#tv-show-description").val(selectedTVShow.overview || '');
+        
+        // Set preview images
+        if (selectedTVShow.poster_path) {
+            $("#tv-show-poster-preview").attr("src", `https://image.tmdb.org/t/p/w500${selectedTVShow.poster_path}`);
+            $("#tv-show-default-poster-path").val(selectedTVShow.poster_path);
+        }
+        
+        if (selectedTVShow.backdrop_path) {
+            $("#tv-show-backdrop-preview").attr("src", `https://image.tmdb.org/t/p/w500${selectedTVShow.backdrop_path}`);
+            $("#tv-show-default-backdrop-path").val(selectedTVShow.backdrop_path);
+        }
+        
+        // Switch stages
+        $("#tv-show-modal-stage-1").hide();
+        $("#tv-show-modal-stage-2").show();
+        $("#tv-show-modal-title").text("Edit TV Show Details");
+    }
+    
+    function goToTVShowStage1() {
+        $("#tv-show-modal-stage-2").hide();
+        $("#tv-show-modal-stage-1").show();
+        $("#tv-show-modal-title").text("Add TV Show");
+    }
+    
+    // Poster Selection Modal Functions
+    function openTVShowPosterSelectionModal() {
+        if (!selectedTVShow) return;
+        $("#tv-show-poster-grid").empty();
+        $("#tv-show-poster-loading").show();
+        $("#tv-show-poster-selection-modal").show();
+        fetchTVShowImages(selectedTVShow.id);
+    }
+    
+    function closeTVShowPosterSelectionModal() {
+        $("#tv-show-poster-selection-modal").hide();
+    }
+    
+    // Backdrop Selection Modal Functions
+    function openTVShowBackdropSelectionModal() {
+        if (!selectedTVShow) return;
+        $("#tv-show-backdrop-grid").empty();
+        $("#tv-show-backdrop-loading").show();
+        $("#tv-show-backdrop-selection-modal").show();
+        fetchTVShowImages(selectedTVShow.id);
+    }
+    
+    function closeTVShowBackdropSelectionModal() {
+        $("#tv-show-backdrop-selection-modal").hide();
+    }
+    
+    // Fetch TV show images from TMDB
+    function fetchTVShowImages(tvShowId) {
+        $.ajax({
+            url: "{% url 'tv_show_images' %}",
+            method: "GET",
+            data: { show_id: tvShowId },
+            success: function(response) {
+                const data = JSON.parse(response);
+                // Load posters
+                $("#tv-show-poster-loading").hide();
+                if (data.posters && data.posters.length > 0) {
+                    data.posters.forEach(poster => {
+                        const imgElement = $('<img>', {
+                            src: `https://image.tmdb.org/t/p/w200${poster.file_path}`,
+                            alt: 'TV show poster',
+                            style: 'width: 100%; cursor: pointer; border: 2px solid transparent;',
+                            'data-path': poster.file_path
+                        }).click(function() {
+                            // Select this poster
+                            $("#tv-show-poster-grid img").css('border', '2px solid transparent');
+                            $(this).css('border', '2px solid #000080');
+                            $("#tv-show-poster-preview").attr("src", `https://image.tmdb.org/t/p/w500${poster.file_path}`);
+                            $("#tv-show-default-poster-path").val(poster.file_path);
+                            closeTVShowPosterSelectionModal();
+                        });
+                        $("#tv-show-poster-grid").append(imgElement);
+                    });
+                } else {
+                    $("#tv-show-poster-grid").html("<p>No posters available.</p>");
+                }
+                
+                // Load backdrops
+                $("#tv-show-backdrop-loading").hide();
+                if (data.backdrops && data.backdrops.length > 0) {
+                    data.backdrops.forEach(backdrop => {
+                        const imgElement = $('<img>', {
+                            src: `https://image.tmdb.org/t/p/w300${backdrop.file_path}`,
+                            alt: 'TV show backdrop',
+                            style: 'width: 100%; cursor: pointer; border: 2px solid transparent;',
+                            'data-path': backdrop.file_path
+                        }).click(function() {
+                            // Select this backdrop
+                            $("#tv-show-backdrop-grid img").css('border', '2px solid transparent');
+                            $(this).css('border', '2px solid #000080');
+                            $("#tv-show-backdrop-preview").attr("src", `https://image.tmdb.org/t/p/w500${backdrop.file_path}`);
+                            $("#tv-show-default-backdrop-path").val(backdrop.file_path);
+                            closeTVShowBackdropSelectionModal();
+                        });
+                        $("#tv-show-backdrop-grid").append(imgElement);
+                    });
+                } else {
+                    $("#tv-show-backdrop-grid").html("<p>No backdrops available.</p>");
+                }
+            },
+            error: function() {
+                $("#tv-show-poster-loading").hide();
+                $("#tv-show-backdrop-loading").hide();
+                $("#tv-show-poster-grid").html("<p>Failed to load images. Please try again.</p>");
+                $("#tv-show-backdrop-grid").html("<p>Failed to load images. Please try again.</p>");
+            }
+        });
+    }
+
+    function renderTVResults() {
+        $('#tv-show-results-list').empty();
+        allTVResults.forEach(function(show) {
+            const listItem = $('<li></li>');
+            const poster = show.poster_path
+                ? `<img src="https://image.tmdb.org/t/p/w200${show.poster_path}" 
+                     alt="${show.name} poster" style="width: 50px; height: auto; vertical-align: middle; margin-right: 10px;">`
+                : '';
+            
+            // Create database status indicators
+            let statusIndicators = '';
+            if (show.in_database) {
+                statusIndicators += `<span class="status-pill in-database">
+                    <a href="/tvshows/${show.id}/" class="status-link">View TV Show</a>
+                </span>`;
+            }
+            if (show.in_watchlist) {
+                statusIndicators += `<span class="status-pill in-watchlist">
+                    <a href="/watchlist/tvshows/" class="status-link">In Watchlist</a>
+                </span>`;
+            }
+            
+            listItem.html(`
+                <div class="tv-show-result">
+                    ${poster}
+                    <span class="tv-show-title">${show.name} (${show.first_air_date || 'N/A'})</span>
+                    <div class="tv-show-status">${statusIndicators}</div>
+                </div>
+            `);
+            
+            listItem.on('click', function() {
+                selectedTVShow = show;
+                $("#tv-show-to-stage-2-btn").prop("disabled", false);
+                
+                // Highlight selected item
+                $('#tv-show-results-list li').removeClass('selected');
+                $(this).addClass('selected');
+            });
+            $('#tv-show-results-list').append(listItem);
+        });
+    }
+
+    function updateTVPagination(response) {
+        $('#tv-show-total-results').text(response.total_results);
+        tvTotalPages = response.total_pages;
+        $('#tv-show-current-page').text(tvCurrentPage);
+        $('#tv-show-total-pages').text(tvTotalPages);
+
+        $('#tv-show-prev-button').prop('disabled', tvCurrentPage <= 1);
+        $('#tv-show-next-button').prop('disabled', tvCurrentPage >= tvTotalPages);
+    }
+
+    function fetchTVResults(query, page) {
+        $.ajax({
+            url: "{% url 'tmdb_tv_search' %}",
+            method: "GET",
+            data: { query: query, page: page },
+            success: function(response) {
+                allTVResults = response.results; 
+                renderTVResults();
+                updateTVPagination(response);
+            },
+            error: function() {
+                alert('An error occurred while searching for TV shows.');
+            }
+        });
+    }
+
+    // Submit TV show to API
+    function submitTVShow() {
+        const tvShowId = $("#tv-show-tmdb_id").val();
+        const posterPath = $("#tv-show-default-poster-path").val();
+        const backdropPath = $("#tv-show-default-backdrop-path").val();
+        const isAnime = $("#tv-show-is_anime").is(':checked');
+        const addToWatchlist = $("#tv-show-add_to_watchlist").is(':checked');
+        
+        if (!tvShowId) {
+            showTVShowMessage("Error", "TV Show ID is missing", true);
+            return;
+        }
+        
+        // Create data object
+        const tvShowData = {
+            id: tvShowId,
+            poster: posterPath,
+            backdrop: backdropPath,
+            is_anime: isAnime,
+            add_to_watchlist: addToWatchlist
+        };
+        
+        // Get CSRF token from the form
+        const csrfToken = $("input[name=csrfmiddlewaretoken]").val();
+        
+        // Show loading screen
+        $("#tv-show-loading-screen-modal").show();
+        
+        // Submit to API
+        $.ajax({
+            url: "{% url 'tvshows-list' %}",
+            method: "POST",
+            data: JSON.stringify(tvShowData),
+            contentType: "application/json",
+            headers: {
+                "X-CSRFToken": csrfToken
+            },
+            success: function(response) {
+                // Hide loading screen
+                $("#tv-show-loading-screen-modal").hide();
+                showTVShowMessage("Success", "TV Show added successfully!");
+                closeTVShowModal();
+            },
+            error: function(xhr) {
+                // Hide loading screen
+                $("#tv-show-loading-screen-modal").hide();
+                let errorMsg = "Failed to add TV show.";
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg = xhr.responseJSON.error;
+                }
+                showTVShowMessage("Error", errorMsg, true);
+            }
+        });
+    }
+
+    $(document).ready(function() {
+        // Modal control
+        $("#tv-show-close-modal-btn").on("click", closeTVShowModal);
+        
+        // Stage navigation
+        $("#tv-show-to-stage-2-btn").on("click", goToTVShowStage2);
+        $("#tv-show-back-to-stage-1-btn").on("click", goToTVShowStage1);
+        
+        // Form submission
+        $("#tv-show-submit-btn").on("click", submitTVShow);
+        
+        // Prevent default form submission
+        $("#add-tv-show-form").on("submit", function(e) {
+            e.preventDefault();
+            submitTVShow();
+        });
+        
+        // Search functionality
+        $('#tv-show-query').on('input', function() {
+            const query = $('#tv-show-query').val();
+            if (query.length > 2) {
+                tvCurrentPage = 1;
+                fetchTVResults(query, tvCurrentPage);
+            } else {
+                $('#tv-show-results-list').empty();
+                $('#tv-show-total-results').text('0');
+                $('#tv-show-current-page').text('0');
+                $('#tv-show-total-pages').text('0');
+            }
+        });
+
+        $('#tv-show-search-button').on('click', function() {
+            const query = $('#tv-show-query').val();
+            if (query.length > 2) {
+                tvCurrentPage = 1;
+                fetchTVResults(query, tvCurrentPage);
+            }
+        });
+
+        $('#tv-show-prev-button').on('click', function() {
+            if (tvCurrentPage > 1) {
+                tvCurrentPage--;
+                fetchTVResults($('#tv-show-query').val(), tvCurrentPage);
+            }
+        });
+
+        $('#tv-show-next-button').on('click', function() {
+            if (tvCurrentPage < tvTotalPages) {
+                tvCurrentPage++;
+                fetchTVResults($('#tv-show-query').val(), tvCurrentPage);
+            }
+        });
+    });
+</script>
+<style>
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    position: relative;
+    margin: auto;
+}
+
+.selected {
+    background-color: #000080;
+    color: white;
+}
+
+#tv-show-poster-grid img:hover, #tv-show-backdrop-grid img:hover {
+    border: 2px solid #000080 !important;
+}
+
+.progress-indicator {
+    width: 100%;
+    height: 20px;
+    background-color: #fff;
+    border: 2px inset #c0c0c0;
+    margin-top: 15px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-indicator-bar {
+    display: block;
+    height: 100%;
+    background-color: #000080;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 40%;
+    animation: progress-animation 1.5s infinite linear;
+}
+
+@keyframes progress-animation {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 100%;
+    }
+}
+
+.tv-show-result {
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 5px 0;
+}
+
+.tv-show-title {
+    flex-grow: 1;
+}
+
+.tv-show-status {
+    display: flex;
+    gap: 5px;
+    margin-left: 10px;
+}
+
+.status-pill {
+    font-size: 12px;
+    padding: 2px 8px;
+    border: 1px solid #808080;
+    background: #d4d0c8;
+    white-space: nowrap;
+    border-radius: 0px;
+}
+
+.in-database {
+    border-color: #008000;
+}
+
+.in-watchlist {
+    border-color: #000080;
+}
+
+.status-link {
+    color: #000080;
+    text-decoration: none;
+}
+
+.status-link:hover {
+    text-decoration: underline;
+}
+</style>
