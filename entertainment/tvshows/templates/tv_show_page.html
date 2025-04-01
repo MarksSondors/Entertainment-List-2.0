@@ -76,7 +76,7 @@ body {
             {% endif %}
             <p><strong>Genre:</strong> 
                 {% for genre in tv_show.genres.all %}
-                    <a href="genre" style="text-decoration: none; color: black;">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
+                    <a href="{{ genre.get_absolute_url }}" style="text-decoration: none; color: black;">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
                 {% endfor %}
             </p>
             <p><strong>Rating:</strong> {{ tv_show.rating }}</p>

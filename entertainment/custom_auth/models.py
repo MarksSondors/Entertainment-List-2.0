@@ -56,6 +56,10 @@ class Genre(models.Model):
 
     def __str__(self):
         return self.name
+    
+    def get_absolute_url(self):
+        """Get the absolute URL for the genre page."""
+        return f"/genres/{self.id}/"
 
 class Country(models.Model):
     name = models.CharField(max_length=100)

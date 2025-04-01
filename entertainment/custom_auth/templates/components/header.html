@@ -48,7 +48,7 @@
         if (selectedValue === 'logout') {
             window.location.href = "{% url 'logout_request' %}";
         } else if (selectedValue === 'profile') {
-            window.location.href = "{% url 'logout_request' %}"; // Update with profile URL when available
+            window.location.href = "{% url 'profile' %}"; // Update with profile URL when available
         } else if (selectedValue === 'settings') {
             window.location.href = "{% url 'logout_request' %}"; // Update with settings URL when available
         }
