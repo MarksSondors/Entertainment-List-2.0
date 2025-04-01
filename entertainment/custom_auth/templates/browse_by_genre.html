@@ -1,0 +1,57 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}Browse by Genre | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">Genre Explorer</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="field-row mb-3">
+                <label>Address:</label>
+                <div class="field-row-stacked" style="width: 100%">
+                    <input type="text" readonly value="C:\Entertainment\Genres\" style="width: 100%">
+                </div>
+            </div>
+            
+            <div class="sunken-panel p-3" style="min-height: 300px;">
+                {% if genres %}
+                    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                        {% for genre in genres %}
+                        <div class="col">
+                            <a href="{% url 'browse_by_genre_detail' genre.id %}" class="text-decoration-none text-dark">
+                                <div class="text-center">
+                                    <img src="{% static 'images/folder.png' %}" alt="Folder" width="64" height="64" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;64&quot; height=&quot;64&quot; viewBox=&quot;0 0 24 24&quot;><path fill=&quot;%23FFC107&quot; d=&quot;M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z&quot;/></svg>';">
+                                    <div style="max-width: 80px; margin: auto; overflow: hidden; text-overflow: ellipsis;">{{ genre.name }}</div>
+                                </div>
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        No folders (genres) available.
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="field-row mt-3" style="justify-content: space-between;">
+                <div>
+                    <span>{{ genres.count }} item(s)</span>
+                </div>
+                <div>
+                    <button class="btn" onclick="window.history.back()">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

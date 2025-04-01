@@ -15,7 +15,7 @@ from .serializers import MovieSerializer
 from .parsers import create_movie
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
-from custom_auth.models import Watchlist, Genre
+from custom_auth.models import Watchlist, Genre, TVShow
 from django.http import JsonResponse
 
 # Create your views here.

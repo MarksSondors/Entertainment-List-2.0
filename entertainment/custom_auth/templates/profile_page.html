@@ -1,0 +1,191 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}{{ user.username }}'s Profile | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">MSN Messenger - {{ user.username }}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <!-- User Profile Section -->
+            <div class="field-row" style="align-items: center; margin-bottom: 15px; padding: 10px; background: #f0f0f0; border: 1px inset;">
+                <div style="margin-right: 15px;">
+                    {% if user.profile.profile_picture %}
+                        <img src="{{ user.profile.profile_picture.url }}" alt="Profile Picture" style="width: 80px; height: 80px; border: 2px inset #c0c0c0;">
+                    {% else %}
+                        <img src="{% static 'images/default-avatar.png' %}" alt="Default Avatar" style="width: 80px; height: 80px; border: 2px inset #c0c0c0;">
+                    {% endif %}
+                </div>
+                <div>
+                    <div style="font-weight: bold; color: #0000AA; font-size: 18px;">{{ user.username }}</div>
+                    <div style="color: #008800; font-style: italic;">Online</div>
+                    <div style="color: #555; margin-top: 5px;">
+                        "{{ user.profile.status_message|default:"Hey there! I'm using Entertainment List" }}"
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section Navigation - No Longer Tabs -->
+            <div class="field-row" style="margin-bottom: 10px;">
+                <h4>Entertainment Collections</h4>
+            </div>
+
+            <!-- Favorite Movies Section -->
+            <div id="favorites-movies" class="content-section">
+                <div class="window" style="width: 100%;">
+                    <div class="title-bar">
+                        <div class="title-bar-text">Favorite Movies</div>
+                    </div>
+                    <div class="window-body">
+                        <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
+                            {% if favorite_movies %}
+                                <div class="poster-row">
+                                    {% for movie in favorite_movies %}
+                                        <a href="{% url 'movie_page' movie.tmdb_id %}" class="poster-link">
+                                            <img src="{{ movie.poster|default:'#' }}" alt="{{ movie.title }}" 
+                                                 class="poster-image">
+                                            <span class="poster-title">{{ movie.title }}</span>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="field-row" style="justify-content: center;">
+                                    <p>No favorite movies added yet.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Favorite TV Shows Section -->
+            <div id="favorites-shows" class="content-section">
+                <div class="window" style="width: 100%; margin-top: 20px;">
+                    <div class="title-bar">
+                        <div class="title-bar-text">Favorite TV Shows</div>
+                    </div>
+                    <div class="window-body">
+                        <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
+                            {% if favorite_shows %}
+                                <div class="poster-row">
+                                    {% for show in favorite_shows %}
+                                        <a href="{% url 'show_detail' show.id %}" class="poster-link">
+                                            <img src="{{ show.poster_url|default:'#' }}" alt="{{ show.title }}" 
+                                                 class="poster-image"
+                                                 onerror="this.src='{% static 'images/tv-default.png' %}'">
+                                            <span class="poster-title">{{ show.title }}</span>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="field-row" style="justify-content: center;">
+                                    <p>No favorite TV shows added yet.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Watchlist Section -->
+            <div id="watchlist" class="content-section">
+                <div class="window" style="width: 100%; margin-top: 20px;">
+                    <div class="title-bar">
+                        <div class="title-bar-text">Watchlist</div>
+                    </div>
+                    <div class="window-body">
+                        <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
+                            {% if watchlist_items %}
+                                <div class="poster-row">
+                                    {% for item in watchlist_items %}
+                                        <a href="{% url 'media_detail' item.id item.media_type|lower %}" class="poster-link">
+                                            <img src="{{ item.poster_url|default:'#' }}" alt="{{ item.title }}" 
+                                                 class="poster-image"
+                                                 onerror="this.src='{% static 'images/media-default.png' %}'">
+                                            <span class="poster-title">{{ item.title }}</span>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="field-row" style="justify-content: center;">
+                                    <p>No items in watchlist yet.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="field-row mt-3" style="justify-content: space-between;">
+                <div>
+                    <span>{{ user.username }}'s profile</span>
+                </div>
+                <div>
+                    <button class="btn" onclick="window.history.back()">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .active-tab {
+        background-color: #c0c0c0;
+        border-bottom: 1px solid #c0c0c0;
+        font-weight: bold;
+    }
+    .tab-content {
+        margin-top: 10px;
+    }
+    .poster-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .poster-link {
+        text-align: center;
+        text-decoration: none;
+        color: inherit;
+    }
+    .poster-image {
+        width: 100px;
+        height: 150px;
+        object-fit: cover;
+        border: 2px inset #c0c0c0;
+    }
+    .poster-title {
+        display: block;
+        margin-top: 5px;
+        font-size: 14px;
+    }
+</style>
+
+<script>
+    function showTab(tabId) {
+        // Hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.style.display = 'none';
+        });
+        
+        // Remove active class from all buttons
+        document.querySelectorAll('.field-row button').forEach(button => {
+            button.classList.remove('active-tab');
+        });
+        
+        // Show the selected tab
+        document.getElementById(tabId).style.display = 'block';
+        
+        // Add active class to clicked button
+        event.target.classList.add('active-tab');
+    }
+</script>
+{% endblock %}
