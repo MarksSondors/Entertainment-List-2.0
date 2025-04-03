@@ -87,7 +87,7 @@ body {
             </p>
             <p><strong>Creator:</strong> 
                 {% for creator in tv_show.creators %}
-                    <a href="#" style="text-decoration: none; color: black;">{{ creator.name }}</a>{% if not forloop.last %}, {% endif %}
+                    <a href="{% url 'person_detail' person_id=creator.id %}" style="text-decoration: none; color: black;">{{ creator.name }}</a>{% if not forloop.last %}, {% endif %}
                 {% empty %}
                     Unknown
                 {% endfor %}
@@ -161,7 +161,7 @@ body {
                         <li style="display: flex; align-items: center; margin-bottom: 10px;">
                             <img src="{{ cast_member.person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" alt="{{ cast_member.person.name }}" style="width: 75px; object-fit: cover; border: 2px solid black; margin-right: 10px;">
                             <div>
-                                <div><a href="#" style="text-decoration: none; color: black;">{{ cast_member.person.name }}</a></div>
+                                <div><a href="{% url 'person_detail' person_id=cast_member.person.id %}" style="text-decoration: none; color: black;">{{ cast_member.person.name }}</a></div>
                                 <div style="font-size: 0.9em; color: #666;">
                                     {% if cast_member.character_name %}
                                         as {{ cast_member.character_name }}

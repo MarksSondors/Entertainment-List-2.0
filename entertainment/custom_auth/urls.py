@@ -21,4 +21,7 @@ urlpatterns = [
     # watchlist
     path('watchlist/', views.watchlist_page, name='watchlist_page'),
 
+    # person
+    path('person/<int:person_id>/', views.person_detail, name='person_detail'),
+
 ]

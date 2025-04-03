@@ -170,3 +170,47 @@ def watchlist_page(request):
     }
     
     return render(request, 'watchlist_page.html', context)
+
+@login_required
+def person_detail(request, person_id):
+    """
+    View for displaying details about a single person and their filmography
+    """
+    # Get the person object or return 404
+    person = get_object_or_404(Person, id=person_id)
+    
+    # Get all media credits for this person
+    person_credits = MediaPerson.objects.filter(person=person).select_related(
+        'content_type'
+    )
+    
+    # For each credit, ensure we have the actual media object
+    valid_credits = []
+    for credit in person_credits:
+        try:
+            # Get the actual movie or TV show object via the generic relation
+            credit.media = credit.content_type.get_object_for_this_type(id=credit.object_id)
+            valid_credits.append(credit)
+        except (Movie.DoesNotExist, TVShow.DoesNotExist):
+            continue
+    
+    # Replace person_credits with only valid credits
+    person_credits = valid_credits
+    
+    # Sort credits by release date (newest first)
+    person_credits = sorted(
+        person_credits,
+        key=lambda x: (
+            x.media.release_date.year if hasattr(x.media, 'release_date') and x.media.release_date else 
+            x.media.first_air_date.year if hasattr(x.media, 'first_air_date') and x.media.first_air_date else 
+            0
+        ),
+        reverse=True
+    )
+    
+    context = {
+        'person': person,
+        'person_credits': person_credits,
+    }
+    
+    return render(request, 'people_page.html', context)
