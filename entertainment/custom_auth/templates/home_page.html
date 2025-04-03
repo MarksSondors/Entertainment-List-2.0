@@ -291,7 +291,7 @@
                 data.forEach(movie => {
                     const listItem = document.createElement('li');
                     listItem.innerHTML = `
-                        <a href="/movies/detail/${movie.id}" style="display: flex; align-items: center; padding: 5px 0;">
+                        <a href="/movies/${movie.id}" style="display: flex; align-items: center; padding: 5px 0;">
                             <img src="${movie.poster_path || '{% static "images/no-poster.png" %}'}" alt="${movie.title}" style="width: 50px; height: auto; margin-right: 10px;">
                             <div>
                                 <strong>${movie.title}</strong>
