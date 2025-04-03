@@ -225,6 +225,10 @@ class TVShow(Media):
     def __str__(self):
         return self.title
     
+    def get_absolute_url(self):
+        """Get the absolute URL for the TV show page."""
+        return f"/tvshows/{self.id}/"
+    
     def get_media_persons(self, role=None):
         """Get all MediaPerson objects related to this TV show."""
         query = MediaPerson.objects.filter(
@@ -362,7 +366,7 @@ class Watchlist(models.Model):
     
     # Generic foreign key to allow different media types
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.PositiveIntegerField(db_index=True)
     media = GenericForeignKey('content_type', 'object_id')
     
     # Tracking information
@@ -372,6 +376,9 @@ class Watchlist(models.Model):
         ordering = ['-date_added']
         # Ensure a user can't add the same item twice
         unique_together = ['user', 'content_type', 'object_id']
+        indexes = [
+            models.Index(fields=['content_type', 'object_id']),
+        ]
         
     def __str__(self):
         return f"{self.user.username}'s watchlist - {self.media}"
