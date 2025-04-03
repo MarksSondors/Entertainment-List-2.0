@@ -9,8 +9,27 @@ class TVShowsService(BaseService):
             bearer_token=config("TMDB_BEARER_TOKEN")
         )
 
-    def get_popular_shows(self):
-        return self._get('tv/popular')
+    def get_popular_shows(self, exclude_genres=None):
+        """
+        Get popular TV shows, excluding certain genres like talk shows and other live media formats.
+        
+        Uses the discover/tv endpoint with filtering to exclude specified genres directly in the API call.
+        """
+        # Default genres to exclude if none provided
+        if exclude_genres is None:
+            exclude_genres = [10767, 10763, 10764, 10766]  # Talk, News, Reality, Soap
+        
+        params = {
+            'sort_by': 'popularity.desc',
+            'without_genres': ','.join(str(genre_id) for genre_id in exclude_genres),
+            'include_adult': False,
+            'language': 'en-US',
+            'page': 1
+        }
+        
+        response = self._get('discover/tv', params=params)
+            
+        return response
     
     def search_shows(self, query, include_adult=False, language='en-US', page=1, first_air_date_year=None, region='US'):
         params = {

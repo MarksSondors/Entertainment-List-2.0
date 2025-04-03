@@ -17,4 +17,8 @@ urlpatterns = [
     # profile
     path('profile/', views.profile_page, name='profile'),
     path('profile/<str:username>/', views.profile_page, name='profile_with_username'),
+
+    # watchlist
+    path('watchlist/', views.watchlist_page, name='watchlist_page'),
+
 ]
