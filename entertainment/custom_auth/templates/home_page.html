@@ -2,12 +2,12 @@
 {% load static %}
 
 {% block content %}
-    <!-- Top row windows -->
+    <!-- Hero section with welcome message -->
     <div class="row px-2 py-2">
-        <div class="col-12 col-md-6 mb-3">
+        <div class="col-12 mb-3">
             <div class="window" style="width: 100%;">
                 <div class="title-bar">
-                    <div class="title-bar-text">main.exe</div>
+                    <div class="title-bar-text">Entertainment List - Welcome</div>
                     <div class="title-bar-controls">
                         <button aria-label="Minimize"></button>
                         <button aria-label="Maximize"></button>
@@ -20,8 +20,7 @@
                         <h1 style="color: #5e9ca0; font-size: clamp(18px, 5vw, 24px);">
                             <span style="background-color: #ff00ff; color: #ffffff;">Welcome to <span style="color: #0000ff;">Entertainment</span> List!</span>
                         </h1>
-                        <img src="https://www.heavensgate.com/img/redalrt3.gif" alt="Alert Image" style="max-width: 100%;" />
-                        <p style="color: #00ffff; background-color: #000000; padding: 10px; font-size: 14px;">
+                        <p style="color: #222; padding: 10px; font-size: 16px; max-width: 800px; margin: 0 auto;">
                             Whether the latest cinematic universe has a "definitive ranking" or not is irrelevant from our perspective. However, its evolution is joyously significant to us at Entertainment List. The joy is that our dedicated platform has made it clear to us that this moment is the "marker" we've been waiting for—the time to fully immerse ourselves in managing our favorite movies, shows, and more, all in one place.
                         </p>
                     </div>
@@ -31,11 +30,15 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <div class="col-12 col-md-6 mb-3">
+    <!-- Main content area -->
+    <div class="row px-2 pb-3">
+        <!-- Left column - Actions -->
+        <div class="col-12 col-md-4 mb-3">
             <div class="window" style="width: 100%;">
                 <div class="title-bar">
-                    <div class="title-bar-text">Actions</div>
+                    <div class="title-bar-text">Quick Actions</div>
                     <div class="title-bar-controls">
                         <button aria-label="Minimize"></button>
                         <button aria-label="Maximize"></button>
@@ -44,11 +47,11 @@
                 </div>
                 <div class="window-body">
                     <fieldset>
-                        <legend>Actions</legend>
+                        <legend>Add Content</legend>
                         <ul class="tree-view">
                             <li>
                                 <a href="javascript:void(0);" onclick="openModal()" style="display: flex; align-items: center; padding: 5px 0;">
-                                    <img src="https://liseklucian.neocities.org/buttons/ie_animated.gif" alt="Add Movie to Watchlist" style="max-width: 88px; margin-right: 10px;">
+                                    <img src="https://liseklucian.neocities.org/buttons/ie_animated.gif" alt="Add Movie" style="max-width: 88px; margin-right: 10px;">
                                     <span>Add Movie</span>
                                 </a>
                             </li>
@@ -59,93 +62,74 @@
                                 </a>
                             </li>
                             <li>
-                                <a href="javascript:void(0);" onclick="" style="display: flex; align-items: center; padding: 5px 0;">
-                                    <img src="https://fustilugz.neocities.org/four/adultchat.gif" alt="Add Movie to Watchlist" style="max-width: 88px; margin-right: 10px;">
+                                <a href="javascript:void(0);" onclick="openBookModal()" style="display: flex; align-items: center; padding: 5px 0;">
+                                    <img src="https://fustilugz.neocities.org/four/adultchat.gif" alt="Add Book" style="max-width: 88px; margin-right: 10px;">
                                     <span>Add Book</span>
                                 </a>
                             </li>
                             <li>
-                                <a href="" onclick="" style="display: flex; align-items: center; padding: 5px 0;">
-                                    <img src="https://fustilugz.neocities.org/buttons/12/button-tupachq1.gif" alt="View Movie List" style="max-width: 88px; margin-right: 10px;">
+                                <a href="javascript:void(0);" onclick="openMusicModal()" style="display: flex; align-items: center; padding: 5px 0;">
+                                    <img src="https://fustilugz.neocities.org/buttons/12/button-tupachq1.gif" alt="Add Music" style="max-width: 88px; margin-right: 10px;">
                                     <span>Add Music</span>
                                 </a>
                             </li>
+                        </ul>
+                    </fieldset>
+                    
+                    <fieldset>
+                        <legend>Explore</legend>
+                        <ul class="tree-view">
                             <li>
                                 <a href="{% url 'watchlist_page' %}" style="display: flex; align-items: center; padding: 5px 0;">
                                     <img src="https://anlucas.neocities.org/bookmark_this_page.gif" alt="View Watchlist" style="max-width: 88px; margin-right: 10px;">
-                                    <span>View Your Watchlist</span>
+                                    <span>Your Watchlist</span>
                                 </a>
                             </li>
                             <li>
                                 <a href="" style="display: flex; align-items: center; padding: 5px 0;">
                                     <img src="https://cyber.dabamos.de/88x31/88-31-banner.gif" alt="Search Movies" style="max-width: 88px; margin-right: 10px;">
-                                    <span>Search for Movies</span>
+                                    <span>Search Movies</span>
                                 </a>
                             </li>
                             <li>
                                 <a href="" style="display: flex; align-items: center; padding: 5px 0;">
                                     <img src="https://anlucas.neocities.org/got_html.gif" alt="Get Recommendations" style="max-width: 88px; margin-right: 10px;">
-                                    <span>Get Movie Recommendations</span>
+                                    <span>Recommendations</span>
                                 </a>
                             </li>
                             <li>
                                 <a href="" style="display: flex; align-items: center; padding: 5px 0;">
                                     <img src="https://cyber.dabamos.de/88x31/88ibet.gif" alt="Manage Account" style="max-width: 88px; margin-right: 10px;">
-                                    <span>Manage Your Account</span>
+                                    <span>Your Account</span>
                                 </a>
                             </li>
                         </ul>
                     </fieldset>
                 </div>
                 <div class="status-bar">
-                    <div class="status-bar-field">Ready</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bottom row windows -->
-    <div class="row px-2 pb-3">
-        <div class="col-12 col-md-6 mb-3">
-            <div class="window" style="width: 100%;">
-                <div class="title-bar">
-                    <div class="title-bar-text">cmd.exe</div>
-                    <div class="title-bar-controls">
-                    <button aria-label="Minimize"></button>
-                    <button aria-label="Maximize"></button>
-                    <button aria-label="Close"></button>
-                    </div>
-                </div>
-                <div class="window-body" style="background-color: black; color: lime; font-family: monospace; padding: 10px;">
-                    <p>Microsoft&#10094;R&#10095; Windows DOS 
-                    &#10094;C&#10095; Copyright Microsoft Corp 1990-2001.
-                    <br>C:&#92;WINDOWS&#92;SYSTEM32> get_reviews.exe </p>
-                    <div style="overflow-y: auto; max-height: 200px; padding: 5px; border: 1px solid lime;">
-                        <p>Recent Reviews:</p>
-                        <p>> john_doe: "Amazing movie, a must-watch!" <br> Movie: Inception <br> Rating: 5/5 <br> Created At: 2023-10-01</p>
-                        <p>> jane_smith: "Not my cup of tea, but well-made." <br> Movie: Titanic <br> Rating: 3/5 <br> Created At: 2023-10-02</p>
-                        <p>> movie_buff99: "A cinematic masterpiece, 10/10!" <br> Movie: The Godfather <br> Rating: 5/5 <br> Created At: 2023-10-03</p>
-                        <p>> casual_viewer: "It was okay, nothing special." <br> Movie: Avatar <br> Rating: 2/5 <br> Created At: 2023-10-04</p>
-                        <p>> critic101: "Overhyped, but still enjoyable." <br> Movie: The Dark Knight <br> Rating: 4/5 <br> Created At: 2023-10-05</p>
-                    </div>
+                    <div class="status-bar-field">Select an action to continue</div>
                 </div>
             </div>
         </div>
         
-        <div class="col-12 col-md-6 mb-3">
-            <div class="window" style="width: 100%;">
+        <!-- Right column - Content -->
+        <div class="col-12 col-md-8">
+            <!-- Popular Content -->
+            <div class="window mb-3" style="width: 100%;">
                 <div class="title-bar">
                     <div class="title-bar-text">Popular Content</div>
                     <div class="title-bar-controls">
-                    <button aria-label="Minimize"></button>
-                    <button aria-label="Maximize"></button>
-                    <button aria-label="Close"></button>
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
                     </div>
                 </div>
                 <div class="window-body">
                     <menu role="tablist">
                         <li role="tab" aria-selected="true"><a href="#movies-tab">Movies</a></li>
                         <li role="tab"><a href="#tv-tab">TV Shows</a></li>
+                        <li role="tab"><a href="#books-tab">Books</a></li>
+                        <li role="tab"><a href="#music-tab">Music</a></li>
                     </menu>
                     
                     <!-- Movies Tab -->
@@ -154,7 +138,7 @@
                             <fieldset>
                                 <legend>Top 5 Popular Movies</legend>
                                 <ul id="popular_movies_block" class="tree-view">
-                                    <!-- Movies will be dynamically loaded here -->
+                                    <li class="loading">Loading popular movies...</li>
                                 </ul>
                             </fieldset>
                         </div>
@@ -166,14 +150,68 @@
                             <fieldset>
                                 <legend>Top 5 Popular TV Shows</legend>
                                 <ul id="popular_tvshows_block" class="tree-view">
-                                    <!-- TV Shows will be dynamically loaded here -->
+                                    <li class="loading">Loading popular shows...</li>
+                                </ul>
+                            </fieldset>
+                        </div>
+                    </div>
+
+                    <!-- Books Tab -->
+                    <div class="window" role="tabpanel" id="books-tab" style="display: none;">
+                        <div class="window-body">
+                            <fieldset>
+                                <legend>Top 5 Popular Books</legend>
+                                <ul id="popular_books_block" class="tree-view">
+                                    <li class="loading">Loading popular books...</li>
+                                </ul>
+                            </fieldset>
+                        </div>
+                    </div>
+
+                    <!-- Music Tab -->
+                    <div class="window" role="tabpanel" id="music-tab" style="display: none;">
+                        <div class="window-body">
+                            <fieldset>
+                                <legend>Top 5 Popular Music</legend>
+                                <ul id="popular_music_block" class="tree-view">
+                                    <li class="loading">Loading popular music...</li>
                                 </ul>
                             </fieldset>
                         </div>
                     </div>
                 </div>
                 <div class="status-bar">
-                    <div class="status-bar-field">Ready</div>
+                    <div class="status-bar-field">Updated hourly</div>
+                </div>
+            </div>
+            
+            <!-- Recent Reviews -->
+            <div class="window" style="width: 100%;">
+                <div class="title-bar">
+                    <div class="title-bar-text">Recent Community Reviews</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body" style="background-color: #eee; color: #333; font-family: 'MS Sans Serif', sans-serif; padding: 10px;">
+                    <div style="overflow-y: auto; max-height: 200px; padding: 5px; border: 1px inset #d5d5d5;">
+                        <ul id="recent_reviews" class="tree-view">
+                            <li>> john_doe: "Amazing movie, a must-watch!" <br> Movie: Inception <br> Rating: ★★★★★</li>
+                            <li>> jane_smith: "Not my cup of tea, but well-made." <br> Movie: Titanic <br> Rating: ★★★☆☆</li>
+                            <li>> movie_buff99: "A cinematic masterpiece!" <br> Movie: The Godfather <br> Rating: ★★★★★</li>
+                            <li>> casual_viewer: "It was okay, nothing special." <br> Movie: Avatar <br> Rating: ★★☆☆☆</li>
+                            <li>> critic101: "Overhyped, but still enjoyable." <br> Movie: The Dark Knight <br> Rating: ★★★★☆</li>
+                        </ul>
+                    </div>
+                    <div class="field-row" style="justify-content: flex-end; margin-top: 10px;">
+                        <button onclick="window.location.href=''">See All Reviews</button>
+                        <button onclick="window.location.href=''">Write a Review</button>
+                    </div>
+                </div>
+                <div class="status-bar">
+                    <div class="status-bar-field">Last updated: Today</div>
                 </div>
             </div>
         </div>
@@ -183,6 +221,35 @@
     {% include 'tv_show_search_modal.html' %}
     
     <style>
+        .tree-view li {
+            margin-bottom: 8px;
+            padding: 5px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .tree-view li a {
+            text-decoration: none;
+            color: inherit;
+        }
+        
+        .tree-view li a:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        
+        menu[role="tablist"] {
+            display: flex;
+            flex-wrap: wrap;
+        }
+        
+        menu[role="tablist"] li {
+            margin-right: 5px;
+        }
+        
         @media (max-width: 768px) {
             .tree-view li a {
                 flex-wrap: wrap;
@@ -192,47 +259,90 @@
             .tree-view li a img {
                 margin-bottom: 5px;
             }
+            
+            menu[role="tablist"] {
+                justify-content: center;
+            }
         }
     </style>
     
     <script>
-        // Fetch popular movies (existing code)
+        // Modal functions
+        function openBookModal() {
+            alert("Book feature coming soon!");
+            // Implement book modal when ready
+        }
+        
+        function openMusicModal() {
+            alert("Music feature coming soon!");
+            // Implement music modal when ready  
+        }
+    
+        // Fetch popular movies
         fetch('/movies/popular/')
             .then(response => response.json())
             .then(data => {
                 const movieList = document.getElementById('popular_movies_block');
                 movieList.innerHTML = '';
+                if (data.length === 0) {
+                    movieList.innerHTML = '<li>No movies found</li>';
+                    return;
+                }
                 data.forEach(movie => {
                     const listItem = document.createElement('li');
                     listItem.innerHTML = `
-                        <a href="#" style="display: flex; align-items: center; padding: 5px 0;">
-                            <img src="${movie.poster_path}" alt="${movie.title}" style="width: 50px; height: auto; margin-right: 10px;">
-                            <span>${movie.title}</span>
+                        <a href="/movies/detail/${movie.id}" style="display: flex; align-items: center; padding: 5px 0;">
+                            <img src="${movie.poster_path || '{% static "images/no-poster.png" %}'}" alt="${movie.title}" style="width: 50px; height: auto; margin-right: 10px;">
+                            <div>
+                                <strong>${movie.title}</strong>
+                                <br>
+                                <small>Rating: ${movie.vote_average}/10</small>
+                            </div>
                         </a>
                     `;
                     movieList.appendChild(listItem);
                 });
             })
-            .catch(error => console.error('Error fetching popular movies:', error));
+            .catch(error => {
+                console.error('Error fetching popular movies:', error);
+                document.getElementById('popular_movies_block').innerHTML = '<li>Failed to load movies</li>';
+            });
             
         // Fetch popular TV shows
-        fetch('/tvshows/popular/') // You'll need to create this endpoint
+        fetch('/tvshows/popular/')
             .then(response => response.json())
             .then(data => {
                 const tvList = document.getElementById('popular_tvshows_block');
                 tvList.innerHTML = '';
+                if (data.length === 0) {
+                    tvList.innerHTML = '<li>No TV shows found</li>';
+                    return;
+                }
                 data.forEach(show => {
                     const listItem = document.createElement('li');
                     listItem.innerHTML = `
-                        <a href="#" style="display: flex; align-items: center; padding: 5px 0;">
-                            <img src="${show.poster_path}" alt="${show.name}" style="width: 50px; height: auto; margin-right: 10px;">
-                            <span>${show.name}</span>
+                        <a href="/tvshows/detail/${show.id}" style="display: flex; align-items: center; padding: 5px 0;">
+                            <img src="${show.poster_path || '{% static "images/no-poster.png" %}'}" alt="${show.name}" style="width: 50px; height: auto; margin-right: 10px;">
+                            <div>
+                                <strong>${show.name}</strong>
+                                <br>
+                                <small>Rating: ${show.vote_average}/10</small>
+                            </div>
                         </a>
                     `;
                     tvList.appendChild(listItem);
                 });
             })
-            .catch(error => console.error('Error fetching popular TV shows:', error));
+            .catch(error => {
+                console.error('Error fetching popular TV shows:', error);
+                document.getElementById('popular_tvshows_block').innerHTML = '<li>Failed to load TV shows</li>';
+            });
+            
+        // For books and music tabs - placeholder data until endpoints are ready
+        document.getElementById('popular_books_block').innerHTML = 
+            '<li>Book integration coming soon!</li>';
+        document.getElementById('popular_music_block').innerHTML = 
+            '<li>Music integration coming soon!</li>';
         
         // Tab switching functionality
         document.addEventListener('DOMContentLoaded', function() {
@@ -257,6 +367,9 @@
                     document.querySelector(targetId).style.display = 'block';
                 });
             });
+            
+            // Fetch recent reviews (could be implemented in the future)
+            // fetchRecentReviews();
         });
     </script>
 {% endblock %}
