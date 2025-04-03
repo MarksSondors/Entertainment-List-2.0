@@ -19,6 +19,13 @@
             <!-- Filter Section -->
             <form method="get" action="{% url 'watchlist_page' %}" class="mb-4">
                 <div class="field-row">
+                    <label for="media_type" class="ms-3">Media Type:</label>
+                    <select id="media_type" name="media_type">
+                        <option value="" {% if not current_media_type %}selected{% endif %}>All Types</option>
+                        <option value="movie" {% if current_media_type == 'movie' %}selected{% endif %}>Movies</option>
+                        <option value="tvshow" {% if current_media_type == 'tvshow' %}selected{% endif %}>TV Shows</option>
+                    </select>
+                    
                     <label for="title">Title:</label>
                     <input type="text" id="title" name="title" value="{{ filter_title }}" placeholder="Search titles...">
                     
@@ -72,7 +79,11 @@
                                     {% endif %}
                                 </p>
                                 <div class="mt-2">
+                                    {% if item.content_type.model == 'movie' %}
                                     <a href="{% url 'movie_page' item.media.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                    {% elif item.content_type.model == 'tvshow' %}
+                                    <a href="{% url 'tv_show_page' item.media.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="card-footer text-muted">
@@ -101,7 +112,11 @@
                             {% for item in watchlist_items %}
                             <tr>
                                 <td>
+                                    {% if item.content_type.model == 'movie' %}
                                     <a href="{% url 'movie_page' item.media.tmdb_id %}">{{ item.media.title }}</a>
+                                    {% elif item.content_type.model == 'tvshow' %}
+                                    <a href="{% url 'tv_show_page' item.media.tmdb_id %}">{{ item.media.title }}</a>
+                                    {% endif %}
                                 </td>
                                 <td>{{ item.media.release_date|date:"M d, Y" }}</td>
                                 <td>
@@ -113,7 +128,11 @@
                                 <td>{{ item.date_added|date:"M d, Y" }}</td>
                                 <td>
                                     <div class="btn-group" role="group">
+                                        {% if item.content_type.model == 'movie' %}
                                         <a href="{% url 'movie_page' item.media.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
+                                        {% elif item.content_type.model == 'tvshow' %}
+                                        <a href="{% url 'tv_show_page' item.media.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
+                                        {% endif %}
                                         <button type="button" class="btn btn-sm btn-danger">Remove</button>
                                     </div>
                                 </td>

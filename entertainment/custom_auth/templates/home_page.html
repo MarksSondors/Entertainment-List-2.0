@@ -135,7 +135,7 @@
         <div class="col-12 col-md-6 mb-3">
             <div class="window" style="width: 100%;">
                 <div class="title-bar">
-                    <div class="title-bar-text">Popular Movies</div>
+                    <div class="title-bar-text">Popular Content</div>
                     <div class="title-bar-controls">
                     <button aria-label="Minimize"></button>
                     <button aria-label="Maximize"></button>
@@ -143,13 +143,34 @@
                     </div>
                 </div>
                 <div class="window-body">
-                    <fieldset>
-                    <legend>Top 5 Popular Movies</legend>
-                
-                    <ul id="popular_movies_block" class="tree-view">
-                        <!-- Movies will be dynamically loaded here -->
-                    </ul>
-                    </fieldset>
+                    <menu role="tablist">
+                        <li role="tab" aria-selected="true"><a href="#movies-tab">Movies</a></li>
+                        <li role="tab"><a href="#tv-tab">TV Shows</a></li>
+                    </menu>
+                    
+                    <!-- Movies Tab -->
+                    <div class="window" role="tabpanel" id="movies-tab">
+                        <div class="window-body">
+                            <fieldset>
+                                <legend>Top 5 Popular Movies</legend>
+                                <ul id="popular_movies_block" class="tree-view">
+                                    <!-- Movies will be dynamically loaded here -->
+                                </ul>
+                            </fieldset>
+                        </div>
+                    </div>
+                    
+                    <!-- TV Shows Tab -->
+                    <div class="window" role="tabpanel" id="tv-tab" style="display: none;">
+                        <div class="window-body">
+                            <fieldset>
+                                <legend>Top 5 Popular TV Shows</legend>
+                                <ul id="popular_tvshows_block" class="tree-view">
+                                    <!-- TV Shows will be dynamically loaded here -->
+                                </ul>
+                            </fieldset>
+                        </div>
+                    </div>
                 </div>
                 <div class="status-bar">
                     <div class="status-bar-field">Ready</div>
@@ -175,6 +196,7 @@
     </style>
     
     <script>
+        // Fetch popular movies (existing code)
         fetch('/movies/popular/')
             .then(response => response.json())
             .then(data => {
@@ -192,5 +214,49 @@
                 });
             })
             .catch(error => console.error('Error fetching popular movies:', error));
+            
+        // Fetch popular TV shows
+        fetch('/tvshows/popular/') // You'll need to create this endpoint
+            .then(response => response.json())
+            .then(data => {
+                const tvList = document.getElementById('popular_tvshows_block');
+                tvList.innerHTML = '';
+                data.forEach(show => {
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `
+                        <a href="#" style="display: flex; align-items: center; padding: 5px 0;">
+                            <img src="${show.poster_path}" alt="${show.name}" style="width: 50px; height: auto; margin-right: 10px;">
+                            <span>${show.name}</span>
+                        </a>
+                    `;
+                    tvList.appendChild(listItem);
+                });
+            })
+            .catch(error => console.error('Error fetching popular TV shows:', error));
+        
+        // Tab switching functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabs = document.querySelectorAll('menu[role="tablist"] li[role="tab"]');
+            const tabPanels = document.querySelectorAll('div[role="tabpanel"]');
+            
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Deselect all tabs
+                    tabs.forEach(t => t.removeAttribute('aria-selected'));
+                    
+                    // Select clicked tab
+                    this.setAttribute('aria-selected', 'true');
+                    
+                    // Hide all tab panels
+                    tabPanels.forEach(panel => panel.style.display = 'none');
+                    
+                    // Show selected tab panel
+                    const targetId = this.querySelector('a').getAttribute('href');
+                    document.querySelector(targetId).style.display = 'block';
+                });
+            });
+        });
     </script>
 {% endblock %}
