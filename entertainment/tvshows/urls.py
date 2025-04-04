@@ -8,11 +8,11 @@ router = DefaultRouter()
 router.register(r'', TVShowViewSet, basename='tvshows')
 
 urlpatterns = [
-    path('add', views.create_tv_show_page, name='add_tv_show'),
     path('<int:show_id>/', views.tv_show_page, name='tv_show_page'),
     
     # API endpoints
     path('search/', TMDBTVSearchView.as_view(), name='tmdb_tv_search'),
     path('popular/', never_cache(PopularTVShowsView.as_view()), name='popular_tv_shows'),
     path('images/', views.TVShowImagesView.as_view(), name='tv_show_images'),
+    path('watchlist/', views.WatchlistTVShow.as_view(), name='watchlist_tv_show'),
 ] + router.urls

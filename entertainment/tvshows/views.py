@@ -20,9 +20,6 @@ from custom_auth.models import Watchlist, Genre
 
 # Create your views here.
 
-def create_tv_show_page(request):
-    return render(request, 'create_tv_show.html')
-
 @login_required
 def tv_show_page(request, show_id):
     try:
@@ -35,8 +32,14 @@ def tv_show_page(request, show_id):
         tv_show_db = create_tv_show(show_id)
         if not tv_show_db:
             raise Http404(f"TV Show with ID {show_id} could not be created")
+    user_watchlist = Watchlist.objects.filter(
+        user=request.user,
+        content_type=ContentType.objects.get_for_model(TVShow),
+        object_id=tv_show_db.id
+    ).exists()
     context = {
-        'tv_show': tv_show_db
+        'tv_show': tv_show_db,
+        'user_watchlist': user_watchlist,
     }
     return render(request, 'tv_show_page.html', context)
 
@@ -228,3 +231,46 @@ class TVShowImagesView(APIView):
             return Response({"error": "TV Show not found"}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(json.dumps(show), status=status.HTTP_200_OK)
+
+class WatchlistTVShow(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Add TV Show to Watchlist",
+        description="Add a TV show to the user's watchlist.",
+        request=TVShowSerializer,
+        responses={201: OpenApiExample("Watchlist TV Show", value={"message": "TV Show added to watchlist"})}
+    )
+    def post(self, request):
+        show_id = request.data.get('id')
+        if not show_id:
+            return Response({"error": "TV Show ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_type = ContentType.objects.get_for_model(TVShow)
+        watchlist_item, created = Watchlist.objects.get_or_create(
+            user=request.user,
+            content_type=content_type,
+            object_id=show_id,
+        )
+        if created:
+            return Response({"message": "TV Show added to watchlist"}, status=status.HTTP_201_CREATED)
+        else:
+            return Response({"message": "TV Show already in watchlist"}, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        show_id = request.data.get('id')
+        if not show_id:
+            return Response({"error": "TV Show ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_type = ContentType.objects.get_for_model(TVShow)
+        try:
+            watchlist_item = Watchlist.objects.get(
+                user=request.user,
+                content_type=content_type,
+                object_id=show_id,
+            )
+            watchlist_item.delete()
+            return Response({"message": "TV Show removed from watchlist"}, status=status.HTTP_204_NO_CONTENT)
+        except Watchlist.DoesNotExist:
+            return Response({"error": "TV Show not in watchlist"}, status=status.HTTP_404_NOT_FOUND)

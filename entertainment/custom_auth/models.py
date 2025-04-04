@@ -4,6 +4,8 @@ from django.conf import settings
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 # Create your models here.
 
 
@@ -131,6 +133,8 @@ class Movie(Media):
     trailer = models.URLField(blank=True, null=True)
 
     is_anime = models.BooleanField(default=False)
+
+    status = models.CharField(max_length=50, blank=True, null=True)  # e.g., "Released", "In Production", "Post Production"
 
     # foreign keys
     genres = models.ManyToManyField(Genre)
@@ -374,7 +378,6 @@ class Watchlist(models.Model):
     
     class Meta:
         ordering = ['-date_added']
-        # Ensure a user can't add the same item twice
         unique_together = ['user', 'content_type', 'object_id']
         indexes = [
             models.Index(fields=['content_type', 'object_id']),
@@ -382,6 +385,15 @@ class Watchlist(models.Model):
         
     def __str__(self):
         return f"{self.user.username}'s watchlist - {self.media}"
+
+# Add signals to automatically remove watchlist entries when media is deleted
+
+@receiver(pre_delete)
+def remove_from_watchlist(sender, instance, **kwargs):
+    """Remove any watchlist entries when media is deleted."""
+    if sender in [Movie, TVShow]:
+        content_type = ContentType.objects.get_for_model(sender)
+        Watchlist.objects.filter(content_type=content_type, object_id=instance.id).delete()
 
 class Review(models.Model):
     """Model for user reviews of media items."""

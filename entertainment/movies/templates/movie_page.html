@@ -95,7 +95,11 @@ body {
                     trailerVideo.src = trailerVideo.src; // Reset the video to stop playback
                 }
             </script>
-            <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">Add to Watchlist</button>
+            {% if user_watchlist %}
+                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="removeFromWatchlist()">Remove from Watchlist</button>
+            {% else %}
+                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="addToWatchlist()">Add to Watchlist</button>
+            {% endif %}
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">Add to Database</button>
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openReviewModal()">Write a Review</button>
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openCastModal()">Cast</button>
@@ -155,6 +159,68 @@ body {
             </div>
 
             <script>
+                function getCookie(name) {
+                    let cookieValue = null;
+                    if (document.cookie && document.cookie !== '') {
+                        const cookies = document.cookie.split(';');
+                        for (let i = 0; i < cookies.length; i++) {
+                            const cookie = cookies[i].trim();
+                            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                                break;
+                            }
+                        }
+                    }
+                    return cookieValue;
+                }
+                
+                function addToWatchlist(){
+                    fetch('/movies/watchlist/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            id: {{ movie.id }}
+                        })
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            window.location.reload();
+                        } else {
+                            alert('Failed to add movie to watchlist');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error adding movie to watchlist');
+                    });
+                }
+                function removeFromWatchlist() {
+                    fetch('/movies/watchlist/', {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            id: {{ movie.id }}
+                        })
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            window.location.reload();
+                        } else {
+                            alert('Failed to remove movie from watchlist');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error removing movie from watchlist');
+                    });
+                }
+
                 function openReviewModal() {
                     document.getElementById('reviewModal').style.display = 'block';
                     document.getElementById('rating').value = 5;

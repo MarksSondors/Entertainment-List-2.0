@@ -108,8 +108,11 @@ body {
         </div>
         <div style="margin-top: 10px;">
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openTrailerModal()">Watch Trailer</button>
-            <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">Add to Watchlist</button>
-            <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">Add to Database</button>
+            {% if user_watchlist %}
+                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="removeFromWatchlist()">Remove from Watchlist</button>
+            {% else %}
+                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="addToWatchlist()">Add to Watchlist</button>
+            {% endif %}
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openReviewModal()">Write a Review</button>
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openCastModal()">Cast</button>
 
@@ -346,6 +349,54 @@ body {
             }
         }
         return cookieValue;
+    }
+    
+    function addToWatchlist(){
+        fetch('/tvshows/watchlist/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: {{ tv_show.id }}
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                alert('Failed to add TV show to watchlist');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding TV show to watchlist');
+        });
+    }
+    
+    function removeFromWatchlist() {
+        fetch('/tvshows/watchlist/', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: {{ tv_show.id }}
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                alert('Failed to remove TV show from watchlist');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error removing TV show from watchlist');
+        });
     }
 
     function openPosterModal() {

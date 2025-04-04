@@ -20,8 +20,6 @@ from django.http import JsonResponse
 
 # Create your views here.
 
-def create_movie_page(request):
-    return render(request, 'create_movie.html')
 
 @login_required
 def movie_page(request, movie_id):
@@ -35,8 +33,15 @@ def movie_page(request, movie_id):
         movie_db = create_movie(movie_id)
         if not movie_db:
             raise Http404(f"Movie with ID {movie_id} could not be created")
+    # get user information if he has written a review is the movie in his watchlist
+    user_watchlist = Watchlist.objects.filter(
+        user=request.user,
+        content_type=ContentType.objects.get_for_model(Movie),
+        object_id=movie_db.id
+    ).exists()
     context = {
-        'movie': movie_db
+        'movie': movie_db,
+        'user_watchlist': user_watchlist,
     }
     return render(request, 'movie_page.html', context)
 
@@ -232,3 +237,46 @@ class MovieImagesView(APIView):
             return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(json.dumps(movie), status=status.HTTP_200_OK)
+
+class WatchlistMovie(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Add Movie to Watchlist",
+        description="Add a movie to the user's watchlist.",
+        request=MovieSerializer,
+        responses={201: OpenApiExample("Watchlist Movie", value={"message": "Movie added to watchlist"})}
+    )
+    def post(self, request):
+        movie_id = request.data.get('id')
+        if not movie_id:
+            return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_type = ContentType.objects.get_for_model(Movie)
+        watchlist_item, created = Watchlist.objects.get_or_create(
+            user=request.user,
+            content_type=content_type,
+            object_id=movie_id,
+        )
+        if created:
+            return Response({"message": "Movie added to watchlist"}, status=status.HTTP_201_CREATED)
+        else:
+            return Response({"message": "Movie already in watchlist"}, status=status.HTTP_200_OK)
+    
+    def delete(self, request):
+        movie_id = request.data.get('id')
+        if not movie_id:
+            return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_type = ContentType.objects.get_for_model(Movie)
+        try:
+            watchlist_item = Watchlist.objects.get(
+                user=request.user,
+                content_type=content_type,
+                object_id=movie_id,
+            )
+            watchlist_item.delete()
+            return Response({"message": "Movie removed from watchlist"}, status=status.HTTP_204_NO_CONTENT)
+        except Watchlist.DoesNotExist:
+            return Response({"error": "Movie not in watchlist"}, status=status.HTTP_404_NOT_FOUND)
