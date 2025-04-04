@@ -10,12 +10,11 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 
 import json
 
-from custom_auth.models import Movie
 from .serializers import MovieSerializer
 from .parsers import create_movie
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
-from custom_auth.models import Watchlist, Genre, TVShow
+from custom_auth.models import *
 from django.http import JsonResponse
 
 # Create your views here.
@@ -280,3 +279,165 @@ class WatchlistMovie(APIView):
             return Response({"message": "Movie removed from watchlist"}, status=status.HTTP_204_NO_CONTENT)
         except Watchlist.DoesNotExist:
             return Response({"error": "Movie not in watchlist"}, status=status.HTTP_404_NOT_FOUND)
+
+class MovieReviewView(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Get Movie Reviews",
+        description="Get all reviews for a specific movie.",
+        parameters=[
+            OpenApiParameter(name="movie_id", description="ID of the movie to retrieve reviews for", required=True, type=int),
+        ],
+        responses={200: OpenApiExample("Movie Reviews", value=[
+            {"id": 1, "user": "username", "rating": 8.5, "review_text": "Great movie!", "date_reviewed": "2025-04-04T12:00:00Z"}
+        ])}
+    )
+    def get(self, request):
+        movie_id = request.GET.get('movie_id')
+        if not movie_id:
+            return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            movie = Movie.objects.get(id=movie_id)
+        except Movie.DoesNotExist:
+            return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+        content_type = ContentType.objects.get_for_model(Movie)
+        reviews = Review.objects.filter(
+            content_type=content_type,
+            object_id=movie_id
+        ).select_related('user')
+        
+        result = []
+        for review in reviews:
+            result.append({
+                "id": review.id,
+                "user": review.user.username,
+                "rating": review.rating,
+                "review_text": review.review_text,
+                "date_reviewed": review.date_reviewed
+            })
+            
+        return Response(result, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Create Movie Review",
+        description="Create a new review for a movie.",
+        request=OpenApiExample("Review Request", value={
+            "movie_id": 1,
+            "rating": 8.5,
+            "review_text": "This was an excellent movie!"
+        }),
+        responses={201: OpenApiExample("Review Created", value={"message": "Review added successfully"})}
+    )
+    def post(self, request):
+        movie_id = request.data.get('movie_id')
+        rating = request.data.get('rating')
+        review_text = request.data.get('review_text', '')
+        
+        if not movie_id:
+            return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if not rating:
+            return Response({"error": "Rating is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            rating = float(rating)
+            if rating < 0 or rating > 10:
+                return Response({"error": "Rating must be between 0 and 10"}, status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+            return Response({"error": "Rating must be a valid number"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            movie = Movie.objects.get(id=movie_id)
+        except Movie.DoesNotExist:
+            return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+        content_type = ContentType.objects.get_for_model(Movie)
+        
+        # Check if user already has a review for this movie
+        existing_review = Review.objects.filter(
+            user=request.user,
+            content_type=content_type,
+            object_id=movie_id
+        ).first()
+        
+        if existing_review:
+            return Response({"error": "You have already reviewed this movie"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Create the review
+        review = Review.objects.create(
+            user=request.user,
+            content_type=content_type,
+            object_id=movie_id,
+            rating=rating,
+            review_text=review_text
+        )
+            
+        return Response({"message": "Review added successfully", "id": review.id}, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        summary="Update Movie Review",
+        description="Update an existing review for a movie.",
+        request=OpenApiExample("Update Review Request", value={
+            "review_id": 1,
+            "rating": 9.0,
+            "review_text": "After watching it again, I liked it even more!"
+        }),
+        responses={200: OpenApiExample("Review Updated", value={"message": "Review updated successfully"})}
+    )
+    def put(self, request):
+        review_id = request.data.get('review_id')
+        rating = request.data.get('rating')
+        review_text = request.data.get('review_text')
+        
+        if not review_id:
+            return Response({"error": "Review ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            review = Review.objects.get(id=review_id, user=request.user)
+        except Review.DoesNotExist:
+            return Response({"error": "Review not found or you don't have permission to edit it"}, 
+                           status=status.HTTP_404_NOT_FOUND)
+        
+        if rating is not None:
+            try:
+                rating = float(rating)
+                if rating < 0 or rating > 10:
+                    return Response({"error": "Rating must be between 0 and 10"}, 
+                                   status=status.HTTP_400_BAD_REQUEST)
+                review.rating = rating
+            except (ValueError, TypeError):
+                return Response({"error": "Rating must be a valid number"}, 
+                               status=status.HTTP_400_BAD_REQUEST)
+        
+        if review_text is not None:
+            review.review_text = review_text
+            
+        review.save()
+        return Response({"message": "Review updated successfully"}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Delete Movie Review",
+        description="Delete an existing review for a movie.",
+        parameters=[
+            OpenApiParameter(name="review_id", description="ID of the review to delete", required=True, type=int),
+        ],
+        responses={204: OpenApiExample("Review Deleted", value={"message": "Review deleted successfully"})}
+    )
+    def delete(self, request):
+        review_id = request.data.get('review_id')
+        
+        if not review_id:
+            return Response({"error": "Review ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            review = Review.objects.get(id=review_id, user=request.user)
+        except Review.DoesNotExist:
+            return Response({"error": "Review not found or you don't have permission to delete it"}, 
+                           status=status.HTTP_404_NOT_FOUND)
+            
+        review.delete()
+        return Response({"message": "Review deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
