@@ -105,7 +105,7 @@ body {
 
             <div id="reviewModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #C3C3C3; border: 2px solid black; z-index: 1000; width: 350px;">
                 <div class="title-bar">
-                    <div class="title-bar-text">Write a Review</div>
+                    <div class="title-bar-text" id="reviewModalTitle">Write a Review</div>
                     <div class="title-bar-controls">
                         <button aria-label="Close" onclick="closeReviewModal()"></button>
                     </div>
@@ -220,11 +220,32 @@ body {
                     });
                 }
 
-                function openReviewModal() {
+                function openReviewModal(isEdit = false) {
                     document.getElementById('reviewModal').style.display = 'block';
-                    document.getElementById('rating').value = 5;
-                    document.getElementById('ratingValue').textContent = 5;
-                    document.getElementById('reviewText').value = '';
+                    
+                    if (isEdit && window.userReviewId) {
+                        document.getElementById('rating').value = window.userReviewRating;
+                        document.getElementById('ratingValue').textContent = window.userReviewRating;
+                        document.getElementById('reviewText').value = window.userReviewText;
+                        
+                        // Add hidden input for review ID
+                        let reviewIdInput = document.getElementById('reviewId');
+                        if (!reviewIdInput) {
+                            reviewIdInput = document.createElement('input');
+                            reviewIdInput.type = 'hidden';
+                            reviewIdInput.id = 'reviewId';
+                            document.getElementById('reviewModal').appendChild(reviewIdInput);
+                        }
+                        reviewIdInput.value = window.userReviewId;
+                    } else {
+                        document.getElementById('rating').value = 5;
+                        document.getElementById('ratingValue').textContent = 5;
+                        document.getElementById('reviewText').value = '';
+                        
+                        // Remove review ID if exists
+                        const reviewIdInput = document.getElementById('reviewId');
+                        if (reviewIdInput) reviewIdInput.remove();
+                    }
                 }
 
                 function closeReviewModal() {
@@ -234,13 +255,165 @@ body {
                 function submitReview() {
                     const rating = document.getElementById('rating').value;
                     const reviewText = document.getElementById('reviewText').value;
-                    console.log('Rating:', rating);
-                    console.log('Review:', reviewText);
+                    const reviewId = document.getElementById('reviewId')?.value;
                     
-                    // TODO: Add AJAX call to submit review to server
+                    const endpoint = '/movies/reviews/';
+                    const method = reviewId ? 'PUT' : 'POST';
+                    const body = reviewId ? 
+                        JSON.stringify({
+                            review_id: reviewId,
+                            rating: rating,
+                            review_text: reviewText
+                        }) : 
+                        JSON.stringify({
+                            movie_id: {{ movie.id }},
+                            rating: rating,
+                            review_text: reviewText
+                        });
                     
-                    closeReviewModal();
-                    // Optional: Show success message
+                    fetch(endpoint, {
+                        method: method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: body
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            closeReviewModal();
+                            loadReviews(); // Reload the reviews
+                            
+                            // If this was a new review, change button to "Edit Review"
+                            if (!reviewId) {
+                                const reviewButton = document.querySelector('button[onclick="openReviewModal()"]');
+                                reviewButton.textContent = 'Edit Review';
+                                reviewButton.onclick = function() { openReviewModal(true); };
+                            }
+                        } else {
+                            return response.json().then(data => {
+                                throw new Error(data.error || 'Failed to submit review');
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert(error.message || 'Error submitting review');
+                    });
+                }
+
+                function loadReviews() {
+                    fetch(`/movies/reviews/?movie_id={{ movie.id }}`)
+                    .then(response => response.json())
+                    .then(reviews => {
+                        const reviewsTable = document.querySelector('.sunken-panel table tbody');
+                        reviewsTable.innerHTML = ''; // Clear existing reviews
+                        
+                        if (reviews.length === 0) {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td colspan="4" style="padding: 4px; text-align: center;">
+                                    No reviews yet. Be the first to review this movie!
+                                </td>
+                            `;
+                            reviewsTable.appendChild(row);
+                            return;
+                        }
+                        
+                        reviews.forEach(review => {
+                            const row = document.createElement('tr');
+                            
+                            // Format the date
+                            const reviewDate = new Date(review.date_reviewed);
+                            const formattedDate = reviewDate.toLocaleDateString('en-US', { 
+                                year: 'numeric', 
+                                month: 'short', 
+                                day: 'numeric' 
+                            });
+                            
+                            // Check if current user is the review author
+                            const isAuthor = review.user === '{{ request.user.username }}';
+                            const actionButtons = isAuthor ? `
+                                <button onclick="editReview(${review.id}, ${review.rating}, '${review.review_text.replace(/'/g, "\\'")}')" 
+                                        style="font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px; margin-right: 5px;">
+                                    Edit
+                                </button>
+                                <button onclick="deleteReview(${review.id})" 
+                                        style="font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px;">
+                                    Delete
+                                </button>
+                            ` : '';
+                            
+                            row.innerHTML = `
+                                <td style="padding: 4px; border-bottom: 1px solid #ddd;">${review.user}</td>
+                                <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">${review.rating}/10</td>
+                                <td style="padding: 4px; border-bottom: 1px solid #ddd;">${review.review_text || ''}</td>
+                                <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">
+                                    ${formattedDate}
+                                    <div>${actionButtons}</div>
+                                </td>
+                            `;
+                            
+                            reviewsTable.appendChild(row);
+                        });
+                        
+                        // Check if current user has already reviewed this movie
+                        const userReview = reviews.find(review => review.user === '{{ request.user.username }}');
+                        if (userReview) {
+                            const reviewButton = document.querySelector('button[onclick="openReviewModal()"]');
+                            if (reviewButton) {
+                                reviewButton.textContent = 'Edit Review';
+                                reviewButton.onclick = function() { openReviewModal(true); };
+                            }
+                            // Store the user's review ID 
+                            window.userReviewId = userReview.id;
+                            window.userReviewRating = userReview.rating;
+                            window.userReviewText = userReview.review_text;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading reviews:', error);
+                    });
+                }
+
+                function editReview(id, rating, text) {
+                    window.userReviewId = id;
+                    window.userReviewRating = rating;
+                    window.userReviewText = text;
+                    openReviewModal(true);
+                }
+
+                function deleteReview(id) {
+                    if (confirm('Are you sure you want to delete your review?')) {
+                        fetch('/movies/reviews/', {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCookie('csrftoken')
+                            },
+                            body: JSON.stringify({
+                                review_id: id
+                            })
+                        })
+                        .then(response => {
+                            if (response.ok) {
+                                loadReviews();
+                                // Reset the review button
+                                const reviewButton = document.querySelector('button[onclick*="openReviewModal"]');
+                                reviewButton.textContent = 'Write a Review';
+                                reviewButton.onclick = function() { openReviewModal(); };
+                                window.userReviewId = null;
+                            } else {
+                                return response.json().then(data => {
+                                    throw new Error(data.error || 'Failed to delete review');
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert(error.message || 'Error deleting review');
+                        });
+                    }
                 }
 
                 function openCastModal() {
@@ -258,6 +431,16 @@ body {
                     ratingSlider.addEventListener('input', function() {
                         ratingValue.textContent = this.value;
                     });
+                    
+                    // Load reviews when page loads
+                    loadReviews();
+                    
+                    // Update modal title when opening
+                    const originalOpenReviewModal = openReviewModal;
+                    openReviewModal = function(isEdit = false) {
+                        document.getElementById('reviewModalTitle').textContent = isEdit ? 'Edit Review' : 'Write a Review';
+                        originalOpenReviewModal(isEdit);
+                    };
                 });
             </script>
         </div>

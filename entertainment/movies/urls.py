@@ -15,4 +15,5 @@ urlpatterns = [
     path('popular/', cache_page(60 * 60)(PopularMoviesView.as_view()), name='popular_movies'),
     path('images/', views.MovieImagesView.as_view(), name='movie_images'),
     path('watchlist/', views.WatchlistMovie.as_view(), name='watchlist'),
+    path('reviews/', views.MovieReviewView.as_view(), name='movie_reviews'),
 ] + router.urls
