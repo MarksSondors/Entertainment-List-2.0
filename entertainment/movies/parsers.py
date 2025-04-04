@@ -30,6 +30,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
         'rating': movie_details.get('vote_average'),
         'trailer': trailer_link,
         'is_anime': is_anime,
+        'status': movie_details.get('status'),
     }
     
     # Create genres, countries and keywords as before

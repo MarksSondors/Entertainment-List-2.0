@@ -8,11 +8,11 @@ router = DefaultRouter()
 router.register(r'', MovieViewSet, basename='movies')
 
 urlpatterns = [
-    path('add', views.create_movie_page, name='add_movie'),
     path('<int:movie_id>/', views.movie_page, name='movie_page'),
 
     # API
     path('search/', TMDBSearchView.as_view(), name='tmdb_search'),
     path('popular/', cache_page(60 * 60)(PopularMoviesView.as_view()), name='popular_movies'),
     path('images/', views.MovieImagesView.as_view(), name='movie_images'),
+    path('watchlist/', views.WatchlistMovie.as_view(), name='watchlist'),
 ] + router.urls
