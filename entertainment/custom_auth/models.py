@@ -404,6 +404,9 @@ class Review(models.Model):
     object_id = models.PositiveIntegerField()
     media = GenericForeignKey('content_type', 'object_id')
     
+    # For TV shows, we can link to a specific season
+    season = models.ForeignKey(Season, on_delete=models.CASCADE, blank=True, null=True, related_name='reviews')
+    
     # Review content
     rating = models.FloatField()
     review_text = models.TextField(blank=True, null=True)
@@ -411,12 +414,33 @@ class Review(models.Model):
     
     class Meta:
         ordering = ['-date_reviewed']
-        unique_together = ['user', 'content_type', 'object_id']
+        # Update unique constraint to include season for TV shows
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'content_type', 'object_id', 'season'],
+                name='unique_review_with_season'
+            ),
+            models.UniqueConstraint(
+                fields=['user', 'content_type', 'object_id'],
+                condition=models.Q(season__isnull=True),
+                name='unique_review_without_season'
+            ),
+        ]
         
     def __str__(self):
+        if self.season:
+            return f"{self.user.username}'s review of {self.season} - {self.rating}/10"
         return f"{self.user.username}'s review of {self.media} - {self.rating}/10"
     
     def save(self, *args, **kwargs):
+        # For TV shows, check if the content type is TVShow
+        if self.content_type.model_class() == TVShow and not self.season:
+            raise ValueError("Reviews for TV shows must include a season")
+        
+        # For non-TV shows, ensure season is None
+        if self.content_type.model_class() != TVShow:
+            self.season = None
+        
         # Remove from watchlist when reviewed
         Watchlist.objects.filter(
             user=self.user,
