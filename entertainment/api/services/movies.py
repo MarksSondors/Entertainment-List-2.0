@@ -58,3 +58,6 @@ class MoviesService(BaseService):
             return self.get_movie_details(movie_id)
         
         return None
+    
+    def get_collection_details(self, collection_id):
+        return self._get(f'collection/{collection_id}')
