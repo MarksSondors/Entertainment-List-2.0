@@ -441,3 +441,13 @@ class MovieReviewView(APIView):
             
         review.delete()
         return Response({"message": "Review deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+    
+
+def collection_detail(request, collection_id):
+    collection = get_object_or_404(Collection, id=collection_id)
+    # You'll need to properly query for movies in this collection
+    movies = Movie.objects.filter(collection=collection)
+    return render(request, 'collection_page.html', {
+        'collection': collection,
+        'movies': movies
+    })

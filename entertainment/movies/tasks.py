@@ -105,6 +105,27 @@ def update_single_movie(movie_id):
         
         if data.get('original_title') and data.get('original_title') != movie.original_title:
             updates['original_title'] = data.get('original_title')
+        
+        if data.get('belongs_to_collection') and data.get('belongs_to_collection') != movie.collection:
+            collection_id = data['belongs_to_collection'].get('id')
+            if collection_id:
+                # Check if the collection exists in our database
+                try:
+                    collection = Collection.objects.get(tmdb_id=collection_id)
+                    updates['collection'] = collection
+                except Collection.DoesNotExist:
+                    # create collection
+                    movies_service = MoviesService()
+                    collection_data = movies_service.get_collection_details(collection_id)
+                    if collection_data:
+                        collection = Collection.objects.create(
+                            name=collection_data.get('name'),
+                            description=collection_data.get('overview'),
+                            tmdb_id=collection_data.get('id'),
+                            poster=f"https://image.tmdb.org/t/p/original{collection_data.get('poster_path')}",
+                            backdrop=f"https://image.tmdb.org/t/p/original{collection_data.get('backdrop_path')}",
+                        )
+                        updates['collection'] = collection
 
         # Update release date if it changed
         if data.get('release_date') and data.get('release_date') != str(movie.release_date):

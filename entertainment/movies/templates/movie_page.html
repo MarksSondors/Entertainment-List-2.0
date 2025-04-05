@@ -68,6 +68,11 @@ body {
                     <a href="keyword" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
                 {% endfor %}
             </p>
+            {% if movie.collection %}
+            <p><strong>Collection:</strong>
+                <a href="{% url 'collection_detail' movie.collection.id %}" style="text-decoration: none; color: black;">{{ movie.collection.name }}</a>
+            </p>
+            {% endif %}
         </div>
         <div style="margin-top: 10px;">
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openTrailerModal()">Watch Trailer</button>
