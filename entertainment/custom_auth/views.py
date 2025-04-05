@@ -83,10 +83,21 @@ def profile_page(request, username=None):
     else:
         user = request.user
     
-    # Get user's favorite movies
-    # In a real implementation, you would sort by review score
-    # For now, just get all movies associated with the user
-    favorite_movies = Movie.objects.all()[:5]  # Replace with: Movie.objects.filter(user=user)
+    # Get user's favorite movies by finding movies they've reviewed
+    # and sorting by rating (highest first)
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    movie_reviews = Review.objects.filter(
+        user=user,
+        content_type=movie_content_type
+    ).select_related('content_type').order_by('-rating')
+    
+    # Create a list of movies with their review scores
+    favorite_movies = []
+    for review in movie_reviews[:5]:  # Limit to top 5 rated movies
+        movie = Movie.objects.filter(id=review.object_id).first()
+        if movie:
+            movie.user_rating = review.rating  # Add the user's rating to the movie object
+            favorite_movies.append(movie)
     
     # Get user's favorite TV shows
     favorite_shows = []  # Replace with: TVShow.objects.filter(user=user)
