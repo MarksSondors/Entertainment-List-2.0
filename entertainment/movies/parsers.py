@@ -75,7 +75,8 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
             content_type=ContentType.objects.get_for_model(movie),
             object_id=movie.id
         )
-    
+
+
     # Get the movie's content type for MediaPerson
     movie_content_type = ContentType.objects.get_for_model(movie)
     

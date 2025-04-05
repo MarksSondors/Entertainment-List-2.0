@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'heroicons',
     "debug_toolbar",
-
+    'django_q',
 
     # Custom apps
     'custom_auth',  # user info and tables which are not unique to other apps
@@ -178,3 +178,21 @@ CACHES = {
 
 # Optional: Cache timeout for views (default is 300 seconds if not specified in cache_page)
 CACHE_MIDDLEWARE_SECONDS = 900  # 15 minutes
+
+# Django Q configuration
+Q_CLUSTER = {
+    'name': 'entertainment',
+    'workers': 4,
+    'recycle': 500,
+    'timeout': 300,
+    'compress': True,
+    'save_limit': 250,
+    'queue_limit': 500,
+    'cpu_affinity': 1,
+    'label': 'Django Q',
+    'redis': {
+        'host': '127.0.0.1',
+        'port': 6379,
+        'db': 0,
+    }
+}

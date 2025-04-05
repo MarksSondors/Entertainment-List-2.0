@@ -109,9 +109,6 @@ class Person(models.Model):
 
     # music roles
     is_musician = models.BooleanField(default=False)
-    is_performer = models.BooleanField(default=False)
-    is_songwriter = models.BooleanField(default=False)
-    is_band_member = models.BooleanField(default=False)
     
     # external IDs for music services
     musicbrainz_id = models.CharField(max_length=36, blank=True, null=True)
