@@ -7,6 +7,9 @@ from django_q.tasks import async_task, schedule
 from custom_auth.models import Movie
 from api.services.movies import MoviesService
 
+from movies.models import Collection
+
+
 logger = logging.getLogger(__name__)
 
 def update_unreleased_movies():
@@ -129,6 +132,95 @@ def update_single_movie(movie_id):
         logger.error(f"Error updating movie {movie_id}: {e}")
         return f"Error updating movie {movie_id}: {str(e)}"
 
+def update_movie_collections():
+    """Update collections by adding any missing movies from TMDB."""
+    
+    # Get all collections in the database
+    collections = Collection.objects.all()
+    
+    # Log how many collections will be checked
+    logger.info(f"Checking {collections.count()} movie collections for updates")
+    
+    # Update each collection
+    updates_count = 0
+    for collection in collections:
+        try:
+            # Schedule individual collection updates as separate tasks
+            async_task(update_single_collection, collection.id)
+            updates_count += 1
+        except Exception as e:
+            logger.error(f"Error scheduling update for collection {collection.name} (ID: {collection.id}): {e}")
+    
+    return f"Scheduled updates for {updates_count} movie collections"
+
+def update_single_collection(collection_id):
+    """Update a single collection by fetching its details and adding missing movies."""
+    try:        
+        collection = Collection.objects.get(id=collection_id)
+        
+        # Use MoviesService to get collection details
+        movies_service = MoviesService()
+        data = movies_service.get_collection_details(collection.tmdb_id)
+        
+        if not data or 'parts' not in data:
+            logger.error(f"TMDB API error for collection {collection.name} (ID: {collection_id}): Failed to retrieve data")
+            return f"Failed to update collection {collection_id}"
+            
+        # Get all movies in this collection from our database
+        existing_movie_tmdb_ids = set(Movie.objects.filter(collection=collection).values_list('tmdb_id', flat=True))
+        
+        # Check for missing movies
+        added_count = 0
+        for movie_data in data['parts']:
+            if movie_data['id'] not in existing_movie_tmdb_ids:
+                try:
+                    # Add this movie to our database
+                    async_task(add_movie_from_collection, movie_data['id'], collection.id)
+                    added_count += 1
+                except Exception as e:
+                    logger.error(f"Error adding movie {movie_data.get('title', 'Unknown')} (TMDB ID: {movie_data['id']}) to collection: {e}")
+        
+        return f"Added {added_count} new movies to collection {collection.name}"
+        
+    except Collection.DoesNotExist:
+        logger.error(f"Collection with ID {collection_id} not found")
+        return f"Collection {collection_id} not found"
+    except Exception as e:
+        logger.error(f"Error updating collection {collection_id}: {e}")
+        return f"Error updating collection {collection_id}: {str(e)}"
+
+def add_movie_from_collection(tmdb_id, collection_id):
+    """Add a single movie from a collection to the database using the existing parser."""
+    try:
+        from movies.parsers import create_movie
+        
+        collection = Collection.objects.get(id=collection_id)
+        
+        # Check if movie already exists
+        if Movie.objects.filter(tmdb_id=tmdb_id).exists():
+            # If it exists but isn't linked to this collection, update it
+            movie = Movie.objects.get(tmdb_id=tmdb_id)
+            if movie.collection != collection:
+                movie.collection = collection
+                movie.save(update_fields=['collection'])
+                return f"Updated collection for existing movie: {movie.title}"
+            return f"Movie already exists and is in collection: {movie.title}"
+        
+        # Get movie details from TMDB
+        movies_service = MoviesService()
+        data = movies_service.get_movie_details(tmdb_id, append_to_response="videos,keywords")
+        
+        if not data:
+            return f"Failed to retrieve data for movie with TMDB ID {tmdb_id}"
+        
+        movie = create_movie(tmdb_id, add_to_watchlist=False)
+        
+        return f"Added new movie to collection: {movie.title}"
+        
+    except Exception as e:
+        logger.error(f"Error adding movie {tmdb_id} to collection {collection_id}: {e}")
+        return f"Error adding movie with TMDB ID {tmdb_id}: {str(e)}"
+
 def setup_scheduled_tasks():
     """Set up scheduled tasks if they don't exist already."""
     # Schedule the task to run every minute
@@ -150,5 +242,13 @@ def setup_scheduled_tasks():
             'repeats': -1,  # Repeat forever
         }
     )
-    
+    # Schedule collection updates to run weekly
+    Schedule.objects.get_or_create(
+        name='Update movie collections',
+        defaults={
+            'func': 'movies.tasks.update_movie_collections',
+            'schedule_type': Schedule.WEEKLY,
+            'repeats': -1,  # Repeat forever
+        }
+    )
     return "Scheduled task setup complete"

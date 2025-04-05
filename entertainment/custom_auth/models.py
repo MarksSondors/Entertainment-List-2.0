@@ -8,6 +8,8 @@ from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 # Create your models here.
 
+from movies.models import Collection
+
 
 class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
@@ -150,7 +152,7 @@ class Movie(Media):
     countries = models.ManyToManyField(Country)
     keywords = models.ManyToManyField(Keyword)
 
-    collection = models.ForeignKey('Collection', related_name='movies', on_delete=models.CASCADE, blank=True, null=True)
+    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, blank=True, null=True, related_name='movies')
 
     def __str__(self):
         return self.title

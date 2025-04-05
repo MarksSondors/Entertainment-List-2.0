@@ -5,6 +5,10 @@ from django.contrib.contenttypes.admin import GenericTabularInline
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
 
+from .models import Collection
+
+admin.site.register(Collection)
+
 class PersonAdmin(admin.ModelAdmin):
     search_fields = ['name', 'imdb_id']
     list_display = ('name', 'is_director', 'is_writer', 'is_original_music_composer')
