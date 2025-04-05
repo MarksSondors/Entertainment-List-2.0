@@ -472,7 +472,7 @@ def collection_detail(request, collection_id):
     
     # Annotate each movie with user's rating and watchlist status
     for movie in movies:
-        movie.user_rating = ratings_dict.get(movie.id)
+        movie.user_rating = int(ratings_dict.get(movie.id)) if ratings_dict.get(movie.id) is not None else None
         movie.in_watchlist = movie.id in user_watchlist
     
     return render(request, 'collection_page.html', {
