@@ -443,10 +443,38 @@ class MovieReviewView(APIView):
         return Response({"message": "Review deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
     
 
+@login_required
 def collection_detail(request, collection_id):
     collection = get_object_or_404(Collection, id=collection_id)
-    # You'll need to properly query for movies in this collection
-    movies = Movie.objects.filter(collection=collection)
+    
+    # Get all movies in this collection
+    movies = Movie.objects.filter(collection=collection).order_by('-release_date')
+    
+    # Get content type for Movie model for annotations
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    
+    # Get user's reviews for these movies
+    user_reviews = Review.objects.filter(
+        user=request.user,
+        content_type=movie_content_type,
+        object_id__in=movies.values_list('id', flat=True)
+    ).values('object_id', 'rating')
+    
+    # Create a dictionary for quick lookup of ratings
+    ratings_dict = {review['object_id']: review['rating'] for review in user_reviews}
+    
+    # Get user's watchlist items
+    user_watchlist = Watchlist.objects.filter(
+        user=request.user,
+        content_type=movie_content_type,
+        object_id__in=movies.values_list('id', flat=True)
+    ).values_list('object_id', flat=True)
+    
+    # Annotate each movie with user's rating and watchlist status
+    for movie in movies:
+        movie.user_rating = ratings_dict.get(movie.id)
+        movie.in_watchlist = movie.id in user_watchlist
+    
     return render(request, 'collection_page.html', {
         'collection': collection,
         'movies': movies
