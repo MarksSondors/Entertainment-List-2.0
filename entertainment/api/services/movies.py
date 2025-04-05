@@ -46,3 +46,15 @@ class MoviesService(BaseService):
     
     def get_person_details(self, person_id):
         return self._get(f'person/{person_id}')
+    
+    def get_movie_details_with_imdb_id(self, imdb_id):
+        # First, search for the movie using the IMDb ID
+        # Use the find endpoint with the IMDB ID
+        search_results = self._get(f'find/{imdb_id}', params={'external_source': 'imdb_id'})
+        
+        # Check if any results were found
+        if search_results and 'results' in search_results and len(search_results['results']) > 0:
+            movie_id = search_results['results'][0]['id']
+            return self.get_movie_details(movie_id)
+        
+        return None
