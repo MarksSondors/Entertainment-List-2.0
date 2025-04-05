@@ -51,28 +51,30 @@ body {
     </div>
 </div>
 
-<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; margin: 20px;">
-    <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
-        <h2 style="margin: 0; font-size: 18px;">Movies in this Collection</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; padding: 10px; background-color: white; border: 2px inset;">
+    {% for movie in movies %}
+    <div style="text-align: center; position: relative;">
+        <a href="{% url 'movie_page' movie.tmdb_id %}" style="text-decoration: none; color: black;">
+            <img src="{{ movie.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                 alt="{{ movie.title }}" 
+                 style="width: 150px; height: 225px; object-fit: cover; 
+                 border: {% if movie.in_watchlist %}4px solid #4CAF50{% elif movie.user_rating %}4px solid #2196F3{% else %}2px solid black{% endif %}; 
+                 margin-bottom: 5px;">
+            {% if movie.user_rating %}
+            <div style="position: absolute; top: 5px; right: 5px; background-color: #E0B020; color: black; 
+                        padding: 3px 6px; border-radius: 3px; font-weight: bold; box-shadow: 0 0 3px rgba(0,0,0,0.5);">
+                {{ movie.user_rating }}
+            </div>
+            {% endif %}
+            <div style="font-weight: bold;">{{ movie.title }}</div>
+            <div style="font-size: 0.9em; color: #666;">{{ movie.release_date|date:"Y" }}</div>
+        </a>
     </div>
-    
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; padding: 10px; background-color: white; border: 2px inset;">
-        {% for movie in movies %}
-        <div style="text-align: center;">
-            <a href="{% url 'movie_page' movie.tmdb_id %}" style="text-decoration: none; color: black;">
-                <img src="{{ movie.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
-                     alt="{{ movie.title }}" 
-                     style="width: 150px; height: 225px; object-fit: cover; border: 2px solid black; margin-bottom: 5px;">
-                <div style="font-weight: bold;">{{ movie.title }}</div>
-                <div style="font-size: 0.9em; color: #666;">{{ movie.release_date|date:"Y" }}</div>
-            </a>
-        </div>
-        {% empty %}
-        <div style="grid-column: 1 / -1; text-align: center; padding: 20px;">
-            <p>No movies found in this collection.</p>
-        </div>
-        {% endfor %}
+    {% empty %}
+    <div style="grid-column: 1 / -1; text-align: center; padding: 20px;">
+        <p>No movies found in this collection.</p>
     </div>
+    {% endfor %}
 </div>
 
 <script>
