@@ -25,6 +25,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
         'backdrop': movie_backdrop,
         'release_date': movie_details.get('release_date'),
         'tmdb_id': movie_details.get('id'),
+        'imdb_id': movie_details.get('imdb_id'),
         'runtime': movie_details.get('runtime'),
         'description': movie_details.get('overview'),
         'rating': movie_details.get('vote_average'),
