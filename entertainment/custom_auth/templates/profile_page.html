@@ -52,6 +52,11 @@
                                         <a href="{% url 'movie_page' movie.tmdb_id %}" class="poster-link">
                                             <img src="{{ movie.poster|default:'#' }}" alt="{{ movie.title }}" 
                                                  class="poster-image">
+                                            {% if movie.user_rating %}
+                                            <div class="rating-badge">
+                                                {{ movie.user_rating }}
+                                            </div>
+                                            {% endif %}
                                             <span class="poster-title">{{ movie.title }}</span>
                                         </a>
                                     {% endfor %}
@@ -81,6 +86,11 @@
                                             <img src="{{ show.poster_url|default:'#' }}" alt="{{ show.title }}" 
                                                  class="poster-image"
                                                  onerror="this.src='{% static 'images/tv-default.png' %}'">
+                                            {% if show.user_rating %}
+                                            <div class="rating-badge">
+                                                {{ show.user_rating }}
+                                            </div>
+                                            {% endif %}
                                             <span class="poster-title">{{ show.title }}</span>
                                         </a>
                                     {% endfor %}
@@ -155,6 +165,7 @@
         text-align: center;
         text-decoration: none;
         color: inherit;
+        position: relative;
     }
     .poster-image {
         width: 100px;
@@ -166,6 +177,17 @@
         display: block;
         margin-top: 5px;
         font-size: 14px;
+    }
+    .rating-badge {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background-color: #E0B020;
+        color: black;
+        padding: 3px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+        box-shadow: 0 0 3px rgba(0,0,0,0.5);
     }
 </style>
 

@@ -1,6 +1,36 @@
 # tmdb
+import time
+import threading
+from collections import deque
 from api.base import BaseService
 from decouple import config
+
+
+class RateLimiter:
+    """Rate limiter to control the number of requests per second"""
+    def __init__(self, max_calls, period=1.0):
+        self.max_calls = max_calls  # maximum calls allowed in period
+        self.period = period  # time period in seconds
+        self.calls = deque()  # timestamps of calls
+        self.lock = threading.RLock()  # lock for thread safety
+
+    def wait_if_needed(self):
+        """Wait if rate limit has been reached"""
+        with self.lock:
+            now = time.time()
+            
+            # Remove timestamps older than our period
+            while self.calls and self.calls[0] <= now - self.period:
+                self.calls.popleft()
+            
+            # If we've reached our limit, wait
+            if len(self.calls) >= self.max_calls:
+                sleep_time = self.calls[0] - (now - self.period)
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+            
+            # Record this call
+            self.calls.append(time.time())
 
 
 class MoviesService(BaseService):
@@ -9,6 +39,15 @@ class MoviesService(BaseService):
             base_url='https://api.themoviedb.org/3',
             bearer_token=config("TMDB_BEARER_TOKEN")
         )
+        # Initialize the rate limiter with 40 calls per second
+        self.rate_limiter = RateLimiter(max_calls=40)
+    
+    # Override the _get method to add rate limiting
+    def _get(self, endpoint, params=None):
+        # Wait if we need to respect the rate limit
+        self.rate_limiter.wait_if_needed()
+        # Call the parent's _get method
+        return super()._get(endpoint, params)
 
     def get_popular_movies(self):
         return self._get('movie/popular')
