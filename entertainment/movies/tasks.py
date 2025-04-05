@@ -97,6 +97,12 @@ def update_single_movie(movie_id):
             movie.backdrop = f"https://image.tmdb.org/t/p/original{data['backdrop_path']}"
             updates['backdrop'] = movie.backdrop
 
+        if data.get('title') and data.get('title') != movie.title:
+            updates['title'] = data.get('title')
+        
+        if data.get('original_title') and data.get('original_title') != movie.original_title:
+            updates['original_title'] = data.get('original_title')
+
         # Update release date if it changed
         if data.get('release_date') and data.get('release_date') != str(movie.release_date):
             try:
