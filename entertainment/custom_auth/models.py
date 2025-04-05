@@ -150,6 +150,8 @@ class Movie(Media):
     countries = models.ManyToManyField(Country)
     keywords = models.ManyToManyField(Keyword)
 
+    collection = models.ForeignKey('Collection', related_name='movies', on_delete=models.CASCADE, blank=True, null=True)
+
     def __str__(self):
         return self.title
     
