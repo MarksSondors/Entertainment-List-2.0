@@ -68,6 +68,23 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     movie.countries.set(country_instances)
     movie.keywords.set(keyword_instances)
 
+    # Set the movie is part of a collection if applicable
+    collection_id = movie_details.get('belongs_to_collection', {}).get('id')
+    if collection_id:
+        collection_details = MoviesService().get_collection_details(collection_id)
+        if collection_details:
+            collection, _ = Collection.objects.get_or_create(
+                tmdb_id=collection_details.get('id'),
+                defaults={
+                    'name': collection_details.get('name'),
+                    'description': collection_details.get('overview'),
+                    'poster': f"https://image.tmdb.org/t/p/original{collection_details.get('poster_path')}" if collection_details.get('poster_path') else None,
+                    'backdrop': f"https://image.tmdb.org/t/p/original{collection_details.get('backdrop_path')}" if collection_details.get('backdrop_path') else None
+                }
+            )
+            movie.collection = collection
+            movie.save()
+
     # Add to watchlist if specified
     if add_to_watchlist:
         Watchlist.objects.create(
@@ -75,6 +92,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
             content_type=ContentType.objects.get_for_model(movie),
             object_id=movie.id
         )
+    
 
 
     # Get the movie's content type for MediaPerson

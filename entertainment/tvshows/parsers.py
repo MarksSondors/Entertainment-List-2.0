@@ -149,16 +149,10 @@ def create_tv_show(show_id, show_poster=None, show_backdrop=None, is_anime=False
             order=person.get('order', index)
         )
     
-    # Process crew members
-    crew = credits.get('crew', [])
-    for person in crew:
-        job = person.get('job')
-        
-        # Only process creator
-        if job not in ['Creator']:
-            continue
-        
-        person_details = MoviesService().get_person_details(person.get('id'))
+    
+    # Process created_by field for creators
+    for creator in show_details.get('created_by', []):
+        person_details = MoviesService().get_person_details(creator.get('id'))
         if not person_details:
             continue
             
@@ -174,17 +168,16 @@ def create_tv_show(show_id, show_poster=None, show_backdrop=None, is_anime=False
             }
         )
         
-        # Set creator flag if applicable
-        if job == 'Creator':
-            person_instance.is_tv_creator = True
-            person_instance.save()
+        # Set creator flag
+        person_instance.is_tv_creator = True
+        person_instance.save()
         
         # Create MediaPerson entry
         MediaPerson.objects.create(
             content_type=tv_show_content_type,
             object_id=tv_show.id,
             person=person_instance,
-            role=job
+            role="Creator"
         )
     
     # Create seasons and episodes if requested
