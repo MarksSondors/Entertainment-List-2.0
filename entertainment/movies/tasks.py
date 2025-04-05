@@ -106,10 +106,10 @@ def update_single_movie(movie_id):
         if data.get('original_title') and data.get('original_title') != movie.original_title:
             updates['original_title'] = data.get('original_title')
         
-        if data.get('belongs_to_collection') and data.get('belongs_to_collection') != movie.collection:
+        if data.get('belongs_to_collection'):
+            print(f"Collection data: {data['belongs_to_collection']}")
             collection_id = data['belongs_to_collection'].get('id')
-            if collection_id:
-                # Check if the collection exists in our database
+            if movie.collection is None:
                 try:
                     collection = Collection.objects.get(tmdb_id=collection_id)
                     updates['collection'] = collection
