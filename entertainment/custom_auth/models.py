@@ -107,6 +107,15 @@ class Person(models.Model):
     # actor
     is_actor = models.BooleanField(default=False)
 
+    # music roles
+    is_musician = models.BooleanField(default=False)
+    is_performer = models.BooleanField(default=False)
+    is_songwriter = models.BooleanField(default=False)
+    is_band_member = models.BooleanField(default=False)
+    
+    # external IDs for music services
+    musicbrainz_id = models.CharField(max_length=36, blank=True, null=True)
+
     imdb_id = models.CharField(max_length=20, blank=True, null=True)
     tmdb_id = models.IntegerField(unique=True, blank=True, null=True)
 
@@ -126,7 +135,10 @@ class Movie(Media):
     backdrop = models.ImageField(upload_to='movie_backdrops/', blank=True, null=True)
 
     release_date = models.DateField()
+    
+    # ids
     tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=20, blank=True, null=True)
 
     runtime = models.IntegerField()
     rating = models.FloatField()
@@ -205,6 +217,42 @@ class Movie(Media):
     def composers(self):
         """Get all composers of this movie."""
         return self._get_persons_by_role({'mediaperson__role': "Original Music Composer"})
+    
+    @property
+    def soundtracks(self):
+        """Get soundtrack albums for this movie."""
+        return self.related_albums.filter(mediaalbumrelationship__relationship_type='soundtrack')
+
+    @property
+    def scores(self):
+        """Get score albums for this movie."""
+        return self.related_albums.filter(mediaalbumrelationship__relationship_type='score')
+
+    def get_related_albums(self, relationship_type=None):
+        """Get albums related to this movie with optional relationship type filter."""
+        from django.contrib.contenttypes.models import ContentType
+        movie_type = ContentType.objects.get_for_model(self.__class__)
+        query = MediaAlbumRelationship.objects.filter(
+            content_type=movie_type,
+            object_id=self.id
+        )
+        if relationship_type:
+            query = query.filter(relationship_type=relationship_type)
+        return Album.objects.filter(
+            id__in=query.values_list('album_id', flat=True)
+        ).select_related('primary_artist')
+
+    @property
+    def related_albums(self):
+        """Get all related albums for this movie."""
+        from django.contrib.contenttypes.models import ContentType
+        movie_type = ContentType.objects.get_for_model(self.__class__)
+        return Album.objects.filter(
+            id__in=MediaAlbumRelationship.objects.filter(
+                content_type=movie_type,
+                object_id=self.id
+            ).values_list('album_id', flat=True)
+        )
 
 class TVShow(Media):
     """Model for TV shows."""
@@ -391,7 +439,7 @@ class Watchlist(models.Model):
 @receiver(pre_delete)
 def remove_from_watchlist(sender, instance, **kwargs):
     """Remove any watchlist entries when media is deleted."""
-    if sender in [Movie, TVShow]:
+    if sender in [Movie, TVShow, Album]:  # Add Album to the list
         content_type = ContentType.objects.get_for_model(sender)
         Watchlist.objects.filter(content_type=content_type, object_id=instance.id).delete()
 
@@ -450,3 +498,127 @@ class Review(models.Model):
         
         super().save(*args, **kwargs)
 
+class Album(Media):
+    """Model for music albums that extends the base Media class."""
+    cover = models.URLField(blank=True, null=True)  # Album cover
+    
+    release_date = models.DateField(blank=True, null=True)
+    musicbrainz_id = models.CharField(max_length=36, unique=True, blank=True, null=True)
+    
+    # Album metadata
+    primary_artist = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='primary_albums')
+    featured_artists = models.ManyToManyField(Person, related_name='featured_albums', blank=True)
+    total_tracks = models.PositiveIntegerField(default=0)
+    runtime = models.IntegerField(blank=True, null=True)  # Total album duration in minutes
+    rating = models.FloatField(blank=True, null=True)
+    
+    # Album type
+    ALBUM_TYPES = [
+        ('album', 'Album'),
+        ('single', 'Single'),
+        ('ep', 'EP'),
+        ('soundtrack', 'Soundtrack'),
+        ('compilation', 'Compilation'),
+        ('score', 'Score'),
+        ('other', 'Other'),
+    ]
+    album_type = models.CharField(max_length=20, choices=ALBUM_TYPES, default='album')
+    
+    # Genre relations - reusing the same Genre model as movies
+    genres = models.ManyToManyField(Genre, blank=True)
+    
+    def __str__(self):
+        return f"{self.title} - {self.primary_artist.name}"
+    
+    @property
+    def _get_content_type_id(self):
+        """Cache content type ID to avoid repeated lookups."""
+        if not hasattr(self, '_content_type_id'):
+            self._content_type_id = ContentType.objects.get_for_model(self.__class__).id
+        return self._content_type_id
+    
+    def get_media_persons(self, role=None):
+        """Get all MediaPerson objects related to this album."""
+        query = MediaPerson.objects.filter(
+            content_type_id=self._get_content_type_id,
+            object_id=self.id
+        ).select_related('person')
+        
+        if role:
+            query = query.filter(role=role)
+        return query
+    
+    def minutes_to_hours(self):
+        if not self.runtime:
+            return "Unknown"
+        hours = self.runtime // 60
+        minutes = self.runtime % 60
+        if hours > 0:
+            return f"{hours}h {minutes}m"
+        return f"{minutes}m"
+    
+    @property
+    def artists(self):
+        """Get all artists associated with this album (primary + featured)."""
+        featured = list(self.featured_artists.all())
+        return [self.primary_artist] + featured
+
+    @property
+    def related_movies(self):
+        """Get all related movies for this album."""
+        from django.contrib.contenttypes.models import ContentType
+        movie_type = ContentType.objects.get_for_model(Movie)
+        return Movie.objects.filter(
+            id__in=MediaAlbumRelationship.objects.filter(
+                content_type=movie_type,
+                album=self
+            ).values_list('object_id', flat=True)
+        )
+    
+    @property
+    def related_tv_shows(self):
+        """Get all related TV shows for this album."""
+        from django.contrib.contenttypes.models import ContentType
+        tv_type = ContentType.objects.get_for_model(TVShow)
+        return TVShow.objects.filter(
+            id__in=MediaAlbumRelationship.objects.filter(
+                content_type=tv_type,
+                album=self
+            ).values_list('object_id', flat=True)
+        )
+
+class MediaAlbumRelationship(models.Model):
+    """Model to define the relationship between media (movies/TV shows) and music albums."""
+    # Generic foreign key to allow both movies and TV shows
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    media = GenericForeignKey('content_type', 'object_id')
+    
+    album = models.ForeignKey(Album, on_delete=models.CASCADE)
+    
+    # Relationship type
+    RELATIONSHIP_TYPES = [
+        ('soundtrack', 'Soundtrack'),
+        ('score', 'Original Score'),
+        ('inspired_by', 'Inspired By Media'),
+        ('featured_in', 'Featured In Media'),
+        ('promotional', 'Promotional Album'),
+        ('opening_theme', 'Opening Theme'), # TV show specific
+        ('ending_theme', 'Ending Theme'),   # TV show specific
+        ('other', 'Other Relationship'),
+    ]
+    relationship_type = models.CharField(max_length=20, choices=RELATIONSHIP_TYPES, default='soundtrack')
+    
+    # Optional description of the relationship
+    description = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        unique_together = ['content_type', 'object_id', 'album']
+        verbose_name = "Media-Album Relationship"
+        verbose_name_plural = "Media-Album Relationships"
+        indexes = [
+            models.Index(fields=['content_type', 'object_id']),
+        ]
+        
+    def __str__(self):
+        return f"{self.media} - {self.album.title} ({self.get_relationship_type_display()})"

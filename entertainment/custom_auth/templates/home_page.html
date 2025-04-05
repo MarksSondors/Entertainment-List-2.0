@@ -68,7 +68,7 @@
                                 </a>
                             </li>
                             <li>
-                                <a href="javascript:void(0);" onclick="openMusicModal()" style="display: flex; align-items: center; padding: 5px 0;">
+                                <a href="javascript:void(0);" onclick="openAlbumModal()" style="display: flex; align-items: center; padding: 5px 0;">
                                     <img src="https://fustilugz.neocities.org/buttons/12/button-tupachq1.gif" alt="Add Music" style="max-width: 88px; margin-right: 10px;">
                                     <span>Add Music</span>
                                 </a>
@@ -219,6 +219,7 @@
 
     {% include 'movie_search_modal.html' %}
     {% include 'tv_show_search_modal.html' %}
+    {% include 'album_search_modal.html' %}
     
     <style>
         .tree-view li {
@@ -271,11 +272,6 @@
         function openBookModal() {
             alert("Book feature coming soon!");
             // Implement book modal when ready
-        }
-        
-        function openMusicModal() {
-            alert("Music feature coming soon!");
-            // Implement music modal when ready  
         }
     
         // Fetch popular movies

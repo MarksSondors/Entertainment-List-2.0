@@ -1,0 +1,645 @@
+{% comment %} album_search_modal.html {% endcomment %}
+
+<div id="album-search-modal" class="modal" style="display: none;">
+        <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <!-- Modal Header -->
+                <div class="title-bar">
+                        <div class="title-bar-text" id="album-modal-title">Add Album</div>
+                        <div class="title-bar-controls">
+                                <button aria-label="Close" id="close-album-modal-btn"></button>
+                        </div>
+                </div>
+                
+                <!-- Modal Body -->
+                <div class="window-body">
+                        <!-- Stage 1: Search and Select -->
+                        <div id="album-modal-stage-1">
+                                <!-- Search Input -->
+                                <div id="musicbrainz-search-form" style="display: flex; align-items: center; margin-bottom: 10px;">
+                                        <label for="album-query">Search:</label>
+                                        <input type="text" id="album-query" name="query" style="margin: 0 10px; flex-grow: 1;" placeholder="Enter album title or artist">
+                                        <select id="album-search-type" style="margin-right: 10px;">
+                                            <option value="albums" selected>Albums</option>
+                                            <option value="artists">Artists</option>
+                                            <option value="songs">Songs</option>
+                                        </select>
+                                        <button id="album-search-button">Search</button>
+                                </div>
+                                
+                                <!-- Results Section -->
+                                <div style="margin-top: 15px;">
+                                        <fieldset>
+                                                <legend>Search Results</legend>
+                                                <div style="overflow-y: auto; max-height: 300px; border: 2px inset; background-color: white; padding: 5px; margin-bottom: 10px;">
+                                                        <ul id="album-results-list" class="tree-view" style="height: 100%; width: 100%;"></ul>
+                                                </div>
+                                                <div>
+                                                        <p><strong>Total Results:</strong> <span id="album-total-results">0</span></p>
+                                                        <div style="display: flex; gap: 10px;">
+                                                                <button id="album-prev-button" disabled>Previous</button>
+                                                                <button id="album-next-button" disabled>Next</button>
+                                                        </div>
+                                                </div>
+                                        </fieldset>
+                                </div>
+                                
+                                <!-- Navigation Buttons -->
+                                <div style="text-align: right; margin-top: 15px;">
+                                        <button id="album-to-stage-2-btn" disabled>Next: Edit Details</button>
+                                </div>
+                        </div>
+                        
+                        <!-- Stage 2: Edit Album Details -->
+                        <div id="album-modal-stage-2" style="display: none;">
+                                <form method="post" id="add-album-form" enctype="multipart/form-data">
+                                        {% csrf_token %}
+                                        <input type="hidden" id="album-musicbrainz-id" name="musicbrainz_id">
+                                        
+                                        <div style="display: flex; gap: 20px;">
+                                            <!-- Album Cover Preview -->
+                                            <div class="album-detail-cover">
+                                                <img id="album-detail-cover-img" src="/static/images/album-placeholder.png" alt="Album cover">
+                                            </div>
+                                            
+                                            <!-- Album Details -->
+                                            <div style="flex-grow: 1;">
+                                                <div class="field-row-stacked" style="margin-bottom: 15px;">
+                                                        <label for="album-title">Album Title:</label>
+                                                        <input type="text" id="album-title" name="title" required readonly style="width: 100%;">
+                                                </div>
+                                                
+                                                <div class="field-row-stacked" style="margin-bottom: 15px;">
+                                                        <label for="album-artist">Artist:</label>
+                                                        <input type="text" id="album-artist" name="artist" required readonly style="width: 100%;">
+                                                </div>
+                                                
+                                                <div class="field-row-stacked" style="margin-bottom: 15px;">
+                                                        <label for="album-release-date">Release Date:</label>
+                                                        <input type="text" id="album-release-date" name="release_date" readonly style="width: 100%;">
+                                                </div>
+                                                
+                                                <div class="field-row-stacked" style="margin-bottom: 15px;">
+                                                        <label for="album-type">Album Type:</label>
+                                                        <input type="text" id="album-type" name="album_type" readonly style="width: 100%;">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Additional Options -->
+                                        <div style="margin-bottom: 15px;">
+                                            <div class="field-row">
+                                                <input type="checkbox" id="album-is-soundtrack" name="is_soundtrack">
+                                                <label for="album-is-soundtrack">This is a soundtrack album</label>
+                                            </div>
+                                            <div class="field-row">
+                                                <input type="checkbox" id="album-add-to-collection" name="add_to_collection" checked>
+                                                <label for="album-add-to-collection">Add to my collection</label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Navigation Buttons -->
+                                        <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+                                                <button type="button" id="album-back-to-stage-1-btn">Back to Search</button>
+                                                <button type="button" id="album-submit-btn">Add Album</button>
+                                        </div>
+                                </form>
+                        </div>
+                </div>
+        </div>
+</div>
+
+<!-- Loading Screen -->
+<div id="album-loading-screen-modal" class="modal" style="display: none; z-index: 1200;">
+    <div class="modal-content window" style="width: 300px;">
+        <div class="title-bar">
+            <div class="title-bar-text">Adding Album</div>
+        </div>
+        <div class="window-body" style="text-align: center; padding: 20px;">
+            <p>Adding album to your collection...</p>
+            <div class="progress-indicator">
+                <span class="progress-indicator-bar"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add success/error message dialog -->
+<div id="album-message-dialog" class="modal" style="display: none; z-index: 1200;">
+        <div class="modal-content window" style="width: 400px;">
+                <div class="title-bar">
+                        <div class="title-bar-text" id="album-dialog-title">Message</div>
+                        <div class="title-bar-controls">
+                                <button aria-label="Close" onclick="closeAlbumMessageDialog()"></button>
+                        </div>
+                </div>
+                <div class="window-body">
+                        <p id="album-dialog-message"></p>
+                        <div style="text-align: right; margin-top: 15px;">
+                                <button onclick="closeAlbumMessageDialog()">OK</button>
+                        </div>
+                </div>
+        </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+                let albumResults = [];
+                let albumCurrentOffset = 0;
+                let albumLimit = 25;
+                let selectedAlbum = null;
+                
+                // Modal Control Functions
+                function openAlbumModal() {
+                        $("#album-search-modal").show();
+                }
+                
+                function closeAlbumModal() {
+                        $("#album-search-modal").hide();
+                        resetAlbumModal();
+                }
+                
+                // Message Dialog Functions
+                function showAlbumMessage(title, message, isError = false) {
+                        $("#album-dialog-title").text(title);
+                        $("#album-dialog-message").text(message);
+                        $("#album-dialog-message").css("color", isError ? "red" : "black");
+                        $("#album-message-dialog").show();
+                }
+                
+                function closeAlbumMessageDialog() {
+                        $("#album-message-dialog").hide();
+                }
+                
+                function resetAlbumModal() {
+                        // Reset stage
+                        $("#album-modal-stage-1").show();
+                        $("#album-modal-stage-2").hide();
+                        
+                        // Reset search
+                        $("#album-query").val("");
+                        $("#album-results-list").empty();
+                        
+                        // Reset form
+                        $("#add-album-form")[0].reset();
+                        selectedAlbum = null;
+                        $("#album-to-stage-2-btn").prop("disabled", true);
+                }
+                
+                function goToAlbumStage2() {
+                        if (!selectedAlbum) return;
+                        
+                        // Fill form with selected album data
+                        $("#album-musicbrainz-id").val(selectedAlbum.id);
+                        $("#album-title").val(selectedAlbum.title || selectedAlbum['release-group'] || '');
+                        
+                        // Set album cover if available
+                        if (selectedAlbum.id) {
+                            const coverUrl = `https://coverartarchive.org/release-group/${selectedAlbum.id}/front-500`;
+                            // Try to load the image
+                            fetch(coverUrl, { method: 'HEAD' })
+                                .then(response => {
+                                    if (response.ok) {
+                                        $("#album-detail-cover-img").attr('src', coverUrl);
+                                    }
+                                })
+                                .catch(error => {
+                                    console.log(`Error fetching album cover: ${error}`);
+                                });
+                        }
+                        
+                        // Handle artist credit (which can be complex in MusicBrainz)
+                        let artistName = 'Unknown Artist';
+                        if (selectedAlbum['artist-credit'] && selectedAlbum['artist-credit'].length > 0) {
+                                artistName = selectedAlbum['artist-credit'][0].name || 
+                                           (selectedAlbum['artist-credit'][0].artist ? 
+                                            selectedAlbum['artist-credit'][0].artist.name : 'Unknown Artist');
+                        }
+                        $("#album-artist").val(artistName);
+                        
+                        // Set release date if available
+                        if (selectedAlbum['first-release-date']) {
+                                $("#album-release-date").val(selectedAlbum['first-release-date']);
+                        } else {
+                                $("#album-release-date").val('Unknown');
+                        }
+                        
+                        // Set album type
+                        let albumType = 'Album';
+                        if (selectedAlbum['primary-type']) {
+                                albumType = selectedAlbum['primary-type'];
+                        } else if (selectedAlbum['type']) {
+                                albumType = selectedAlbum['type'];
+                        }
+                        $("#album-type").val(albumType);
+                        
+                        // Check if it's likely a soundtrack
+                        if (albumType.toLowerCase() === 'soundtrack' || 
+                           (selectedAlbum.title && selectedAlbum.title.toLowerCase().includes('soundtrack'))) {
+                                $("#album-is-soundtrack").prop('checked', true);
+                        }
+                        
+                        // Switch stages
+                        $("#album-modal-stage-1").hide();
+                        $("#album-modal-stage-2").show();
+                        $("#album-modal-title").text("Edit Album Details");
+                }
+                
+                function goToAlbumStage1() {
+                        $("#album-modal-stage-2").hide();
+                        $("#album-modal-stage-1").show();
+                        $("#album-modal-title").text("Add Album");
+                }
+
+                function renderAlbumResults() {
+                        $('#album-results-list').empty();
+                        albumResults.forEach(function(album) {
+                                const listItem = $('<li></li>');
+                                
+                                // Extract artist name(s)
+                                let artist = 'Unknown Artist';
+                                if (album['artist-credit'] && album['artist-credit'].length > 0) {
+                                        artist = album['artist-credit'][0].name || 
+                                               (album['artist-credit'][0].artist ? 
+                                                album['artist-credit'][0].artist.name : 'Unknown Artist');
+                                }
+                                
+                                // Extract release date
+                                let releaseDate = album['first-release-date'] || 'N/A';
+                                
+                                // Create status indicators (if we have DB data)
+                                let statusIndicators = '';
+                                if (album.in_database) {
+                                        statusIndicators += `<span class="status-pill in-database">
+                                                <a href="/music/albums/${album.id}/" class="status-link">View Album</a>
+                                        </span>`;
+                                }
+                                if (album.in_collection) {
+                                        statusIndicators += `<span class="status-pill in-collection">
+                                                <a href="/collection/music/" class="status-link">In Collection</a>
+                                        </span>`;
+                                }
+                                
+                                // Build the album result HTML with cover image
+                                listItem.html(`
+                                        <div class="album-result">
+                                                <div class="album-cover">
+                                                    <img src="/static/images/album-placeholder.png" 
+                                                         data-mbid="${album.id}" 
+                                                         class="album-cover-img" 
+                                                         alt="Album cover">
+                                                </div>
+                                                <div class="album-details">
+                                                    <span class="album-title">${album.title || album['release-group'] || 'Untitled Album'}</span>
+                                                    <span class="album-artist"> by ${artist}</span>
+                                                    <span class="album-year">(${releaseDate})</span>
+                                                </div>
+                                                <div class="album-status">${statusIndicators}</div>
+                                        </div>
+                                `);
+                                
+                                // Load the actual cover image
+                                if (album.id) {
+                                    loadAlbumCover(album.id, listItem.find('.album-cover-img'));
+                                }
+                                
+                                listItem.on('click', function() {
+                                        selectedAlbum = album;
+                                        $("#album-to-stage-2-btn").prop("disabled", false);
+                                        
+                                        // Highlight selected item
+                                        $('#album-results-list li').removeClass('selected');
+                                        $(this).addClass('selected');
+                                });
+                                $('#album-results-list').append(listItem);
+                        });
+                        
+                        // After rendering results, load cover images
+                        loadAllAlbumCovers();
+                }
+
+                // Function to load album cover art from MusicBrainz/Cover Art Archive
+                function loadAlbumCover(mbid, imgElement) {
+                    // Try to get the cover from Cover Art Archive
+                    const coverUrl = `https://coverartarchive.org/release-group/${mbid}/front-250`;
+                    
+                    // Use a proxy or direct URL depending on your CORS setup
+                    fetch(coverUrl, { method: 'HEAD' })
+                        .then(response => {
+                            if (response.ok) {
+                                imgElement.attr('src', coverUrl);
+                            } else {
+                                // If not found, keep placeholder
+                                console.log(`No cover found for album ${mbid}`);
+                            }
+                        })
+                        .catch(error => {
+                            console.log(`Error fetching album cover: ${error}`);
+                        });
+                }
+
+                // Load all covers for visible results
+                function loadAllAlbumCovers() {
+                    // Limit concurrent requests
+                    const visibleCovers = $('.album-cover-img').slice(0, 10); // Load first 10 initially
+                    
+                    visibleCovers.each(function() {
+                        const mbid = $(this).data('mbid');
+                        if (mbid) {
+                            loadAlbumCover(mbid, $(this));
+                        }
+                    });
+                }
+
+                function updateAlbumPagination(totalCount) {
+                        $('#album-total-results').text(totalCount || albumResults.length);
+                        
+                        // Enable/disable pagination buttons
+                        $('#album-prev-button').prop('disabled', albumCurrentOffset <= 0);
+                        $('#album-next-button').prop('disabled', totalCount <= albumCurrentOffset + albumLimit);
+                }
+
+                function fetchAlbumResults(query, offset = 0) {
+                        const searchType = $('#album-search-type').val();
+                        
+                        $.ajax({
+                                url: "{% url 'music_search' %}",
+                                method: "GET",
+                                data: { 
+                                        query: query, 
+                                        type: searchType,
+                                        offset: offset,
+                                        limit: albumLimit
+                                },
+                                success: function(response) {
+                                        albumResults = response.results || [];
+                                        renderAlbumResults();
+                                        updateAlbumPagination(response.count);
+                                },
+                                error: function(xhr) {
+                                        let errorMsg = "An error occurred while searching for music.";
+                                        if (xhr.responseJSON && xhr.responseJSON.error) {
+                                                errorMsg = xhr.responseJSON.error;
+                                        }
+                                        showAlbumMessage("Error", errorMsg, true);
+                                }
+                        });
+                }
+
+                // Submit album to API
+                function submitAlbum() {
+                        const albumId = $("#album-musicbrainz-id").val();
+                        const isSoundtrack = $("#album-is-soundtrack").is(':checked');
+                        const addToCollection = $("#album-add-to-collection").is(':checked');
+                        
+                        if (!albumId) {
+                                showAlbumMessage("Error", "Album ID is missing", true);
+                                return;
+                        }
+                        
+                        // Create data object
+                        const albumData = {
+                                id: albumId,
+                                is_soundtrack: isSoundtrack,
+                                add_to_collection: addToCollection
+                        };
+                        
+                        // Get CSRF token from the form
+                        const csrfToken = $("input[name=csrfmiddlewaretoken]").val();
+                        
+                        // Show loading screen
+                        $("#album-loading-screen-modal").show();
+                        
+                        // Submit to API
+                        $.ajax({
+                                url: "{% url 'albums-list' %}", // Replace with the actual URL for adding the album
+                                method: "POST",
+                                data: JSON.stringify(albumData),
+                                contentType: "application/json",
+                                headers: {
+                                        "X-CSRFToken": csrfToken
+                                },
+                                success: function(response) {
+                                        // Hide loading screen
+                                        $("#album-loading-screen-modal").hide();
+                                        showAlbumMessage("Success", "Album added successfully!");
+                                        closeAlbumModal();
+                                },
+                                error: function(xhr) {
+                                        // Hide loading screen
+                                        $("#album-loading-screen-modal").hide();
+                                        let errorMsg = "Failed to add album.";
+                                        if (xhr.responseJSON && xhr.responseJSON.error) {
+                                                errorMsg = xhr.responseJSON.error;
+                                        }
+                                        showAlbumMessage("Error", errorMsg, true);
+                                }
+                        });
+                }
+
+                $(document).ready(function() {
+                        // Modal control
+                        $("#close-album-modal-btn").on("click", closeAlbumModal);
+                        
+                        // Stage navigation
+                        $("#album-to-stage-2-btn").on("click", goToAlbumStage2);
+                        $("#album-back-to-stage-1-btn").on("click", goToAlbumStage1);
+                        
+                        // Form submission
+                        $("#album-submit-btn").on("click", submitAlbum);
+                        
+                        // Prevent default form submission
+                        $("#add-album-form").on("submit", function(e) {
+                                e.preventDefault();
+                                submitAlbum();
+                        });
+                        
+                        // Search functionality
+                        $('#album-query').on('input', function() {
+                                const query = $('#album-query').val();
+                                if (query.length > 2) {
+                                        albumCurrentOffset = 0;
+                                        fetchAlbumResults(query, albumCurrentOffset);
+                                } else {
+                                        $('#album-results-list').empty();
+                                        $('#album-total-results').text('0');
+                                        updateAlbumPagination(0);
+                                }
+                        });
+
+                        $('#album-search-button').on('click', function() {
+                                const query = $('#album-query').val();
+                                if (query.length > 2) {
+                                        albumCurrentOffset = 0;
+                                        fetchAlbumResults(query, albumCurrentOffset);
+                                }
+                        });
+
+                        // Handle search type changes
+                        $('#album-search-type').on('change', function() {
+                                const query = $('#album-query').val();
+                                if (query.length > 2) {
+                                        albumCurrentOffset = 0;
+                                        fetchAlbumResults(query, albumCurrentOffset);
+                                }
+                        });
+
+                        $('#album-prev-button').on('click', function() {
+                                if (albumCurrentOffset >= albumLimit) {
+                                        albumCurrentOffset -= albumLimit;
+                                        fetchAlbumResults($('#album-query').val(), albumCurrentOffset);
+                                }
+                        });
+
+                        $('#album-next-button').on('click', function() {
+                                albumCurrentOffset += albumLimit;
+                                fetchAlbumResults($('#album-query').val(), albumCurrentOffset);
+                        });
+                });
+</script>
+
+<style>
+.modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+}
+
+.modal-content {
+        position: relative;
+        margin: auto;
+}
+
+.selected {
+        background-color: #000080;
+        color: white;
+}
+
+.progress-indicator {
+    width: 100%;
+    height: 20px;
+    background-color: #fff;
+    border: 2px inset #c0c0c0;
+    margin-top: 15px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-indicator-bar {
+    display: block;
+    height: 100%;
+    background-color: #000080;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 40%;
+    animation: progress-animation 1.5s infinite linear;
+}
+
+@keyframes progress-animation {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 100%;
+    }
+}
+
+.album-result {
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 8px 0;
+    flex-wrap: nowrap;
+}
+
+.album-cover {
+    width: 50px;
+    height: 50px;
+    min-width: 50px;
+    margin-right: 10px;
+    background-color: #f0f0f0;
+    border: 1px solid #d0d0d0;
+    overflow: hidden;
+}
+
+.album-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.album-details {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.album-title {
+    font-weight: bold;
+    margin-right: 5px;
+    display: block;
+}
+
+.album-artist {
+    font-style: italic;
+    display: block;
+}
+
+.album-year {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.album-status {
+    display: flex;
+    gap: 5px;
+    margin-left: auto;
+}
+
+.status-pill {
+    font-size: 12px;
+    padding: 2px 8px;
+    border: 1px solid #808080;
+    background: #d4d0c8;
+    white-space: nowrap;
+    border-radius: 0px;
+}
+
+.in-database {
+    border-color: #008000;
+}
+
+.in-collection {
+    border-color: #000080;
+}
+
+.status-link {
+    color: #000080;
+    text-decoration: none;
+}
+
+.status-link:hover {
+    text-decoration: underline;
+}
+
+.album-detail-cover {
+    width: 150px;
+    height: 150px;
+    background-color: #f0f0f0;
+    border: 1px solid #d0d0d0;
+    overflow: hidden;
+}
+
+.album-detail-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+</style>
