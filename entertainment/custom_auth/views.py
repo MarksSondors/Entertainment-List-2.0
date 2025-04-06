@@ -53,10 +53,10 @@ def genre_detail(request, genre_id):
     view_type = request.GET.get('view_type', 'grid')
     
     # Filter movies and TV shows based on anime_filter
-    if anime_filter == 'anime_only':
+    if (anime_filter == 'anime_only'):
         movies = Movie.objects.filter(genres=genre, is_anime=True)
         tv_shows = TVShow.objects.filter(genres=genre, is_anime=True)
-    elif anime_filter == 'no_anime':
+    elif (anime_filter == 'no_anime'):
         movies = Movie.objects.filter(genres=genre, is_anime=False)
         tv_shows = TVShow.objects.filter(genres=genre, is_anime=False)
     else:  # 'all' is the default
@@ -158,9 +158,11 @@ def watchlist_page(request):
     elif sort_by == '-title':
         watchlist_items = sorted(watchlist_items, key=lambda x: x.media.title, reverse=True)
     elif sort_by == 'release_date':
-        watchlist_items = sorted(watchlist_items, key=lambda x: getattr(x.media, 'release_date', '1900-01-01'))
+        from datetime import date
+        watchlist_items = sorted(watchlist_items, key=lambda x: getattr(x.media, 'release_date', date(1900, 1, 1)))
     elif sort_by == '-release_date':
-        watchlist_items = sorted(watchlist_items, key=lambda x: getattr(x.media, 'release_date', '1900-01-01'), reverse=True)
+        from datetime import date
+        watchlist_items = sorted(watchlist_items, key=lambda x: getattr(x.media, 'release_date', date(1900, 1, 1)), reverse=True)
     # Default sorting by date_added is handled by the model's Meta ordering
     
     # Get only the genres that are in the watchlist items
@@ -169,6 +171,30 @@ def watchlist_page(request):
         if hasattr(item.media, 'genres'):
             genre_ids.update(item.media.genres.values_list('id', flat=True))
     genres = Genre.objects.filter(id__in=genre_ids).distinct()
+    
+    # Add other users' reviews for each watchlist item
+    current_user = request.user
+    for item in watchlist_items:
+        # Get the content type and object id for the media
+        content_type = item.content_type
+        object_id = item.object_id
+        
+        # Get reviews for this media from other users
+        other_reviews = Review.objects.filter(
+            content_type=content_type,
+            object_id=object_id
+        ).exclude(user=current_user).select_related('user')
+        
+        # Create a list of reviews with username and rating
+        item.other_reviews = [
+            {'username': review.user.username, 'rating': review.rating}
+            for review in other_reviews
+        ]
+        
+        # Add average rating and count
+        if other_reviews:
+            item.avg_rating = round(sum(review.rating for review in other_reviews) / len(other_reviews), 1)
+            item.rating_count = len(other_reviews)
     
     context = {
         'watchlist_items': watchlist_items,

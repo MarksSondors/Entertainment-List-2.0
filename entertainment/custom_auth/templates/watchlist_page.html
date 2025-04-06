@@ -71,6 +71,14 @@
                                 <span>No Image</span>
                             </div>
                             {% endif %}
+                            
+                            <!-- Average Rating Badge (if available) -->
+                            {% if item.avg_rating %}
+                            <div class="avg-rating-badge">
+                                {{ item.avg_rating }} ({{ item.rating_count }})
+                            </div>
+                            {% endif %}
+                            
                             <div class="card-body">
                                 <h5 class="card-title">{{ item.media.title }}</h5>
                                 <p class="card-text">
@@ -78,6 +86,24 @@
                                     <small class="text-muted">{{ item.media.release_date|date:"Y" }}</small>
                                     {% endif %}
                                 </p>
+                                
+                                <!-- Other Users' Reviews Section -->
+                                {% if item.other_reviews %}
+                                <div class="mt-2 mb-2">
+                                    <small class="text-muted">User Ratings:</small>
+                                    <div class="user-reviews-list">
+                                        {% for review in item.other_reviews|slice:":3" %}
+                                        <div class="user-review-item">
+                                            <span class="badge bg-secondary">{{ review.username }}: {{ review.rating }}</span>
+                                        </div>
+                                        {% endfor %}
+                                        {% if item.other_reviews|length > 3 %}
+                                        <small>+{{ item.other_reviews|length|add:"-3" }} more</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
                                 <div class="mt-2">
                                     {% if item.content_type.model == 'movie' %}
                                     <a href="{% url 'movie_page' item.media.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
@@ -104,6 +130,7 @@
                                 <th>Release Date</th>
                                 <th>Genres</th>
                                 <th>Rating</th>
+                                <th>User Ratings</th>
                                 <th>Date Added</th>
                                 <th>Actions</th>
                             </tr>
@@ -124,7 +151,21 @@
                                     <span class="badge bg-secondary">{{ genre.name }}</span>
                                     {% endfor %}
                                 </td>
-                                <td>{{ item.media.rating }} / 10</td>
+                                <td>
+                                    {% if item.avg_rating %}{{ item.avg_rating }} / 10 ({{ item.rating_count }}){% else %}Not rated{% endif %}
+                                </td>
+                                <td>
+                                    {% if item.other_reviews %}
+                                        {% for review in item.other_reviews|slice:":3" %}
+                                        <span class="badge bg-secondary">{{ review.username }}: {{ review.rating }}</span>
+                                        {% endfor %}
+                                        {% if item.other_reviews|length > 3 %}
+                                        <small>+{{ item.other_reviews|length|add:"-3" }} more</small>
+                                        {% endif %}
+                                    {% else %}
+                                    No user ratings
+                                    {% endif %}
+                                </td>
                                 <td>{{ item.date_added|date:"M d, Y" }}</td>
                                 <td>
                                     <div class="btn-group" role="group">
@@ -144,12 +185,46 @@
                 {% endif %}
             {% else %}
                 <div class="alert alert-info">
-                    Your watchlist is empty! <a href="{% url 'add_movie' %}">Add some movies</a> to get started.
+                    Your watchlist is empty! Add some movies to get started.
                 </div>
             {% endif %}
         </div>
     </div>
 </div>
+
+<!-- Add CSS for rating badges -->
+<style>
+    /* Rating badge styles */
+    .avg-rating-badge {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background-color: #6c757d;
+        color: white;
+        padding: 3px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+        font-size: 0.85em;
+        box-shadow: 0 0 3px rgba(0,0,0,0.5);
+        z-index: 5;
+    }
+    
+    .card {
+        position: relative;
+    }
+    
+    /* User review styles */
+    .user-reviews-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 4px;
+    }
+    
+    .user-review-item {
+        margin-bottom: 2px;
+    }
+</style>
 
 <script>
     // JavaScript to automatically submit the form when view type changes

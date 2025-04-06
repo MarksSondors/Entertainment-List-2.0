@@ -1,0 +1,678 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}All Movies | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">All Movies Database</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <!-- Filter Section -->
+            <form method="get" action="{% url 'all_movies_page' %}" class="mb-4">
+                <div class="field-row">
+                    <label for="title">Title:</label>
+                    <input type="text" id="title" name="title" value="{{ filter_title }}" placeholder="Search titles...">
+                    
+                    <label for="genre" class="ms-3">Genre:</label>
+                    <select id="genre" name="genre">
+                        <option value="" {% if not current_genre %}selected{% endif %}>All Genres</option>
+                        {% for genre in genres %}
+                        <option value="{{ genre.id }}" {% if current_genre == genre.name %}selected{% endif %}>{{ genre.name }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <label for="sort_by" class="ms-3">Sort By:</label>
+                    <select id="sort_by" name="sort_by">
+                        <option value="title" {% if current_sort == 'title' %}selected{% endif %}>Title</option>
+                        <option value="release_date" {% if current_sort == 'release_date' %}selected{% endif %}>Release Date</option>
+                        <option value="rating" {% if current_sort == 'rating' %}selected{% endif %}>Rating</option>
+                    </select>
+                    
+                    <label for="view_type" class="ms-3">View:</label>
+                    <div class="btn-group" role="group">
+                        <input type="radio" name="view_type" id="grid" value="grid" {% if view_type == 'grid' %}checked{% endif %}>
+                        <label for="grid">Grid</label>
+                        <input type="radio" name="view_type" id="table" value="table" {% if view_type == 'table' %}checked{% endif %}>
+                        <label for="table">Table</label>
+                    </div>
+                    
+                    <button type="submit" class="ms-2">Apply Filters</button>
+                    <a href="{% url 'all_movies_page' %}" class="ms-2 btn">Reset</a>
+                </div>
+            </form>
+
+            {% comment %} <!-- Accordion Sections --> {% endcomment %}
+            <div class="accordion-container">
+                <!-- Reviewed/Watched Movies Section -->
+                <details open>
+                    <summary class="accordion-header">
+                        <div class="title-bar">
+                            <div class="title-bar-text">Movies You've Reviewed or Watched</div>
+                        </div>
+                    </summary>
+                    <div class="accordion-content p-3">
+                        {% if reviewed_movies %}
+                            {% if view_type == 'grid' %}
+                            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                                {% for movie in reviewed_movies %}
+                                <div class="col">
+                                    <div class="card h-100 movie-card card-reviewed">
+                                        {% if movie.poster %}
+                                        <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border: 4px solid #2196F3;">
+                                        {% else %}
+                                        <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border: 4px solid #2196F3;">
+                                            <span>No Image</span>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <!-- User Rating Badge -->
+                                        <div class="user-rating-badge">
+                                            {{ movie.user_rating }}
+                                        </div>
+                                        
+                                        <!-- Average Rating Badge (if different from user rating) -->
+                                        {% if movie.avg_rating and movie.rating_count > 1 %}
+                                        <div class="avg-rating-badge">
+                                            {{ movie.avg_rating }} ({{ movie.rating_count }})
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <div class="card-body">
+                                            <h5 class="card-title">{{ movie.title }}</h5>
+                                            <p class="card-text">
+                                                {% if movie.release_date %}
+                                                <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                {% endif %}
+                                            </p>
+                                            <div class="mt-2">
+                                                <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th>Release Date</th>
+                                            <th>Genres</th>
+                                            <th>Your Rating</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for movie in reviewed_movies %}
+                                        <tr>
+                                            <td><a href="{% url 'movie_page' movie.tmdb_id %}">{{ movie.title }}</a></td>
+                                            <td>{{ movie.release_date|date:"M d, Y" }}</td>
+                                            <td>
+                                                {% for genre in movie.genres.all %}
+                                                <span class="badge bg-secondary">{{ genre.name }}</span>
+                                                {% endfor %}
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-warning text-dark">Your: {{ movie.user_rating }}</span>
+                                                {% if movie.avg_rating and movie.rating_count > 1 %}
+                                                <span class="badge bg-secondary">Avg: {{ movie.avg_rating }} ({{ movie.rating_count }})</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                You haven't watched or reviewed any movies yet.
+                            </div>
+                        {% endif %}
+                    </div>
+                </details>
+
+                <!-- My Watchlist Section with Other Users' Ratings -->
+                <details>
+                    <summary class="accordion-header">
+                        <div class="title-bar">
+                            <div class="title-bar-text">Your Watchlist Movies</div>
+                        </div>
+                    </summary>
+                    <div class="accordion-content p-3">
+                        {% if watchlist_movies %}
+                            {% if view_type == 'grid' %}
+                            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                                {% for movie in watchlist_movies %}
+                                <div class="col">
+                                    <div class="card h-100 movie-card card-watchlist">
+                                        {% if movie.poster %}
+                                        <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border: 4px solid #4CAF50;">
+                                        {% else %}
+                                        <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border: 4px solid #4CAF50;">
+                                            <span>No Image</span>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <!-- Average Rating Badge (if available) -->
+                                        {% if movie.avg_rating %}
+                                        <div class="avg-rating-badge">
+                                            {{ movie.avg_rating }} ({{ movie.rating_count }})
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <div class="card-body">
+                                            <h5 class="card-title">{{ movie.title }}</h5>
+                                            <p class="card-text">
+                                                {% if movie.release_date %}
+                                                <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                {% endif %}
+                                            </p>
+                                            
+                                            <!-- Other Users' Reviews Section -->
+                                            {% if movie.other_reviews %}
+                                            <div class="mt-2 mb-2">
+                                                <small class="text-muted">User Ratings:</small>
+                                                <div class="user-reviews-list">
+                                                    {% for review in movie.other_reviews|slice:":3" %}
+                                                    <div class="user-review-item">
+                                                        <span class="badge bg-secondary">{{ review.username }}: {{ review.rating }}</span>
+                                                    </div>
+                                                    {% endfor %}
+                                                    {% if movie.other_reviews|length > 3 %}
+                                                    <small>+{{ movie.other_reviews|length|add:"-3" }} more</small>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                            
+                                            <div class="mt-2">
+                                                <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                                <button type="button" class="btn btn-sm btn-warning">Mark Watched</button>
+                                            </div>
+                                        </div>
+                                        <div class="card-footer text-muted">
+                                            <small>Added on {{ movie.date_added|date:"M d, Y" }}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th>Release Date</th>
+                                            <th>Genres</th>
+                                            <th>Rating</th>
+                                            <th>User Ratings</th>
+                                            <th>Date Added</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for movie in watchlist_movies %}
+                                        <tr>
+                                            <td><a href="{% url 'movie_page' movie.tmdb_id %}">{{ movie.title }}</a></td>
+                                            <td>{{ movie.release_date|date:"M d, Y" }}</td>
+                                            <td>
+                                                {% for genre in movie.genres.all %}
+                                                <span class="badge bg-secondary">{{ genre.name }}</span>
+                                                {% endfor %}
+                                            </td>
+                                            <td>
+                                                {% if movie.avg_rating %}{{ movie.avg_rating }} / 10 ({{ movie.rating_count }}){% else %}Not rated{% endif %}
+                                            </td>
+                                            <td>
+                                                {% if movie.other_reviews %}
+                                                    {% for review in movie.other_reviews|slice:":3" %}
+                                                    <span class="badge bg-secondary">{{ review.username }}: {{ review.rating }}</span>
+                                                    {% endfor %}
+                                                    {% if movie.other_reviews|length > 3 %}
+                                                    <small>+{{ movie.other_reviews|length|add:"-3" }} more</small>
+                                                    {% endif %}
+                                                {% else %}
+                                                No user ratings
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ movie.date_added|date:"M d, Y" }}</td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
+                                                    <button type="button" class="btn btn-sm btn-warning">Mark Watched</button>
+                                                    <button type="button" class="btn btn-sm btn-danger">Remove</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                Your watchlist is empty! Browse other sections to add movies.
+                            </div>
+                        {% endif %}
+                    </div>
+                </details>
+
+                <!-- Others' Watchlists Section -->
+                <details>
+                    <summary class="accordion-header">
+                        <div class="title-bar">
+                            <div class="title-bar-text">Movies in Other Users' Watchlists</div>
+                        </div>
+                    </summary>
+                    <div class="accordion-content p-3">
+                        {% if others_watchlist_movies %}
+                            {% if view_type == 'grid' %}
+                            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                                {% for movie in others_watchlist_movies %}
+                                <div class="col">
+                                    <div class="card h-100 movie-card card-others">
+                                        {% if movie.poster %}
+                                        <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}">
+                                        {% else %}
+                                        <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
+                                            <span>No Image</span>
+                                        </div>
+                                        {% endif %}
+                                        <div class="card-body">
+                                            <h5 class="card-title">{{ movie.title }}</h5>
+                                            <p class="card-text">
+                                                {% if movie.release_date %}
+                                                <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                {% endif %}
+                                            </p>
+                                            <p class="card-text">
+                                                <small class="text-muted">In {{ movie.user_count }} other watchlists</small>
+                                            </p>
+                                            <div class="mt-2">
+                                                <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                                <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th>Release Date</th>
+                                            <th>Genres</th>
+                                            <th>Rating</th>
+                                            <th>In Watchlists</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for movie in others_watchlist_movies %}
+                                        <tr>
+                                            <td><a href="{% url 'movie_page' movie.tmdb_id %}">{{ movie.title }}</a></td>
+                                            <td>{{ movie.release_date|date:"M d, Y" }}</td>
+                                            <td>
+                                                {% for genre in movie.genres.all %}
+                                                <span class="badge bg-secondary">{{ genre.name }}</span>
+                                                {% endfor %}
+                                            </td>
+                                            <td>{{ movie.rating }} / 10</td>
+                                            <td>{{ movie.user_count }} users</td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
+                                                    <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                No movies in other users' watchlists that aren't already in yours.
+                            </div>
+                        {% endif %}
+                    </div>
+                </details>
+
+                <!-- New Section: Movies Reviewed by Others -->
+                <details>
+                    <summary class="accordion-header">
+                        <div class="title-bar">
+                            <div class="title-bar-text">Movies Reviewed by Other Users</div>
+                        </div>
+                    </summary>
+                    <div class="accordion-content p-3">
+                        {% if friends_reviewed_movies %}
+                            {% if view_type == 'grid' %}
+                            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                                {% for movie in friends_reviewed_movies %}
+                                <div class="col">
+                                    <div class="card h-100 movie-card card-friends">
+                                        {% if movie.poster %}
+                                        <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border: 4px solid #9C27B0;">
+                                        {% else %}
+                                        <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border: 4px solid #9C27B0;">
+                                            <span>No Image</span>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <!-- Average Rating Badge -->
+                                        {% if movie.avg_rating %}
+                                        <div class="avg-rating-badge">
+                                            {{ movie.avg_rating }} ({{ movie.rating_count }})
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <div class="card-body">
+                                            <h5 class="card-title">{{ movie.title }}</h5>
+                                            <p class="card-text">
+                                                {% if movie.release_date %}
+                                                <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                {% endif %}
+                                            </p>
+                                            
+                                            <!-- User Reviews Section -->
+                                            <div class="mt-2 mb-2">
+                                                <small class="text-muted">User Ratings:</small>
+                                                <div class="user-reviews-list">
+                                                    {% for review in movie.other_reviews|slice:":3" %}
+                                                    <div class="user-review-item">
+                                                        <span class="badge" style="background-color: #673AB7; color: white;">
+                                                            {{ review.username }}: {{ review.rating }}
+                                                        </span>
+                                                    </div>
+                                                    {% endfor %}
+                                                    {% if movie.other_reviews|length > 3 %}
+                                                    <small>+{{ movie.other_reviews|length|add:"-3" }} more</small>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="mt-2">
+                                                <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                                <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th>Release Date</th>
+                                            <th>Genres</th>
+                                            <th>Rating</th>
+                                            <th>User Ratings</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for movie in friends_reviewed_movies %}
+                                        <tr>
+                                            <td><a href="{% url 'movie_page' movie.tmdb_id %}">{{ movie.title }}</a></td>
+                                            <td>{{ movie.release_date|date:"M d, Y" }}</td>
+                                            <td>
+                                                {% for genre in movie.genres.all %}
+                                                <span class="badge bg-secondary">{{ genre.name }}</span>
+                                                {% endfor %}
+                                            </td>
+                                            <td>
+                                                {% if movie.avg_rating %}{{ movie.avg_rating }} / 10 ({{ movie.rating_count }}){% else %}Not rated{% endif %}
+                                            </td>
+                                            <td>
+                                                {% for review in movie.other_reviews|slice:":3" %}
+                                                <span class="badge" style="background-color: #673AB7; color: white;">{{ review.username }}: {{ review.rating }}</span>
+                                                {% endfor %}
+                                                {% if movie.other_reviews|length > 3 %}
+                                                <small>+{{ movie.other_reviews|length|add:"-3" }} more</small>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
+                                                    <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                No movies have been reviewed by other users that aren't already in your watchlist or reviewed by you.
+                            </div>
+                        {% endif %}
+                    </div>
+                </details>
+                
+                <!-- Undiscovered Movies Section -->
+                <details>
+                    <summary class="accordion-header">
+                        <div class="title-bar">
+                            <div class="title-bar-text">Undiscovered Movies</div>
+                        </div>
+                    </summary>
+                    <div class="accordion-content p-3">
+                        <p class="text-muted">Movies that no one has added to their watchlist or reviewed yet.</p>
+                        {% if undiscovered_movies %}
+                            {% if view_type == 'grid' %}
+                            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                                {% for movie in undiscovered_movies %}
+                                <div class="col">
+                                    <div class="card h-100 movie-card card-undiscovered">
+                                        {% if movie.poster %}
+                                        <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}">
+                                        {% else %}
+                                        <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
+                                            <span>No Image</span>
+                                        </div>
+                                        {% endif %}
+                                        <div class="card-body">
+                                            <h5 class="card-title">{{ movie.title }}</h5>
+                                            <p class="card-text">
+                                                {% if movie.release_date %}
+                                                <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                {% endif %}
+                                            </p>
+                                            <div class="mt-2">
+                                                <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                                <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th>Release Date</th>
+                                            <th>Genres</th>
+                                            <th>Rating</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for movie in undiscovered_movies %}
+                                        <tr>
+                                            <td><a href="{% url 'movie_page' movie.tmdb_id %}">{{ movie.title }}</a></td>
+                                            <td>{{ movie.release_date|date:"M d, Y" }}</td>
+                                            <td>
+                                                {% for genre in movie.genres.all %}
+                                                <span class="badge bg-secondary">{{ genre.name }}</span>
+                                                {% endfor %}
+                                            </td>
+                                            <td>{{ movie.rating }} / 10</td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
+                                                    <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                No undiscovered movies in the database.
+                            </div>
+                        {% endif %}
+                    </div>
+                </details>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Accordion styles */
+    .accordion-container {
+        width: 100%;
+    }
+    
+    .accordion-container details {
+        margin-bottom: 10px;
+    }
+    
+    .accordion-header {
+        cursor: pointer;
+        user-select: none;
+    }
+    
+    .accordion-header .title-bar {
+        width: 100%;
+    }
+    
+    .accordion-content {
+        padding: 10px;
+        background-color: #EFEFEF;
+        border: 1px solid #C0C0C0;
+    }
+    
+    /* Remove default triangle from details element */
+    details > summary {
+        list-style: none;
+    }
+    
+    details > summary::-webkit-details-marker {
+        display: none;
+    }
+    
+    /* Rating badge styles */
+    .user-rating-badge {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background-color: #E0B020;
+        color: black;
+        padding: 3px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+        box-shadow: 0 0 3px rgba(0,0,0,0.5);
+        z-index: 5;
+    }
+    
+    .avg-rating-badge {
+        position: absolute;
+        top: 35px;
+        right: 5px;
+        background-color: #6c757d;
+        color: white;
+        padding: 3px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+        font-size: 0.85em;
+        box-shadow: 0 0 3px rgba(0,0,0,0.5);
+        z-index: 5;
+    }
+    
+    .movie-card {
+        position: relative;
+    }
+    
+    /* Border colors based on status */
+    .card-reviewed {
+        border: 4px solid #2196F3;
+    }
+    
+    .card-watchlist {
+        border: 4px solid #4CAF50;
+    }
+    
+    .card-others {
+        border: 2px solid #9C27B0;
+    }
+    
+    .card-undiscovered {
+        border: 2px solid #9E9E9E;
+    }
+    
+    /* User review styles */
+    .user-reviews-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 4px;
+    }
+    
+    .user-review-item {
+        margin-bottom: 2px;
+    }
+    
+    .card-friends {
+        border: 4px solid #9C27B0;
+    }
+    
+    .card-watchlist {
+        border: 4px solid #4CAF50;
+    }
+</style>
+
+<script>
+    // JavaScript to automatically submit the form when view type changes
+    document.getElementById('grid').addEventListener('change', function() {
+        this.form.submit();
+    });
+    
+    document.getElementById('table').addEventListener('change', function() {
+        this.form.submit();
+    });
+</script>
+{% endblock %}
