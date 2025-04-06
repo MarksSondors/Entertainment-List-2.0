@@ -1,0 +1,66 @@
+{% load static %}
+<div id="reviewModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #C3C3C3; border: 2px solid black; z-index: 1000; width: min(90%, 400px); box-shadow: 5px 5px 10px rgba(0,0,0,0.3);">
+    <div class="title-bar">
+        <div class="title-bar-text" id="reviewModalTitle">Write a Review</div>
+        <div class="title-bar-controls">
+            <button aria-label="Close" onclick="closeReviewModal()"></button>
+        </div>
+    </div>
+    <div style="padding: 15px; background-color: #C3C3C3;">
+        <form id="reviewForm" onsubmit="event.preventDefault(); submitReview({{ content_id }}, '{{ content_type }}')">
+            <div style="background-color: white; border: 2px inset; padding: 10px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="watchDate" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Date Watched:</label>
+                        <input type="date" id="watchDate" name="watchDate" style="width: 100%; font-family: 'MS Sans Serif'; border: 2px inset; padding: 5px;" value="{% now 'Y-m-d' %}" required>
+                    </div>
+                </div>
+                
+                <label for="rating" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Rating:</label>
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    <input type="range" id="rating" name="rating" min="1" max="10" value="5" style="flex: 1; margin-right: 10px;" oninput="updateRatingDisplay(this.value)">
+                    <div style="font-family: 'MS Sans Serif'; background-color: white; border: 2px inset; padding: 5px; min-width: 50px; text-align: center;">
+                        <span id="ratingValue">5</span>/10
+                    </div>
+                </div>
+                
+                <label for="reviewText" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Review:</label>
+                <textarea id="reviewText" name="reviewText" rows="4" style="width: 100%; font-family: 'MS Sans Serif'; margin-bottom: 5px; border: 2px inset; padding: 5px;" placeholder="Write your review here..." required></textarea>
+                <div id="charCount" style="font-family: 'MS Sans Serif'; font-size: 0.8em; text-align: right;">0/500</div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div id="reviewLoadingIndicator" style="display: none;">
+                    <img src="{% static 'images/hourglass.gif' %}" alt="Loading" style="width: 20px; height: 20px; margin-right: 5px;">
+                    <span style="font-family: 'MS Sans Serif'; font-size: 0.9em;">Submitting...</span>
+                </div>
+                <div style="margin-left: auto;">
+                    <button type="button" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="closeReviewModal()">Cancel</button>
+                    <button type="submit" id="submitBtn" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px; margin-left: 5px;">Submit</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function updateRatingDisplay(value) {
+    document.getElementById('ratingValue').textContent = value;
+}
+
+document.getElementById('reviewText').addEventListener('input', function() {
+    const maxLength = 500;
+    const currentLength = this.value.length;
+    document.getElementById('charCount').textContent = currentLength + '/' + maxLength;
+    
+    if (currentLength > maxLength) {
+        document.getElementById('charCount').style.color = 'red';
+        this.value = this.value.substring(0, maxLength);
+    } else {
+        document.getElementById('charCount').style.color = '';
+    }
+});
+
+// Initialize the character counter
+document.getElementById('charCount').textContent = '0/500';
+</script>
+<script src="{% static 'js/review.js' %}"></script>

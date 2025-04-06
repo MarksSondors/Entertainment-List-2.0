@@ -8,7 +8,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from django.contrib.contenttypes.models import ContentType
-from custom_auth.models import Album, Watchlist, Person, Movie, TVShow
+from custom_auth.models import Album, Watchlist, Person, TVShow
+from movies.models import Movie
 from .parsers import create_album_from_musicbrainz
 
 

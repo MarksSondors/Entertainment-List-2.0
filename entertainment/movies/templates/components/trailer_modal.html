@@ -1,0 +1,23 @@
+<div id="trailerModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 560px;">
+    <div class="title-bar">
+        <div class="title-bar-text">Watch Trailer</div>
+        <div class="title-bar-controls">
+            <button aria-label="Close" onclick="closeTrailerModal()"></button>
+        </div>
+    </div>
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+        <iframe id="trailerVideo" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="{{ trailer_url }}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
+</div>
+
+<script>
+    function openTrailerModal() {
+        document.getElementById('trailerModal').style.display = 'block';
+    }
+
+    function closeTrailerModal() {
+        document.getElementById('trailerModal').style.display = 'none';
+        const trailerVideo = document.getElementById('trailerVideo');
+        trailerVideo.src = trailerVideo.src; // Reset the video to stop playback
+    }
+</script>

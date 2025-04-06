@@ -1,0 +1,47 @@
+services:
+  django:
+    loadbalancer:
+      servers:
+        - url: "http://django:8000"
+  
+http:
+  routers:
+    django:
+      rule: "Host(`yourdomain.com`)"  # Replace with your domain
+      service: django
+      entryPoints:
+        - web
+      tls:
+        certResolver: myresolver
+
+    entertainment:
+      rule: "Host(`localhost`)"  # For development, change to your domain in production
+      service: entertainment
+      entryPoints:
+        - web
+      # Enable TLS only when you're ready for production
+      # tls:
+      #   certResolver: myresolver
+
+  services:
+    django:
+      loadBalancer:
+        servers:
+          - url: "http://django:8000"  # Replace with your Django service name and port
+
+    entertainment:
+      loadBalancer:
+        servers:
+          - url: "http://web:8000"  # This matches our web service name in docker-compose.yml
+
+  middlewares:
+    redirect-to-https:
+      redirectScheme:
+        scheme: "https"
+        permanent: true
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"

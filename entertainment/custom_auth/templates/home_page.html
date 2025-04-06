@@ -317,7 +317,7 @@
                 data.forEach(show => {
                     const listItem = document.createElement('li');
                     listItem.innerHTML = `
-                        <a href="/tvshows/detail/${show.id}" style="display: flex; align-items: center; padding: 5px 0;">
+                        <a href="#" style="display: flex; align-items: center; padding: 5px 0;">
                             <img src="${show.poster_path || '{% static "images/no-poster.png" %}'}" alt="${show.name}" style="width: 50px; height: auto; margin-right: 10px;">
                             <div>
                                 <strong>${show.name}</strong>
