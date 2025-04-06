@@ -14,17 +14,7 @@ body {
     <div style="flex-shrink: 0;">
         <img src="{{ movie.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" alt="{{ movie.title }} Poster" style="width: 200px; border: 2px solid black; cursor: pointer;" onclick="openPosterModal()">
 
-        <div id="posterModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; max-width: 90%; max-height: 90%;">
-            <div class="title-bar">
-            <div class="title-bar-text">{{ movie.title }} Poster</div>
-            <div class="title-bar-controls">
-                <button aria-label="Close" onclick="closePosterModal()"></button>
-            </div>
-            </div>
-            <div style="padding: 10px; text-align: center;">
-            <img src="{{ movie.poster }}" alt="{{ movie.title }} Poster" style="max-width: 100%; max-height: 80vh;">
-            </div>
-        </div>
+        {% include "components/poster_modal.html" with poster_url=movie.poster title=movie.title %}
 
         <script>
             function openPosterModal() {
@@ -64,9 +54,17 @@ body {
                 {% endfor %}
             </p>
             <p><strong>Keywords:</strong>
-                {% for keyword in movie.keywords.all %}
-                    <a href="keyword" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
-                {% endfor %}
+                {% if user_watchlist != True %}
+                    {% for keyword in movie.keywords.all %}
+                        <a href="keyword" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <span style="filter: blur(4px); user-select: none;" title="Review this movie to see keywords">
+                        {% for keyword in movie.keywords.all %}
+                            <a href="javascript:void(0)" style="text-decoration: none; color: black; pointer-events: none;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </span>
+                {% endif %}
             </p>
             {% if movie.collection %}
             <p><strong>Collection:</strong>
@@ -76,91 +74,21 @@ body {
         </div>
         <div style="margin-top: 10px;">
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openTrailerModal()">Watch Trailer</button>
+            {% include "components/trailer_modal.html" with trailer_url=movie.trailer %}
 
-            <div id="trailerModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 560px;">
-                <div class="title-bar">
-                    <div class="title-bar-text">Watch Trailer</div>
-                    <div class="title-bar-controls">
-                        <button aria-label="Close" onclick="closeTrailerModal()"></button>
-                    </div>
-                </div>
-                <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
-                    <iframe id="trailerVideo" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="{{movie.trailer}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                </div>
-            </div>
-
-            <script>
-                function openTrailerModal() {
-                    document.getElementById('trailerModal').style.display = 'block';
-                }
-
-                function closeTrailerModal() {
-                    document.getElementById('trailerModal').style.display = 'none';
-                    const trailerVideo = document.getElementById('trailerVideo');
-                    trailerVideo.src = trailerVideo.src; // Reset the video to stop playback
-                }
-            </script>
             {% if user_watchlist %}
                 <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="removeFromWatchlist()">Remove from Watchlist</button>
             {% else %}
                 <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="addToWatchlist()">Add to Watchlist</button>
             {% endif %}
+            {% if movie.status == "Released" %}
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openReviewModal()">Write a Review</button>
+            {% endif %}
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openCastModal()">Cast</button>
 
-            <div id="reviewModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #C3C3C3; border: 2px solid black; z-index: 1000; width: 350px;">
-                <div class="title-bar">
-                    <div class="title-bar-text" id="reviewModalTitle">Write a Review</div>
-                    <div class="title-bar-controls">
-                        <button aria-label="Close" onclick="closeReviewModal()"></button>
-                    </div>
-                </div>
-                <div style="padding: 15px; background-color: #C3C3C3;">
-                    <div style="background-color: white; border: 2px inset; padding: 10px; margin-bottom: 10px;">
-                        <label for="watchDate" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Date Watched:</label>
-                        <input type="date" id="watchDate" name="watchDate" style="width: 100%; font-family: 'MS Sans Serif'; margin-bottom: 10px; border: 2px inset; padding: 5px;" value="{% now 'Y-m-d' %}">
-                        
-                        <label for="rating" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Rating: <span id="ratingValue">5</span>/10</label>
-                        <input type="range" id="rating" name="rating" min="1" max="10" value="5" style="width: 100%; margin-bottom: 10px;">
-                        
-                        <label for="reviewText" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Review:</label>
-                        <textarea id="reviewText" name="reviewText" rows="4" style="width: 100%; font-family: 'MS Sans Serif'; margin-bottom: 5px; border: 2px inset; padding: 5px;" placeholder="Write your review here..."></textarea>
-                    </div>
-                    <div style="text-align: right;">
-                        <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="submitReview()">Submit</button>
-                        <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="closeReviewModal()">Cancel</button>
-                    </div>
-                </div>
-            </div>
+            {% include "components/movie_review_modal.html" with content_id=movie.id content_type='movie' %}
+            {% include "components/cast_modal.html" with cast=movie.cast %}
 
-            <div id="castModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 400px;">
-                <div class="title-bar">
-                    <div class="title-bar-text">Cast</div>
-                    <div class="title-bar-controls">
-                        <button aria-label="Close" onclick="closeCastModal()"></button>
-                    </div>
-                </div>
-                <div style="padding: 10px; background-color: white; max-height: 70vh; overflow-y: auto;">
-                    <h3 style="margin: 5px 0; font-size: 16px;">Actors</h3>
-                    <ul style="margin: 0; padding-left: 20px;">
-                        {% for cast_member in movie.cast %}
-                        <li style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <img src="{{ cast_member.person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" alt="{{ cast_member.person.name }}" style="width: 75px; object-fit: cover; border: 2px solid black; margin-right: 10px;">
-                            <div>
-                                <div><a href="{% url 'person_detail' cast_member.person.id %}" style="text-decoration: none; color: black;">{{ cast_member.person.name }}</a></div>
-                                <div style="font-size: 0.9em; color: #666;">
-                                    {% if cast_member.character_name %}
-                                        as {{ cast_member.character_name }}
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </li>
-                        {% empty %}
-                        <li>No cast information available</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
 
             <script>
                 function getCookie(name) {
@@ -193,7 +121,11 @@ body {
                         if (response.ok) {
                             window.location.reload();
                         } else {
-                            alert('Failed to add movie to watchlist');
+                            response.json().then(data => {
+                                alert('Failed to add movie to watchlist: ' + (data.error || 'Unknown error'));
+                            }).catch(() => {
+                                alert('Failed to add movie to watchlist');
+                            });
                         }
                     })
                     .catch(error => {
@@ -222,88 +154,6 @@ body {
                     .catch(error => {
                         console.error('Error:', error);
                         alert('Error removing movie from watchlist');
-                    });
-                }
-
-                function openReviewModal(isEdit = false) {
-                    document.getElementById('reviewModal').style.display = 'block';
-                    
-                    if (isEdit && window.userReviewId) {
-                        document.getElementById('rating').value = window.userReviewRating;
-                        document.getElementById('ratingValue').textContent = window.userReviewRating;
-                        document.getElementById('reviewText').value = window.userReviewText;
-                        
-                        // Add hidden input for review ID
-                        let reviewIdInput = document.getElementById('reviewId');
-                        if (!reviewIdInput) {
-                            reviewIdInput = document.createElement('input');
-                            reviewIdInput.type = 'hidden';
-                            reviewIdInput.id = 'reviewId';
-                            document.getElementById('reviewModal').appendChild(reviewIdInput);
-                        }
-                        reviewIdInput.value = window.userReviewId;
-                    } else {
-                        document.getElementById('rating').value = 5;
-                        document.getElementById('ratingValue').textContent = 5;
-                        document.getElementById('reviewText').value = '';
-                        
-                        // Remove review ID if exists
-                        const reviewIdInput = document.getElementById('reviewId');
-                        if (reviewIdInput) reviewIdInput.remove();
-                    }
-                }
-
-                function closeReviewModal() {
-                    document.getElementById('reviewModal').style.display = 'none';
-                }
-
-                function submitReview() {
-                    const rating = document.getElementById('rating').value;
-                    const reviewText = document.getElementById('reviewText').value;
-                    const reviewId = document.getElementById('reviewId')?.value;
-                    
-                    const endpoint = '/movies/reviews/';
-                    const method = reviewId ? 'PUT' : 'POST';
-                    const body = reviewId ? 
-                        JSON.stringify({
-                            review_id: reviewId,
-                            rating: rating,
-                            review_text: reviewText
-                        }) : 
-                        JSON.stringify({
-                            movie_id: {{ movie.id }},
-                            rating: rating,
-                            review_text: reviewText
-                        });
-                    
-                    fetch(endpoint, {
-                        method: method,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken')
-                        },
-                        body: body
-                    })
-                    .then(response => {
-                        if (response.ok) {
-                            closeReviewModal();
-                            loadReviews(); // Reload the reviews
-                            
-                            // If this was a new review, change button to "Edit Review"
-                            if (!reviewId) {
-                                const reviewButton = document.querySelector('button[onclick="openReviewModal()"]');
-                                reviewButton.textContent = 'Edit Review';
-                                reviewButton.onclick = function() { openReviewModal(true); };
-                            }
-                        } else {
-                            return response.json().then(data => {
-                                throw new Error(data.error || 'Failed to submit review');
-                            });
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        alert(error.message || 'Error submitting review');
                     });
                 }
 
@@ -421,14 +271,6 @@ body {
                     }
                 }
 
-                function openCastModal() {
-                    document.getElementById('castModal').style.display = 'block';
-                }
-                
-                function closeCastModal() {
-                    document.getElementById('castModal').style.display = 'none';
-                }
-
                 document.addEventListener('DOMContentLoaded', function() {
                     const ratingSlider = document.getElementById('rating');
                     const ratingValue = document.getElementById('ratingValue');
@@ -467,35 +309,9 @@ body {
                 </tr>
             </thead>
             <tbody>
+                <!-- Reviews will be dynamically loaded here -->
                 <tr>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">MovieBuff42</td>
-                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">9/10</td>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">Absolutely brilliant film. The cinematography and script were outstanding.</td>
-                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">Jan 15, 2023</td>
-                </tr>
-                <tr>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">CinemaFan</td>
-                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">7/10</td>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">Good movie overall, but the pacing was a bit off in the middle section.</td>
-                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">Mar 22, 2023</td>
-                </tr>
-                <tr>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">FilmCritic101</td>
-                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">10/10</td>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">A masterpiece! One of the best films I've seen in years. The acting was superb.</td>
-                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">Apr 5, 2023</td>
-                </tr>
-                <tr>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">ScreenWriter</td>
-                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">6/10</td>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">Decent effort but fell short of expectations. The third act needed work.</td>
-                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">May 17, 2023</td>
-                </tr>
-                <tr>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">PopcornLover</td>
-                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">8/10</td>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">Really enjoyed it! Great entertainment value and solid performances all around.</td>
-                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">Jun 30, 2023</td>
+                    <td colspan="4" style="padding: 4px; text-align: center;">Loading reviews...</td>
                 </tr>
             </tbody>
         </table>

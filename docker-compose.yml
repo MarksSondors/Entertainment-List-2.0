@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: ./entertainment
+      dockerfile: Dockerfile
+    volumes:
+      - ./entertainment:/app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.entertainment.rule=Host(`localhost`)"  # Change to your domain in production
+      - "traefik.http.services.entertainment.loadbalancer.server.port=8000"
+    networks:
+      - webnet
+    restart: unless-stopped
+
+  redis:
+    image: "redis:alpine"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - webnet
+    restart: unless-stopped
+
+  traefik:
+    image: "traefik:v3.3.5"
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.file.filename=/etc/traefik/dynamic_conf.yml"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - ./traefik/acme.json:/acme.json
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml
+      - ./traefik/dynamic_conf.yml:/etc/traefik/dynamic_conf.yml
+    networks:
+      - webnet
+    restart: unless-stopped
+
+networks:
+  webnet:
+    driver: bridge
+
+volumes:
+  redis_data:

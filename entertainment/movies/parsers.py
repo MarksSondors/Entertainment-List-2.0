@@ -1,4 +1,4 @@
-from custom_auth.models import *
+from .models import *
 from api.services.movies import MoviesService
 from django.contrib.contenttypes.models import ContentType
 
@@ -70,7 +70,8 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     movie.keywords.set(keyword_instances)
 
     # Set the movie is part of a collection if applicable
-    collection_id = movie_details.get('belongs_to_collection', {}).get('id')
+    belongs_to_collection = movie_details.get('belongs_to_collection')
+    collection_id = belongs_to_collection.get('id') if belongs_to_collection else None
     if collection_id:
         collection_details = MoviesService().get_collection_details(collection_id)
         if collection_details:

@@ -1,0 +1,26 @@
+providers:
+  docker:
+    exposedByDefault: false
+  file:
+    filename: /etc/traefik/dynamic_conf.yml
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+api:
+  dashboard: true
+  insecure: true  # Only use in development
+
+log:
+  level: DEBUG
+
+certificatesResolvers:
+  myresolver:
+    acme:
+      email: your-email@example.com
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web

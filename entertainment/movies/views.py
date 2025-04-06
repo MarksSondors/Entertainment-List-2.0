@@ -14,10 +14,11 @@ from .serializers import MovieSerializer
 from .parsers import create_movie
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
-from custom_auth.models import *
+from .models import *
 from django.http import JsonResponse
 
 from django.db.models import Count, Q
+from django.utils import timezone
 
 # Create your views here.
 
@@ -254,12 +255,25 @@ class WatchlistMovie(APIView):
         if not movie_id:
             return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Check if the user has already reviewed this movie
         content_type = ContentType.objects.get_for_model(Movie)
+        existing_review = Review.objects.filter(
+            user=request.user,
+            content_type=content_type,
+            object_id=movie_id
+        ).exists()
+        
+        if existing_review:
+            return Response({"error": "Cannot add to watchlist: movie has already been reviewed"}, 
+                           status=status.HTTP_400_BAD_REQUEST)
+        
+        # If no review exists, add to watchlist
         watchlist_item, created = Watchlist.objects.get_or_create(
             user=request.user,
             content_type=content_type,
             object_id=movie_id,
         )
+        
         if created:
             return Response({"message": "Movie added to watchlist"}, status=status.HTTP_201_CREATED)
         else:
@@ -338,6 +352,7 @@ class MovieReviewView(APIView):
         movie_id = request.data.get('movie_id')
         rating = request.data.get('rating')
         review_text = request.data.get('review_text', '')
+        date_reviewed = request.data.get('date_reviewed', timezone.now())
         
         if not movie_id:
             return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -375,7 +390,8 @@ class MovieReviewView(APIView):
             content_type=content_type,
             object_id=movie_id,
             rating=rating,
-            review_text=review_text
+            review_text=review_text,
+            date_reviewed=date_reviewed
         )
             
         return Response({"message": "Review added successfully", "id": review.id}, status=status.HTTP_201_CREATED)
@@ -394,6 +410,8 @@ class MovieReviewView(APIView):
         review_id = request.data.get('review_id')
         rating = request.data.get('rating')
         review_text = request.data.get('review_text')
+        date_reviewed = request.data.get('date_reviewed', timezone.now())
+
         
         if not review_id:
             return Response({"error": "Review ID is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -417,6 +435,10 @@ class MovieReviewView(APIView):
         
         if review_text is not None:
             review.review_text = review_text
+        
+        print(f"Date reviewed: {date_reviewed}")
+        if date_reviewed is not None:
+            review.date_reviewed = date_reviewed
             
         review.save()
         return Response({"message": "Review updated successfully"}, status=status.HTTP_200_OK)

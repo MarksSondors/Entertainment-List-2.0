@@ -4,10 +4,9 @@ from django.conf import settings
 from django_q.models import Schedule
 from django_q.tasks import async_task, schedule
 
-from custom_auth.models import Movie
 from api.services.movies import MoviesService
 
-from movies.models import Collection
+from movies.models import *
 
 
 logger = logging.getLogger(__name__)
@@ -109,21 +108,25 @@ def update_single_movie(movie_id):
         if data.get('belongs_to_collection'):
             print(f"Collection data: {data['belongs_to_collection']}")
             collection_id = data['belongs_to_collection'].get('id')
-            if movie.collection is None:
+            if collection_id and movie.collection is None:
                 try:
                     collection = Collection.objects.get(tmdb_id=collection_id)
+                    print(f"Found existing collection: {collection.name}")
                     updates['collection'] = collection
                 except Collection.DoesNotExist:
                     # create collection
                     movies_service = MoviesService()
                     collection_data = movies_service.get_collection_details(collection_id)
                     if collection_data:
+                        poster_path = collection_data.get('poster_path')
+                        backdrop_path = collection_data.get('backdrop_path')
+                        
                         collection = Collection.objects.create(
                             name=collection_data.get('name'),
                             description=collection_data.get('overview'),
                             tmdb_id=collection_data.get('id'),
-                            poster=f"https://image.tmdb.org/t/p/original{collection_data.get('poster_path')}",
-                            backdrop=f"https://image.tmdb.org/t/p/original{collection_data.get('backdrop_path')}",
+                            poster=f"https://image.tmdb.org/t/p/original{poster_path}" if poster_path else None,
+                            backdrop=f"https://image.tmdb.org/t/p/original{backdrop_path}" if backdrop_path else None,
                         )
                         updates['collection'] = collection
 
@@ -142,6 +145,7 @@ def update_single_movie(movie_id):
             for field, value in updates.items():
                 setattr(movie, field, value)
             movie.save()
+            async_task(update_single_collection, collection.id)
             return f"Updated movie {movie.title} with {len(updates)} changes: {', '.join([f'{k}={v}' for k, v in updates.items()])}"
         else:
             return f"No updates needed for movie {movie.title}"

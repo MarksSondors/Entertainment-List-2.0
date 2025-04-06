@@ -46,7 +46,6 @@ INSTALLED_APPS = [
     'django_bootstrap5',
     'rest_framework',
     'drf_spectacular',
-    'heroicons',
     "debug_toolbar",
     'django_q',
 
@@ -171,8 +170,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Caching configuration
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',  # In-memory cache
-        'LOCATION': 'unique-snowflake',
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': 'redis://redis:6379/1',
     }
 }
 
@@ -191,7 +190,7 @@ Q_CLUSTER = {
     'cpu_affinity': 1,
     'label': 'Django Q',
     'redis': {
-        'host': '127.0.0.1',
+        'host': 'redis',
         'port': 6379,
         'db': 0,
     }

@@ -6,10 +6,6 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
-# Create your models here.
-
-from movies.models import Collection
-
 
 class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
@@ -128,132 +124,6 @@ class Media(models.Model):
 
     class Meta:
         abstract = True
-
-class Movie(Media):
-    poster = models.ImageField(upload_to='movie_posters/', blank=True, null=True)
-    backdrop = models.ImageField(upload_to='movie_backdrops/', blank=True, null=True)
-
-    release_date = models.DateField()
-    
-    # ids
-    tmdb_id = models.IntegerField(unique=True)
-    imdb_id = models.CharField(max_length=20, blank=True, null=True)
-
-    runtime = models.IntegerField()
-    rating = models.FloatField()
-    trailer = models.URLField(blank=True, null=True)
-
-    is_anime = models.BooleanField(default=False)
-
-    status = models.CharField(max_length=50, blank=True, null=True)  # e.g., "Released", "In Production", "Post Production"
-
-    # foreign keys
-    genres = models.ManyToManyField(Genre)
-    countries = models.ManyToManyField(Country)
-    keywords = models.ManyToManyField(Keyword)
-
-    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, blank=True, null=True, related_name='movies')
-
-    def __str__(self):
-        return self.title
-    
-    def minutes_to_hours(self):
-        hours = self.runtime // 60
-        minutes = self.runtime % 60
-        return f"{hours}h {minutes}m"
-
-    def get_media_persons(self, role=None):
-        """Get all MediaPerson objects related to this movie."""
-        query = MediaPerson.objects.filter(
-            content_type_id=ContentType.objects.get_for_model(self.__class__).id,
-            object_id=self.id
-        ).select_related('person')
-        
-        if role:
-            query = query.filter(role=role)
-        return query
-    
-    @property
-    def _get_content_type_id(self):
-        """Cache content type ID to avoid repeated lookups."""
-        if not hasattr(self, '_content_type_id'):
-            self._content_type_id = ContentType.objects.get_for_model(self.__class__).id
-        return self._content_type_id
-    
-    def _get_persons_by_role(self, role_filter):
-        """Base method for retrieving persons by role."""
-        return Person.objects.filter(
-            mediaperson__content_type_id=self._get_content_type_id,
-            mediaperson__object_id=self.id,
-            **role_filter
-        ).distinct()
-    
-    @property
-    def directors(self):
-        """Get all directors of this movie."""
-        return self._get_persons_by_role({'mediaperson__role': "Director"})
-    
-    @property
-    def writers(self):
-        """Get all writers of this movie."""
-        return self._get_persons_by_role({
-            'mediaperson__role__in': ["Writer", "Screenplay", "Original Story", "Story"]
-        })
-    
-    @property
-    def producers(self):
-        """Get all producers of this movie."""
-        return self._get_persons_by_role({'mediaperson__role': "Executive Producer"})
-    
-    @property
-    def cast(self):
-        """Get all cast members of this movie with their character names."""
-        return MediaPerson.objects.select_related('person').filter(
-            content_type_id=self._get_content_type_id,
-            object_id=self.id,
-            role="Actor"
-        ).order_by('order')
-    
-    @property
-    def composers(self):
-        """Get all composers of this movie."""
-        return self._get_persons_by_role({'mediaperson__role': "Original Music Composer"})
-    
-    @property
-    def soundtracks(self):
-        """Get soundtrack albums for this movie."""
-        return self.related_albums.filter(mediaalbumrelationship__relationship_type='soundtrack')
-
-    @property
-    def scores(self):
-        """Get score albums for this movie."""
-        return self.related_albums.filter(mediaalbumrelationship__relationship_type='score')
-
-    def get_related_albums(self, relationship_type=None):
-        """Get albums related to this movie with optional relationship type filter."""
-        from django.contrib.contenttypes.models import ContentType
-        movie_type = ContentType.objects.get_for_model(self.__class__)
-        query = MediaAlbumRelationship.objects.filter(
-            content_type=movie_type,
-            object_id=self.id
-        )
-        if relationship_type:
-            query = query.filter(relationship_type=relationship_type)
-        return Album.objects.filter(
-            id__in=query.values_list('album_id', flat=True)
-        ).select_related('primary_artist')
-
-    @property
-    def related_albums(self):
-        """Get all related albums for this movie."""
-        from django.contrib.contenttypes.models import ContentType
-        movie_type = ContentType.objects.get_for_model(self.__class__)
-        return Album.objects.filter(
-            id__in=MediaAlbumRelationship.objects.filter(
-                content_type=movie_type,
-                object_id=self.id
-            ).values_list('album_id', flat=True)
-        )
 
 class TVShow(Media):
     """Model for TV shows."""
@@ -440,7 +310,8 @@ class Watchlist(models.Model):
 @receiver(pre_delete)
 def remove_from_watchlist(sender, instance, **kwargs):
     """Remove any watchlist entries when media is deleted."""
-    if sender in [Movie, TVShow, Album]:  # Add Album to the list
+    # Use the class name as string to avoid import issues
+    if sender.__name__ in ['Movie', 'TVShow', 'Album']:
         content_type = ContentType.objects.get_for_model(sender)
         Watchlist.objects.filter(content_type=content_type, object_id=instance.id).delete()
 
@@ -568,18 +439,21 @@ class Album(Media):
     def related_movies(self):
         """Get all related movies for this album."""
         from django.contrib.contenttypes.models import ContentType
-        movie_type = ContentType.objects.get_for_model(Movie)
+        # Get the Movie model by its app label and model name
+        movie_type = ContentType.objects.get(app_label='movies', model='movie')
+        # Use the model class from the content type
+        Movie = movie_type.model_class()
         return Movie.objects.filter(
             id__in=MediaAlbumRelationship.objects.filter(
                 content_type=movie_type,
                 album=self
             ).values_list('object_id', flat=True)
         )
-    
     @property
     def related_tv_shows(self):
         """Get all related TV shows for this album."""
         from django.contrib.contenttypes.models import ContentType
+        # Use the current TVShow model since it's already defined in this file
         tv_type = ContentType.objects.get_for_model(TVShow)
         return TVShow.objects.filter(
             id__in=MediaAlbumRelationship.objects.filter(
@@ -587,7 +461,7 @@ class Album(Media):
                 album=self
             ).values_list('object_id', flat=True)
         )
-
+    
 class MediaAlbumRelationship(models.Model):
     """Model to define the relationship between media (movies/TV shows) and music albums."""
     # Generic foreign key to allow both movies and TV shows

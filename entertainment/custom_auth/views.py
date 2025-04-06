@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 # import services
 
 from .models import *
+from movies.models import Movie
 
 
 def login_page(request):
