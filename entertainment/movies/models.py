@@ -145,3 +145,26 @@ class Movie(Media):
                 object_id=self.id
             ).values_list('album_id', flat=True)
         )
+
+    def get_crew(self):
+        """
+        Returns crew members with their combined roles.
+        Example: {'Person1': ['Director', 'Writer'], 'Person2': ['Novel']}
+        """
+        from django.contrib.contenttypes.models import ContentType
+        movie_content_type = ContentType.objects.get_for_model(self)
+        
+        # Get all crew members (not actors)
+        crew_members = MediaPerson.objects.filter(
+            content_type=movie_content_type,
+            object_id=self.id
+        ).exclude(role="Actor")
+        
+        # Group by person and combine roles
+        crew_by_person = {}
+        for member in crew_members:
+            if member.person not in crew_by_person:
+                crew_by_person[member.person] = []
+            crew_by_person[member.person].append(member.role)
+        
+        return crew_by_person
