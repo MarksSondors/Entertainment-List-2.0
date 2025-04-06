@@ -90,7 +90,7 @@ body {
             <tbody>
                 {% for credit in person_credits %}
                 <tr>
-                    <td style="padding: 5px;"><a href="{{ credit.media.get_absolute_url }}" style="text-decoration: none; color: black;">{{ credit.media.title }}</a></td>
+                    <td style="padding: 5px;"><a href="{% url 'movie_page' credit.media.tmdb_id %}" style="text-decoration: none; color: black;">{{ credit.media.title }}</a></td>
                     <td style="padding: 5px;">
                         {% if credit.content_type.model == 'movie' %}
                             {{ credit.media.release_date|date:"Y" }}
