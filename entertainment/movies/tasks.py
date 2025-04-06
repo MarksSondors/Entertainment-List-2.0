@@ -249,8 +249,7 @@ def setup_scheduled_tasks():
         name='Update unreleased movies',
         defaults={
             'func': 'movies.tasks.update_unreleased_movies',
-            'schedule_type': Schedule.MINUTES,
-            'minutes': 1,  # Run every minute
+            'schedule_type': Schedule.HOURLY,
             'repeats': -1,  # Repeat forever
         }
     )

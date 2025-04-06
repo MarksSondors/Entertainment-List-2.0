@@ -17,6 +17,8 @@ from django.contrib.auth.decorators import login_required
 from custom_auth.models import *
 from django.http import JsonResponse
 
+from django.db.models import Count, Q
+
 # Create your views here.
 
 
@@ -479,3 +481,140 @@ def collection_detail(request, collection_id):
         'collection': collection,
         'movies': movies
     })
+
+@login_required
+def all_movies_page(request):
+    # Get filter parameters
+    filter_title = request.GET.get('title', '')
+    genre_id = request.GET.get('genre', '')
+    current_sort = request.GET.get('sort_by', 'title')
+    view_type = request.GET.get('view_type', 'grid')
+    
+    # Get content type for Movie model
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    
+    # Define sort order
+    sort_field = 'title'
+    if current_sort == 'release_date':
+        sort_field = '-release_date'
+    elif current_sort == 'rating':
+        sort_field = '-rating'
+    
+    # Base query for movies with filtering
+    base_query = Movie.objects.prefetch_related('genres')
+    
+    if filter_title:
+        base_query = base_query.filter(title__icontains=filter_title)
+    
+    if genre_id:
+        base_query = base_query.filter(genres__id=genre_id)
+    
+    # Get all movies that match the filter criteria
+    all_movies = list(base_query.order_by(sort_field))
+    
+    # Get user's reviews
+    user_reviews = {
+        review.object_id: review.rating 
+        for review in Review.objects.filter(
+            user=request.user,
+            content_type=movie_content_type
+        )
+    }
+    
+    # Get user's watchlist with date_added
+    user_watchlist = {
+        item.object_id: item.date_added 
+        for item in Watchlist.objects.filter(
+            user=request.user,
+            content_type=movie_content_type
+        )
+    }
+    
+    # Get all watchlist counts by movie
+    watchlist_counts = {}
+    for item in Watchlist.objects.filter(content_type=movie_content_type).values('object_id').annotate(count=Count('user')):
+        watchlist_counts[item['object_id']] = item['count']
+    
+    # Get average ratings across the platform
+    avg_ratings = {}
+    rating_counts = {}
+    for item in Review.objects.filter(content_type=movie_content_type).values('object_id').annotate(
+        avg_rating=models.Avg('rating'),
+        count=models.Count('id')
+    ):
+        avg_ratings[item['object_id']] = round(item['avg_rating'], 1)
+        rating_counts[item['object_id']] = item['count']
+    
+    # Get reviews by other users (not current user)
+    other_users_reviews = {}
+    for review in Review.objects.filter(
+        content_type=movie_content_type
+    ).exclude(
+        user=request.user
+    ).select_related('user'):
+        if review.object_id not in other_users_reviews:
+            other_users_reviews[review.object_id] = []
+        other_users_reviews[review.object_id].append({
+            'user': review.user,
+            'username': review.user.username,
+            'rating': review.rating,
+            'review_text': review.review_text,
+            'date_reviewed': review.date_reviewed
+        })
+    
+    # Categorize the movies
+    reviewed_movies = []
+    watchlist_movies = []
+    others_watchlist = []
+    undiscovered = []
+    friends_reviewed = []  # New category for movies reviewed by others
+    
+    for movie in all_movies:
+        # Add average rating if available
+        if movie.id in avg_ratings:
+            movie.avg_rating = avg_ratings[movie.id]
+            movie.rating_count = rating_counts[movie.id]
+        
+        # Add other users' reviews if available
+        if movie.id in other_users_reviews:
+            movie.other_reviews = other_users_reviews[movie.id]
+        
+        # Is this movie reviewed by the current user?
+        if movie.id in user_reviews:
+            movie.user_rating = user_reviews[movie.id]
+            reviewed_movies.append(movie)
+        # Is this movie in the current user's watchlist?
+        elif movie.id in user_watchlist:
+            movie.date_added = user_watchlist[movie.id]
+            watchlist_movies.append(movie)
+        # Is this movie reviewed by others but not in user's watchlist or reviewed by user?
+        elif movie.id in other_users_reviews:
+            friends_reviewed.append(movie)
+        # Is this movie in any watchlist?
+        elif movie.id in watchlist_counts:
+            movie.user_count = watchlist_counts[movie.id]
+            others_watchlist.append(movie)
+        # This movie is undiscovered
+        else:
+            undiscovered.append(movie)
+    
+    # Get all genres for filter dropdown
+    genres = Genre.objects.all().order_by('name')
+    current_genre = None
+    if genre_id:
+        current_genre = get_object_or_404(Genre, id=genre_id).name
+    
+    context = {
+        'reviewed_movies': reviewed_movies,
+        'watchlist_movies': watchlist_movies,
+        'others_watchlist_movies': others_watchlist,
+        'undiscovered_movies': undiscovered,
+        'friends_reviewed_movies': friends_reviewed,  # Add to context
+        'genres': genres,
+        'current_genre': current_genre,
+        'filter_title': filter_title,
+        'current_sort': current_sort,
+        'view_type': view_type,
+    }
+    
+    return render(request, 'all_movies_page.html', context)
