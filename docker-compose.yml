@@ -47,6 +47,17 @@ services:
     networks:
       - webnet
     restart: unless-stopped
+    
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 86400 --cleanup  # Check for updates once per day
+    environment:
+      - TZ=UTC
+    networks:
+      - webnet
+    restart: unless-stopped
 
 networks:
   webnet:
