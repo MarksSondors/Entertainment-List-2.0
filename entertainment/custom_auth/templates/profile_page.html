@@ -51,13 +51,14 @@
                                     {% for movie in favorite_movies %}
                                         <a href="{% url 'movie_page' movie.tmdb_id %}" class="poster-link">
                                             <img src="{{ movie.poster|default:'#' }}" alt="{{ movie.title }}" 
-                                                 class="poster-image">
+                                                 class="poster-image"
+                                                 onerror="this.src='{% static 'images/movie-default.png' %}'">
                                             {% if movie.user_rating %}
                                             <div class="rating-badge">
                                                 {{ movie.user_rating }}
                                             </div>
                                             {% endif %}
-                                            <span class="poster-title">{{ movie.title }}</span>
+                                            <span class="poster-title" title="{{ movie.title }}">{{ movie.title|truncatechars:15 }}</span>
                                         </a>
                                     {% endfor %}
                                 </div>

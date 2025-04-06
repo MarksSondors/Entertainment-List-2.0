@@ -29,7 +29,8 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=lambda v: v.split(','))
 
 INTERNAL_IPS = [
-    '127.0.0.1'
+    '127.0.0.1',
+    'localhost',
 ]
 
 # Application definition
