@@ -15,7 +15,7 @@ urlpatterns = [
     path('genres/<int:genre_id>/', views.genre_detail, name='browse_by_genre_detail'),
 
     # profile
-    path('profile/', views.profile_page, name='profile'),
+    path('profile/', views.profile_page, name='profile_page'),
     path('profile/<str:username>/', views.profile_page, name='profile_with_username'),
 
     # watchlist
