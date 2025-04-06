@@ -2,15 +2,15 @@ from .models import *
 from api.services.movies import MoviesService
 from django.contrib.contenttypes.models import ContentType
 
-def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False):
-    movie_details = MoviesService().get_movie_details(movie_id, append_to_response='videos,credits,keywords')
-    if not movie_details:
-        return None
+def extract_movie_data(movie_details, movie_poster=None, movie_backdrop=None, is_anime=False):
+    """Extract and format basic movie data from API response"""
     if not movie_poster:
         movie_poster = f"https://image.tmdb.org/t/p/original{movie_details.get('poster_path')}"
     if not movie_backdrop:
         movie_backdrop = f"https://image.tmdb.org/t/p/original{movie_details.get('backdrop_path')}"
-    youtube_videos = [video for video in movie_details.get('videos', {}).get('results', []) if video.get('site') == 'YouTube' and video.get('type') == 'Trailer']
+    
+    youtube_videos = [video for video in movie_details.get('videos', {}).get('results', []) 
+                    if video.get('site') == 'YouTube' and video.get('type') == 'Trailer']
     trailer_key = youtube_videos[0].get('key') if youtube_videos else None
     trailer_link = f'https://www.youtube.com/embed/{trailer_key}' if trailer_key else None
 
@@ -18,7 +18,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
         production_countries = movie_details.get('production_countries', [])
         is_anime = any(country.get('iso_3166_1') == 'JP' for country in production_countries)
 
-    movie_dict = {
+    return {
         'title': movie_details.get('title'),
         'original_title': movie_details.get('original_title'),
         'poster': movie_poster,
@@ -33,8 +33,10 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
         'is_anime': is_anime,
         'status': movie_details.get('status'),
     }
-    
-    # Create genres, countries and keywords as before
+
+def process_genres_countries_keywords(movie_details):
+    """Process and create genre, country and keyword instances"""
+    # Process genres
     genres = movie_details.get('genres', [])
     genre_instances = []
     for genre in genres:
@@ -44,6 +46,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
         )
         genre_instances.append(genre_instance)
 
+    # Process countries
     countries = movie_details.get('production_countries', [])
     country_instances = []
     for country in countries:
@@ -53,7 +56,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
         )
         country_instances.append(country_instance)
 
-    # Use keywords directly from movie_details instead of making another API call
+    # Process keywords
     keywords = movie_details.get('keywords', {}).get('keywords', [])
     keyword_instances = []
     for keyword in keywords:
@@ -63,17 +66,15 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
         )
         keyword_instances.append(keyword_instance)
 
-    # Create the movie instance
-    movie = Movie.objects.create(**movie_dict)
-    movie.genres.set(genre_instances)
-    movie.countries.set(country_instances)
-    movie.keywords.set(keyword_instances)
+    return genre_instances, country_instances, keyword_instances
 
-    # Set the movie is part of a collection if applicable
+def process_collection(movie, movie_details, movies_service):
+    """Process and associate collection if applicable"""
     belongs_to_collection = movie_details.get('belongs_to_collection')
     collection_id = belongs_to_collection.get('id') if belongs_to_collection else None
+    
     if collection_id:
-        collection_details = MoviesService().get_collection_details(collection_id)
+        collection_details = movies_service.get_collection_details(collection_id)
         if collection_details:
             collection, _ = Collection.objects.get_or_create(
                 tmdb_id=collection_details.get('id'),
@@ -87,24 +88,12 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
             movie.collection = collection
             movie.save()
 
-    # Add to watchlist if specified
-    if add_to_watchlist:
-        Watchlist.objects.create(
-            user_id=1,
-            content_type=ContentType.objects.get_for_model(movie),
-            object_id=movie.id
-        )
-    
-
-
-    # Get the movie's content type for MediaPerson
+def process_cast(movie, cast, movies_service):
+    """Process cast members from movie credits"""
     movie_content_type = ContentType.objects.get_for_model(movie)
     
-    # Use credits directly from movie_details
-    credits = movie_details.get('credits', {})
-    cast = credits.get('cast', [])
     for index, person in enumerate(cast):
-        person_details = MoviesService().get_person_details(person.get('id'))
+        person_details = movies_service.get_person_details(person.get('id'))
         person_instance, _ = Person.objects.get_or_create(
             tmdb_id=person_details.get('id'),
             defaults={
@@ -120,7 +109,6 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
         person_instance.is_actor = True
         person_instance.save()
         
-        # Create MediaPerson for cast member
         MediaPerson.objects.create(
             content_type=movie_content_type,
             object_id=movie.id,
@@ -129,12 +117,13 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
             character_name=person.get('character'),
             order=person.get('order', index)
         )
+
+def process_crew(movie, crew, movies_service):
+    """Process crew members from movie credits"""
+    movie_content_type = ContentType.objects.get_for_model(movie)
+    relevant_crew = [person for person in crew if person.get('department') in ['Directing', 'Writing', 'Sound']]
     
-    # Process crew members from the same credits object
-    crew = credits.get('crew', [])
-    crew = [person for person in crew if person.get('department') in ['Directing', 'Writing', 'Sound']]
-    
-    for person in crew:
+    for person in relevant_crew:
         job = person.get('job')
         department = person.get('department')
         
@@ -144,7 +133,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
            (department == 'Sound' and job != 'Original Music Composer'):
             continue
         
-        person_details = MoviesService().get_person_details(person.get('id'))
+        person_details = movies_service.get_person_details(person.get('id'))
         person_instance, _ = Person.objects.get_or_create(
             tmdb_id=person_details.get('id'),
             defaults={
@@ -181,12 +170,52 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
         
         person_instance.save()
         
-        # Create MediaPerson entry
         MediaPerson.objects.create(
             content_type=movie_content_type,
             object_id=movie.id,
             person=person_instance,
             role=role
         )
+
+def add_to_movie_watchlist(movie, user_id=1):
+    """Add movie to watchlist"""
+    Watchlist.objects.create(
+        user_id=user_id,
+        content_type=ContentType.objects.get_for_model(movie),
+        object_id=movie.id
+    )
+
+def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False):
+    """Main function to create a movie from TMDB ID"""
+    movies_service = MoviesService()
+    
+    # Get movie details from API
+    movie_details = movies_service.get_movie_details(movie_id, append_to_response='videos,credits,keywords')
+    if not movie_details:
+        return None
+    
+    # Extract basic movie data
+    movie_dict = extract_movie_data(movie_details, movie_poster, movie_backdrop, is_anime)
+    
+    # Process metadata
+    genre_instances, country_instances, keyword_instances = process_genres_countries_keywords(movie_details)
+    
+    # Create the movie instance
+    movie = Movie.objects.create(**movie_dict)
+    movie.genres.set(genre_instances)
+    movie.countries.set(country_instances)
+    movie.keywords.set(keyword_instances)
+    
+    # Handle collection
+    process_collection(movie, movie_details, movies_service)
+    
+    # Add to watchlist if specified
+    if add_to_watchlist:
+        add_to_movie_watchlist(movie)
+    
+    # Process cast and crew
+    credits = movie_details.get('credits', {})
+    process_cast(movie, credits.get('cast', []), movies_service)
+    process_crew(movie, credits.get('crew', []), movies_service)
     
     return movie
