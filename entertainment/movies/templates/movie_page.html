@@ -43,13 +43,13 @@ body {
             <p><strong>Runtime:</strong> {{ movie.minutes_to_hours }}</p>
             <p><strong>Country:</strong> 
                 {% for country in movie.countries.all %}
-                    <a href="country" style="text-decoration: none; color: black;">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
+                    <a href="{{ country.get_absolute_url }}" style="text-decoration: none; color: black;">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
                 {% endfor %}
             </p>
             <p><strong>Keywords:</strong>
                 {% if user_watchlist != True %}
                     {% for keyword in movie.keywords.all %}
-                        <a href="keyword" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
+                        <a href="#" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
                     {% endfor %}
                 {% else %}
                     <span style="filter: blur(4px); user-select: none;" title="Review this movie to see keywords">

@@ -2,39 +2,9 @@
 {% load static %}
 
 {% block content %}
-    <!-- Hero section with welcome message -->
+    <!-- Main content area - removing the hero section -->
     <div class="row px-2 py-2">
-        <div class="col-12 mb-3">
-            <div class="window" style="width: 100%;">
-                <div class="title-bar">
-                    <div class="title-bar-text">Entertainment List - Welcome</div>
-                    <div class="title-bar-controls">
-                        <button aria-label="Minimize"></button>
-                        <button aria-label="Maximize"></button>
-                        <button aria-label="Close"></button>
-                    </div>
-                </div>
-                <div class="window-body">
-                    <div class="field-row-stacked" style="text-align: center;">
-                        <img src="{% static 'images/frontend-logo.png' %}" alt="Entertainment List Logo" style="width: 25%; max-width: 100px;" />
-                        <h1 style="color: #5e9ca0; font-size: clamp(18px, 5vw, 24px);">
-                            <span style="background-color: #ff00ff; color: #ffffff;">Welcome to <span style="color: #0000ff;">Entertainment</span> List!</span>
-                        </h1>
-                        <p style="color: #222; padding: 10px; font-size: 16px; max-width: 800px; margin: 0 auto;">
-                            Whether the latest cinematic universe has a "definitive ranking" or not is irrelevant from our perspective. However, its evolution is joyously significant to us at Entertainment List. The joy is that our dedicated platform has made it clear to us that this moment is the "marker" we've been waiting for—the time to fully immerse ourselves in managing our favorite movies, shows, and more, all in one place.
-                        </p>
-                    </div>
-                </div>
-                <div class="status-bar">
-                    <div class="status-bar-field">Ready</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main content area -->
-    <div class="row px-2 pb-3">
-        <!-- Left column - Actions -->
+        <!-- Left column - Actions (keep the current style but adjust size) -->
         <div class="col-12 col-md-4 mb-3">
             <div class="window" style="width: 100%;">
                 <div class="title-bar">
@@ -54,7 +24,6 @@
                                     <img src="https://liseklucian.neocities.org/buttons/ie_animated.gif" alt="Add Movie" style="max-width: 88px; margin-right: 10px;">
                                     <span>Add Movie</span>
                                 </a>
-                            </li>
                             <li>
                                 <a href="javascript:void(0);" onclick="openTVShowModal()" style="display: flex; align-items: center; padding: 5px 0;">
                                     <img src="https://liseklucian.neocities.org/buttons/bandwith_conservation_society.gif" alt="Add TV Show" style="max-width: 88px; margin-right: 10px;">
@@ -98,9 +67,9 @@
                                 </a>
                             </li>
                             <li>
-                                <a href="{% url 'profile_page' %}" style="display: flex; align-items: center; padding: 5px 0;">
+                                <a href="{% url 'browse_by_country' %}" style="display: flex; align-items: center; padding: 5px 0;">
                                     <img src="https://cyber.dabamos.de/88x31/88ibet.gif" alt="Your Profile" style="max-width: 88px; margin-right: 10px;">
-                                    <span>Your Profile</span>
+                                    <span>Browse by Country</span>
                                 </a>
                             </li>
                         </ul>
@@ -112,9 +81,9 @@
             </div>
         </div>
         
-        <!-- Right column - Content -->
+        <!-- Right column - Content (made much smaller) -->
         <div class="col-12 col-md-8">
-            <!-- Popular Content -->
+            <!-- Popular Content - Smaller size -->
             <div class="window mb-3" style="width: 100%;">
                 <div class="title-bar">
                     <div class="title-bar-text">Popular Content</div>
@@ -124,59 +93,45 @@
                         <button aria-label="Close"></button>
                     </div>
                 </div>
-                <div class="window-body">
-                    <menu role="tablist">
-                        <li role="tab" aria-selected="true"><a href="#movies-tab">Movies</a></li>
-                        <li role="tab"><a href="#tv-tab">TV Shows</a></li>
-                        <li role="tab"><a href="#books-tab">Books</a></li>
-                        <li role="tab"><a href="#music-tab">Music</a></li>
-                    </menu>
+                <div class="window-body" style="padding: 8px;">
+                    <!-- Compact tabs -->
+                    <div class="field-row mb-2">
+                        <button id="tab-movies" class="tab-btn active">Movies</button>
+                        <button id="tab-tvshows" class="tab-btn">TV Shows</button>
+                        <button id="tab-books" class="tab-btn">Books</button>
+                        <button id="tab-music" class="tab-btn">Music</button>
+                    </div>
                     
-                    <!-- Movies Tab -->
-                    <div class="window" role="tabpanel" id="movies-tab">
-                        <div class="window-body">
-                            <fieldset>
-                                <legend>Top 5 Popular Movies</legend>
-                                <ul id="popular_movies_block" class="tree-view">
-                                    <li class="loading">Loading popular movies...</li>
-                                </ul>
-                            </fieldset>
+                    <!-- Content panels - smaller and more compact -->
+                    <div id="panel-movies" class="tab-panel">
+                        <div class="scrollable-row" id="popular_movies_block">
+                            <div class="poster-item">
+                                <div class="poster-card">Loading...</div>
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- TV Shows Tab -->
-                    <div class="window" role="tabpanel" id="tv-tab" style="display: none;">
-                        <div class="window-body">
-                            <fieldset>
-                                <legend>Top 5 Popular TV Shows</legend>
-                                <ul id="popular_tvshows_block" class="tree-view">
-                                    <li class="loading">Loading popular shows...</li>
-                                </ul>
-                            </fieldset>
+                    <div id="panel-tvshows" class="tab-panel" style="display: none;">
+                        <div class="scrollable-row" id="popular_tvshows_block">
+                            <div class="poster-item">
+                                <div class="poster-card">Loading...</div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Books Tab -->
-                    <div class="window" role="tabpanel" id="books-tab" style="display: none;">
-                        <div class="window-body">
-                            <fieldset>
-                                <legend>Top 5 Popular Books</legend>
-                                <ul id="popular_books_block" class="tree-view">
-                                    <li class="loading">Loading popular books...</li>
-                                </ul>
-                            </fieldset>
+                    <div id="panel-books" class="tab-panel" style="display: none;">
+                        <div class="scrollable-row" id="popular_books_block">
+                            <div class="poster-item">
+                                <div class="poster-card">Coming soon</div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Music Tab -->
-                    <div class="window" role="tabpanel" id="music-tab" style="display: none;">
-                        <div class="window-body">
-                            <fieldset>
-                                <legend>Top 5 Popular Music</legend>
-                                <ul id="popular_music_block" class="tree-view">
-                                    <li class="loading">Loading popular music...</li>
-                                </ul>
-                            </fieldset>
+                    <div id="panel-music" class="tab-panel" style="display: none;">
+                        <div class="scrollable-row" id="popular_music_block">
+                            <div class="poster-item">
+                                <div class="poster-card">Coming soon</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -185,7 +140,7 @@
                 </div>
             </div>
             
-            <!-- Recent Reviews -->
+            <!-- Recent Reviews - Also more compact -->
             <div class="window" style="width: 100%;">
                 <div class="title-bar">
                     <div class="title-bar-text">Recent Community Reviews</div>
@@ -195,9 +150,9 @@
                         <button aria-label="Close"></button>
                     </div>
                 </div>
-                <div class="window-body" style="background-color: #eee; color: #333; font-family: 'MS Sans Serif', sans-serif; padding: 10px;">
-                    <div style="overflow-y: auto; max-height: 200px; padding: 5px; border: 1px inset #d5d5d5;">
-                        <ul id="recent_reviews" class="tree-view">
+                <div class="window-body" style="background-color: #eee; color: #333; font-family: 'MS Sans Serif', sans-serif; padding: 8px;">
+                    <div style="padding: 5px; border: 1px inset #d5d5d5;">
+                        <ul id="recent_reviews" class="tree-view" style="margin: 0; padding: 0 0 0 16px;">
                             <li>> john_doe: "Amazing movie, a must-watch!" <br> Movie: Inception <br> Rating: ★★★★★</li>
                             <li>> jane_smith: "Not my cup of tea, but well-made." <br> Movie: Titanic <br> Rating: ★★★☆☆</li>
                             <li>> movie_buff99: "A cinematic masterpiece!" <br> Movie: The Godfather <br> Rating: ★★★★★</li>
@@ -205,7 +160,7 @@
                             <li>> critic101: "Overhyped, but still enjoyable." <br> Movie: The Dark Knight <br> Rating: ★★★★☆</li>
                         </ul>
                     </div>
-                    <div class="field-row" style="justify-content: flex-end; margin-top: 10px;">
+                    <div class="field-row" style="justify-content: flex-end; margin-top: 8px;">
                         <button onclick="window.location.href=''">See All Reviews</button>
                         <button onclick="window.location.href=''">Write a Review</button>
                     </div>
@@ -213,6 +168,33 @@
                 <div class="status-bar">
                     <div class="status-bar-field">Last updated: Today</div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Welcome Modal (Only shown for first-time visitors) -->
+    <div id="welcome-modal" class="modal" style="display: none;">
+        <div class="window">
+            <div class="title-bar">
+                <div class="title-bar-text">Welcome to Entertainment List!</div>
+                <div class="title-bar-controls">
+                    <button aria-label="Close" onclick="closeWelcomeModal()"></button>
+                </div>
+            </div>
+            <div class="window-body">
+                <div class="field-row-stacked" style="text-align: center;">
+                    <img src="{% static 'images/frontend-logo.png' %}" alt="Entertainment List Logo" style="width: 25%; max-width: 100px;" />
+                    <h1 style="color: #5e9ca0; font-size: clamp(18px, 5vw, 24px);">
+                        <span style="background-color: #ff00ff; color: #ffffff;">Welcome to <span style="color: #0000ff;">Entertainment</span> List!</span>
+                    </h1>
+                    <p style="color: #222; padding: 10px; font-size: 16px; max-width: 800px; margin: 0 auto;">
+                        Whether the latest cinematic universe has a "definitive ranking" or not is irrelevant from our perspective. However, its evolution is joyously significant to us at Entertainment List. The joy is that our dedicated platform has made it clear to us that this moment is the "marker" we've been waiting for—the time to fully immerse ourselves in managing our favorite movies, shows, and more, all in one place.
+                    </p>
+                    <button onclick="closeWelcomeModal()" class="mt-3">Get Started</button>
+                </div>
+            </div>
+            <div class="status-bar">
+                <div class="status-bar-field">Click "Get Started" to continue</div>
             </div>
         </div>
     </div>
@@ -237,18 +219,123 @@
             background-color: #e0e0e0;
         }
         
-        .loading {
-            color: #666;
-            font-style: italic;
+        .tab-btn {
+            border: 1px solid #a0a0a0;
+            background-color: #d4d0c8;
+            margin-right: 2px;
+            padding: 2px 6px;
+            cursor: pointer;
+            outline: none;
         }
         
-        menu[role="tablist"] {
+        .tab-btn.active {
+            border-bottom: 1px solid #d4d0c8;
+            font-weight: bold;
+        }
+        
+        .compact-card {
+            border: 1px solid #a0a0a0;
+            padding: 4px;
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+            text-align: center;
+            background-color: white;
+        }
+        
+        .poster-card {
+            border: 1px solid #a0a0a0;
+            background-color: white;
+            height: 100%;
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
+            position: relative;
+            margin-bottom: 6px;
+            overflow: hidden;
         }
         
-        menu[role="tablist"] li {
-            margin-right: 5px;
+        .poster-card img {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 2/3;
+            object-fit: contain;
+            object-position: center top;
+        }
+        
+        .poster-card .info-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px;
+            font-size: 11px;
+            text-align: center;
+        }
+        
+        .poster-card .title {
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+        }
+        
+        .poster-card .rating {
+            display: inline-block;
+            background-color: #ffc107;
+            color: #000;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 10px;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal .window {
+            width: 90%;
+            max-width: 600px;
+        }
+        
+        .scrollable-row {
+            display: flex;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            gap: 8px;
+            padding: 4px;
+            scrollbar-width: thin;
+        }
+        
+        .scrollable-row::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        .scrollable-row::-webkit-scrollbar-thumb {
+            background: #a0a0a0;
+            border-radius: 4px;
+        }
+        
+        .scrollable-row::-webkit-scrollbar-track {
+            background: #d4d0c8;
+        }
+        
+        .scrollable-row .poster-item {
+            flex: 0 0 auto;
+            width: 200px;
+            margin-bottom: 8px;
         }
         
         @media (max-width: 768px) {
@@ -260,14 +347,52 @@
             .tree-view li a img {
                 margin-bottom: 5px;
             }
-            
-            menu[role="tablist"] {
-                justify-content: center;
+            .poster-card img {
+                width: 100%;
+                height: auto;
             }
         }
     </style>
     
     <script>
+        // Check if first-time visitor
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!localStorage.getItem('returningUser')) {
+                // Show welcome modal for first-time visitors
+                document.getElementById('welcome-modal').style.display = 'flex';
+                // Set flag in localStorage
+                localStorage.setItem('returningUser', 'true');
+            }
+            
+            // Set up tab functionality
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // Hide all panels
+                    document.querySelectorAll('.tab-panel').forEach(panel => {
+                        panel.style.display = 'none';
+                    });
+                    
+                    // Remove active class from all buttons
+                    tabButtons.forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    
+                    // Show the selected panel
+                    const panelId = 'panel-' + button.id.split('-')[1];
+                    document.getElementById(panelId).style.display = 'block';
+                    
+                    // Add active class to clicked button
+                    button.classList.add('active');
+                });
+            });
+        });
+        
+        // Close welcome modal
+        function closeWelcomeModal() {
+            document.getElementById('welcome-modal').style.display = 'none';
+        }
+        
         // Modal functions
         function openBookModal() {
             alert("Book feature coming soon!");
@@ -281,27 +406,31 @@
                 const movieList = document.getElementById('popular_movies_block');
                 movieList.innerHTML = '';
                 if (data.length === 0) {
-                    movieList.innerHTML = '<li>No movies found</li>';
+                    movieList.innerHTML = '<div class="poster-item"><div class="poster-card">No movies found</div></div>';
                     return;
                 }
-                data.forEach(movie => {
-                    const listItem = document.createElement('li');
-                    listItem.innerHTML = `
-                        <a href="/movies/${movie.id}" style="display: flex; align-items: center; padding: 5px 0;">
-                            <img src="${movie.poster_path || '{% static "images/no-poster.png" %}'}" alt="${movie.title}" style="width: 50px; height: auto; margin-right: 10px;">
-                            <div>
-                                <strong>${movie.title}</strong>
-                                <br>
-                                <small>Rating: ${movie.vote_average}/10</small>
-                            </div>
-                        </a>
+                data.slice(0, 10).forEach(movie => {
+                    const movieItem = document.createElement('div');
+                    movieItem.className = 'poster-item';
+                    movieItem.innerHTML = `
+                        <div class="poster-card">
+                            <a href="/movies/${movie.id}" style="text-decoration:none; color:inherit; display:block; height:100%;">
+                                <img src="${movie.poster_path || '{% static "images/no-poster.png" %}'}" 
+                                     alt="${movie.title}">
+                                <div class="info-overlay">
+                                    <div class="title">${movie.title}</div>
+                                    <div class="rating">${movie.vote_average}/10</div>
+                                </div>
+                            </a>
+                        </div>
                     `;
-                    movieList.appendChild(listItem);
+                    movieList.appendChild(movieItem);
                 });
             })
             .catch(error => {
                 console.error('Error fetching popular movies:', error);
-                document.getElementById('popular_movies_block').innerHTML = '<li>Failed to load movies</li>';
+                document.getElementById('popular_movies_block').innerHTML = 
+                    '<div class="poster-item"><div class="alert alert-danger">Failed to load movies</div></div>';
             });
             
         // Fetch popular TV shows
@@ -311,61 +440,37 @@
                 const tvList = document.getElementById('popular_tvshows_block');
                 tvList.innerHTML = '';
                 if (data.length === 0) {
-                    tvList.innerHTML = '<li>No TV shows found</li>';
+                    tvList.innerHTML = '<div class="poster-item"><div class="poster-card">No TV shows found</div></div>';
                     return;
                 }
-                data.forEach(show => {
-                    const listItem = document.createElement('li');
-                    listItem.innerHTML = `
-                        <a href="#" style="display: flex; align-items: center; padding: 5px 0;">
-                            <img src="${show.poster_path || '{% static "images/no-poster.png" %}'}" alt="${show.name}" style="width: 50px; height: auto; margin-right: 10px;">
-                            <div>
-                                <strong>${show.name}</strong>
-                                <br>
-                                <small>Rating: ${show.vote_average}/10</small>
-                            </div>
-                        </a>
+                data.slice(0, 10).forEach(show => {
+                    const showItem = document.createElement('div');
+                    showItem.className = 'poster-item';
+                    showItem.innerHTML = `
+                        <div class="poster-card">
+                            <a href="#" style="text-decoration:none; color:inherit; display:block; height:100%;">
+                                <img src="${show.poster_path || '{% static "images/no-poster.png" %}'}" 
+                                     alt="${show.name}">
+                                <div class="info-overlay">
+                                    <div class="title">${show.name}</div>
+                                    <div class="rating">${show.vote_average}/10</div>
+                                </div>
+                            </a>
+                        </div>
                     `;
-                    tvList.appendChild(listItem);
+                    tvList.appendChild(showItem);
                 });
             })
             .catch(error => {
                 console.error('Error fetching popular TV shows:', error);
-                document.getElementById('popular_tvshows_block').innerHTML = '<li>Failed to load TV shows</li>';
+                document.getElementById('popular_tvshows_block').innerHTML = 
+                    '<div class="poster-item"><div class="alert alert-danger">Failed to load TV shows</div></div>';
             });
             
-        // For books and music tabs - placeholder data until endpoints are ready
+        // For books and music tabs - placeholder data
         document.getElementById('popular_books_block').innerHTML = 
-            '<li><img src="https://64.media.tumblr.com/b1b34aa74e3df63058c136e3abb67f44/f2330a1cf397e970-9c/s400x600/32d2402d6fbfb4fdf2c478a8c871c6412e2441f4.jpg" alt="Coming Soon" ><br>Book integration coming soon!</li>';
+            '<div class="poster-item" style="width: 100%;"><div class="poster-card p-2" style="justify-content: center; align-items: center; display: flex; height: 140px;">Book integration coming soon!</div></div>';
         document.getElementById('popular_music_block').innerHTML = 
-            '<li><img src="https://64.media.tumblr.com/b1b34aa74e3df63058c136e3abb67f44/f2330a1cf397e970-9c/s400x600/32d2402d6fbfb4fdf2c478a8c871c6412e2441f4.jpg" alt="Coming Soon" ><br>Music integration coming soon!</li>';
-        
-        // Tab switching functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            const tabs = document.querySelectorAll('menu[role="tablist"] li[role="tab"]');
-            const tabPanels = document.querySelectorAll('div[role="tabpanel"]');
-            
-            tabs.forEach(tab => {
-                tab.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    
-                    // Deselect all tabs
-                    tabs.forEach(t => t.removeAttribute('aria-selected'));
-                    
-                    // Select clicked tab
-                    this.setAttribute('aria-selected', 'true');
-                    
-                    // Hide all tab panels
-                    tabPanels.forEach(panel => panel.style.display = 'none');
-                    
-                    // Show selected tab panel
-                    const targetId = this.querySelector('a').getAttribute('href');
-                    document.querySelector(targetId).style.display = 'block';
-                });
-            });
-            
-            // Fetch recent reviews (could be implemented in the future)
-            // fetchRecentReviews();
-        });
+            '<div class="poster-item" style="width: 100%;"><div class="poster-card p-2" style="justify-content: center; align-items: center; display: flex; height: 140px;">Music integration coming soon!</div></div>';
     </script>
 {% endblock %}

@@ -1,0 +1,200 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}{{ country.name }} | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">{{ country.name }}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <!-- Filter Section -->
+            <form method="get" action="" class="mb-4">
+                <div class="field-row">
+                    <label>Content Filter:</label>
+                    <div class="btn-group" role="group">
+                        <input type="radio" name="anime_filter" id="all" value="all" {% if anime_filter == 'all' %}checked{% endif %}>
+                        <label for="all">All Content</label>
+                        
+                        <input type="radio" name="anime_filter" id="anime_only" value="anime_only" {% if anime_filter == 'anime_only' %}checked{% endif %}>
+                        <label for="anime_only">Anime Only</label>
+                        
+                        <input type="radio" name="anime_filter" id="no_anime" value="no_anime" {% if anime_filter == 'no_anime' %}checked{% endif %}>
+                        <label for="no_anime">No Anime</label>
+                    </div>
+                    
+                    <label for="view_type" class="ms-3">View:</label>
+                    <div class="btn-group" role="group">
+                        <input type="radio" name="view_type" id="grid" value="grid" {% if view_type == 'grid' %}checked{% endif %}>
+                        <label for="grid">Grid</label>
+                        <input type="radio" name="view_type" id="table" value="table" {% if view_type == 'table' %}checked{% endif %}>
+                        <label for="table">Table</label>
+                    </div>
+                    
+                    <button type="submit" class="ms-2">Apply Filters</button>
+                </div>
+            </form>
+
+            <!-- Movies Section -->
+            <h4 class="mb-3">Movies</h4>
+            {% if movies %}
+                <!-- Grid View -->
+                {% if view_type == 'grid' %}
+                <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                    {% for movie in movies %}
+                    <div class="col">
+                        <div class="card h-100">
+                            {% if movie.poster %}
+                            <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}">
+                            {% else %}
+                            <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
+                                <span>No Image</span>
+                            </div>
+                            {% endif %}
+                            <div class="card-body">
+                                <h5 class="card-title">{{ movie.title }}</h5>
+                                <p class="card-text">
+                                    {% if movie.release_date %}
+                                    <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                    {% endif %}
+                                    {% if movie.is_anime %}
+                                    <span class="badge bg-primary">Anime</span>
+                                    {% endif %}
+                                </p>
+                                <div class="mt-2">
+                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <!-- Table View -->
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Release Date</th>
+                                <th>Type</th>
+                                <th>Rating</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for movie in movies %}
+                            <tr>
+                                <td><a href="{% url 'movie_page' movie.tmdb_id %}">{{ movie.title }}</a></td>
+                                <td>{{ movie.release_date|date:"M d, Y" }}</td>
+                                <td>{% if movie.is_anime %}<span class="badge bg-primary">Anime</span>{% else %}Movie{% endif %}</td>
+                                <td>{{ movie.rating }} / 10</td>
+                                <td><a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="alert alert-info">No movies found from this country.</div>
+            {% endif %}
+
+            <!-- TV Shows Section -->
+            <h4 class="mt-4 mb-3">TV Shows</h4>
+            {% if tv_shows %}
+                <!-- Grid View -->
+                {% if view_type == 'grid' %}
+                <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                    {% for show in tv_shows %}
+                    <div class="col">
+                        <div class="card h-100">
+                            {% if show.poster %}
+                            <img src="{{ show.poster }}" class="card-img-top" alt="{{ show.title }}">
+                            {% else %}
+                            <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
+                                <span>No Image</span>
+                            </div>
+                            {% endif %}
+                            <div class="card-body">
+                                <h5 class="card-title">{{ show.title }}</h5>
+                                <p class="card-text">
+                                    {% if show.first_air_date %}
+                                    <small class="text-muted">{{ show.first_air_date|date:"Y" }}</small>
+                                    {% endif %}
+                                    {% if show.is_anime %}
+                                    <span class="badge bg-primary">Anime</span>
+                                    {% endif %}
+                                </p>
+                                <div class="mt-2">
+                                    <a href="{% url 'tv_show_page' show.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <!-- Table View -->
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>First Air Date</th>
+                                <th>Type</th>
+                                <th>Rating</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for show in tv_shows %}
+                            <tr>
+                                <td>{{ show.title }}</td>
+                                <td>{{ show.first_air_date|date:"M d, Y" }}</td>
+                                <td>{% if show.is_anime %}<span class="badge bg-primary">Anime</span>{% else %}TV Show{% endif %}</td>
+                                <td>{{ show.rating }} / 10</td>
+                                <td><a href="{% url 'tv_show_page' show.tmdb_id %}" class="btn btn-sm btn-primary">View</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="alert alert-info">No TV shows found from this country.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    // JavaScript to automatically submit the form when view type changes
+    document.getElementById('grid').addEventListener('change', function() {
+        this.form.submit();
+    });
+    
+    document.getElementById('table').addEventListener('change', function() {
+        this.form.submit();
+    });
+    
+    document.getElementById('all').addEventListener('change', function() {
+        this.form.submit();
+    });
+    
+    document.getElementById('anime_only').addEventListener('change', function() {
+        this.form.submit();
+    });
+    
+    document.getElementById('no_anime').addEventListener('change', function() {
+        this.form.submit();
+    });
+</script>
+{% endblock %}

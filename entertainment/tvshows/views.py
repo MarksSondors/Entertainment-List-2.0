@@ -205,7 +205,7 @@ class PopularTVShowsView(APIView):
     )
     def get(self, request):
         popular_shows = TVShowsService().get_popular_shows()
-        popular_shows = sorted(popular_shows['results'], key=lambda x: x['popularity'], reverse=True)[:5]
+        popular_shows = sorted(popular_shows['results'], key=lambda x: x['popularity'], reverse=True)[:10]
         for show in popular_shows:
             show['poster_path'] = f"https://image.tmdb.org/t/p/w500{show['poster_path']}"
         return Response(popular_shows, status=status.HTTP_200_OK)

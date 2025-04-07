@@ -1,0 +1,57 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}Browse by Country | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">Country Explorer</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="field-row mb-3">
+                <label>Address:</label>
+                <div class="field-row-stacked" style="width: 100%">
+                    <input type="text" readonly value="C:\Entertainment\Countries\" style="width: 100%">
+                </div>
+            </div>
+            
+            <div class="sunken-panel p-3" style="min-height: 300px;">
+                {% if countries %}
+                    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                        {% for country in countries %}
+                        <div class="col">
+                            <a href="{% url 'browse_by_country_detail' country.id %}" class="text-decoration-none text-dark">
+                                <div class="text-center">
+                                    <img src="https://www.crwflags.com/fotw/images/{{ country.iso_3166_1|lower|slice:':1' }}/{{ country.iso_3166_1|lower }}.gif" alt="{{ country.name }} flag" width="64" height="40" onerror="this.src='{% static 'images/flag-placeholder.png' %}';" style="border: 1px solid #ccc;">
+                                    <div style="max-width: 80px; margin: auto; overflow: hidden; text-overflow: ellipsis;">{{ country.name }}</div>
+                                </div>
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        No countries available.
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="field-row mt-3" style="justify-content: space-between;">
+                <div>
+                    <span>{{ countries.count }} item(s)</span>
+                </div>
+                <div>
+                    <button class="btn" onclick="window.history.back()">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

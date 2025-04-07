@@ -14,6 +14,10 @@ urlpatterns = [
     path('genres/', views.browse_by_genre, name='browse_by_genre'),
     path('genres/<int:genre_id>/', views.genre_detail, name='browse_by_genre_detail'),
 
+    # countries
+    path('countries/', views.browse_by_country, name='browse_by_country'),
+    path('countries/<int:country_id>/', views.country_detail, name='browse_by_country_detail'),
+
     # profile
     path('profile/', views.profile_page, name='profile_page'),
     path('profile/<str:username>/', views.profile_page, name='profile_with_username'),
