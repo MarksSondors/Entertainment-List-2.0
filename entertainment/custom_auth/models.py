@@ -67,6 +67,10 @@ class Country(models.Model):
 
     def __str__(self):
         return self.name
+    
+    def get_absolute_url(self):
+        """Get the absolute URL for the country page."""
+        return f"/countries/{self.id}/"
 
 class Keyword(models.Model):
     name = models.CharField(max_length=100)

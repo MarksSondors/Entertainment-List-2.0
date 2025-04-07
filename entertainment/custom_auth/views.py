@@ -252,3 +252,40 @@ def person_detail(request, person_id):
     }
     
     return render(request, 'people_page.html', context)
+
+def browse_by_country(request):
+    """
+    View for displaying all available countries for browsing
+    """
+    countries = Country.objects.all().order_by('name')
+    return render(request, 'browse_by_country.html', {
+        'countries': countries,
+    })
+
+def country_detail(request, country_id):
+    """
+    View for displaying all movies and TV shows from a specific country
+    with filtering options
+    """
+    country = get_object_or_404(Country, pk=country_id)
+    anime_filter = request.GET.get('anime_filter', 'all')
+    view_type = request.GET.get('view_type', 'grid')
+    
+    # Filter movies and TV shows based on anime_filter
+    if (anime_filter == 'anime_only'):
+        movies = Movie.objects.filter(countries=country, is_anime=True)
+        tv_shows = TVShow.objects.filter(countries=country, is_anime=True)
+    elif (anime_filter == 'no_anime'):
+        movies = Movie.objects.filter(countries=country, is_anime=False)
+        tv_shows = TVShow.objects.filter(countries=country, is_anime=False)
+    else:  # 'all' is the default
+        movies = Movie.objects.filter(countries=country)
+        tv_shows = TVShow.objects.filter(countries=country)
+    
+    return render(request, 'country_detail.html', {
+        'country': country,
+        'movies': movies,
+        'tv_shows': tv_shows,
+        'anime_filter': anime_filter,
+        'view_type': view_type,
+    })
