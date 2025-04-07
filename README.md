@@ -21,7 +21,7 @@ Entertainment-List-2.0 is a Django-based platform that allows users to:
 ## Technologies Used
 
 - **Backend**: Django (Python)
-- **Database**: SQLite
+- **Database**: PostgreSQL
 - **Frontend**: HTML, CSS, JavaScript
 - **Containerization**: Docker and Docker Compose
 - **Reverse Proxy**: Traefik with automatic HTTPS

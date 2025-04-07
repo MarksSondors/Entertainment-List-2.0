@@ -10,6 +10,7 @@ services:
     env_file:
       - .env
     depends_on:
+      - postgres
       - redis
     labels:
       - "traefik.enable=true"
@@ -18,6 +19,25 @@ services:
     networks:
       - webnet
     restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=entertainment
+    ports:
+      - "5432:5432"
+    networks:
+      - webnet
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: "redis:alpine"
@@ -65,3 +85,4 @@ networks:
 
 volumes:
   redis_data:
+  postgres_data:

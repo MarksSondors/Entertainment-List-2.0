@@ -6,6 +6,7 @@ until nc -z redis 6379; do
 done
 echo "Redis is up - continuing..."
 
+
 # Apply database migrations
 echo "Applying migrations..."
 python manage.py migrate
@@ -17,6 +18,10 @@ python manage.py collectstatic --noinput
 # Start Django Q cluster in the background
 echo "Starting Django Q cluster..."
 python manage.py qcluster &
+
+# create tasks
+echo "Creating tasks..."
+python manage.py update_movies --setup
 
 # Start Django server
 echo "Starting Django server..."
