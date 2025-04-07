@@ -31,6 +31,7 @@ def logout_request(request):
         logout(request)  # Use the logout function
     return redirect('login_page')
 
+@login_required
 def home_page(request):
     if request.user.is_authenticated:
         context = {
@@ -40,6 +41,7 @@ def home_page(request):
     else:
         return redirect('login_page')
 
+@login_required
 def browse_by_genre(request):
     anime_only = request.GET.get('anime_only') == 'on'
     genres = Genre.objects.all()
@@ -48,6 +50,7 @@ def browse_by_genre(request):
         'anime_only': anime_only,
     })
 
+@login_required
 def genre_detail(request, genre_id):
     genre = get_object_or_404(Genre, pk=genre_id)
     anime_filter = request.GET.get('anime_filter', 'all')
@@ -253,6 +256,7 @@ def person_detail(request, person_id):
     
     return render(request, 'people_page.html', context)
 
+@login_required
 def browse_by_country(request):
     """
     View for displaying all available countries for browsing
@@ -262,6 +266,7 @@ def browse_by_country(request):
         'countries': countries,
     })
 
+@login_required
 def country_detail(request, country_id):
     """
     View for displaying all movies and TV shows from a specific country
