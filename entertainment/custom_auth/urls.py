@@ -28,4 +28,8 @@ urlpatterns = [
     # person
     path('person/<int:person_id>/', views.person_detail, name='person_detail'),
 
+    #reviews
+    path('reviews/recent/', views.recent_reviews, name='recent_reviews'),
+
+
 ]

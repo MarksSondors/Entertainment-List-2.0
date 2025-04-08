@@ -9,3 +9,4 @@ django-q2>=1.7.6
 redis>=5.2.1
 psycopg>=3.2.6
 gunicorn>=23.0.0
+numpy>=2.2.4

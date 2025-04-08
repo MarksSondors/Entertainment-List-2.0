@@ -19,6 +19,10 @@ from django.http import JsonResponse
 
 from django.db.models import Count, Q
 from django.utils import timezone
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from .services.recommendation import MovieRecommender
 
 # Create your views here.
 
@@ -640,3 +644,26 @@ def all_movies_page(request):
     }
     
     return render(request, 'all_movies_page.html', context)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def movie_recommendations(request):
+    """Get personalized movie recommendations for the current user"""
+    limit = int(request.GET.get('limit', 10))
+    recommender = MovieRecommender()
+    recommendations = recommender.get_recommendations_for_user(request.user.id, limit)
+    
+    # Format the response data
+    data = []
+    for movie in recommendations:
+        data.append({
+            'id': movie.id,
+            'tmdb_id': movie.tmdb_id,
+            'title': movie.title,
+            'poster': movie.poster,
+            'release_date': movie.release_date,
+            'rating': movie.rating,
+            'collection': movie.collection.name if movie.collection else None
+        })
+    
+    return Response(data)

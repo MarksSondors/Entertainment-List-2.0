@@ -18,4 +18,5 @@ urlpatterns = [
     path('images/', views.MovieImagesView.as_view(), name='movie_images'),
     path('watchlist/', views.WatchlistMovie.as_view(), name='watchlist'),
     path('reviews/', views.MovieReviewView.as_view(), name='movie_reviews'),
+    path('recommendations/', views.movie_recommendations, name='movie_recommendations'),
 ] + router.urls

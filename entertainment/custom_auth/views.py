@@ -2,12 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout  # Import the logout function
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.http import JsonResponse
+from django.db.models import Q
+from django.contrib.contenttypes.models import ContentType
 # Create your views here.
 # import services
 
 from .models import *
 from movies.models import Movie
-
 
 def login_page(request):
     if request.user.is_authenticated:
@@ -294,3 +296,41 @@ def country_detail(request, country_id):
         'anime_filter': anime_filter,
         'view_type': view_type,
     })
+
+def recent_reviews(request):
+    """
+    Returns recent reviews across all content types as JSON
+    """
+    # Fetch 10 most recent reviews
+    reviews = Review.objects.all().order_by('-date_reviewed')[:10]
+    
+    # Format data for frontend
+    review_data = []
+    for review in reviews:
+        # Get the content object that was reviewed
+        content_object = review.media
+        
+        # Determine content type and title
+        if isinstance(content_object, Movie):
+            content_type = "Movie"
+            title = content_object.title
+        elif isinstance(content_object, TVShow):
+            content_type = "TV Show"
+            title = content_object.name
+            if review.season:
+                title += f" - {review.season}"
+        else:
+            # Default fallback
+            content_type = review.content_type.model.capitalize()
+            title = getattr(content_object, 'title', 'Unknown')
+        
+        # Build review data object
+        review_data.append({
+            'username': review.user.username,
+            'content': review.review_text[:100] + '...' if review.review_text and len(review.review_text) > 100 else review.review_text,
+            'title': title,
+            'rating': review.rating,
+            'content_type': content_type,
+            'created_at': review.date_reviewed.strftime('%Y-%m-%d %H:%M')
+        })
+    return JsonResponse(review_data, safe=False)
