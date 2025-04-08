@@ -31,5 +31,4 @@ urlpatterns = [
     #reviews
     path('reviews/recent/', views.recent_reviews, name='recent_reviews'),
 
-
 ]
