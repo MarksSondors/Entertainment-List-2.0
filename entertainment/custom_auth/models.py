@@ -334,10 +334,10 @@ class Review(models.Model):
     # Review content
     rating = models.FloatField()
     review_text = models.TextField(blank=True, null=True)
-    date_reviewed = models.DateTimeField(auto_now_add=True)
+    date_added = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        ordering = ['-date_reviewed']
+        ordering = ['-date_added']
         # Update unique constraint to include season for TV shows
         constraints = [
             models.UniqueConstraint(

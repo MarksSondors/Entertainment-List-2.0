@@ -251,7 +251,7 @@ body {
                             const row = document.createElement('tr');
                             
                             // Format the date
-                            const reviewDate = new Date(review.date_reviewed);
+                            const reviewDate = new Date(review.date_added);
                             const formattedDate = reviewDate.toLocaleDateString('en-US', { 
                                 year: 'numeric', 
                                 month: 'short', 

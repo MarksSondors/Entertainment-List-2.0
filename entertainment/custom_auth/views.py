@@ -302,7 +302,7 @@ def recent_reviews(request):
     Returns recent reviews across all content types as JSON
     """
     # Fetch 10 most recent reviews
-    reviews = Review.objects.all().order_by('-date_reviewed')[:10]
+    reviews = Review.objects.all().order_by('-date_added')[:10]
     
     # Format data for frontend
     review_data = []
@@ -331,6 +331,123 @@ def recent_reviews(request):
             'title': title,
             'rating': review.rating,
             'content_type': content_type,
-            'created_at': review.date_reviewed.strftime('%Y-%m-%d %H:%M')
+            'created_at': review.date_added.strftime('%Y-%m-%d %H:%M')
         })
     return JsonResponse(review_data, safe=False)
+
+def recent_activity(request):
+    """
+    Returns recently added reviews, watchlist items and movies added to the database, combines them in the order of most recent first.
+    """
+    # Fetch 10 most recent reviews
+    reviews = Review.objects.all().order_by('-date_added')[:10]
+    
+    # Fetch 10 most recent watchlist items
+    watchlist_items = Watchlist.objects.all().order_by('-date_added')[:10]
+    
+    # Fetch 10 most recent movies added to the database
+    movies = Movie.objects.all().order_by('-date_added')[:10]
+    
+    # Format and combine activities
+    activities = []
+    
+    # Format reviews
+    for review in reviews:
+        content_object = review.media
+        poster_path = None
+        tmdb_id = None
+        
+        # Determine content type and title
+        if isinstance(content_object, Movie):
+            content_type = "Movie"
+            title = content_object.title
+            poster_path = content_object.poster
+            tmdb_id = content_object.tmdb_id
+        elif isinstance(content_object, TVShow):
+            content_type = "TV Show"
+            title = content_object.name
+            poster_path = content_object.poster  # Assuming TVShow has a poster field
+            tmdb_id = content_object.tmdb_id     # Assuming TVShow has a tmdb_id field
+            if review.season:
+                title += f" - {review.season}"
+        else:
+            # Default fallback
+            content_type = review.content_type.model.capitalize()
+            title = getattr(content_object, 'title', 'Unknown')
+        
+        activities.append({
+            'type': 'review',
+            'username': review.user.username,
+            'content': review.review_text[:100] + '...' if review.review_text and len(review.review_text) > 100 else review.review_text,
+            'title': title,
+            'rating': review.rating,
+            'content_type': content_type,
+            'date': review.date_added,
+            'timestamp': review.date_added.strftime('%Y-%m-%d %H:%M'),
+            'poster_path': poster_path,
+            'tmdb_id': tmdb_id
+        })
+    
+    # Format watchlist items
+    for item in watchlist_items:
+        content_object = item.media
+        poster_path = None
+        tmdb_id = None
+        
+        # Determine content type and title
+        if isinstance(content_object, Movie):
+            content_type = "Movie"
+            title = content_object.title
+            poster_path = content_object.poster
+            tmdb_id = content_object.tmdb_id
+        elif isinstance(content_object, TVShow):
+            content_type = "TV Show"
+            title = content_object.name
+            poster_path = content_object.poster  # Assuming TVShow has a poster field
+            tmdb_id = content_object.tmdb_id     # Assuming TVShow has a tmdb_id field
+        else:
+            # Default fallback
+            content_type = item.content_type.model.capitalize()
+            title = getattr(content_object, 'title', 'Unknown')
+            
+        activities.append({
+            'type': 'watchlist',
+            'username': item.user.username,
+            'title': title,
+            'content_type': content_type,
+            'date': item.date_added,
+            'timestamp': item.date_added.strftime('%Y-%m-%d %H:%M'),
+            'action': 'added to watchlist',
+            'poster_path': poster_path,
+            'tmdb_id': tmdb_id
+        })
+    
+    # Format new movies
+    for movie in movies:
+        activities.append({
+            'type': 'new_content',
+            'username': movie.added_by.username if movie.added_by else 'System',
+            'title': movie.title,
+            'content_type': 'Movie',
+            'date': movie.date_added,
+            'timestamp': movie.date_added.strftime('%Y-%m-%d %H:%M'),
+            'action': 'added to database',
+            'poster_path': movie.poster,
+            'tmdb_id': movie.tmdb_id
+        })
+    
+    # Sort all activities by date (most recent first)
+    activities.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Remove the date field used for sorting (keeping only the formatted timestamp)
+    for activity in activities:
+        del activity['date']
+    
+    # Take only the first 15 activities across all types
+    activities = activities[:15]
+    
+    # Return as JSON
+    return JsonResponse(activities, safe=False)
+
+
+

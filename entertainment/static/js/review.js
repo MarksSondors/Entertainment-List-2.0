@@ -67,13 +67,13 @@ function submitReview(contentId, contentType) {
             review_id: reviewId,
             rating: rating,
             review_text: reviewText,
-            date_reviewed: watchDate
+            date_added: watchDate
         }) : 
         JSON.stringify({
             [`${contentType}_id`]: contentId,
             rating: rating,
             review_text: reviewText,
-            date_reviewed: watchDate
+            date_added: watchDate
         });
     
     fetch(endpoint, {
@@ -169,7 +169,7 @@ function loadReviews(contentId, contentType) {
             const row = document.createElement('tr');
             
             // Format the review date
-            const reviewDate = new Date(review.date_reviewed);
+            const reviewDate = new Date(review.date_added);
             const formattedReviewDate = reviewDate.toLocaleDateString('en-US', { 
                 year: 'numeric', 
                 month: 'short', 

@@ -31,4 +31,7 @@ urlpatterns = [
     #reviews
     path('reviews/recent/', views.recent_reviews, name='recent_reviews'),
 
+    #activity
+    path('activity/recent/', views.recent_activity, name='recent_activity'),
+
 ]

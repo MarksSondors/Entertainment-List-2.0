@@ -149,6 +149,7 @@ class MovieViewSet(viewsets.ViewSet):
             if add_to_watchlist:
                 # Add to watchlist if it already exists
                 content_type = ContentType.objects.get_for_model(Movie)
+                print(f"Current user: {request.user.username}, ID: {request.user.id}")
                 watchlist_item, created = Watchlist.objects.get_or_create(
                     user=request.user,
                     content_type=content_type,
@@ -170,7 +171,7 @@ class MovieViewSet(viewsets.ViewSet):
         if movie_backdrop:
             movie_backdrop = f"https://image.tmdb.org/t/p/original{movie_backdrop}"
 
-        movie = create_movie(movie_id, movie_poster, movie_backdrop, is_anime, add_to_watchlist)
+        movie = create_movie(movie_id, movie_poster, movie_backdrop, is_anime, add_to_watchlist, request.user.id)
         if not movie:
             return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
         
@@ -311,7 +312,7 @@ class MovieReviewView(APIView):
             OpenApiParameter(name="movie_id", description="ID of the movie to retrieve reviews for", required=True, type=int),
         ],
         responses={200: OpenApiExample("Movie Reviews", value=[
-            {"id": 1, "user": "username", "rating": 8.5, "review_text": "Great movie!", "date_reviewed": "2025-04-04T12:00:00Z"}
+            {"id": 1, "user": "username", "rating": 8.5, "review_text": "Great movie!", "date_added": "2025-04-04T12:00:00Z"}
         ])}
     )
     def get(self, request):
@@ -337,7 +338,7 @@ class MovieReviewView(APIView):
                 "user": review.user.username,
                 "rating": review.rating,
                 "review_text": review.review_text,
-                "date_reviewed": review.date_reviewed
+                "date_added": review.date_added
             })
             
         return Response(result, status=status.HTTP_200_OK)
@@ -356,7 +357,7 @@ class MovieReviewView(APIView):
         movie_id = request.data.get('movie_id')
         rating = request.data.get('rating')
         review_text = request.data.get('review_text', '')
-        date_reviewed = request.data.get('date_reviewed', timezone.now())
+        date_added = request.data.get('date_added', timezone.now())
         
         if not movie_id:
             return Response({"error": "Movie ID is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -395,7 +396,7 @@ class MovieReviewView(APIView):
             object_id=movie_id,
             rating=rating,
             review_text=review_text,
-            date_reviewed=date_reviewed
+            date_added=date_added
         )
             
         return Response({"message": "Review added successfully", "id": review.id}, status=status.HTTP_201_CREATED)
@@ -414,7 +415,7 @@ class MovieReviewView(APIView):
         review_id = request.data.get('review_id')
         rating = request.data.get('rating')
         review_text = request.data.get('review_text')
-        date_reviewed = request.data.get('date_reviewed', timezone.now())
+        date_added = request.data.get('date_added', timezone.now())
 
         
         if not review_id:
@@ -440,9 +441,9 @@ class MovieReviewView(APIView):
         if review_text is not None:
             review.review_text = review_text
         
-        print(f"Date reviewed: {date_reviewed}")
-        if date_reviewed is not None:
-            review.date_reviewed = date_reviewed
+        print(f"Date reviewed: {date_added}")
+        if date_added is not None:
+            review.date_added = date_added
             
         review.save()
         return Response({"message": "Review updated successfully"}, status=status.HTTP_200_OK)
@@ -585,7 +586,7 @@ def all_movies_page(request):
             'username': review.user.username,
             'rating': review.rating,
             'review_text': review.review_text,
-            'date_reviewed': review.date_reviewed
+            'date_added': review.date_added
         })
     
     # Categorize the movies

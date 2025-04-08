@@ -185,7 +185,7 @@ def add_to_movie_watchlist(movie, user_id=1):
         object_id=movie.id
     )
 
-def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False):
+def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=1):
     """Main function to create a movie from TMDB ID"""
     movies_service = MoviesService()
     
@@ -201,7 +201,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     genre_instances, country_instances, keyword_instances = process_genres_countries_keywords(movie_details)
     
     # Create the movie instance
-    movie = Movie.objects.create(**movie_dict)
+    movie = Movie.objects.create(**movie_dict, added_by=CustomUser.objects.get(id=user_id))
     movie.genres.set(genre_instances)
     movie.countries.set(country_instances)
     movie.keywords.set(keyword_instances)
@@ -211,7 +211,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     
     # Add to watchlist if specified
     if add_to_watchlist:
-        add_to_movie_watchlist(movie)
+        add_to_movie_watchlist(movie, user_id)
     
     # Process cast and crew
     credits = movie_details.get('credits', {})

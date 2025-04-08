@@ -268,7 +268,7 @@ body {
                     <td style="padding: 4px; border-bottom: 1px solid #ddd;">{{ review.user.username }}</td>
                     <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">{{ review.rating }}/10</td>
                     <td style="padding: 4px; border-bottom: 1px solid #ddd;">{{ review.review_text }}</td>
-                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">{{ review.date_reviewed|date:"M d, Y" }}</td>
+                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">{{ review.date_added|date:"M d, Y" }}</td>
                 </tr>
                 {% empty %}
                 <tr>
