@@ -47,8 +47,8 @@ class Movie(Media):
 
     # user related fields
     added_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='added_movies', blank=True, null=True)
-    added_on = models.DateTimeField(auto_now_add=True)
-    updated_on = models.DateTimeField(auto_now=True)
+    date_added = models.DateTimeField(auto_now_add=True)
+    date_updated = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.title

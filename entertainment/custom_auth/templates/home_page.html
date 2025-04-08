@@ -165,7 +165,7 @@
             <!-- Recent Reviews - Also more compact -->
             <div class="window" style="width: 100%;">
                 <div class="title-bar">
-                    <div class="title-bar-text">Recent Community Reviews</div>
+                    <div class="title-bar-text">Recent Community Activity</div>
                     <div class="title-bar-controls">
                         <button aria-label="Minimize"></button>
                         <button aria-label="Maximize"></button>
@@ -173,17 +173,12 @@
                     </div>
                 </div>
                 <div class="window-body" style="background-color: #eee; color: #333; font-family: 'MS Sans Serif', sans-serif; padding: 8px;">
-                    <div style="padding: 5px; border: 1px inset #d5d5d5;">
-                        <ul id="recent_reviews" class="tree-view" style="margin: 0; padding: 0 0 0 16px;">
-                            <li>> john_doe: "Amazing movie, a must-watch!" <br> Movie: Inception <br> Rating: ★★★★★</li>
-                            <li>> jane_smith: "Not my cup of tea, but well-made." <br> Movie: Titanic <br> Rating: ★★★☆☆</li>
-                            <li>> movie_buff99: "A cinematic masterpiece!" <br> Movie: The Godfather <br> Rating: ★★★★★</li>
-                            <li>> casual_viewer: "It was okay, nothing special." <br> Movie: Avatar <br> Rating: ★★☆☆☆</li>
-                            <li>> critic101: "Overhyped, but still enjoyable." <br> Movie: The Dark Knight <br> Rating: ★★★★☆</li>
+                    <div style="padding: 5px; border: 1px inset #d5d5d5; height: 500px; overflow-y: auto;">
+                        <ul id="recent_activity" class="tree-view" style="margin: 0;">
                         </ul>
                     </div>
                     <div class="field-row" style="justify-content: flex-end; margin-top: 8px;">
-                        <button>See All Reviews</button>
+                        <button>See All Activity</button>
                     </div>
                 </div>
                 <div class="status-bar">
@@ -373,6 +368,107 @@
                 height: auto;
             }
         }
+        
+        .activity-item {
+            margin-bottom: 10px;
+            background-color: #ffffff;
+            border: 1px solid #a0a0a0;
+            list-style-type: none;
+            transition: background-color 0.2s;
+        }
+        
+        .activity-item:hover {
+            background-color: #efefef;
+        }
+        
+        .activity-link {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        
+        .activity-content {
+            display: flex;
+            padding: 8px;
+        }
+        
+        .activity-poster {
+            width: 60px;
+            height: 90px;
+            object-fit: cover;
+            border: 1px solid #d0d0d0;
+            margin-right: 10px;
+        }
+        
+        .activity-info {
+            flex: 1;
+        }
+        
+        .activity-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+        
+        .activity-username {
+            font-weight: bold;
+            color: #0000A0;
+        }
+        
+        .activity-timestamp {
+            color: #666;
+            font-size: 11px;
+        }
+        
+        .activity-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        
+        .activity-text {
+            font-style: italic;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+        
+        .activity-rating {
+            display: inline-block;
+            font-weight: bold;
+            font-size: 18px;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .high-rating {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .mid-rating {
+            background-color: #FFC107;
+            color: black;
+        }
+        
+        .low-rating {
+            background-color: #F44336;
+            color: white;
+        }
+        
+        .rating-max {
+            font-size: 12px;
+            font-weight: normal;
+        }
+        
+        .activity-action {
+            font-size: 12px;
+            color: #555;
+        }
+        
+        #recent_activity {
+            padding: 0;
+            margin: 0;
+        }
     </style>
     
     <script>
@@ -528,32 +624,93 @@
                     '<div class="poster-item"><div class="alert alert-danger">Failed to load recommendations</div></div>';
             });
             
-        // Fetch recent reviews
-        fetch('/reviews/recent/')
+        // Fetch recent activity
+        fetch('/activity/recent/')
             .then(response => response.json())
             .then(data => {
-                const reviewsList = document.getElementById('recent_reviews');
-                reviewsList.innerHTML = '';
+                const activityList = document.getElementById('recent_activity');
+                activityList.innerHTML = '';
                 
                 if (data.length === 0) {
-                    reviewsList.innerHTML = '<li>No reviews yet. Be the first to share your thoughts!</li>';
+                    activityList.innerHTML = '<li class="activity-empty">No activity yet. Be the first to contribute!</li>';
                     return;
                 }
                 
-                data.slice(0, 5).forEach(review => {
-                    const reviewItem = document.createElement('li');
+                data.slice(0, 10).forEach(activity => {
+                    const activityItem = document.createElement('li');
+                    activityItem.className = 'activity-item';
                     
-                    // Create star rating display
-                    let stars = '';
-                    for (let i = 0; i < 10; i++) {
-                        stars += i < Math.round(review.rating) ? '★' : '☆';
+                    // Build the poster placeholder - default poster if none available
+                    const posterPath = activity.poster_path || 'https://via.placeholder.com/60x90/333333/FFFFFF?text=No+Image';
+                    
+                    // Set the URL based on content type
+                    let detailUrl = '#';
+                    if (activity.content_type === 'Movie' && activity.tmdb_id) {
+                        detailUrl = `/movies/${activity.tmdb_id}`;
+                    } else if (activity.content_type === 'TV Show' && activity.tmdb_id) {
+                        detailUrl = `/tvshows/${activity.tmdb_id}`;
                     }
                     
-                    // Determine content type label (Movie, TV Show, etc.)
-                    const contentType = review.content_type || 'Movie';
+                    // Handle different types of activities with improved layout
+                    if (activity.type === 'review') {
+                        // Create a cleaner rating display
+                        const ratingValue = Math.round(activity.rating);
+                        const ratingClass = ratingValue >= 7 ? 'high-rating' : 
+                                         ratingValue >= 5 ? 'mid-rating' : 'low-rating';
+                        
+                        activityItem.innerHTML = `
+                            <a href="${detailUrl}" class="activity-link">
+                                <div class="activity-content">
+                                    <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                    <div class="activity-info">
+                                        <div class="activity-header">
+                                            <span class="activity-username">${activity.username}</span>
+                                            <span class="activity-timestamp">${activity.timestamp}</span>
+                                        </div>
+                                        <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                        <div class="activity-text">"${activity.content}"</div>
+                                        <div class="activity-rating ${ratingClass}">${ratingValue}<span class="rating-max">/10</span></div>
+                                    </div>
+                                </div>
+                            </a>
+                        `;
+                    } 
+                    else if (activity.type === 'watchlist') {
+                        activityItem.innerHTML = `
+                            <a href="${detailUrl}" class="activity-link">
+                                <div class="activity-content">
+                                    <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                    <div class="activity-info">
+                                        <div class="activity-header">
+                                            <span class="activity-username">${activity.username}</span>
+                                            <span class="activity-timestamp">${activity.timestamp}</span>
+                                        </div>
+                                        <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                        <div class="activity-action">${activity.action}</div>
+                                    </div>
+                                </div>
+                            </a>
+                        `;
+                    }
+                    else if (activity.type === 'new_content') {
+                        activityItem.innerHTML = `
+                            <a href="${detailUrl}" class="activity-link">
+                                <div class="activity-content">
+                                    <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                    <div class="activity-info">
+                                        <div class="activity-header">
+                                            <span class="activity-username">${activity.username}</span>
+                                            <span class="activity-timestamp">${activity.timestamp}</span>
+                                        </div>
+                                        <div class="activity-title">${activity.title}</div>
+                                        <div class="activity-action">${activity.content_type} ${activity.action}</div>
+                                    </div>
+                                </div>
+                            </a>
+                        `;
+                    }
                     
-                    reviewItem.innerHTML = `> ${review.username}: "${review.content}" <br> ${contentType}: ${review.title} <br> Rating: ${stars}`;
-                    reviewsList.appendChild(reviewItem);
+                    activityList.appendChild(activityItem);
                 });
                 
                 // Update last updated time
@@ -562,9 +719,9 @@
                     'Last updated: ' + now.toLocaleTimeString();
             })
             .catch(error => {
-                console.error('Error fetching recent reviews:', error);
-                document.getElementById('recent_reviews').innerHTML = 
-                    '<li>Failed to load reviews. Please try again later.</li>';
+                console.error('Error fetching recent activity:', error);
+                document.getElementById('recent_activity').innerHTML = 
+                    '<li>Failed to load activity. Please try again later.</li>';
             });
     </script>
 {% endblock %}
