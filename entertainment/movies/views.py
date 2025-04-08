@@ -149,7 +149,6 @@ class MovieViewSet(viewsets.ViewSet):
             if add_to_watchlist:
                 # Add to watchlist if it already exists
                 content_type = ContentType.objects.get_for_model(Movie)
-                print(f"Current user: {request.user.username}, ID: {request.user.id}")
                 watchlist_item, created = Watchlist.objects.get_or_create(
                     user=request.user,
                     content_type=content_type,
