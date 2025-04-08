@@ -21,8 +21,8 @@ class Collection(models.Model):
     
 
 class Movie(Media):
-    poster = models.ImageField(upload_to='movie_posters/', blank=True, null=True)
-    backdrop = models.ImageField(upload_to='movie_backdrops/', blank=True, null=True)
+    poster = models.URLField(blank=True, null=True)
+    backdrop = models.URLField(blank=True, null=True)
 
     release_date = models.DateField()
     
@@ -110,6 +110,14 @@ class Movie(Media):
             role="Actor"
         ).order_by('order')
     
+    @property
+    def crew(self):
+        """Get all crew members of this movie."""
+        return MediaPerson.objects.select_related('person').filter(
+            content_type_id=self._get_content_type_id,
+            object_id=self.id
+        ).exclude(role="Actor").order_by('order')
+
     @property
     def composers(self):
         """Get all composers of this movie."""

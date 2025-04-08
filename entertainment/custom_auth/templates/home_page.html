@@ -79,6 +79,28 @@
                     <div class="status-bar-field">Select an action to continue</div>
                 </div>
             </div>
+            
+            <!-- Recommended For You --> 
+            <div class="window" style="width: 100%; margin-top: 20px;">
+                <div class="title-bar">
+                    <div class="title-bar-text">Recommended For You</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body" style="padding: 8px; background-color: #eee;">
+                    <div class="scrollable-row" id="recommended_movies_block">
+                        <div class="poster-item">
+                            <div class="poster-card">Loading recommendations...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="status-bar">
+                    <div class="status-bar-field">Based on your ratings</div>
+                </div>
+            </div>
         </div>
         
         <!-- Right column - Content (made much smaller) -->
@@ -161,8 +183,7 @@
                         </ul>
                     </div>
                     <div class="field-row" style="justify-content: flex-end; margin-top: 8px;">
-                        <button onclick="window.location.href=''">See All Reviews</button>
-                        <button onclick="window.location.href=''">Write a Review</button>
+                        <button>See All Reviews</button>
                     </div>
                 </div>
                 <div class="status-bar">
@@ -472,5 +493,78 @@
             '<div class="poster-item" style="width: 100%;"><div class="poster-card p-2" style="justify-content: center; align-items: center; display: flex; height: 140px;">Book integration coming soon!</div></div>';
         document.getElementById('popular_music_block').innerHTML = 
             '<div class="poster-item" style="width: 100%;"><div class="poster-card p-2" style="justify-content: center; align-items: center; display: flex; height: 140px;">Music integration coming soon!</div></div>';
+
+        // Fetch movie recommendations
+        fetch('/movies/recommendations/')
+            .then(response => response.json())
+            .then(data => {
+                const movieList = document.getElementById('recommended_movies_block');
+                movieList.innerHTML = '';
+                if (data.length === 0) {
+                    movieList.innerHTML = '<div class="poster-item"><div class="poster-card">No recommendations yet. Rate more movies to get personalized suggestions.</div></div>';
+                    return;
+                }
+                data.forEach(movie => {
+                    const movieItem = document.createElement('div');
+                    movieItem.className = 'poster-item';
+                    movieItem.innerHTML = `
+                        <div class="poster-card">
+                            <a href="/movies/${movie.tmdb_id}" style="text-decoration:none; color:inherit; display:block; height:100%;">
+                                <img src="${movie.poster || '{% static "images/no-poster.png" %}'}" 
+                                     alt="${movie.title}">
+                                <div class="info-overlay">
+                                    <div class="title">${movie.title}</div>
+                                    <div class="rating">${movie.rating}/10</div>
+                                </div>
+                            </a>
+                        </div>
+                    `;
+                    movieList.appendChild(movieItem);
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching recommendations:', error);
+                document.getElementById('recommended_movies_block').innerHTML = 
+                    '<div class="poster-item"><div class="alert alert-danger">Failed to load recommendations</div></div>';
+            });
+            
+        // Fetch recent reviews
+        fetch('/reviews/recent/')
+            .then(response => response.json())
+            .then(data => {
+                const reviewsList = document.getElementById('recent_reviews');
+                reviewsList.innerHTML = '';
+                
+                if (data.length === 0) {
+                    reviewsList.innerHTML = '<li>No reviews yet. Be the first to share your thoughts!</li>';
+                    return;
+                }
+                
+                data.slice(0, 5).forEach(review => {
+                    const reviewItem = document.createElement('li');
+                    
+                    // Create star rating display
+                    let stars = '';
+                    for (let i = 0; i < 10; i++) {
+                        stars += i < Math.round(review.rating) ? '★' : '☆';
+                    }
+                    
+                    // Determine content type label (Movie, TV Show, etc.)
+                    const contentType = review.content_type || 'Movie';
+                    
+                    reviewItem.innerHTML = `> ${review.username}: "${review.content}" <br> ${contentType}: ${review.title} <br> Rating: ${stars}`;
+                    reviewsList.appendChild(reviewItem);
+                });
+                
+                // Update last updated time
+                const now = new Date();
+                document.querySelector('.window:last-child .status-bar-field').textContent = 
+                    'Last updated: ' + now.toLocaleTimeString();
+            })
+            .catch(error => {
+                console.error('Error fetching recent reviews:', error);
+                document.getElementById('recent_reviews').innerHTML = 
+                    '<li>Failed to load reviews. Please try again later.</li>';
+            });
     </script>
 {% endblock %}
