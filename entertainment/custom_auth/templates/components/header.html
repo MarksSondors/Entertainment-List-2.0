@@ -55,7 +55,7 @@
         } else if (selectedValue === 'profile') {
             window.location.href = "{% url 'profile_page' %}"; // Update with profile URL when available
         } else if (selectedValue === 'settings') {
-            window.location.href = "{% url 'logout_request' %}"; // Update with settings URL when available
+            window.location.href = "{% url 'profile_page' %}"; // Update with settings URL when available
         }
         
         // Reset to username option after navigation starts
