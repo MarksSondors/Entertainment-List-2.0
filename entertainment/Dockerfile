@@ -24,9 +24,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the project files
 COPY . .
 
-# Ensure entrypoint.sh has correct line endings and is executable
-RUN sed -i 's/\r$//' /app/entrypoint.prod.sh && \
-    chmod +x /app/entrypoint.prod.sh
+# Ensure entrypoint script has correct permissions
+RUN chmod +x /app/entrypoint.prod.sh
 
 EXPOSE 8000
 
