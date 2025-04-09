@@ -421,7 +421,7 @@
 
     // Add this to your existing script, just above the document.ready section
     let taskCheckIntervalTV = null;
-    let currentTaskId = null;
+    let currentTaskIdTV = null;
     
     // Function to check task status
     function checkTaskStatus(taskId) {
@@ -502,7 +502,7 @@
             success: function(response) {
                 // Handle background task response
                 if (response.task_id) {
-                    currentTaskId = response.task_id;
+                    currentTaskIdTV = response.task_id;
                     
                     // Show message that task is running in background after 3 seconds
                     setTimeout(function() {
@@ -511,12 +511,12 @@
                     
                     // Start checking task status
                     taskCheckIntervalTV = setInterval(function() {
-                        checkTaskStatus(currentTaskId);
+                        checkTaskStatus(currentTaskIdTV);
                     }, 5000); // Check every 5 seconds
                     
                     // Do initial check after 2 seconds
                     setTimeout(function() {
-                        checkTaskStatus(currentTaskId);
+                        checkTaskStatus(currentTaskIdTV);
                     }, 2000);
                 } else {
                     // If no task_id, assume it's a direct response
