@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 from . import views
-from .views import TMDBTVSearchView, TVShowViewSet, PopularTVShowsView
+from .views import TMDBTVSearchView, TVShowViewSet, PopularTVShowsView, TaskStatusView
 from django.views.decorators.cache import cache_page
 
 router = DefaultRouter()
@@ -15,4 +15,5 @@ urlpatterns = [
     path('popular/', cache_page(60*60)(PopularTVShowsView.as_view()), name='popular_tv_shows'),
     path('images/', views.TVShowImagesView.as_view(), name='tv_show_images'),
     path('watchlist/', views.WatchlistTVShow.as_view(), name='watchlist_tv_show'),
+    path('task-status/', TaskStatusView.as_view(), name='task-status'),
 ] + router.urls

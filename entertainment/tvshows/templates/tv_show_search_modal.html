@@ -108,16 +108,21 @@
     </div>
 </div>
 
-<!-- Loading Screen for TV Shows -->
+<!-- Update the loading screen modal with task status info -->
 <div id="tv-show-loading-screen-modal" class="modal" style="display: none; z-index: 1200;">
-    <div class="modal-content window" style="width: 300px;">
+    <div class="modal-content window" style="width: 400px;">
         <div class="title-bar">
             <div class="title-bar-text">Adding TV Show</div>
         </div>
         <div class="window-body" style="text-align: center; padding: 20px;">
-            <p>Adding TV show to your list...</p>
+            <p id="tv-show-loading-message">Adding TV show to your list...</p>
             <div class="progress-indicator">
                 <span class="progress-indicator-bar"></span>
+            </div>
+            <div id="tv-show-task-info" style="margin-top: 15px; font-size: 12px; display: none;">
+                <p>This may take some time. You can close this dialog and the process will continue in the background.</p>
+                <p>Your TV show will be available in your library once the process completes.</p>
+                <button id="tv-show-close-loading-btn">Close</button>
             </div>
         </div>
     </div>
@@ -414,7 +419,50 @@
         });
     }
 
-    // Submit TV show to API
+    // Add this to your existing script, just above the document.ready section
+    let taskCheckInterval = null;
+    let currentTaskId = null;
+    
+    // Function to check task status
+    function checkTaskStatus(taskId) {
+        $.ajax({
+            url: "{% url 'task-status' %}",
+            method: "GET",
+            data: { task_id: taskId },
+            success: function(response) {
+                if (response.complete) {
+                    // Task is complete
+                    clearInterval(taskCheckInterval);
+                    
+                    if (response.success) {
+                        // Task was successful
+                        $("#tv-show-loading-screen-modal").hide();
+                        showTVShowMessage("Success", "TV Show added successfully!");
+                        closeTVShowModal();
+                    } else {
+                        // Task failed
+                        $("#tv-show-loading-screen-modal").hide();
+                        let errorMsg = "Failed to add TV show.";
+                        if (response.error) {
+                            errorMsg = response.error;
+                        }
+                        showTVShowMessage("Error", errorMsg, true);
+                    }
+                } else {
+                    // Task is still running
+                    $("#tv-show-loading-message").text("Adding TV show to your list... (Processing in background)");
+                    $("#tv-show-task-info").show();
+                }
+            },
+            error: function() {
+                // Handle error checking task status
+                // But don't stop checking - it might just be temporary
+                console.log("Error checking task status");
+            }
+        });
+    }
+
+    // Update the submit TV show function to handle background processing
     function submitTVShow() {
         const tvShowId = $("#tv-show-tmdb_id").val();
         const posterPath = $("#tv-show-default-poster-path").val();
@@ -452,10 +500,30 @@
                 "X-CSRFToken": csrfToken
             },
             success: function(response) {
-                // Hide loading screen
-                $("#tv-show-loading-screen-modal").hide();
-                showTVShowMessage("Success", "TV Show added successfully!");
-                closeTVShowModal();
+                // Handle background task response
+                if (response.task_id) {
+                    currentTaskId = response.task_id;
+                    
+                    // Show message that task is running in background after 3 seconds
+                    setTimeout(function() {
+                        $("#tv-show-task-info").show();
+                    }, 3000);
+                    
+                    // Start checking task status
+                    taskCheckInterval = setInterval(function() {
+                        checkTaskStatus(currentTaskId);
+                    }, 5000); // Check every 5 seconds
+                    
+                    // Do initial check after 2 seconds
+                    setTimeout(function() {
+                        checkTaskStatus(currentTaskId);
+                    }, 2000);
+                } else {
+                    // If no task_id, assume it's a direct response
+                    $("#tv-show-loading-screen-modal").hide();
+                    showTVShowMessage("Success", "TV Show added successfully!");
+                    closeTVShowModal();
+                }
             },
             error: function(xhr) {
                 // Hide loading screen
@@ -521,6 +589,18 @@
                 fetchTVResults($('#tv-show-query').val(), tvCurrentPage);
             }
         });
+
+        // Add this to your existing document ready function
+        $("#tv-show-close-loading-btn").on("click", function() {
+            $("#tv-show-loading-screen-modal").hide();
+            // Note: We keep the interval running to check status in the background
+            showTVShowMessage("Background Processing", 
+                "The TV show addition process will continue in the background. " +
+                "You can check your library later to see when it's complete.");
+            closeTVShowModal();
+        });
+        
+        // Rest of your document.ready code remains the same
     });
 </script>
 <style>
@@ -623,4 +703,15 @@
 .status-link:hover {
     text-decoration: underline;
 }
+
+/* Add this to your existing styles */
+#tv-show-task-info {
+    background-color: #ffffcc;
+    border: 1px solid #ffcc00;
+    padding: 10px;
+    margin-top: 15px;
+    text-align: left;
+}
+
+/* Existing styles remain the same */
 </style>

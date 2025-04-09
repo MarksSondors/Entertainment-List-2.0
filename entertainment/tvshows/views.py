@@ -7,6 +7,8 @@ from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+from django_q.tasks import async_task
+from .tasks import create_tvshow_async
 
 import json
 
@@ -123,9 +125,12 @@ class TVShowViewSet(viewsets.ViewSet):
     
     @extend_schema(
         summary="Create TV Show",
-        description="Create a new TV show.",
+        description="Create a new TV show in the background.",
         request=TVShowSerializer,
-        responses={201: TVShowSerializer},
+        responses={
+            201: TVShowSerializer,
+            202: OpenApiExample("Task Queued", value={"message": "TV show creation has been queued", "task_id": "task-uuid-example"})
+        },
     )
     def create(self, request):
         show_id = request.data.get('id')
@@ -159,11 +164,21 @@ class TVShowViewSet(viewsets.ViewSet):
         if show_backdrop:
             show_backdrop = f"https://image.tmdb.org/t/p/original{show_backdrop}"
 
-        tv_show = create_tvshow(show_id, show_poster, show_backdrop, is_anime, add_to_watchlist, request.user.id)
-        if not tv_show:
-            return Response({"error": "TV Show not found"}, status=status.HTTP_404_NOT_FOUND)
+        # Queue the TV show creation as a background task using your existing function
+        task_id = create_tvshow_async(
+            tvshow_id=show_id, 
+            tvshow_poster=show_poster, 
+            tvshow_backdrop=show_backdrop, 
+            is_anime=is_anime, 
+            add_to_watchlist=add_to_watchlist, 
+            user_id=request.user.id
+        )
         
-        return Response(TVShowSerializer(tv_show).data, status=status.HTTP_201_CREATED)
+        # Return a response immediately with the task ID
+        return Response({
+            "message": "TV show creation has been queued",
+            "task_id": str(task_id)
+        }, status=status.HTTP_202_ACCEPTED)
     
     @extend_schema(
         summary="Get TV Show",
@@ -274,3 +289,55 @@ class WatchlistTVShow(APIView):
             return Response({"message": "TV Show removed from watchlist"}, status=status.HTTP_204_NO_CONTENT)
         except Watchlist.DoesNotExist:
             return Response({"error": "TV Show not in watchlist"}, status=status.HTTP_404_NOT_FOUND)
+
+# Add this new view to check task status
+
+class TaskStatusView(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Check Task Status",
+        description="Check the status of a background TV show creation task.",
+        parameters=[
+            OpenApiParameter(name="task_id", description="ID of the task to check", required=True, type=str),
+        ],
+        responses={
+            200: OpenApiExample("Task Status", value={
+                "complete": True,
+                "success": True,
+                "tv_show": {"id": 1, "title": "Show Name", "...": "other fields"}
+            })
+        }
+    )
+    def get(self, request):
+        task_id = request.GET.get('task_id')
+        if not task_id:
+            return Response({"error": "Task ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django_q.models import Task
+        try:
+            task = Task.objects.get(id=task_id)
+            
+            response_data = {
+                "complete": task.success is not None,
+                "success": task.success if task.success is not None else None,
+            }
+            
+            # If task is complete and successful, try to get the TV show
+            if task.success and task.result:
+                try:
+                    # The result should be a TVShow object
+                    tv_show = task.result
+                    response_data["tv_show"] = TVShowSerializer(tv_show).data
+                except Exception as e:
+                    response_data["result"] = str(task.result)
+                    response_data["error"] = str(e)
+            elif not task.success and task.result:
+                # If task failed, include error information
+                response_data["error"] = str(task.result)
+                
+            return Response(response_data)
+            
+        except Task.DoesNotExist:
+            return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
