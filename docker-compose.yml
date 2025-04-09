@@ -5,7 +5,6 @@ services:
     build:
       context: ./entertainment
       dockerfile: Dockerfile
-    command: sh -c "chmod +x /app/entrypoint.prod.sh && /app/entrypoint.prod.sh"
     volumes:
       - ./entertainment:/app
     env_file:
