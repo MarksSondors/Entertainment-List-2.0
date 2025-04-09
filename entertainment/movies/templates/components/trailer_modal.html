@@ -1,4 +1,4 @@
-<div id="trailerModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 560px;">
+<div id="trailerModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 90%; max-width: 560px;">
     <div class="title-bar">
         <div class="title-bar-text">Watch Trailer</div>
         <div class="title-bar-controls">
@@ -13,11 +13,21 @@
 <script>
     function openTrailerModal() {
         document.getElementById('trailerModal').style.display = 'block';
+        document.body.style.overflow = 'hidden'; // Prevent scrolling when modal is open
     }
 
     function closeTrailerModal() {
         document.getElementById('trailerModal').style.display = 'none';
+        document.body.style.overflow = ''; // Restore scrolling
         const trailerVideo = document.getElementById('trailerVideo');
         trailerVideo.src = trailerVideo.src; // Reset the video to stop playback
     }
+
+    // Close modal when clicking outside of it
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('trailerModal');
+        if (event.target === modal) {
+            closeTrailerModal();
+        }
+    });
 </script>
