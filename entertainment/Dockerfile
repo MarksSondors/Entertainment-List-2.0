@@ -30,4 +30,4 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh && \
 
 EXPOSE 8000
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint.prod.sh"]
