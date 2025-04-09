@@ -420,7 +420,7 @@
     }
 
     // Add this to your existing script, just above the document.ready section
-    let taskCheckInterval = null;
+    let taskCheckIntervalTV = null;
     let currentTaskId = null;
     
     // Function to check task status
@@ -432,7 +432,7 @@
             success: function(response) {
                 if (response.complete) {
                     // Task is complete
-                    clearInterval(taskCheckInterval);
+                    clearInterval(taskCheckIntervalTV);
                     
                     if (response.success) {
                         // Task was successful
@@ -510,7 +510,7 @@
                     }, 3000);
                     
                     // Start checking task status
-                    taskCheckInterval = setInterval(function() {
+                    taskCheckIntervalTV = setInterval(function() {
                         checkTaskStatus(currentTaskId);
                     }, 5000); // Check every 5 seconds
                     
