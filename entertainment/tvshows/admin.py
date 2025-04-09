@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from custom_auth.models import TVShow, MediaPerson, Person
+from .models import *
 from django.contrib.contenttypes.admin import GenericTabularInline
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse

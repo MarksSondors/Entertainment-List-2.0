@@ -7,6 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 
+
 class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
     bio = models.TextField(blank=True, null=True)
@@ -84,7 +85,7 @@ class Person(models.Model):
     bio = models.TextField(blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     date_of_death = models.DateField(blank=True, null=True)
-    profile_picture = models.ImageField(upload_to='person_profiles/', blank=True, null=True)
+    profile_picture = models.URLField(blank=True, null=True)
 
     # directing
     is_director = models.BooleanField(default=False)
@@ -129,151 +130,6 @@ class Media(models.Model):
     class Meta:
         abstract = True
 
-class TVShow(Media):
-    """Model for TV shows."""
-    poster = models.ImageField(upload_to='tvshow_posters/', blank=True, null=True)
-    backdrop = models.ImageField(upload_to='tvshow_backdrops/', blank=True, null=True)
-    
-    first_air_date = models.DateField(blank=True, null=True)
-    last_air_date = models.DateField(blank=True, null=True)
-    tmdb_id = models.IntegerField(unique=True)
-    
-    status = models.CharField(max_length=50, blank=True, null=True)  # e.g., "Ended", "Returning Series"
-    rating = models.FloatField(blank=True, null=True)
-    trailer = models.URLField(blank=True, null=True)
-    
-    is_anime = models.BooleanField(default=False)
-    
-    # foreign keys
-    genres = models.ManyToManyField(Genre)
-    countries = models.ManyToManyField(Country)
-    keywords = models.ManyToManyField(Keyword)
-    
-    def __str__(self):
-        return self.title
-    
-    def get_absolute_url(self):
-        """Get the absolute URL for the TV show page."""
-        return f"/tvshows/{self.id}/"
-    
-    def get_media_persons(self, role=None):
-        """Get all MediaPerson objects related to this TV show."""
-        query = MediaPerson.objects.filter(
-            content_type_id=ContentType.objects.get_for_model(self.__class__).id,
-            object_id=self.id
-        ).select_related('person')
-        
-        if role:
-            query = query.filter(role=role)
-        return query
-    
-    @property
-    def _get_content_type_id(self):
-        """Cache content type ID to avoid repeated lookups."""
-        if not hasattr(self, '_content_type_id'):
-            self._content_type_id = ContentType.objects.get_for_model(self.__class__).id
-        return self._content_type_id
-    
-    def _get_persons_by_role(self, role_filter):
-        """Base method for retrieving persons by role."""
-        return Person.objects.filter(
-            mediaperson__content_type_id=self._get_content_type_id,
-            mediaperson__object_id=self.id,
-            **role_filter
-        ).distinct()
-    
-    @property
-    def creators(self):
-        """Get all creators of this TV show."""
-        return self._get_persons_by_role({'mediaperson__role': "Creator"})
-    
-    @property
-    def cast(self):
-        """Get all cast members of this TV show with their character names."""
-        return MediaPerson.objects.select_related('person').filter(
-            content_type_id=self._get_content_type_id,
-            object_id=self.id,
-            role="Actor"
-        ).order_by('order')
-    
-    @property
-    def seasons_count(self):
-        """Get the number of seasons for this TV show."""
-        return self.seasons.count()
-    
-    @property
-    def episodes_count(self):
-        """Get the total number of episodes across all seasons."""
-        return Episode.objects.filter(season__show=self).count()
-
-class Season(models.Model):
-    """Model for TV show seasons."""
-    show = models.ForeignKey(TVShow, related_name='seasons', on_delete=models.CASCADE)
-    
-    title = models.CharField(max_length=255, blank=True, null=True)
-    season_number = models.PositiveIntegerField()
-    air_date = models.DateField(blank=True, null=True)
-    overview = models.TextField(blank=True, null=True)
-    poster = models.ImageField(upload_to='season_posters/', blank=True, null=True)
-    
-    tmdb_id = models.IntegerField(blank=True, null=True)
-    
-    class Meta:
-        unique_together = ['show', 'season_number']
-        ordering = ['season_number']
-        
-    def __str__(self):
-        return f"{self.show.title} - Season {self.season_number}"
-    
-    @property
-    def episodes_count(self):
-        """Get the number of episodes in this season."""
-        return self.episodes.count()
-
-class Episode(models.Model):
-    """Model for TV show episodes."""
-    season = models.ForeignKey(Season, related_name='episodes', on_delete=models.CASCADE)
-    
-    title = models.CharField(max_length=255)
-    episode_number = models.PositiveIntegerField()
-    air_date = models.DateField(blank=True, null=True)
-    overview = models.TextField(blank=True, null=True)
-    still = models.ImageField(upload_to='episode_stills/', blank=True, null=True)
-    
-    runtime = models.IntegerField(blank=True, null=True)
-    rating = models.FloatField(blank=True, null=True)
-    tmdb_id = models.IntegerField(blank=True, null=True)
-    
-    class Meta:
-        unique_together = ['season', 'episode_number']
-        ordering = ['episode_number']
-        
-    def __str__(self):
-        return f"{self.season.show.title} - S{self.season.season_number:02d}E{self.episode_number:02d} - {self.title}"
-    
-    def minutes_to_hours(self):
-        if not self.runtime:
-            return "Unknown"
-        hours = self.runtime // 60
-        minutes = self.runtime % 60
-        if hours > 0:
-            return f"{hours}h {minutes}m"
-        return f"{minutes}m"
-
-class WatchedEpisode(models.Model):
-    """Model for tracking which episodes a user has watched."""
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='watched_episodes')
-    episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name='watched_by')
-    
-    watched_date = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        unique_together = ['user', 'episode']
-        ordering = ['-watched_date']
-        
-    def __str__(self):
-        return f"{self.user.username} watched {self.episode}"
-
 class MediaPerson(models.Model):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
@@ -314,11 +170,14 @@ class Watchlist(models.Model):
 @receiver(pre_delete)
 def remove_from_watchlist(sender, instance, **kwargs):
     """Remove any watchlist entries when media is deleted."""
-    # Use the class name as string to avoid import issues
-    if sender.__name__ in ['Movie', 'TVShow', 'Album']:
+    # Check if the model is one that can be in a watchlist
+    media_models = ['Movie', 'TVShow', 'Album']
+    
+    if sender.__name__ in media_models:
+        # Direct media deletion
         content_type = ContentType.objects.get_for_model(sender)
         Watchlist.objects.filter(content_type=content_type, object_id=instance.id).delete()
-
+    
 class Review(models.Model):
     """Model for user reviews of media items."""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reviews')
@@ -329,7 +188,7 @@ class Review(models.Model):
     media = GenericForeignKey('content_type', 'object_id')
     
     # For TV shows, we can link to a specific season
-    season = models.ForeignKey(Season, on_delete=models.CASCADE, blank=True, null=True, related_name='reviews')
+    season = models.ForeignKey('tvshows.Season', on_delete=models.CASCADE, blank=True, null=True, related_name='reviews')
     
     # Review content
     rating = models.FloatField()
@@ -357,6 +216,10 @@ class Review(models.Model):
         return f"{self.user.username}'s review of {self.media} - {self.rating}/10"
     
     def save(self, *args, **kwargs):
+        # Get TVShow model dynamically to avoid circular import
+        from django.apps import apps
+        TVShow = apps.get_model('tvshows', 'TVShow')
+        
         # For TV shows, check if the content type is TVShow
         if self.content_type.model_class() == TVShow and not self.season:
             raise ValueError("Reviews for TV shows must include a season")
@@ -373,131 +236,3 @@ class Review(models.Model):
         ).delete()
         
         super().save(*args, **kwargs)
-
-class Album(Media):
-    """Model for music albums that extends the base Media class."""
-    cover = models.URLField(blank=True, null=True)  # Album cover
-    
-    release_date = models.DateField(blank=True, null=True)
-    musicbrainz_id = models.CharField(max_length=36, unique=True, blank=True, null=True)
-    
-    # Album metadata
-    primary_artist = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='primary_albums')
-    featured_artists = models.ManyToManyField(Person, related_name='featured_albums', blank=True)
-    total_tracks = models.PositiveIntegerField(default=0)
-    runtime = models.IntegerField(blank=True, null=True)  # Total album duration in minutes
-    rating = models.FloatField(blank=True, null=True)
-    
-    # Album type
-    ALBUM_TYPES = [
-        ('album', 'Album'),
-        ('single', 'Single'),
-        ('ep', 'EP'),
-        ('soundtrack', 'Soundtrack'),
-        ('compilation', 'Compilation'),
-        ('score', 'Score'),
-        ('other', 'Other'),
-    ]
-    album_type = models.CharField(max_length=20, choices=ALBUM_TYPES, default='album')
-    
-    # Genre relations - reusing the same Genre model as movies
-    genres = models.ManyToManyField(Genre, blank=True)
-    
-    def __str__(self):
-        return f"{self.title} - {self.primary_artist.name}"
-    
-    @property
-    def _get_content_type_id(self):
-        """Cache content type ID to avoid repeated lookups."""
-        if not hasattr(self, '_content_type_id'):
-            self._content_type_id = ContentType.objects.get_for_model(self.__class__).id
-        return self._content_type_id
-    
-    def get_media_persons(self, role=None):
-        """Get all MediaPerson objects related to this album."""
-        query = MediaPerson.objects.filter(
-            content_type_id=self._get_content_type_id,
-            object_id=self.id
-        ).select_related('person')
-        
-        if role:
-            query = query.filter(role=role)
-        return query
-    
-    def minutes_to_hours(self):
-        if not self.runtime:
-            return "Unknown"
-        hours = self.runtime // 60
-        minutes = self.runtime % 60
-        if hours > 0:
-            return f"{hours}h {minutes}m"
-        return f"{minutes}m"
-    
-    @property
-    def artists(self):
-        """Get all artists associated with this album (primary + featured)."""
-        featured = list(self.featured_artists.all())
-        return [self.primary_artist] + featured
-
-    @property
-    def related_movies(self):
-        """Get all related movies for this album."""
-        from django.contrib.contenttypes.models import ContentType
-        # Get the Movie model by its app label and model name
-        movie_type = ContentType.objects.get(app_label='movies', model='movie')
-        # Use the model class from the content type
-        Movie = movie_type.model_class()
-        return Movie.objects.filter(
-            id__in=MediaAlbumRelationship.objects.filter(
-                content_type=movie_type,
-                album=self
-            ).values_list('object_id', flat=True)
-        )
-    @property
-    def related_tv_shows(self):
-        """Get all related TV shows for this album."""
-        from django.contrib.contenttypes.models import ContentType
-        # Use the current TVShow model since it's already defined in this file
-        tv_type = ContentType.objects.get_for_model(TVShow)
-        return TVShow.objects.filter(
-            id__in=MediaAlbumRelationship.objects.filter(
-                content_type=tv_type,
-                album=self
-            ).values_list('object_id', flat=True)
-        )
-    
-class MediaAlbumRelationship(models.Model):
-    """Model to define the relationship between media (movies/TV shows) and music albums."""
-    # Generic foreign key to allow both movies and TV shows
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
-    media = GenericForeignKey('content_type', 'object_id')
-    
-    album = models.ForeignKey(Album, on_delete=models.CASCADE)
-    
-    # Relationship type
-    RELATIONSHIP_TYPES = [
-        ('soundtrack', 'Soundtrack'),
-        ('score', 'Original Score'),
-        ('inspired_by', 'Inspired By Media'),
-        ('featured_in', 'Featured In Media'),
-        ('promotional', 'Promotional Album'),
-        ('opening_theme', 'Opening Theme'), # TV show specific
-        ('ending_theme', 'Ending Theme'),   # TV show specific
-        ('other', 'Other Relationship'),
-    ]
-    relationship_type = models.CharField(max_length=20, choices=RELATIONSHIP_TYPES, default='soundtrack')
-    
-    # Optional description of the relationship
-    description = models.TextField(blank=True, null=True)
-    
-    class Meta:
-        unique_together = ['content_type', 'object_id', 'album']
-        verbose_name = "Media-Album Relationship"
-        verbose_name_plural = "Media-Album Relationships"
-        indexes = [
-            models.Index(fields=['content_type', 'object_id']),
-        ]
-        
-    def __str__(self):
-        return f"{self.media} - {self.album.title} ({self.get_relationship_type_display()})"

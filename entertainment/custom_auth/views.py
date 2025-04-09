@@ -10,6 +10,7 @@ from django.contrib.contenttypes.models import ContentType
 
 from .models import *
 from movies.models import Movie
+from tvshows.models import TVShow
 
 def login_page(request):
     if request.user.is_authenticated:
@@ -58,6 +59,10 @@ def genre_detail(request, genre_id):
     anime_filter = request.GET.get('anime_filter', 'all')
     view_type = request.GET.get('view_type', 'grid')
     
+    # Get content types for Movie and TVShow models
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    tv_show_content_type = ContentType.objects.get_for_model(TVShow)
+    
     # Filter movies and TV shows based on anime_filter
     if (anime_filter == 'anime_only'):
         movies = Movie.objects.filter(genres=genre, is_anime=True)
@@ -68,6 +73,37 @@ def genre_detail(request, genre_id):
     else:  # 'all' is the default
         movies = Movie.objects.filter(genres=genre)
         tv_shows = TVShow.objects.filter(genres=genre)
+    
+    # Get user's reviews for movies in this genre
+    user_movie_reviews = {
+        review.object_id: review.rating 
+        for review in Review.objects.filter(
+            user=request.user,
+            content_type=movie_content_type,
+            object_id__in=movies.values_list('id', flat=True)
+        )
+    }
+    
+    
+    # Get average movie ratings across the platform
+    avg_movie_ratings = {}
+    movie_rating_counts = {}
+    for item in Review.objects.filter(
+        content_type=movie_content_type,
+        object_id__in=movies.values_list('id', flat=True)
+    ).values('object_id').annotate(
+        avg_rating=models.Avg('rating'),
+        count=models.Count('id')
+    ):
+        avg_movie_ratings[item['object_id']] = round(item['avg_rating'], 1)
+        movie_rating_counts[item['object_id']] = item['count']
+    
+    # Annotate movies with user ratings and average ratings
+    for movie in movies:
+        movie.user_rating = user_movie_reviews.get(movie.id)
+        if movie.id in avg_movie_ratings:
+            movie.avg_rating = avg_movie_ratings[movie.id]
+            movie.rating_count = movie_rating_counts[movie.id]
     
     return render(request, 'genre_detail.html', {
         'genre': genre,
@@ -99,7 +135,7 @@ def profile_page(request, username=None):
     
     # Create a list of movies with their review scores
     favorite_movies = []
-    for review in movie_reviews[:5]:  # Limit to top 5 rated movies
+    for review in movie_reviews[:11]:  # Limit to top 5 rated movies
         movie = Movie.objects.filter(id=review.object_id).first()
         if movie:
             movie.user_rating = review.rating  # Add the user's rating to the movie object
@@ -278,6 +314,9 @@ def country_detail(request, country_id):
     anime_filter = request.GET.get('anime_filter', 'all')
     view_type = request.GET.get('view_type', 'grid')
     
+    # Get content types for Movie and TVShow models
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    
     # Filter movies and TV shows based on anime_filter
     if (anime_filter == 'anime_only'):
         movies = Movie.objects.filter(countries=country, is_anime=True)
@@ -288,6 +327,39 @@ def country_detail(request, country_id):
     else:  # 'all' is the default
         movies = Movie.objects.filter(countries=country)
         tv_shows = TVShow.objects.filter(countries=country)
+    
+    # Get user's reviews for movies in this country
+    user_movie_reviews = {
+        review.object_id: review.rating 
+        for review in Review.objects.filter(
+            user=request.user,
+            content_type=movie_content_type,
+            object_id__in=movies.values_list('id', flat=True)
+        )
+    }
+    
+    
+    # Get average movie ratings across the platform
+    avg_movie_ratings = {}
+    movie_rating_counts = {}
+    for item in Review.objects.filter(
+        content_type=movie_content_type,
+        object_id__in=movies.values_list('id', flat=True)
+    ).values('object_id').annotate(
+        avg_rating=models.Avg('rating'),
+        count=models.Count('id')
+    ):
+        avg_movie_ratings[item['object_id']] = round(item['avg_rating'], 1)
+        movie_rating_counts[item['object_id']] = item['count']
+    
+    
+    # Annotate movies with user ratings and average ratings
+    for movie in movies:
+        movie.user_rating = user_movie_reviews.get(movie.id)
+        if movie.id in avg_movie_ratings:
+            movie.avg_rating = avg_movie_ratings[movie.id]
+            movie.rating_count = movie_rating_counts[movie.id]
+    
     
     return render(request, 'country_detail.html', {
         'country': country,

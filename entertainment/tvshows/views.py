@@ -10,7 +10,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 
 import json
 
-from custom_auth.models import TVShow
+from .models import TVShow
 from .serializers import TVShowSerializer
 from .parsers import create_tv_show
 from django.contrib.contenttypes.models import ContentType

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from custom_auth.models import TVShow
+from .models import TVShow
 
 class TVShowSerializer(serializers.ModelSerializer):
     class Meta:
