@@ -1,5 +1,6 @@
 from .models import *
 from api.services.tvshows import TVShowsService
+from api.services.movies import MoviesService
 from django.contrib.contenttypes.models import ContentType
 from custom_auth.models import CustomUser
 
@@ -72,7 +73,7 @@ def process_cast(tvshow, cast, tvshows_service):
     tvshow_content_type = ContentType.objects.get_for_model(tvshow)
     
     for index, person in enumerate(cast):
-        person_details = tvshows_service.get_person_details(person.get('id'))
+        person_details = MoviesService().get_person_details(person.get('id'))
         person_instance, _ = Person.objects.get_or_create(
             tmdb_id=person_details.get('id'),
             defaults={
@@ -108,7 +109,7 @@ def process_crew(tvshow, crew, tvshows_service):
         if job not in ['Creator', 'Executive Producer', 'Writer']:
             continue
         
-        person_details = tvshows_service.get_person_details(person.get('id'))
+        person_details = MoviesService().get_person_details(person.get('id'))
         person_instance, _ = Person.objects.get_or_create(
             tmdb_id=person_details.get('id'),
             defaults={
@@ -190,7 +191,7 @@ def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=
     tvshows_service = TVShowsService()
     
     # Get TV show details from API
-    tvshow_details = tvshows_service.get_tvshow_details(tvshow_id, append_to_response='videos,credits,keywords')
+    tvshow_details = tvshows_service.get_show_details(tvshow_id, append_to_response='videos,credits,keywords')
     if not tvshow_details:
         return None
     
