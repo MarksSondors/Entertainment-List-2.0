@@ -41,6 +41,8 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 CSRF_COOKIE_HTTPONLY = True
 
+CSRF_TRUSTED_ORIGINS = [config('ALLOWED_HOSTS', default='', cast=lambda v: v.split(','))]
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
