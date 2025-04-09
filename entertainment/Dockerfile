@@ -29,4 +29,4 @@ RUN chmod a+x /app/entrypoint.prod.sh
 
 EXPOSE 8000
 
-ENTRYPOINT ["/app/entrypoint.prod.sh"]
+ENTRYPOINT ["/app/entrypoint.sh"]
