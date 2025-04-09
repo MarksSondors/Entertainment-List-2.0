@@ -24,8 +24,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the project files
 COPY . .
 
-# Ensure entrypoint script has correct permissions
-RUN chmod a+x /app/entrypoint.prod.sh
+
+# Add these lines if they don't exist:
+COPY entrypoint.sh /app/
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 
