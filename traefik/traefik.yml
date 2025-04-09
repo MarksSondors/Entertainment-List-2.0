@@ -15,10 +15,10 @@ entryPoints:
   websecure:
     address: ":443"
 
-# For production, either disable the dashboard or secure it properly
+# Secure dashboard configuration
 api:
-  dashboard: false  # Set to true only if needed and properly secured
-  # Remove the insecure: true option for production
+  dashboard: true  # Enable the dashboard
+  insecure: false  # Ensure it's not running in insecure mode
 
 log:
   level: "INFO"  # Use INFO or WARNING for production
