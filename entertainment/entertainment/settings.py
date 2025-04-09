@@ -179,7 +179,7 @@ Q_CLUSTER = {
     'name': 'entertainment',
     'workers': 4,
     'recycle': 500,
-    'timeout': 600,
+    'timeout': 300,
     'compress': True,
     'save_limit': 250,
     'queue_limit': 500,
