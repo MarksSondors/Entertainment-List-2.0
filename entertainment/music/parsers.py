@@ -1,5 +1,5 @@
 from api.services.music import MusicService
-from custom_auth.models import Album, Person, MediaAlbumRelationship
+from .models import *
 import re
 from api.services.movies import MoviesService
 from movies.parsers import create_movie

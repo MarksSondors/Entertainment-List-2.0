@@ -50,7 +50,8 @@
                 <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
                     {% for movie in movies %}
                     <div class="col">
-                        <div class="card h-100">
+                        <!-- For Movies Grid View -->
+                        <div class="card h-100 movie-card">
                             {% if movie.poster %}
                             <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}">
                             {% else %}
@@ -68,6 +69,21 @@
                                     <span class="badge bg-primary">Anime</span>
                                     {% endif %}
                                 </p>
+                                
+                                <!-- User Rating Badge (if available) -->
+                                {% if movie.user_rating %}
+                                <div class="user-rating-badge">
+                                    {{ movie.user_rating }}
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Average Rating Badge (if available) -->
+                                {% if movie.avg_rating %}
+                                <div class="avg-rating-badge">
+                                    {{ movie.avg_rating }} ({{ movie.rating_count }})
+                                </div>
+                                {% endif %}
+                                
                                 <div class="mt-2">
                                     <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
                                 </div>
@@ -95,7 +111,17 @@
                                 <td><a href="{% url 'movie_page' movie.tmdb_id %}">{{ movie.title }}</a></td>
                                 <td>{{ movie.release_date|date:"M d, Y" }}</td>
                                 <td>{% if movie.is_anime %}<span class="badge bg-primary">Anime</span>{% else %}Movie{% endif %}</td>
-                                <td>{{ movie.rating }} / 10</td>
+                                <!-- For Movies Table View -->
+                                <td>
+                                    {% if movie.user_rating %}
+                                    <span class="badge badge-rating-user">Your: {{ movie.user_rating }}</span>
+                                    {% endif %}
+                                    {% if movie.avg_rating %}
+                                    <span class="badge badge-rating-avg">Avg: {{ movie.avg_rating }} ({{ movie.rating_count }})</span>
+                                    {% else %}
+                                    {{ movie.rating }} / 10
+                                    {% endif %}
+                                </td>
                                 <td><a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View</a></td>
                             </tr>
                             {% endfor %}
@@ -115,7 +141,8 @@
                 <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
                     {% for show in tv_shows %}
                     <div class="col">
-                        <div class="card h-100">
+                        <!-- For TV Shows Grid View -->
+                        <div class="card h-100 movie-card">
                             {% if show.poster %}
                             <img src="{{ show.poster }}" class="card-img-top" alt="{{ show.title }}">
                             {% else %}
@@ -133,6 +160,21 @@
                                     <span class="badge bg-primary">Anime</span>
                                     {% endif %}
                                 </p>
+                                
+                                <!-- User Rating Badge (if available) -->
+                                {% if show.user_rating %}
+                                <div class="user-rating-badge">
+                                    {{ show.user_rating }}
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Average Rating Badge (if available) -->
+                                {% if show.avg_rating %}
+                                <div class="avg-rating-badge">
+                                    {{ show.avg_rating }} ({{ show.rating_count }})
+                                </div>
+                                {% endif %}
+                                
                                 <div class="mt-2">
                                     <a href="{% url 'tv_show_page' show.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
                                 </div>
@@ -160,7 +202,17 @@
                                 <td>{{ show.title }}</td>
                                 <td>{{ show.first_air_date|date:"M d, Y" }}</td>
                                 <td>{% if show.is_anime %}<span class="badge bg-primary">Anime</span>{% else %}TV Show{% endif %}</td>
-                                <td>{{ show.rating }} / 10</td>
+                                <!-- For TV Shows Table View -->
+                                <td>
+                                    {% if show.user_rating %}
+                                    <span class="badge badge-rating-user">Your: {{ show.user_rating }}</span>
+                                    {% endif %}
+                                    {% if show.avg_rating %}
+                                    <span class="badge badge-rating-avg">Avg: {{ show.avg_rating }} ({{ show.rating_count }})</span>
+                                    {% else %}
+                                    {{ show.rating }} / 10
+                                    {% endif %}
+                                </td>
                                 <td><a href="{% url 'tv_show_page' show.tmdb_id %}" class="btn btn-sm btn-primary">View</a></td>
                             </tr>
                             {% endfor %}
@@ -197,4 +249,66 @@
         this.form.submit();
     });
 </script>
+
+<style>
+    /* Card styles */
+    .movie-card {
+        position: relative;
+        transition: transform 0.2s;
+        border: 2px solid rgba(0, 0, 0, 0.125);
+    }
+    
+    .movie-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Rating badge styles */
+    .user-rating-badge {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background-color: #E0B020;
+        color: black;
+        padding: 3px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+        box-shadow: 0 0 3px rgba(0,0,0,0.5);
+        z-index: 5;
+    }
+    
+    .avg-rating-badge {
+        position: absolute;
+        top: 35px;
+        right: 5px;
+        background-color: #6c757d;
+        color: white;
+        padding: 3px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+        font-size: 0.85em;
+        box-shadow: 0 0 3px rgba(0,0,0,0.5);
+        z-index: 5;
+    }
+    
+    /* Style for the table ratings to match */
+    .badge-rating-user {
+        background-color: #E0B020;
+        color: black;
+    }
+    
+    .badge-rating-avg {
+        background-color: #6c757d;
+        color: white;
+    }
+    
+    /* Improved table styling */
+    .table-striped > tbody > tr:nth-of-type(odd) > * {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    
+    .table td, .table th {
+        vertical-align: middle;
+    }
+</style>
 {% endblock %}

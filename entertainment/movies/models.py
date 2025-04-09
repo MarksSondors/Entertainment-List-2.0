@@ -4,7 +4,8 @@ from django.contrib.contenttypes.models import ContentType
 
 # Import these from custom_auth app
 from custom_auth.models import *
-
+from music.models import MediaAlbumRelationship
+from music.models import Album
 # Create your models here.
 
 # movie collections
