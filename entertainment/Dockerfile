@@ -1,4 +1,4 @@
-FROM python:alpine
+FROM python:3.13-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -8,12 +8,12 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install system dependencies
-RUN apk update && apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     gcc \
-    musl-dev \
-    postgresql-dev \
+    libpq-dev \
     netcat-openbsd \
-    bash
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file
 COPY requirements.txt .
@@ -24,10 +24,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the project files
 COPY . .
 
-
-# Add these lines if they don't exist:
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
+# Ensure entrypoint.sh has correct line endings and is executable
+RUN sed -i 's/\r$//' /app/entrypoint.sh && \
+    chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 
