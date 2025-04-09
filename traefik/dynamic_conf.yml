@@ -28,7 +28,7 @@ http:
         - redirect-to-https
 
     api:
-      rule: "Host(`traefik.yourdomain.com`)"  # Replace with your actual domain for the dashboard
+      rule: "Host(`yourdomain.com`) + PathPrefix(`/dashboard`)"
       service: "api@internal"
       entrypoints:
         - websecure
