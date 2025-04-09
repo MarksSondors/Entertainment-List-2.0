@@ -39,6 +39,8 @@ SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_PRELOAD = True
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
+CSRF_COOKIE_HTTPONLY = True
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
