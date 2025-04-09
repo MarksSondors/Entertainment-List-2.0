@@ -34,7 +34,6 @@ http:
         - websecure
       middlewares:
         - auth
-        - ipwallowlist  # Optional, remove if you don't need IP filtering
       tls:
         certResolver: myresolver
 
