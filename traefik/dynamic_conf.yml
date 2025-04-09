@@ -27,6 +27,17 @@ http:
       middlewares:
         - redirect-to-https
 
+    api:
+      rule: "Host(`traefik.yourdomain.com`)"  # Replace with your actual domain for the dashboard
+      service: "api@internal"
+      entrypoints:
+        - websecure
+      middlewares:
+        - auth
+        - ipwhitelist  # Optional, remove if you don't need IP filtering
+      tls:
+        certResolver: myresolver
+
   services:
     django:
       loadBalancer:
@@ -57,6 +68,19 @@ http:
         customResponseHeaders:
           X-Content-Type-Options: "nosniff"
           Referrer-Policy: "strict-origin-when-cross-origin"
+
+    auth:
+      basicAuth:
+        users:
+          # Generate these with: htpasswd -nb admin secure_password
+          # The below is example only - replace with your own credentials!
+          - "admin:$apr1$ruca84Hq$mbjdMZBAG.KWn7vfN/SNK/"  
+    
+    ipwhitelist:  # Optional: restrict access to specific IPs
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"  # localhost
+          - "192.168.1.0/24"  # example local network - customize to your needs
 
 entryPoints:
   web:
