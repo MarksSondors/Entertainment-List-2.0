@@ -1,24 +1,7 @@
-services:
-  django:
-    loadbalancer:
-      servers:
-        - url: "http://django:8000"
-  
 http:
   routers:
-    django:
-      rule: "Host(`your-actual-domain.com`)"  # Replace with your actual domain
-      service: django
-      entryPoints:
-        - websecure
-      tls:
-        certResolver: myresolver
-      middlewares:
-        - redirect-to-https
-    
-    # Define as many domain routes as needed for your application
     entertainment:
-      rule: "Host(`your-actual-domain.com`)"  # Use your production domain
+      rule: "Host(`your-actual-domain.com`)"  # Replace with your actual domain
       service: entertainment
       entryPoints:
         - websecure
@@ -28,7 +11,7 @@ http:
         - redirect-to-https
 
     api:
-      rule: "Host(`yourdomain.com`) + PathPrefix(`/dashboard`)"
+      rule: "Host(`your-actual-domain.com`) && PathPrefix(`/dashboard`)"
       service: "api@internal"
       entrypoints:
         - websecure
@@ -38,15 +21,10 @@ http:
         certResolver: myresolver
 
   services:
-    django:
-      loadBalancer:
-        servers:
-          - url: "http://django:8000"
-    
     entertainment:
       loadBalancer:
         servers:
-          - url: "http://web:8000"  # Should match your docker-compose.yml service name
+          - url: "http://web:8000"  # Matches your docker-compose service name
 
   middlewares:
     redirect-to-https:
@@ -54,7 +32,6 @@ http:
         scheme: "https"
         permanent: true
 
-    # Add security headers for production
     security-headers:
       headers:
         frameDeny: true
@@ -74,12 +51,6 @@ http:
           # Generate these with: htpasswd -nb admin secure_password
           # The below is example only - replace with your own credentials!
           - "admin:$apr1$ruca84Hq$mbjdMZBAG.KWn7vfN/SNK/"  
-    
-    ipwhitelist:  # Optional: restrict access to specific IPs
-      ipWhiteList:
-        sourceRange:
-          - "127.0.0.1/32"  # localhost
-          - "192.168.1.0/24"  # example local network - customize to your needs
 
 entryPoints:
   web:
