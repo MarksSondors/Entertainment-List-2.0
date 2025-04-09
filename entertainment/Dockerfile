@@ -8,12 +8,12 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apk update && apk add --no-cache \
     gcc \
-    libpq-dev \
+    musl-dev \
+    postgresql-dev \
     netcat-openbsd \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    bash
 
 # Copy the requirements file
 COPY requirements.txt .
