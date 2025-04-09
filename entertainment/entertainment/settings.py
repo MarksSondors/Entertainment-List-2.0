@@ -101,9 +101,9 @@ WSGI_APPLICATION = 'entertainment.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': config('DB_ENGINE', default='django.db.backends.sqlite3'),
-        'NAME': config('DB_NAME', default=BASE_DIR / 'db.sqlite3'),
-        'USER': config('DB_USER', default=''),
-        'PASSWORD': config('DB_PASSWORD', default=''),
+        'NAME': config('POSTGRES_DB', default=BASE_DIR / 'db.sqlite3'),
+        'USER': config('POSTGRES_USER', default=''),
+        'PASSWORD': config('POSTGRES_PASSWORD', default=''),
         'HOST': config('DB_HOST', default=''),
         'PORT': config('DB_PORT', default=''),
     }
@@ -179,7 +179,7 @@ Q_CLUSTER = {
     'name': 'entertainment',
     'workers': 4,
     'recycle': 500,
-    'timeout': 300,
+    'timeout': 600,
     'compress': True,
     'save_limit': 250,
     'queue_limit': 500,
