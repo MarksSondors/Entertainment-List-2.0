@@ -39,7 +39,7 @@ SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_PRELOAD = True
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
-CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
 
 allowed_hosts = config('ALLOWED_HOSTS', default='', cast=lambda v: v.split(','))
 CSRF_TRUSTED_ORIGINS = ['https://' + host for host in allowed_hosts]
