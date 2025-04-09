@@ -437,7 +437,7 @@ def recent_activity(request):
             tmdb_id = content_object.tmdb_id
         elif isinstance(content_object, TVShow):
             content_type = "TV Show"
-            title = content_object.name
+            title = content_object.title
             poster_path = content_object.poster  # Assuming TVShow has a poster field
             tmdb_id = content_object.tmdb_id     # Assuming TVShow has a tmdb_id field
             if review.season:
@@ -474,7 +474,7 @@ def recent_activity(request):
             tmdb_id = content_object.tmdb_id
         elif isinstance(content_object, TVShow):
             content_type = "TV Show"
-            title = content_object.name
+            title = content_object.title
             poster_path = content_object.poster  # Assuming TVShow has a poster field
             tmdb_id = content_object.tmdb_id     # Assuming TVShow has a tmdb_id field
         else:

@@ -1,64 +1,43 @@
-from custom_auth.models import *
-from api.services.tv_shows import TVShowsService
-from api.services.movies import MoviesService
+from .models import *
+from api.services.tvshows import TVShowsService
 from django.contrib.contenttypes.models import ContentType
+from custom_auth.models import CustomUser
 
-def create_tv_show(show_id, show_poster=None, show_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=1, include_seasons=True):
-    """
-    Create a TV show and its related entities from TMDB API data.
+def extract_tvshow_data(tvshow_details, tvshow_poster=None, tvshow_backdrop=None, is_anime=False):
+    """Extract and format basic TV show data from API response"""
+    if not tvshow_poster:
+        tvshow_poster = f"https://image.tmdb.org/t/p/original{tvshow_details.get('poster_path')}" if tvshow_details.get('poster_path') else None
+    if not tvshow_backdrop:
+        tvshow_backdrop = f"https://image.tmdb.org/t/p/original{tvshow_details.get('backdrop_path')}" if tvshow_details.get('backdrop_path') else None
     
-    Args:
-        show_id: TMDB ID for the TV show
-        show_poster: URL for the poster image (if None, uses TMDB URL)
-        show_backdrop: URL for the backdrop image (if None, uses TMDB URL)
-        is_anime: Boolean flag to mark the show as anime
-        add_to_watchlist: Boolean flag to add the show to the user's watchlist
-        user_id: User ID for the watchlist (default is 1)
-        include_seasons: Whether to create seasons and episodes (can be time-consuming for large shows)
-    
-    Returns:
-        The created TVShow instance, or None if creation failed
-    """
-    # Get TV show details from TMDB API
-    show_details = TVShowsService().get_show_details(show_id, append_to_response='videos,credits,keywords')
-    if not show_details:
-        return None
-        
-    # Set poster and backdrop URLs
-    if not show_poster:
-        show_poster = f"https://image.tmdb.org/t/p/original{show_details.get('poster_path')}" if show_details.get('poster_path') else None
-    if not show_backdrop:
-        show_backdrop = f"https://image.tmdb.org/t/p/original{show_details.get('backdrop_path')}" if show_details.get('backdrop_path') else None
-    
-    # Find trailer
-    youtube_videos = [video for video in show_details.get('videos', {}).get('results', []) 
-                     if video.get('site') == 'YouTube' and video.get('type') == 'Trailer']
+    youtube_videos = [video for video in tvshow_details.get('videos', {}).get('results', []) 
+                    if video.get('site') == 'YouTube' and video.get('type') == 'Trailer']
     trailer_key = youtube_videos[0].get('key') if youtube_videos else None
     trailer_link = f'https://www.youtube.com/embed/{trailer_key}' if trailer_key else None
 
-    # Detect if anime (by production country)
-    if is_anime:
-        production_countries = show_details.get('production_countries', []) or show_details.get('origin_country', [])
-        is_anime = any(country == 'JP' or country.get('iso_3166_1') == 'JP' for country in production_countries)
+    if is_anime == True:
+        production_countries = tvshow_details.get('origin_country', [])
+        is_anime = 'JP' in production_countries
 
-    # Create the TV show dictionary with basic properties
-    show_dict = {
-        'title': show_details.get('name'),
-        'original_title': show_details.get('original_name') or show_details.get('name'),
-        'poster': show_poster,
-        'backdrop': show_backdrop,
-        'first_air_date': show_details.get('first_air_date'),
-        'last_air_date': show_details.get('last_air_date'),
-        'tmdb_id': show_details.get('id'),
-        'description': show_details.get('overview'),
-        'rating': show_details.get('vote_average'),
+    return {
+        'title': tvshow_details.get('name'),
+        'original_title': tvshow_details.get('original_name'),
+        'poster': tvshow_poster,
+        'backdrop': tvshow_backdrop,
+        'first_air_date': tvshow_details.get('first_air_date'),
+        'last_air_date': tvshow_details.get('last_air_date'),
+        'tmdb_id': tvshow_details.get('id'),
+        'description': tvshow_details.get('overview'),
+        'rating': tvshow_details.get('vote_average'),
         'trailer': trailer_link,
         'is_anime': is_anime,
-        'status': show_details.get('status'),
+        'status': tvshow_details.get('status'),
     }
-    
-    # Create genres, countries and keywords
-    genres = show_details.get('genres', [])
+
+def process_genres_countries_keywords(tvshow_details):
+    """Process and create genre, country and keyword instances"""
+    # Process genres
+    genres = tvshow_details.get('genres', [])
     genre_instances = []
     for genre in genres:
         genre_instance, _ = Genre.objects.get_or_create(
@@ -67,24 +46,17 @@ def create_tv_show(show_id, show_poster=None, show_backdrop=None, is_anime=False
         )
         genre_instances.append(genre_instance)
 
-    # Handle country data which might be in different formats
-    countries = show_details.get('production_countries', []) or show_details.get('origin_country', [])
+    # Process countries
+    countries = tvshow_details.get('origin_country', [])
     country_instances = []
-    for country in countries:
-        if isinstance(country, dict):  # Full country object
-            country_instance, _ = Country.objects.get_or_create(
-                iso_3166_1=country.get('iso_3166_1'),
-                defaults={'name': country.get('name')}
-            )
-        else:  # Just country code
-            country_instance, _ = Country.objects.get_or_create(
-                iso_3166_1=country,
-                defaults={'name': country}  # Will be updated later if needed
-            )
+    for country_code in countries:
+        country_instance, _ = Country.objects.get_or_create(
+            iso_3166_1=country_code
+        )
         country_instances.append(country_instance)
 
-    # Keywords
-    keywords = show_details.get('keywords', {}).get('results', [])
+    # Process keywords
+    keywords = tvshow_details.get('keywords', {}).get('results', [])
     keyword_instances = []
     for keyword in keywords:
         keyword_instance, _ = Keyword.objects.get_or_create(
@@ -93,31 +65,14 @@ def create_tv_show(show_id, show_poster=None, show_backdrop=None, is_anime=False
         )
         keyword_instances.append(keyword_instance)
 
-    # Create the TV show instance
-    tv_show = TVShow.objects.create(**show_dict)
-    tv_show.genres.set(genre_instances)
-    tv_show.countries.set(country_instances)
-    tv_show.keywords.set(keyword_instances)
+    return genre_instances, country_instances, keyword_instances
 
-    # Add to watchlist if specified
-    if add_to_watchlist:
-        Watchlist.objects.create(
-            user_id=user_id,
-            content_type=ContentType.objects.get_for_model(tv_show),
-            object_id=tv_show.id
-        )
+def process_cast(tvshow, cast, tvshows_service):
+    """Process cast members from TV show credits"""
+    tvshow_content_type = ContentType.objects.get_for_model(tvshow)
     
-    # Get the TV show's content type for MediaPerson
-    tv_show_content_type = ContentType.objects.get_for_model(tv_show)
-    
-    # Process cast
-    credits = TVShowsService().get_show_credits(show_id)
-    cast = credits.get('cast', [])
     for index, person in enumerate(cast):
-        person_details = MoviesService().get_person_details(person.get('id'))
-        if not person_details:
-            continue
-            
+        person_details = tvshows_service.get_person_details(person.get('id'))
         person_instance, _ = Person.objects.get_or_create(
             tmdb_id=person_details.get('id'),
             defaults={
@@ -126,36 +81,34 @@ def create_tv_show(show_id, show_poster=None, show_backdrop=None, is_anime=False
                 'date_of_birth': person_details.get('birthday'),
                 'date_of_death': person_details.get('deathday'),
                 'bio': person_details.get('biography'),
-                'imdb_id': person_details.get('imdb_id'),
+                'imdb_id': person_details.get('imdb_id')
             }
         )
 
         person_instance.is_actor = True
         person_instance.save()
         
-        roles = person.get('roles')
-        if roles:
-            # combie them into a single string
-            roles = ', '.join([role.get('character') for role in roles])
-        else:
-            roles = person.get('character')
-        # Create MediaPerson for cast member
         MediaPerson.objects.create(
-            content_type=tv_show_content_type,
-            object_id=tv_show.id,
+            content_type=tvshow_content_type,
+            object_id=tvshow.id,
             person=person_instance,
             role="Actor",
-            character_name=roles,
+            character_name=person.get('character'),
             order=person.get('order', index)
         )
+
+def process_crew(tvshow, crew, tvshows_service):
+    """Process crew members from TV show credits"""
+    tvshow_content_type = ContentType.objects.get_for_model(tvshow)
     
-    
-    # Process created_by field for creators
-    for creator in show_details.get('created_by', []):
-        person_details = MoviesService().get_person_details(creator.get('id'))
-        if not person_details:
+    for person in crew:
+        job = person.get('job')
+        
+        # Skip if not a creator/writer/producer
+        if job not in ['Creator', 'Executive Producer', 'Writer']:
             continue
-            
+        
+        person_details = tvshows_service.get_person_details(person.get('id'))
         person_instance, _ = Person.objects.get_or_create(
             tmdb_id=person_details.get('id'),
             defaults={
@@ -168,55 +121,102 @@ def create_tv_show(show_id, show_poster=None, show_backdrop=None, is_anime=False
             }
         )
         
-        # Set creator flag
-        person_instance.is_tv_creator = True
+        # Set appropriate role
+        if job == 'Creator':
+            person_instance.is_creator = True
+        elif job == 'Writer':
+            person_instance.is_writer = True
+        elif job == 'Executive Producer':
+            person_instance.is_producer = True
+        
         person_instance.save()
         
-        # Create MediaPerson entry
         MediaPerson.objects.create(
-            content_type=tv_show_content_type,
-            object_id=tv_show.id,
+            content_type=tvshow_content_type,
+            object_id=tvshow.id,
             person=person_instance,
-            role="Creator"
+            role=job
         )
-    
-    # Create seasons and episodes if requested
-    if include_seasons:
-        for season_data in show_details.get('seasons', []):
-            season_number = season_data.get('season_number')
-                
-            # Get detailed season info
-            season_details = TVShowsService().get_season_details(
-                show_id=show_id, 
-                season_number=season_number
+
+def process_seasons(tvshow, seasons_data, tvshows_service):
+    """Process seasons and episodes for a TV show"""
+    for season_data in seasons_data:
+        season_number = season_data.get('season_number')
+        
+        # Skip specials (season 0) if desired
+        if season_number == 0:
+            continue
+        
+        # Get detailed season information
+        season_details = tvshows_service.get_season_details(tvshow.tmdb_id, season_number)
+        if not season_details:
+            continue
+        
+        season = Season.objects.create(
+            show=tvshow,
+            title=season_details.get('name'),
+            season_number=season_number,
+            air_date=season_details.get('air_date'),
+            overview=season_details.get('overview'),
+            poster=f"https://image.tmdb.org/t/p/original{season_details.get('poster_path')}" if season_details.get('poster_path') else None,
+            tmdb_id=season_details.get('id')
+        )
+        
+        # Process episodes for this season
+        episodes = season_details.get('episodes', [])
+        for episode_data in episodes:
+            Episode.objects.create(
+                season=season,
+                title=episode_data.get('name'),
+                episode_number=episode_data.get('episode_number'),
+                air_date=episode_data.get('air_date'),
+                overview=episode_data.get('overview'),
+                still=f"https://image.tmdb.org/t/p/original{episode_data.get('still_path')}" if episode_data.get('still_path') else None,
+                runtime=episode_data.get('runtime'),
+                rating=episode_data.get('vote_average'),
+                tmdb_id=episode_data.get('id')
             )
-            
-            if not season_details:
-                continue
-                
-            # Create season
-            season = Season.objects.create(
-                show=tv_show,
-                title=season_details.get('name'),
-                season_number=season_number,
-                air_date=season_details.get('air_date'),
-                overview=season_details.get('overview'),
-                poster=f"https://image.tmdb.org/t/p/original{season_details.get('poster_path')}" if season_details.get('poster_path') else None,
-                tmdb_id=season_details.get('id')
-            )
-            
-            # Create episodes for this season
-            for episode_data in season_details.get('episodes', []):
-                Episode.objects.create(
-                    season=season,
-                    title=episode_data.get('name'),
-                    episode_number=episode_data.get('episode_number'),
-                    air_date=episode_data.get('air_date'),
-                    overview=episode_data.get('overview'),
-                    still=f"https://image.tmdb.org/t/p/original{episode_data.get('still_path')}" if episode_data.get('still_path') else None,
-                    runtime=episode_data.get('runtime'),
-                    rating=episode_data.get('vote_average'),
-                    tmdb_id=episode_data.get('id')
-                )
+
+def add_to_tvshow_watchlist(tvshow, user_id):
+    """Add TV show to watchlist"""
+    Watchlist.objects.create(
+        user_id=user_id,
+        content_type=ContentType.objects.get_for_model(tvshow),
+        object_id=tvshow.id
+    )
+
+def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
+    """Main function to create a TV show from TMDB ID"""
+    tvshows_service = TVShowsService()
     
-    return tv_show
+    # Get TV show details from API
+    tvshow_details = tvshows_service.get_tvshow_details(tvshow_id, append_to_response='videos,credits,keywords')
+    if not tvshow_details:
+        return None
+    
+    # Extract basic TV show data
+    tvshow_dict = extract_tvshow_data(tvshow_details, tvshow_poster, tvshow_backdrop, is_anime)
+    
+    # Process metadata
+    genre_instances, country_instances, keyword_instances = process_genres_countries_keywords(tvshow_details)
+    
+    # Create the TV show instance with proper user assignment
+    user = CustomUser.objects.filter(id=user_id).first() if user_id else None
+    tvshow = TVShow.objects.create(**tvshow_dict, added_by=user)
+    tvshow.genres.set(genre_instances)
+    tvshow.countries.set(country_instances)
+    tvshow.keywords.set(keyword_instances)
+    
+    # Add to watchlist if specified
+    if add_to_watchlist and user_id:
+        add_to_tvshow_watchlist(tvshow, user_id)
+    
+    # Process cast and crew
+    credits = tvshow_details.get('credits', {})
+    process_cast(tvshow, credits.get('cast', []), tvshows_service)
+    process_crew(tvshow, credits.get('crew', []), tvshows_service)
+    
+    # Process seasons and episodes
+    process_seasons(tvshow, tvshow_details.get('seasons', []), tvshows_service)
+    
+    return tvshow
