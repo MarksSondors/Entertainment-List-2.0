@@ -46,6 +46,8 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    sysctls:
+      - vm.overcommit_memory=1
     networks:
       - webnet
     restart: unless-stopped
@@ -77,7 +79,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --interval 86400 --cleanup  # Check for updates once per day
     environment:
-      - TZ=UTC
+      - TZ=Europe/Riga
     networks:
       - webnet
     restart: unless-stopped
