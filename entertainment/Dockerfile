@@ -1,19 +1,18 @@
 FROM python:alpine
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Set the working directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apk update && apk add --no-cache \
     gcc \
-    libpq-dev \
-    netcat-openbsd \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    musl-dev \
+    postgresql-dev \
+    netcat-openbsd
 
 # Copy the requirements file
 COPY requirements.txt .
