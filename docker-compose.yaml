@@ -46,8 +46,6 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
-    sysctls:
-      - vm.overcommit_memory=1
     networks:
       - webnet
     restart: unless-stopped
