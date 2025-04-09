@@ -23,6 +23,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .services.recommendation import MovieRecommender
+from .tasks import create_movie_async
 
 # Create your views here.
 
@@ -36,9 +37,36 @@ def movie_page(request, movie_id):
             'keywords'
         ).get(tmdb_id=movie_id)
     except Movie.DoesNotExist:
-        movie_db = create_movie(movie_id)
-        if not movie_db:
-            raise Http404(f"Movie with ID {movie_id} could not be created")
+        task_id = create_movie_async(
+            movie_id=movie_id,
+            user_id=request.user.id,
+            add_to_watchlist=False
+        )
+        # Replace the wait_for_task import and usage with:
+        from django_q.models import Task
+        from time import sleep
+        
+        # Wait for the task to complete
+        max_attempts = 30
+        for _ in range(max_attempts):
+            try:
+                task = Task.objects.get(id=task_id)
+                if task.success is not None:  # Task has completed (success or failure)
+                    break
+            except Task.DoesNotExist:
+                pass
+            sleep(1)
+            
+        # Check task result
+        try:
+            task = Task.objects.get(id=task_id)
+            if task.success:
+                movie_db = Movie.objects.get(tmdb_id=movie_id)
+            else:
+                return JsonResponse({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Task.DoesNotExist:
+            return JsonResponse({"error": "Task processing failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
     # get user information if he has written a review is the movie in his watchlist
     user_watchlist = Watchlist.objects.filter(
         user=request.user,
@@ -134,9 +162,12 @@ class MovieViewSet(viewsets.ViewSet):
     
     @extend_schema(
         summary="Create Movie",
-        description="Create a new movie.",
+        description="Create a new movie in the background.",
         request=MovieSerializer,
-        responses={201: MovieSerializer},
+        responses={
+            201: MovieSerializer,
+            202: OpenApiExample("Task Queued", value={"message": "Movie creation has been queued", "task_id": "task-uuid-example"})
+        },
     )
     def create(self, request):
         movie_id = request.data.get('id')
@@ -164,18 +195,27 @@ class MovieViewSet(viewsets.ViewSet):
         movie_backdrop = request.data.get('backdrop')
 
         is_anime = request.data.get('is_anime', False)
-        # if movie_poster or movie_backdrop is added add the url https://image.tmdb.org/t/p/original to the front
+        # Add the URL base if poster or backdrop is provided
         if movie_poster:
             movie_poster = f"https://image.tmdb.org/t/p/original{movie_poster}"
         if movie_backdrop:
             movie_backdrop = f"https://image.tmdb.org/t/p/original{movie_backdrop}"
 
-        movie = create_movie(movie_id, movie_poster, movie_backdrop, is_anime, add_to_watchlist, request.user.id)
-        if not movie:
-            return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
+        # Queue the movie creation as a background task
+        task_id = create_movie_async(
+            movie_id=movie_id, 
+            movie_poster=movie_poster, 
+            movie_backdrop=movie_backdrop, 
+            is_anime=is_anime, 
+            add_to_watchlist=add_to_watchlist, 
+            user_id=request.user.id
+        )
         
-            
-        return Response(MovieSerializer(movie).data, status=status.HTTP_201_CREATED)
+        # Return a response immediately with the task ID
+        return Response({
+            "message": "Movie creation has been queued",
+            "task_id": str(task_id)
+        }, status=status.HTTP_202_ACCEPTED)
     
     @extend_schema(
         summary="Get Movie",
@@ -667,3 +707,55 @@ def movie_recommendations(request):
         })
     
     return Response(data)
+
+# Add this new view to check task status
+
+class MovieTaskStatusView(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Check Movie Task Status",
+        description="Check the status of a background movie creation task.",
+        parameters=[
+            OpenApiParameter(name="task_id", description="ID of the task to check", required=True, type=str),
+        ],
+        responses={
+            200: OpenApiExample("Task Status", value={
+                "complete": True,
+                "success": True,
+                "movie": {"id": 1, "title": "Movie Name", "...": "other fields"}
+            })
+        }
+    )
+    def get(self, request):
+        task_id = request.GET.get('task_id')
+        if not task_id:
+            return Response({"error": "Task ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django_q.models import Task
+        try:
+            task = Task.objects.get(id=task_id)
+            
+            response_data = {
+                "complete": task.success is not None,
+                "success": task.success if task.success is not None else None,
+            }
+            
+            # If task is complete and successful, try to get the movie
+            if task.success and task.result:
+                try:
+                    # The result should be a Movie object
+                    movie = task.result
+                    response_data["movie"] = MovieSerializer(movie).data
+                except Exception as e:
+                    response_data["result"] = str(task.result)
+                    response_data["error"] = str(e)
+            elif not task.success and task.result:
+                # If task failed, include error information
+                response_data["error"] = str(task.result)
+                
+            return Response(response_data)
+            
+        except Task.DoesNotExist:
+            return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)

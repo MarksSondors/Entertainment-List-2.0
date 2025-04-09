@@ -410,17 +410,14 @@ def recent_reviews(request):
 def recent_activity(request):
     """
     Returns recently added reviews, watchlist items and movies added to the database, combines them in the order of most recent first.
+    Groups activities that happened at the same minute.
     """
-    # Fetch 10 most recent reviews
-    reviews = Review.objects.all().order_by('-date_added')[:10]
+    # Fetch recent data
+    reviews = Review.objects.all().order_by('-date_added')[:15]
+    watchlist_items = Watchlist.objects.all().order_by('-date_added')[:15]
+    movies = Movie.objects.all().order_by('-date_added')[:15]
     
-    # Fetch 10 most recent watchlist items
-    watchlist_items = Watchlist.objects.all().order_by('-date_added')[:10]
-    
-    # Fetch 10 most recent movies added to the database
-    movies = Movie.objects.all().order_by('-date_added')[:10]
-    
-    # Format and combine activities
+    # Format individual activities
     activities = []
     
     # Format reviews
@@ -429,7 +426,6 @@ def recent_activity(request):
         poster_path = None
         tmdb_id = None
         
-        # Determine content type and title
         if isinstance(content_object, Movie):
             content_type = "Movie"
             title = content_object.title
@@ -438,14 +434,16 @@ def recent_activity(request):
         elif isinstance(content_object, TVShow):
             content_type = "TV Show"
             title = content_object.title
-            poster_path = content_object.poster  # Assuming TVShow has a poster field
-            tmdb_id = content_object.tmdb_id     # Assuming TVShow has a tmdb_id field
+            poster_path = content_object.poster
+            tmdb_id = content_object.tmdb_id
             if review.season:
                 title += f" - {review.season}"
         else:
-            # Default fallback
             content_type = review.content_type.model.capitalize()
             title = getattr(content_object, 'title', 'Unknown')
+        
+        # Use the minute as the key for grouping
+        timestamp_key = review.date_added.strftime('%Y-%m-%d %H:%M')
         
         activities.append({
             'type': 'review',
@@ -455,7 +453,9 @@ def recent_activity(request):
             'rating': review.rating,
             'content_type': content_type,
             'date': review.date_added,
-            'timestamp': review.date_added.strftime('%Y-%m-%d %H:%M'),
+            'timestamp': timestamp_key,
+            'timestamp_key': timestamp_key,
+            'media_id': content_object.id,
             'poster_path': poster_path,
             'tmdb_id': tmdb_id
         })
@@ -466,7 +466,6 @@ def recent_activity(request):
         poster_path = None
         tmdb_id = None
         
-        # Determine content type and title
         if isinstance(content_object, Movie):
             content_type = "Movie"
             title = content_object.title
@@ -475,12 +474,13 @@ def recent_activity(request):
         elif isinstance(content_object, TVShow):
             content_type = "TV Show"
             title = content_object.title
-            poster_path = content_object.poster  # Assuming TVShow has a poster field
-            tmdb_id = content_object.tmdb_id     # Assuming TVShow has a tmdb_id field
+            poster_path = content_object.poster
+            tmdb_id = content_object.tmdb_id
         else:
-            # Default fallback
             content_type = item.content_type.model.capitalize()
             title = getattr(content_object, 'title', 'Unknown')
+        
+        timestamp_key = item.date_added.strftime('%Y-%m-%d %H:%M')
             
         activities.append({
             'type': 'watchlist',
@@ -488,7 +488,9 @@ def recent_activity(request):
             'title': title,
             'content_type': content_type,
             'date': item.date_added,
-            'timestamp': item.date_added.strftime('%Y-%m-%d %H:%M'),
+            'timestamp': timestamp_key,
+            'timestamp_key': timestamp_key,
+            'media_id': content_object.id,
             'action': 'added to watchlist',
             'poster_path': poster_path,
             'tmdb_id': tmdb_id
@@ -496,13 +498,17 @@ def recent_activity(request):
     
     # Format new movies
     for movie in movies:
+        timestamp_key = movie.date_added.strftime('%Y-%m-%d %H:%M')
+        
         activities.append({
             'type': 'new_content',
             'username': movie.added_by.username if movie.added_by else 'System',
             'title': movie.title,
             'content_type': 'Movie',
             'date': movie.date_added,
-            'timestamp': movie.date_added.strftime('%Y-%m-%d %H:%M'),
+            'timestamp': timestamp_key,
+            'timestamp_key': timestamp_key,
+            'media_id': movie.id,
             'action': 'added to database',
             'poster_path': movie.poster,
             'tmdb_id': movie.tmdb_id
@@ -511,15 +517,54 @@ def recent_activity(request):
     # Sort all activities by date (most recent first)
     activities.sort(key=lambda x: x['date'], reverse=True)
     
-    # Remove the date field used for sorting (keeping only the formatted timestamp)
+    # Group activities by timestamp and media_id
+    grouped_activities = {}
     for activity in activities:
-        del activity['date']
+        key = (activity['timestamp_key'], activity['title'], activity['media_id'])
+        if key not in grouped_activities:
+            grouped_activities[key] = {
+                'title': activity['title'],
+                'content_type': activity['content_type'],
+                'timestamp': activity['timestamp'],
+                'username': activity['username'],
+                'poster_path': activity['poster_path'],
+                'tmdb_id': activity['tmdb_id'],
+                'actions': []
+            }
+            if 'content' in activity:
+                grouped_activities[key]['content'] = activity['content']
+            if 'rating' in activity:
+                grouped_activities[key]['rating'] = activity['rating']
+        
+        # Add action based on type
+        if activity['type'] == 'review':
+            grouped_activities[key]['actions'].append('reviewed')
+        elif activity['type'] == 'watchlist':
+            grouped_activities[key]['actions'].append('added to watchlist')
+        elif activity['type'] == 'new_content':
+            grouped_activities[key]['actions'].append('added to database')
     
-    # Take only the first 15 activities across all types
-    activities = activities[:15]
+    # Convert grouped activities to list and format actions
+    result = []
+    for _, activity in grouped_activities.items():
+        # Format the actions into a readable string
+        if len(activity['actions']) == 1:
+            activity['action'] = activity['actions'][0]
+        else:
+            activity['action'] = ' and '.join([', '.join(activity['actions'][:-1]), activity['actions'][-1]])
+        
+        # Remove actions list from final output
+        del activity['actions']
+        result.append(activity)
+    
+    # Sort by timestamp again to ensure newest first
+    result.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    # Take only the first 15 grouped activities
+    result = result[:15]
     
     # Return as JSON
-    return JsonResponse(activities, safe=False)
+    return JsonResponse(result, safe=False)
 
 
 

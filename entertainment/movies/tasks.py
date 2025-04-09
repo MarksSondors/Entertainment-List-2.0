@@ -276,3 +276,51 @@ def setup_scheduled_tasks():
         }
     )
     return "Scheduled task setup complete"
+
+def create_movie_async(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
+    """
+    Queue movie creation as an async task using Django Q
+    This returns the task ID which can be used to check status later
+    """
+    # Queue the task with Django Q
+    task_id = async_task(
+        'movies.tasks.create_movie_task',
+        movie_id, 
+        movie_poster, 
+        movie_backdrop, 
+        is_anime, 
+        add_to_watchlist, 
+        user_id,
+        hook='movies.tasks.movie_task_complete_hook'
+    )
+    return task_id
+
+def create_movie_task(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
+    """
+    Task function that is called by Django Q worker
+    """
+    # Use a local import to avoid circular imports
+    from .parsers import create_movie
+    
+    return create_movie(
+        movie_id=movie_id, 
+        movie_poster=movie_poster, 
+        movie_backdrop=movie_backdrop, 
+        is_anime=is_anime, 
+        add_to_watchlist=add_to_watchlist, 
+        user_id=user_id
+    )
+
+def movie_task_complete_hook(task):
+    """
+    Optional hook that runs when the movie creation task completes
+    You can use this to send notifications or update status
+    """
+    if task.success:
+        # Task completed successfully
+        movie = task.result
+        if movie:
+            print(f"Movie '{movie.title}' was successfully created.")
+    else:
+        # Task failed
+        print(f"Movie creation failed: {task.result}")

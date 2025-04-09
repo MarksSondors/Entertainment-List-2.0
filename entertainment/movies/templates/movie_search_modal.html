@@ -107,19 +107,24 @@
 </div>
 </div>
 
-<!-- Loading Screen -->
+<!-- Update the loading screen modal for task status info -->
 <div id="loading-screen-modal" class="modal" style="display: none; z-index: 1200;">
-<div class="modal-content window" style="width: 300px;">
-<div class="title-bar">
-<div class="title-bar-text">Adding Movie</div>
-</div>
-<div class="window-body" style="text-align: center; padding: 20px;">
-<p>Adding movie to your list...</p>
-<div class="progress-indicator">
-<span class="progress-indicator-bar"></span>
-</div>
-</div>
-</div>
+    <div class="modal-content window" style="width: 400px;">
+        <div class="title-bar">
+            <div class="title-bar-text">Adding Movie</div>
+        </div>
+        <div class="window-body" style="text-align: center; padding: 20px;">
+            <p id="movie-loading-message">Adding movie to your list...</p>
+            <div class="progress-indicator">
+                <span class="progress-indicator-bar"></span>
+            </div>
+            <div id="movie-task-info" style="margin-top: 15px; font-size: 12px; display: none;">
+                <p>This may take some time. You can close this dialog and the process will continue in the background.</p>
+                <p>Your movie will be available in your library once the process completes.</p>
+                <button id="movie-close-loading-btn">Close</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Add success/error message dialog -->
@@ -186,6 +191,8 @@ let allResults = [];
 let currentPage = 1;
 let totalPages = 0;
 let selectedMovie = null;
+let taskCheckInterval = null;
+let currentTaskId = null;
 
 // Modal Control Functions
 function openModal() {
@@ -413,6 +420,44 @@ function fetchResults(query, page) {
         });
 }
 
+// Function to check task status
+function checkTaskStatus(taskId) {
+    $.ajax({
+        url: "{% url 'movie-task-status' %}",
+        method: "GET",
+        data: { task_id: taskId },
+        success: function(response) {
+            if (response.complete) {
+                // Task is complete
+                clearInterval(taskCheckInterval);
+                
+                if (response.success) {
+                    // Task was successful
+                    $("#loading-screen-modal").hide();
+                    showMessage("Success", "Movie added successfully!");
+                    closeModal();
+                } else {
+                    // Task failed
+                    $("#loading-screen-modal").hide();
+                    let errorMsg = "Failed to add movie.";
+                    if (response.error) {
+                        errorMsg = response.error;
+                    }
+                    showMessage("Error", errorMsg, true);
+                }
+            } else {
+                // Task is still running
+                $("#movie-loading-message").text("Adding movie to your list... (Processing in background)");
+                $("#movie-task-info").show();
+            }
+        },
+        error: function() {
+            // Handle error checking task status
+            console.log("Error checking task status");
+        }
+    });
+}
+
 // Submit movie to API
 function submitMovie() {
         const movieId = $("#tmdb_id").val();
@@ -451,10 +496,30 @@ function submitMovie() {
                                         "X-CSRFToken": csrfToken
                         },
                         success: function(response) {
-                                        // Hide loading screen
-                                        $("#loading-screen-modal").hide();
-                                        showMessage("Success", "Movie added successfully!");
-                                        closeModal();
+                            // Handle background task response
+                            if (response.task_id) {
+                                currentTaskId = response.task_id;
+                                
+                                // Show message that task is running in background after 3 seconds
+                                setTimeout(function() {
+                                    $("#movie-task-info").show();
+                                }, 3000);
+                                
+                                // Start checking task status
+                                taskCheckInterval = setInterval(function() {
+                                    checkTaskStatus(currentTaskId);
+                                }, 5000); // Check every 5 seconds
+                                
+                                // Do initial check after 2 seconds
+                                setTimeout(function() {
+                                    checkTaskStatus(currentTaskId);
+                                }, 2000);
+                            } else {
+                                // If no task_id, assume it's a direct response
+                                $("#loading-screen-modal").hide();
+                                showMessage("Success", "Movie added successfully!");
+                                closeModal();
+                            }
                         },
                         error: function(xhr) {
                                         // Hide loading screen
@@ -519,6 +584,16 @@ $(document).ready(function() {
                                         currentPage++;
                                         fetchResults($('#query').val(), currentPage);
                         }
+        });
+
+        // Add this to your existing document ready function
+        $("#movie-close-loading-btn").on("click", function() {
+            $("#loading-screen-modal").hide();
+            // Note: We keep the interval running to check status in the background
+            showMessage("Background Processing", 
+                "The movie addition process will continue in the background. " +
+                "You can check your library later to see when it's complete.");
+            closeModal();
         });
 });
 </script>
@@ -622,5 +697,13 @@ $(document).ready(function() {
 
 .status-link:hover {
     text-decoration: underline;
+}
+
+#movie-task-info {
+    background-color: #ffffcc;
+    border: 1px solid #ffcc00;
+    padding: 10px;
+    margin-top: 15px;
+    text-align: left;
 }
 </style>

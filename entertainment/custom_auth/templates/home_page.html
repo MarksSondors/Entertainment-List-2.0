@@ -182,7 +182,11 @@
                     </div>
                 </div>
                 <div class="status-bar">
-                    <div class="status-bar-field">Last updated: Today</div>
+                    <div class="status-bar-field" id="activity-last-updated">Last updated: Just now</div>
+                    <div class="status-bar-field">
+                        <label><input type="checkbox" id="auto-refresh-toggle" checked> Auto-refresh</label>
+                        <span id="refresh-indicator" style="display: none; margin-left: 5px;">⟳</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -469,6 +473,30 @@
             padding: 0;
             margin: 0;
         }
+        
+        @keyframes highlight {
+            0% { background-color: #ffffcc; }
+            100% { background-color: #ffffff; }
+        }
+        
+        .new-activity {
+            animation: highlight 3s ease-out;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .spinning {
+            display: inline-block;
+            animation: spin 1s infinite linear;
+        }
+        
+        #refresh-indicator {
+            font-size: 16px;
+            font-weight: bold;
+        }
     </style>
     
     <script>
@@ -624,104 +652,190 @@
                     '<div class="poster-item"><div class="alert alert-danger">Failed to load recommendations</div></div>';
             });
             
-        // Fetch recent activity
-        fetch('/activity/recent/')
-            .then(response => response.json())
-            .then(data => {
-                const activityList = document.getElementById('recent_activity');
-                activityList.innerHTML = '';
-                
-                if (data.length === 0) {
-                    activityList.innerHTML = '<li class="activity-empty">No activity yet. Be the first to contribute!</li>';
-                    return;
-                }
-                
-                data.slice(0, 10).forEach(activity => {
-                    const activityItem = document.createElement('li');
-                    activityItem.className = 'activity-item';
+        // Modified variables - removed lastActivityTimestamp since we don't need it
+        let activityRefreshInterval = null;
+        let isRefreshing = false;
+        
+        // Extract the activity fetching into a reusable function - modified to remove ?since parameter
+        function fetchRecentActivity(showRefreshIndicator = true) {
+            if (isRefreshing) return; // Prevent multiple concurrent requests
+            isRefreshing = true;
+            
+            if (showRefreshIndicator) {
+                // Show refresh indicator
+                const indicator = document.getElementById('refresh-indicator');
+                indicator.style.display = 'inline-block';
+                indicator.classList.add('spinning');
+            }
+            
+            fetch('/activity/recent/') // Removed the ?since parameter
+                .then(response => response.json())
+                .then(data => {
+                    isRefreshing = false;
+                    const activityList = document.getElementById('recent_activity');
                     
-                    // Build the poster placeholder - default poster if none available
-                    const posterPath = activity.poster_path || 'https://via.placeholder.com/60x90/333333/FFFFFF?text=No+Image';
+                    // Hide refresh indicator
+                    document.getElementById('refresh-indicator').style.display = 'none';
+                    document.getElementById('refresh-indicator').classList.remove('spinning');
                     
-                    // Set the URL based on content type
-                    let detailUrl = '#';
-                    if (activity.content_type === 'Movie' && activity.tmdb_id) {
-                        detailUrl = `/movies/${activity.tmdb_id}`;
-                    } else if (activity.content_type === 'TV Show' && activity.tmdb_id) {
-                        detailUrl = `/tvshows/${activity.tmdb_id}`;
+                    // Always update last updated time
+                    const now = new Date();
+                    document.getElementById('activity-last-updated').textContent = 
+                        'Last updated: ' + now.toLocaleTimeString();
+                    
+                    // Always clear the list to display fresh data in correct order
+                    activityList.innerHTML = '';
+                    
+                    if (data.length === 0) {
+                        activityList.innerHTML = '<li class="activity-empty">No activity yet. Be the first to contribute!</li>';
+                        return;
                     }
                     
-                    // Handle different types of activities with improved layout
-                    if (activity.type === 'review') {
-                        // Create a cleaner rating display
-                        const ratingValue = Math.round(activity.rating);
-                        const ratingClass = ratingValue >= 7 ? 'high-rating' : 
-                                         ratingValue >= 5 ? 'mid-rating' : 'low-rating';
+                    // Add activities in the order they come from the server
+                    data.forEach(activity => {
+                        const activityItem = document.createElement('li');
+                        activityItem.className = 'activity-item';
                         
-                        activityItem.innerHTML = `
-                            <a href="${detailUrl}" class="activity-link">
-                                <div class="activity-content">
-                                    <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
-                                    <div class="activity-info">
-                                        <div class="activity-header">
-                                            <span class="activity-username">${activity.username}</span>
-                                            <span class="activity-timestamp">${activity.timestamp}</span>
+                        // Build the poster placeholder
+                        const posterPath = activity.poster_path || 'https://via.placeholder.com/60x90/333333/FFFFFF?text=No+Image';
+                        
+                        // Set URL based on content type
+                        let detailUrl = '#';
+                        if (activity.content_type === 'Movie' && activity.tmdb_id) {
+                            detailUrl = `/movies/${activity.tmdb_id}`;
+                        } else if (activity.content_type === 'TV Show' && activity.tmdb_id) {
+                            detailUrl = `/tvshows/${activity.tmdb_id}`;
+                        }
+                        
+                        // Build activity content based on what data is available
+                        if ('rating' in activity) {
+                            // This is a review activity
+                            const ratingValue = Math.round(activity.rating);
+                            const ratingClass = ratingValue >= 7 ? 'high-rating' : 
+                                              ratingValue >= 5 ? 'mid-rating' : 'low-rating';
+                            
+                            activityItem.innerHTML = `
+                                <a href="${detailUrl}" class="activity-link">
+                                    <div class="activity-content">
+                                        <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                        <div class="activity-info">
+                                            <div class="activity-header">
+                                                <span class="activity-username">${activity.username}</span>
+                                                <span class="activity-timestamp">${activity.timestamp}</span>
+                                            </div>
+                                            <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                            <div class="activity-text">${activity.content ? `"${activity.content}"` : ''}</div>
+                                            <div class="activity-rating ${ratingClass}">${ratingValue}<span class="rating-max">/10</span></div>
                                         </div>
-                                        <div class="activity-title">${activity.content_type}: ${activity.title}</div>
-                                        <div class="activity-text">"${activity.content}"</div>
-                                        <div class="activity-rating ${ratingClass}">${ratingValue}<span class="rating-max">/10</span></div>
                                     </div>
-                                </div>
-                            </a>
-                        `;
-                    } 
-                    else if (activity.type === 'watchlist') {
-                        activityItem.innerHTML = `
-                            <a href="${detailUrl}" class="activity-link">
-                                <div class="activity-content">
-                                    <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
-                                    <div class="activity-info">
-                                        <div class="activity-header">
-                                            <span class="activity-username">${activity.username}</span>
-                                            <span class="activity-timestamp">${activity.timestamp}</span>
+                                </a>
+                            `;
+                        } 
+                        else {
+                            // This is a watchlist or new content activity
+                            activityItem.innerHTML = `
+                                <a href="${detailUrl}" class="activity-link">
+                                    <div class="activity-content">
+                                        <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                        <div class="activity-info">
+                                            <div class="activity-header">
+                                                <span class="activity-username">${activity.username}</span>
+                                                <span class="activity-timestamp">${activity.timestamp}</span>
+                                            </div>
+                                            <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                            <div class="activity-action">${activity.action}</div>
                                         </div>
-                                        <div class="activity-title">${activity.content_type}: ${activity.title}</div>
-                                        <div class="activity-action">${activity.action}</div>
                                     </div>
-                                </div>
-                            </a>
-                        `;
-                    }
-                    else if (activity.type === 'new_content') {
-                        activityItem.innerHTML = `
-                            <a href="${detailUrl}" class="activity-link">
-                                <div class="activity-content">
-                                    <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
-                                    <div class="activity-info">
-                                        <div class="activity-header">
-                                            <span class="activity-username">${activity.username}</span>
-                                            <span class="activity-timestamp">${activity.timestamp}</span>
-                                        </div>
-                                        <div class="activity-title">${activity.title}</div>
-                                        <div class="activity-action">${activity.content_type} ${activity.action}</div>
-                                    </div>
-                                </div>
-                            </a>
-                        `;
-                    }
+                                </a>
+                            `;
+                        }
+                        
+                        // Simply append to maintain server's order
+                        activityList.appendChild(activityItem);
+                    });
                     
-                    activityList.appendChild(activityItem);
+                    // Limit the list to 10 items to avoid growing too large
+                    while (activityList.children.length > 10) {
+                        activityList.removeChild(activityList.lastChild);
+                    }
+                })
+                .catch(error => {
+                    isRefreshing = false;
+                    console.error('Error fetching recent activity:', error);
+                    
+                    // Hide refresh indicator
+                    document.getElementById('refresh-indicator').style.display = 'none';
+                    document.getElementById('refresh-indicator').classList.remove('spinning');
+                    
+                    // Only show error if it's the initial load
+                    if (activityList.children.length === 0) {
+                        document.getElementById('recent_activity').innerHTML = 
+                            '<li>Failed to load activity. Please try again later.</li>';
+                    }
                 });
-                
-                // Update last updated time
-                const now = new Date();
-                document.querySelector('.window:last-child .status-bar-field').textContent = 
-                    'Last updated: ' + now.toLocaleTimeString();
-            })
-            .catch(error => {
-                console.error('Error fetching recent activity:', error);
-                document.getElementById('recent_activity').innerHTML = 
-                    '<li>Failed to load activity. Please try again later.</li>';
+        }
+        
+        // Set up auto-refresh toggle
+        function setupAutoRefresh() {
+            const autoRefreshCheckbox = document.getElementById('auto-refresh-toggle');
+            
+            // Initialize auto-refresh
+            startAutoRefresh();
+            
+            // Toggle auto-refresh based on checkbox
+            autoRefreshCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    startAutoRefresh();
+                } else {
+                    stopAutoRefresh();
+                }
             });
+            
+            // Stop refreshing when tab is not visible
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    stopAutoRefresh();
+                } else if (autoRefreshCheckbox.checked) {
+                    startAutoRefresh();
+                }
+            });
+        }
+        
+        function startAutoRefresh() {
+            if (activityRefreshInterval) clearInterval(activityRefreshInterval);
+            activityRefreshInterval = setInterval(fetchRecentActivity, 30000); // Check every 30 seconds
+        }
+        
+        function stopAutoRefresh() {
+            if (activityRefreshInterval) {
+                clearInterval(activityRefreshInterval);
+                activityRefreshInterval = null;
+            }
+        }
+        
+        // Call this when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Existing DOMContentLoaded code
+            if (!localStorage.getItem('returningUser')) {
+                // Show welcome modal for first-time visitors
+                document.getElementById('welcome-modal').style.display = 'flex';
+                // Set flag in localStorage
+                localStorage.setItem('returningUser', 'true');
+            }
+            
+            // Set up tab functionality
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // ...existing tab code...
+                });
+            });
+            
+            // Initial activity fetch (don't show refresh indicator for initial load)
+            fetchRecentActivity(false);
+            
+            // Set up auto-refresh functionality
+            setupAutoRefresh();
+        });
     </script>
 {% endblock %}

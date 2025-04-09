@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 from . import views
-from .views import TMDBSearchView, MovieViewSet, PopularMoviesView
+from .views import TMDBSearchView, MovieViewSet, PopularMoviesView, MovieTaskStatusView
 from django.views.decorators.cache import cache_page
 
 router = DefaultRouter()
@@ -19,4 +19,5 @@ urlpatterns = [
     path('watchlist/', views.WatchlistMovie.as_view(), name='watchlist'),
     path('reviews/', views.MovieReviewView.as_view(), name='movie_reviews'),
     path('recommendations/', views.movie_recommendations, name='movie_recommendations'),
+    path('task-status/', MovieTaskStatusView.as_view(), name='movie-task-status'),
 ] + router.urls
