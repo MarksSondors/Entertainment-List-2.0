@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404
-from api.services.tv_shows import TVShowsService
+from api.services.tvshows import TVShowsService
 from django.http import JsonResponse, Http404
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -12,7 +12,7 @@ import json
 
 from .models import TVShow
 from .serializers import TVShowSerializer
-from .parsers import create_tv_show
+from .parsers import create_tvshow
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
 from custom_auth.models import Watchlist, Genre
@@ -29,7 +29,7 @@ def tv_show_page(request, show_id):
             'keywords'
         ).get(tmdb_id=show_id)
     except TVShow.DoesNotExist:
-        tv_show_db = create_tv_show(show_id)
+        tv_show_db = create_tvshow(show_id)
         if not tv_show_db:
             raise Http404(f"TV Show with ID {show_id} could not be created")
     user_watchlist = Watchlist.objects.filter(
@@ -159,7 +159,7 @@ class TVShowViewSet(viewsets.ViewSet):
         if show_backdrop:
             show_backdrop = f"https://image.tmdb.org/t/p/original{show_backdrop}"
 
-        tv_show = create_tv_show(show_id, show_poster, show_backdrop, is_anime, add_to_watchlist)
+        tv_show = create_tvshow(show_id, show_poster, show_backdrop, is_anime, add_to_watchlist, request.user.id)
         if not tv_show:
             return Response({"error": "TV Show not found"}, status=status.HTTP_404_NOT_FOUND)
         

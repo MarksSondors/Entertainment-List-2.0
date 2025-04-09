@@ -137,7 +137,7 @@ class MediaPerson(models.Model):
 
     person = models.ForeignKey('Person', on_delete=models.CASCADE)
     role = models.CharField(max_length=50)  # e.g., "Director", "Writer", "Actor", "Composer", "Author", "Artist"
-    character_name = models.CharField(max_length=100, blank=True, null=True)  # For actors, the name of their character
+    character_name = models.CharField(blank=True, null=True)  # For actors, the name of their character
     order = models.PositiveIntegerField(default=0)
 
     class Meta:

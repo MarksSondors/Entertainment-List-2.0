@@ -3,7 +3,7 @@ from .models import *
 import re
 from api.services.movies import MoviesService
 from movies.parsers import create_movie
-from tvshows.parsers import create_tv_show
+from tvshows.parsers import create_tvshow
 from django.contrib.contenttypes.models import ContentType
 
 def create_album_from_musicbrainz(musicbrainz_id):

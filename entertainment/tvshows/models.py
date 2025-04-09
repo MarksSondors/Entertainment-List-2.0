@@ -5,6 +5,7 @@ from custom_auth.models import *
 # Create your models here.
 class TVShow(Media):
     """Model for TV shows."""
+
     poster = models.URLField(blank=True, null=True)
     backdrop = models.URLField(blank=True, null=True)
     
@@ -22,6 +23,11 @@ class TVShow(Media):
     genres = models.ManyToManyField(Genre)
     countries = models.ManyToManyField(Country)
     keywords = models.ManyToManyField(Keyword)
+
+    # user related fields
+    added_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='added_tv_shows', blank=True, null=True)
+    date_added = models.DateTimeField(auto_now_add=True)
+    date_updated = models.DateTimeField(auto_now=True)
     
     def __str__(self):
         return self.title
