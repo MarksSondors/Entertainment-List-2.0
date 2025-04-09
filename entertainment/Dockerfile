@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:alpine
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Ensure entrypoint script has correct permissions
-RUN chmod +x /app/entrypoint.prod.sh
+RUN chmod a+x /app/entrypoint.prod.sh
 
 EXPOSE 8000
 
