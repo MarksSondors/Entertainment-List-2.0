@@ -47,28 +47,12 @@ class TVShowsService(BaseService):
         self.rate_limiter.wait_if_needed()
         # Call the parent's _get method
         return super()._get(endpoint, params)
-
-    def get_popular_shows(self, exclude_genres=None):
+    
+    def get_popular_shows(self):
         """
-        Get popular TV shows in the US, excluding certain genres like talk shows and other live media formats.
-        
-        Uses the discover/tv endpoint with filtering to exclude specified genres directly in the API call.
+        Get trending TV shows
         """
-        # Default genres to exclude if none provided
-        if exclude_genres is None:
-            exclude_genres = [10767, 10763, 10764, 10766]  # Talk, News, Reality, Soap
-        
-        params = {
-            'sort_by': 'popularity.desc',
-            'without_genres': ','.join(str(genre_id) for genre_id in exclude_genres),
-            'include_adult': False,
-            'language': 'en-US',
-            'region': 'US',  # Restrict results to the US
-            'page': 1
-        }
-        
-        response = self._get('discover/tv', params=params)
-            
+        response = self._get('trending/tv/day')
         return response
     
     def search_shows(self, query, include_adult=False, language='en-US', page=1, first_air_date_year=None, region='US'):

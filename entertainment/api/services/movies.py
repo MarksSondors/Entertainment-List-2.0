@@ -49,14 +49,8 @@ class MoviesService(BaseService):
         # Call the parent's _get method
         return super()._get(endpoint, params)
 
-    def get_popular_movies(self, region='US', language='en-US', sort_by='popularity.desc', page=1):
-        params = {
-            'region': region,
-            'language': language,
-            'sort_by': sort_by,
-            'page': page
-        }
-        return self._get('discover/movie', params=params)
+    def get_popular_movies(self):
+        return self._get('trending/movie/day')
     
     def search_movies(self, query, include_adult=False, language='en-US', page=1, primary_release_year=None, region='US', year=None):
         params = {
