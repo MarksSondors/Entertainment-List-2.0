@@ -241,10 +241,10 @@ body::before {
                 <tr>
                     {% with media=item.media %}
                     <td>
-                        {% if media.content_type.model == 'movie' %}
+                        {% if media.release_date %}
                             <a href="{% url 'movie_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
-                        {% elif media.content_type.model == 'tvshow' %}
-                             <a href="{% url 'tvshow_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
+                        {% elif media.first_air_date %}
+                            <a href="{% url 'tvshow_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
                         {% else %}
                             {{ media.title }}
                         {% endif %}
