@@ -1,5 +1,10 @@
 {% extends "components/base.html" %}
 
+{% block head %}
+<!-- Add viewport meta tag for proper mobile scaling -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% endblock %}
+
 {% block content %}
 <style>
 body {
@@ -7,40 +12,162 @@ body {
     background: url('{{ person.profile_picture|default:"" }}') no-repeat center center fixed;
     background-size: cover;
     color: black;
+    margin: 0;
+    padding: 0;
+}
+
+.profile-container {
+    font-family: 'MS Sans Serif', Arial, sans-serif;
+    background-color: rgba(195, 195, 195, 0.7);
+    color: black;
+    padding: 15px;
+    border: 2px solid black;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 20px;
+    margin: 10px;
+}
+
+.profile-image {
+    width: 200px;
+    border: 2px solid black;
+    cursor: pointer;
+}
+
+.profile-content {
+    flex-grow: 1;
+}
+
+.window-title {
+    background-color: #000080;
+    color: white;
+    padding: 5px;
+    margin-bottom: 10px;
+}
+
+.window-content {
+    background-color: rgba(255, 255, 255, 0.86);
+    padding: 10px;
+    border: 2px inset;
+}
+
+.filmography-container {
+    font-family: 'MS Sans Serif', Arial, sans-serif;
+    background-color: #E0E0E0;
+    color: black;
+    padding: 15px;
+    border: 2px solid black;
+    margin: 10px;
+}
+
+.filmography-table-container {
+    background-color: white;
+    border: 2px inset;
+    padding: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+    width: 100%;
+}
+
+.filmography-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.filmography-table th {
+    text-align: left;
+    padding: 5px;
+    background-color: #C3C3C3;
+}
+
+.filmography-table td {
+    padding: 5px;
+}
+
+.interactive tr.highlighted {
+    background-color: #000080;
+    color: white;
+}
+
+.interactive tr.highlighted a {
+    color: white;
+}
+
+#profileModal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    border: 2px solid black;
+    z-index: 1000;
+    max-width: 90%;
+    max-height: 90%;
+}
+
+/* Mobile responsive styles */
+@media screen and (max-width: 767px) {
+    .profile-container {
+        flex-direction: column;
+        padding: 10px;
+        gap: 10px;
+    }
+    
+    .profile-image {
+        width: 150px;
+        margin: 0 auto;
+        display: block;
+    }
+    
+    .filmography-table-container {
+        max-height: none;
+        overflow-x: auto;
+    }
+    
+    .filmography-table {
+        display: block;
+        width: 100%;
+    }
+    
+    .window-title h1, .window-title h2 {
+        font-size: 16px;
+    }
+    
+    #profileModal {
+        max-width: 95%;
+    }
 }
 </style>
 
-<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; display: flex; align-items: flex-start; gap: 20px; margin-top: 20px; margin-bottom: 20px; margin-left: 20px; margin-right: 20px;">
-    <div style="flex-shrink: 0;">
-        <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" alt="{{ person.name }} Profile" style="width: 200px; border: 2px solid black; cursor: pointer;" onclick="openProfileModal()">
+<div class="profile-container">
+    <div>
+        <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+             alt="{{ person.name }} Profile" 
+             class="profile-image"
+             onclick="openProfileModal()">
 
-        <div id="profileModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; max-width: 90%; max-height: 90%;">
+        <div id="profileModal">
             <div class="title-bar">
-            <div class="title-bar-text">{{ person.name }} Profile</div>
-            <div class="title-bar-controls">
-                <button aria-label="Close" onclick="closeProfileModal()"></button>
-            </div>
+                <div class="title-bar-text">{{ person.name }} Profile</div>
+                <div class="title-bar-controls">
+                    <button aria-label="Close" onclick="closeProfileModal()"></button>
+                </div>
             </div>
             <div style="padding: 10px; text-align: center;">
-            <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" alt="{{ person.name }} Profile" style="max-width: 100%; max-height: 80vh;">
+                <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                     alt="{{ person.name }} Profile" 
+                     style="max-width: 100%; max-height: 80vh;">
             </div>
         </div>
-
-        <script>
-            function openProfileModal() {
-                document.getElementById('profileModal').style.display = 'block';
-            }
-
-            function closeProfileModal() {
-                document.getElementById('profileModal').style.display = 'none';
-            }
-        </script>
     </div>
-    <div style="flex-grow: 1;">
-        <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
+
+    <div class="profile-content">
+        <div class="window-title">
             <h1 style="margin: 0; font-size: 18px;">{{ person.name }}</h1>
         </div>
-        <div style="background-color: rgba(255, 255, 255, 0.86); padding: 10px; border: 2px inset;">
+        <div class="window-content">
             <p><strong>Bio:</strong> {{ person.bio|default:"No biography available." }}</p>
             
             {% if person.date_of_birth %}
@@ -81,25 +208,25 @@ body {
     </div>
 </div>
 
-<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: #E0E0E0; color: black; padding: 20px; border: 2px solid black; margin: 20px;">
-    <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
+<div class="filmography-container">
+    <div class="window-title">
         <h2 style="margin: 0; font-size: 18px;">Filmography</h2>
     </div>
-    <div class="sunken-panel" style="background-color: white; border: 2px inset; padding: 10px; height: 300px; overflow-y: auto;">
-        <table class="interactive" style="width: 100%; border-collapse: collapse;">
+    <div class="filmography-table-container">
+        <table class="filmography-table interactive">
             <thead>
-                <tr style="background-color: #C3C3C3;">
-                    <th style="text-align: left; padding: 5px;">Title</th>
-                    <th style="text-align: left; padding: 5px;">Year</th>
-                    <th style="text-align: left; padding: 5px;">Role(s)</th>
-                    <th style="text-align: left; padding: 5px;">Character(s)</th>
+                <tr>
+                    <th>Title</th>
+                    <th>Year</th>
+                    <th>Role(s)</th>
+                    <th>Character(s)</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in combined_credits %}
                 <tr>
                     {% with media=item.media %}
-                    <td style="padding: 5px;">
+                    <td>
                         {% if media.content_type.model == 'movie' %}
                             <a href="{% url 'movie_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
                         {% elif media.content_type.model == 'tvshow' %}
@@ -108,7 +235,7 @@ body {
                             {{ media.title }}
                         {% endif %}
                     </td>
-                    <td style="padding: 5px;">
+                    <td>
                         {% if media.release_date %}
                             {{ media.release_date|date:"Y" }}
                         {% elif media.first_air_date %}
@@ -118,12 +245,12 @@ body {
                         {% endif %}
                     </td>
                     {% endwith %}
-                    <td style="padding: 5px;">{{ item.roles|join:", " }}</td>
-                    <td style="padding: 5px;">{{ item.characters|join:", "|default:"-" }}</td>
+                    <td>{{ item.roles|join:", " }}</td>
+                    <td>{{ item.characters|join:", "|default:"-" }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="4" style="padding: 5px;">No filmography available.</td>
+                    <td colspan="4">No filmography available.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -132,6 +259,14 @@ body {
 </div>
 
 <script>
+    function openProfileModal() {
+        document.getElementById('profileModal').style.display = 'block';
+    }
+
+    function closeProfileModal() {
+        document.getElementById('profileModal').style.display = 'none';
+    }
+
     document.querySelectorAll('table.interactive').forEach(element => {
         element.addEventListener('click', (event) => {
             const highlightedClass = 'highlighted';
@@ -152,14 +287,4 @@ body {
         })
     });
 </script>
-
-<style>
-    .interactive tr.highlighted {
-        background-color: #000080;
-        color: white;
-    }
-    .interactive tr.highlighted a { /* Ensure links remain readable when highlighted */
-        color: white;
-    }
-</style>
 {% endblock %}
