@@ -93,22 +93,27 @@ def process_cast(movie, cast, movies_service):
     movie_content_type = ContentType.objects.get_for_model(movie)
     
     for index, person in enumerate(cast):
-        person_details = movies_service.get_person_details(person.get('id'))
-        person_instance, _ = Person.objects.get_or_create(
-            tmdb_id=person_details.get('id'),
-            defaults={
-                'name': person_details.get('name'),
-                'profile_picture': f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
-                'date_of_birth': person_details.get('birthday'),
-                'date_of_death': person_details.get('deathday'),
-                'bio': person_details.get('biography'),
-                'imdb_id': person_details.get('imdb_id')
-            }
-        )
-
-        person_instance.is_actor = True
-        person_instance.save()
+        # Check if the person already exists in the database
+        person_instance = Person.objects.filter(tmdb_id=person.get('id')).first()
         
+        if not person_instance:
+            # Fetch person details and create if not found
+            person_details = movies_service.get_person_details(person.get('id'))
+            person_instance, _ = Person.objects.get_or_create(
+                tmdb_id=person_details.get('id'),
+                defaults={
+                    'name': person_details.get('name'),
+                    'profile_picture': f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
+                    'date_of_birth': person_details.get('birthday'),
+                    'date_of_death': person_details.get('deathday'),
+                    'bio': person_details.get('biography'),
+                    'imdb_id': person_details.get('imdb_id')
+                }
+            )
+            person_instance.is_actor = True
+            person_instance.save()
+        
+        # Create MediaPerson entry
         MediaPerson.objects.create(
             content_type=movie_content_type,
             object_id=movie.id,
@@ -124,57 +129,45 @@ def process_crew(movie, crew, movies_service):
     relevant_crew = [person for person in crew if person.get('department') in ['Directing', 'Writing', 'Sound']]
     
     for person in relevant_crew:
+        person_instance = Person.objects.filter(tmdb_id=person.get('id')).first()
+        
+        if not person_instance:
+            person_details = movies_service.get_person_details(person.get('id'))
+            person_instance, _ = Person.objects.get_or_create(
+                tmdb_id=person_details.get('id'),
+                defaults={
+                    'name': person_details.get('name'),
+                    'profile_picture': f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
+                    'date_of_birth': person_details.get('birthday'),
+                    'date_of_death': person_details.get('deathday'),
+                    'bio': person_details.get('biography'),
+                    'imdb_id': person_details.get('imdb_id')
+                }
+            )
+        # Set the appropriate role flags
         job = person.get('job')
-        department = person.get('department')
-        
-        # Skip if not one of our supported roles
-        if (department == 'Directing' and job != 'Director') or \
-           (department == 'Writing' and job not in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel']) or \
-           (department == 'Sound' and job != 'Original Music Composer'):
-            continue
-        
-        person_details = movies_service.get_person_details(person.get('id'))
-        person_instance, _ = Person.objects.get_or_create(
-            tmdb_id=person_details.get('id'),
-            defaults={
-                'name': person_details.get('name'),
-                'profile_picture': f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
-                'date_of_birth': person_details.get('birthday'),
-                'date_of_death': person_details.get('deathday'),
-                'bio': person_details.get('biography'),
-                'imdb_id': person_details.get('imdb_id')
-            }
-        )
-        
-        # Set the appropriate role
-        role = job
         if job == 'Director':
             person_instance.is_director = True
         elif job in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel']:
-            if job == 'Writer':
-                person_instance.is_writer = True
-            if job == 'Story':
-                person_instance.is_story = True
-            if job == 'Original Story':
-                person_instance.is_original_story = True
-            if job == 'Screenplay':
-                person_instance.is_screenwriter = True
-            if job == 'Novel':
-                person_instance.is_novelist = True
-            if job == 'Comic Book':
-                person_instance.is_comic_artist = True
-            if job == 'Graphic Novel':
-                person_instance.is_graphic_novelist = True
+            role_flags = {
+                'Writer': 'is_writer',
+                'Story': 'is_story',
+                'Original Story': 'is_original_story',
+                'Screenplay': 'is_screenwriter',
+                'Novel': 'is_novelist',
+                'Comic Book': 'is_comic_artist',
+                'Graphic Novel': 'is_graphic_novelist'
+            }
+            setattr(person_instance, role_flags.get(job, ''), True)
         elif job == 'Original Music Composer':
             person_instance.is_original_music_composer = True
-        
         person_instance.save()
-        
+        # Create MediaPerson entry
         MediaPerson.objects.create(
             content_type=movie_content_type,
             object_id=movie.id,
             person=person_instance,
-            role=role
+            role=job
         )
 
 def add_to_movie_watchlist(movie, user_id):
