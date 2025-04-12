@@ -289,7 +289,7 @@ def person_detail(request, person_id):
         except (Movie.DoesNotExist, TVShow.DoesNotExist):
             continue # Skip if the related media object doesn't exist
             
-    # Calculate average rating for the person's works
+    # Calculate average rating for the person's works (all users)
     average_rating = None
     if media_identifiers:
         # Build Q objects for filtering reviews
@@ -297,10 +297,16 @@ def person_detail(request, person_id):
         for ct_id, obj_id in media_identifiers:
             q_objects |= Q(content_type_id=ct_id, object_id=obj_id)
             
-        # Calculate average rating
+        # Calculate average rating across all users
         rating_data = Review.objects.filter(q_objects).aggregate(Avg('rating'))
         if rating_data['rating__avg'] is not None:
             average_rating = round(rating_data['rating__avg'], 1)
+
+        # Calculate average rating for the current user's reviews
+        user_average_rating = None
+        user_rating_data = Review.objects.filter(q_objects, user=request.user).aggregate(Avg('rating'))
+        if user_rating_data['rating__avg'] is not None:
+            user_average_rating = round(user_rating_data['rating__avg'], 1)
 
     # Convert grouped credits to a list for sorting and template iteration
     combined_credits_list = list(grouped_credits.values())
@@ -320,6 +326,7 @@ def person_detail(request, person_id):
         'person': person,
         'combined_credits': combined_credits_list,
         'average_rating': average_rating, # Add average rating to context
+        'user_average_rating': user_average_rating, # Add user-specific average rating
     }
     
     return render(request, 'people_page.html', context)
