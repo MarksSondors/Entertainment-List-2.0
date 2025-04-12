@@ -12,6 +12,7 @@ from .models import *
 from movies.models import Movie
 from tvshows.models import TVShow
 from datetime import date # Import date
+import random
 
 def login_page(request):
     if request.user.is_authenticated:
@@ -252,7 +253,7 @@ def watchlist_page(request):
     return render(request, 'watchlist_page.html', context)
 
 @login_required
-def person_detail(request, person_id):
+def people_detail(request, person_id):
     """
     View for displaying details about a single person and their filmography
     """
@@ -322,11 +323,27 @@ def person_detail(request, person_id):
         reverse=True
     )
     
+    # Select a random backdrop from the person's filmography
+    random_backdrop = None
+    backdrop_candidates = []
+    
+    for credit in combined_credits_list:
+        media = credit['media']
+        # Check if media has a valid backdrop property
+        backdrop = getattr(media, 'backdrop', None)
+        if backdrop:
+            backdrop_candidates.append(backdrop)
+    
+    # Choose a random backdrop if available
+    if backdrop_candidates:
+        random_backdrop = random.choice(backdrop_candidates)
+    
     context = {
         'person': person,
         'combined_credits': combined_credits_list,
         'average_rating': average_rating, # Add average rating to context
         'user_average_rating': user_average_rating, # Add user-specific average rating
+        'random_backdrop': random_backdrop, # Add random backdrop to context
     }
     
     return render(request, 'people_page.html', context)
@@ -611,16 +628,11 @@ def browse_by_people(request):
     """
     # Cache key prefix for storing sorted people lists
     cache_key_prefix = "people_browser_"
-    cache_timeout = 3600  # 1 hour cache timeout
+    cache_timeout = 20  # 1 hour cache timeout
     
     # Function to efficiently get and sort people by role with caching
     def get_people_by_role(role_filter, cache_key):
         from django.core.cache import cache
-        
-        # Try to get from cache first
-        cached_result = cache.get(cache_key)
-        if cached_result is not None:
-            return cached_result
         
         # Limit to first 100 people per category to prevent slowdowns
         # with huge datasets - add pagination if needed
@@ -640,15 +652,15 @@ def browse_by_people(request):
         for relation in media_relations:
             person_id = relation['person_id']
             if person_id not in person_media:
-                person_media[person_id] = []
-            person_media[person_id].append(
+                person_media[person_id] = set()  # Use a set instead of a list
+            person_media[person_id].add(
                 (relation['content_type_id'], relation['object_id'])
             )
         
         # Batch collect all content types and object IDs for reviews
-        all_media_identifiers = []
+        all_media_identifiers = set()  # Use a set here too
         for relations in person_media.values():
-            all_media_identifiers.extend(relations)
+            all_media_identifiers.update(relations)  # Use update for sets
         
         # Build a map of all media ratings at once
         media_ratings = {}
