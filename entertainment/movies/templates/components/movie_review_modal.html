@@ -48,19 +48,14 @@ function updateRatingDisplay(value) {
 }
 
 document.getElementById('reviewText').addEventListener('input', function() {
-    const maxLength = 500;
+    // Remove the maxLength constant and just count characters
     const currentLength = this.value.length;
-    document.getElementById('charCount').textContent = currentLength + '/' + maxLength;
+    document.getElementById('charCount').textContent = currentLength + ' characters';
     
-    if (currentLength > maxLength) {
-        document.getElementById('charCount').style.color = 'red';
-        this.value = this.value.substring(0, maxLength);
-    } else {
-        document.getElementById('charCount').style.color = '';
-    }
+    // Remove the if-else block that was enforcing the limit
 });
 
-// Initialize the character counter
-document.getElementById('charCount').textContent = '0/500';
+// Update the initial counter text
+document.getElementById('charCount').textContent = '0 characters';
 </script>
 <script src="{% static 'js/review.js' %}"></script>
