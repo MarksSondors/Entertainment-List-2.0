@@ -60,6 +60,10 @@ body {
                 {% if person.is_tv_creator %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer or person.is_original_music_composer %}, {% endif %}<span>TV Creator</span>{% endif %}
                 {% if not person.is_actor and not person.is_director and not person.is_screenwriter and not person.is_writer and not person.is_original_music_composer and not person.is_tv_creator %}Unknown{% endif %}
             </p>
+
+            {% if average_rating is not None %}
+            <p><strong>Average Rating of Works:</strong> {{ average_rating }} / 10</p>
+            {% endif %}
             
             {% if person.imdb_id %}
             <p>
@@ -83,23 +87,35 @@ body {
                 <tr style="background-color: #C3C3C3;">
                     <th style="text-align: left; padding: 5px;">Title</th>
                     <th style="text-align: left; padding: 5px;">Year</th>
-                    <th style="text-align: left; padding: 5px;">Role</th>
-                    <th style="text-align: left; padding: 5px;">Character</th>
+                    <th style="text-align: left; padding: 5px;">Role(s)</th>
+                    <th style="text-align: left; padding: 5px;">Character(s)</th>
                 </tr>
             </thead>
             <tbody>
-                {% for credit in person_credits %}
+                {% for item in combined_credits %}
                 <tr>
-                    <td style="padding: 5px;"><a href="{% url 'movie_page' credit.media.tmdb_id %}" style="text-decoration: none; color: black;">{{ credit.media.title }}</a></td>
+                    {% with media=item.media %}
                     <td style="padding: 5px;">
-                        {% if credit.content_type.model == 'movie' %}
-                            {{ credit.media.release_date|date:"Y" }}
+                        {% if media.content_type.model == 'movie' %}
+                            <a href="{% url 'movie_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
+                        {% elif media.content_type.model == 'tvshow' %}
+                             <a href="{% url 'tvshow_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
                         {% else %}
-                            {{ credit.media.first_air_date|date:"Y" }}
+                            {{ media.title }}
                         {% endif %}
                     </td>
-                    <td style="padding: 5px;">{{ credit.role }}</td>
-                    <td style="padding: 5px;">{{ credit.character_name|default:"-" }}</td>
+                    <td style="padding: 5px;">
+                        {% if media.release_date %}
+                            {{ media.release_date|date:"Y" }}
+                        {% elif media.first_air_date %}
+                            {{ media.first_air_date|date:"Y" }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    {% endwith %}
+                    <td style="padding: 5px;">{{ item.roles|join:", " }}</td>
+                    <td style="padding: 5px;">{{ item.characters|join:", "|default:"-" }}</td>
                 </tr>
                 {% empty %}
                 <tr>
@@ -117,16 +133,18 @@ body {
             const highlightedClass = 'highlighted';
             const isRow = element => element.tagName === 'TR' && element.parentElement.tagName === 'TBODY';
             const newlySelectedRow = event.composedPath().find(isRow);
+            
+            // Check if a row was actually clicked
+            if (!newlySelectedRow) return;
+
             const previouslySelectedRow = Array.from(newlySelectedRow.parentElement.children)
-                .filter(isRow).find(element => element.classList.contains(highlightedClass));
+                .find(row => row.classList.contains(highlightedClass));
                 
-            if(previouslySelectedRow){
-                previouslySelectedRow.classList.toggle(highlightedClass);
+            if(previouslySelectedRow && previouslySelectedRow !== newlySelectedRow){
+                previouslySelectedRow.classList.remove(highlightedClass);
             }
 
-            if (newlySelectedRow) {
-                newlySelectedRow.classList.toggle(highlightedClass);
-            }
+            newlySelectedRow.classList.toggle(highlightedClass);
         })
     });
 </script>
@@ -134,6 +152,9 @@ body {
 <style>
     .interactive tr.highlighted {
         background-color: #000080;
+        color: white;
+    }
+    .interactive tr.highlighted a { /* Ensure links remain readable when highlighted */
         color: white;
     }
 </style>
