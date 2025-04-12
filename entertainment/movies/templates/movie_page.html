@@ -262,7 +262,7 @@ body {
                             const isAuthor = review.user === '{{ request.user.username }}';
                             const actionButtons = isAuthor ? `
                                 <div class="review-action-buttons">
-                                    <button onclick="editReview(${review.id}, ${review.rating}, '${review.review_text.replace(/'/g, "\\'")}')" 
+                                    <button onclick="editReview(${review.id}, ${review.rating}, '${review.review_text.replace(/'/g, "\\'")}', '${review.date_added}')" 
                                             style="font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px; margin-right: 5px;">
                                         Edit
                                     </button>
@@ -298,6 +298,7 @@ body {
                             window.userReviewId = userReview.id;
                             window.userReviewRating = userReview.rating;
                             window.userReviewText = userReview.review_text;
+                            window.userReviewDate = userReview.date_added; // Store the original date
                         }
                     })
                     .catch(error => {
@@ -305,10 +306,11 @@ body {
                     });
                 }
 
-                function editReview(id, rating, text) {
+                function editReview(id, rating, text, date) {
                     window.userReviewId = id;
                     window.userReviewRating = rating;
                     window.userReviewText = text;
+                    window.userReviewDate = date; // Store the original date
                     openReviewModal(true);
                 }
 
@@ -360,8 +362,131 @@ body {
                     const originalOpenReviewModal = openReviewModal;
                     openReviewModal = function(isEdit = false) {
                         document.getElementById('reviewModalTitle').textContent = isEdit ? 'Edit Review' : 'Write a Review';
+                        
+                        // Pre-populate the form if editing
+                        if (isEdit && window.userReviewId) {
+                            const form = document.getElementById('reviewForm');
+                            if (form) {
+                                // Set the rating slider value
+                                const ratingSlider = document.getElementById('rating');
+                                if (ratingSlider) {
+                                    ratingSlider.value = window.userReviewRating;
+                                    // Update the displayed rating value
+                                    const ratingValue = document.getElementById('ratingValue');
+                                    if (ratingValue) {
+                                        ratingValue.textContent = window.userReviewRating;
+                                    }
+                                }
+                                
+                                // Set the review text
+                                const reviewText = document.getElementById('reviewText');
+                                if (reviewText) {
+                                    reviewText.value = window.userReviewText || '';
+                                }
+                                
+                                // Store the review ID in a hidden field or data attribute for submission
+                                const reviewIdField = document.getElementById('reviewId');
+                                if (!reviewIdField) {
+                                    // Create a hidden field if it doesn't exist
+                                    const hiddenField = document.createElement('input');
+                                    hiddenField.type = 'hidden';
+                                    hiddenField.id = 'reviewId';
+                                    hiddenField.name = 'reviewId';
+                                    form.appendChild(hiddenField);
+                                }
+                                document.getElementById('reviewId').value = window.userReviewId;
+                                
+                                // Store the original date as a hidden field
+                                const dateField = document.getElementById('reviewDate');
+                                if (!dateField) {
+                                    const hiddenDateField = document.createElement('input');
+                                    hiddenDateField.type = 'hidden';
+                                    hiddenDateField.id = 'reviewDate';
+                                    hiddenDateField.name = 'reviewDate';
+                                    form.appendChild(hiddenDateField);
+                                }
+                                document.getElementById('reviewDate').value = window.userReviewDate;
+                            }
+                        }
+                        
                         originalOpenReviewModal(isEdit);
                     };
+                });
+
+                function submitReview(event) {
+                    event.preventDefault();
+                    
+                    const form = document.getElementById('reviewForm');
+                    const rating = document.getElementById('rating').value;
+                    const reviewText = document.getElementById('reviewText').value;
+                    const reviewId = document.getElementById('reviewId')?.value;
+                    const reviewDate = document.getElementById('reviewDate')?.value;
+                    
+                    // Determine if this is an edit or a new review
+                    const isEdit = !!reviewId;
+                    
+                    // Set up the request data
+                    const requestData = {
+                        rating: rating,
+                        review_text: reviewText,
+                    };
+                    
+                    if (isEdit) {
+                        requestData.review_id = reviewId;
+                        // Make sure to include the original date when editing
+                        if (reviewDate) {
+                            requestData.date_added = reviewDate;
+                        }
+                    } else {
+                        requestData.movie_id = {{ movie.id }};
+                    }
+                    
+                    // Send the request
+                    fetch('/movies/reviews/', {
+                        method: isEdit ? 'PUT' : 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify(requestData)
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            // Close the modal
+                            document.getElementById('reviewModal').style.display = 'none';
+                            
+                            // Reload the reviews
+                            loadReviews();
+                            
+                            // Reset the form
+                            form.reset();
+                            document.getElementById('ratingValue').textContent = '5';
+                            
+                            // Clear the stored review data
+                            if (isEdit) {
+                                window.userReviewId = null;
+                                window.userReviewRating = null;
+                                window.userReviewText = null;
+                                window.userReviewDate = null;
+                            }
+                        } else {
+                            return response.json().then(data => {
+                                throw new Error(data.error || 'Failed to submit review');
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert(error.message || 'Error submitting review');
+                    });
+                }
+
+                // Make sure the form has the proper submit handler
+                document.addEventListener('DOMContentLoaded', function() {
+                    const reviewForm = document.getElementById('reviewForm');
+                    if (reviewForm) {
+                        reviewForm.addEventListener('submit', submitReview);
+                    }
                 });
             </script>
         </div>

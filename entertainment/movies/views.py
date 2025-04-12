@@ -454,7 +454,8 @@ class MovieReviewView(APIView):
         review_id = request.data.get('review_id')
         rating = request.data.get('rating')
         review_text = request.data.get('review_text')
-        date_added = request.data.get('date_added', timezone.now())
+        date_added = request.data.get('date_added')
+        print(f"Date reviewed: {date_added}")
 
         
         if not review_id:
