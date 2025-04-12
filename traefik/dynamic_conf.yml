@@ -1,7 +1,7 @@
 http:
   routers:
     entertainment:
-      rule: "Host(`your-actual-domain.com`)"  # Replace with your actual domain
+      rule: "Host(`${DOMAIN:-your-actual-domain.com}`)"
       service: entertainment
       entryPoints:
         - websecure
@@ -11,7 +11,7 @@ http:
         - redirect-to-https
 
     api:
-      rule: "Host(`your-actual-domain.com`) && PathPrefix(`/dashboard`)"
+      rule: "Host(`${DOMAIN:-your-actual-domain.com}`) && PathPrefix(`/dashboard`)"
       service: "api@internal"
       entrypoints:
         - websecure

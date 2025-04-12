@@ -14,7 +14,7 @@ services:
       - redis
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.entertainment.rule=Host(`localhost`)"  # Change to your domain in production
+      - "traefik.http.routers.entertainment.rule=Host(`${DOMAIN:-localhost}`)"
       - "traefik.http.services.entertainment.loadbalancer.server.port=8000"
     networks:
       - webnet
