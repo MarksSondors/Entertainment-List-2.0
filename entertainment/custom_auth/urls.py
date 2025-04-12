@@ -25,13 +25,14 @@ urlpatterns = [
     # watchlist
     path('watchlist/', views.watchlist_page, name='watchlist_page'),
 
-    # person
-    path('person/<int:person_id>/', views.person_detail, name='person_detail'),
+    # People
+    path('people/<int:person_id>/', views.person_detail, name='person_detail'),
+    path('people/', views.browse_by_people, name='browse_by_people'),
 
-    #reviews
+    # reviews
     path('reviews/recent/', views.recent_reviews, name='recent_reviews'),
 
-    #activity
+    # activity
     path('activity/recent/', views.recent_activity, name='recent_activity'),
 
 ]

@@ -1,0 +1,347 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}Browse by People | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-2 py-md-4">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">People Explorer</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="field-row mb-2 d-none d-md-flex">
+                <label>Address:</label>
+                <div class="field-row-stacked" style="width: 100%">
+                    <input type="text" readonly value="C:\Entertainment\People\" style="width: 100%">
+                </div>
+            </div>
+            
+            <!-- Mobile-friendly tabs as dropdown on small screens -->
+            <div class="d-block d-md-none mb-3">
+                <select class="form-select" id="mobile-tab-selector">
+                    <option value="0">Directors</option>
+                    <option value="1">Writers</option>
+                    <option value="2">Actors</option>
+                    <option value="3">TV Creators</option>
+                    <option value="4">Musicians</option>
+                    <option value="5">Other Creators</option>
+                </select>
+            </div>
+            
+            <div class="tabs">
+                <!-- Desktop tabs, hidden on mobile -->
+                <menu role="tablist" class="d-none d-md-flex">
+                    <button role="tab" aria-selected="true">Directors</button>
+                    <button role="tab">Writers</button>
+                    <button role="tab">Actors</button>
+                    <button role="tab">TV Creators</button>
+                    <button role="tab">Musicians</button>
+                    <button role="tab">Other Creators</button>
+                </menu>
+                
+                <!-- Directors Tab -->
+                <div class="sunken-panel p-2 p-md-3" role="tabpanel" style="min-height: 300px;">
+                    {% if directors %}
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                            {% for person in directors %}
+                            <div class="col">
+                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                    <div class="text-center">
+                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                             alt="{{ person.name }}" width="65" height="65" 
+                                             class="person-img"
+                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;" 
+                                             loading="lazy">
+                                        <div class="person-name">{{ person.name }}</div>
+                                        {% if person.avg_rating %}
+                                            <div style="font-size: 0.8em;">
+                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
+                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                            </div>
+                                        {% else %}
+                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            No directors available.
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Writers Tab -->
+                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    {% if writers %}
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                            {% for person in writers %}
+                            <div class="col">
+                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                    <div class="text-center">
+                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                             alt="{{ person.name }}" width="65" height="65" 
+                                             class="person-img"
+                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
+                                             loading="lazy">
+                                        <div class="person-name">{{ person.name }}</div>
+                                        {% if person.avg_rating %}
+                                            <div style="font-size: 0.8em;">
+                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
+                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                            </div>
+                                        {% else %}
+                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            No writers available.
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Actors Tab -->
+                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    {% if actors %}
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                            {% for person in actors %}
+                            <div class="col">
+                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                    <div class="text-center">
+                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                             alt="{{ person.name }}" width="65" height="65" 
+                                             class="person-img"
+                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
+                                             loading="lazy">
+                                        <div class="person-name">{{ person.name }}</div>
+                                        {% if person.avg_rating %}
+                                            <div style="font-size: 0.8em;">
+                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
+                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                            </div>
+                                        {% else %}
+                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            No actors available.
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- TV Creators Tab -->
+                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    {% if tv_creators %}
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                            {% for person in tv_creators %}
+                            <div class="col">
+                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                    <div class="text-center">
+                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                             alt="{{ person.name }}" width="65" height="65" 
+                                             class="person-img"
+                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
+                                             loading="lazy">
+                                        <div class="person-name">{{ person.name }}</div>
+                                        {% if person.avg_rating %}
+                                            <div style="font-size: 0.8em;">
+                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
+                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                            </div>
+                                        {% else %}
+                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            No TV creators available.
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Musicians Tab -->
+                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    {% if musicians %}
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                            {% for person in musicians %}
+                            <div class="col">
+                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                    <div class="text-center">
+                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                             alt="{{ person.name }}" width="65" height="65" 
+                                             class="person-img"
+                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
+                                             loading="lazy">
+                                        <div class="person-name">{{ person.name }}</div>
+                                        {% if person.avg_rating %}
+                                            <div style="font-size: 0.8em;">
+                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
+                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                            </div>
+                                        {% else %}
+                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            No musicians available.
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Other Creators Tab -->
+                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    {% if other_creators %}
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                            {% for person in other_creators %}
+                            <div class="col">
+                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                    <div class="text-center">
+                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                             alt="{{ person.name }}" width="65" height="65" 
+                                             class="person-img"
+                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
+                                             loading="lazy">
+                                        <div class="person-name">{{ person.name }}</div>
+                                        {% if person.avg_rating %}
+                                            <div style="font-size: 0.8em;">
+                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
+                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                            </div>
+                                        {% else %}
+                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            No other creators available.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="field-row mt-2 mt-md-3" style="justify-content: space-between;">
+                <div>
+                    <span id="item-count" class="small">0 item(s)</span>
+                </div>
+                <div>
+                    <button class="btn" onclick="window.history.back()">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Mobile-specific styles */
+    @media (max-width: 767.98px) {
+        .person-img {
+            width: 55px;
+            height: 55px;
+        }
+        
+        .person-name {
+            max-width: 80px;
+            margin: auto;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.9em;
+        }
+    }
+    
+    /* Desktop styles */
+    @media (min-width: 768px) {
+        .person-img {
+            width: 80px;
+            height: 80px;
+        }
+        
+        .person-name {
+            max-width: 100px;
+            margin: auto;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 1em;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const tabs = document.querySelectorAll('menu[role="tablist"] button[role="tab"]');
+        const panels = document.querySelectorAll('div[role="tabpanel"]');
+        const mobileSelector = document.getElementById('mobile-tab-selector');
+        
+        // Handle desktop tab switching
+        tabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => {
+                switchTab(index);
+            });
+        });
+        
+        // Handle mobile dropdown switching
+        mobileSelector.addEventListener('change', function() {
+            switchTab(parseInt(this.value));
+        });
+        
+        // Switch tab function for both mobile and desktop
+        function switchTab(index) {
+            // Update desktop tab state
+            tabs.forEach(t => t.setAttribute('aria-selected', 'false'));
+            tabs[index].setAttribute('aria-selected', 'true');
+            
+            // Update mobile selector
+            mobileSelector.value = index;
+            
+            // Show selected panel, hide others
+            panels.forEach(panel => panel.hidden = true);
+            panels[index].hidden = false;
+            
+            // Update item count
+            const visibleItems = panels[index].querySelectorAll('.col').length;
+            document.getElementById('item-count').textContent = `${visibleItems} item(s)`;
+        }
+        
+        // Set initial item count for first tab
+        const initialItems = panels[0].querySelectorAll('.col').length;
+        document.getElementById('item-count').textContent = `${initialItems} item(s)`;
+    });
+</script>
+{% endblock %}

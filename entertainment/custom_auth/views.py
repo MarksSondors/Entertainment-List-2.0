@@ -603,5 +603,160 @@ def recent_activity(request):
     # Return as JSON
     return JsonResponse(result, safe=False)
 
+@login_required
+def browse_by_people(request):
+    """
+    View for displaying people categorized by their roles (directors, writers, actors, etc.)
+    with optimized query performance
+    """
+    # Cache key prefix for storing sorted people lists
+    cache_key_prefix = "people_browser_"
+    cache_timeout = 3600  # 1 hour cache timeout
+    
+    # Function to efficiently get and sort people by role with caching
+    def get_people_by_role(role_filter, cache_key):
+        from django.core.cache import cache
+        
+        # Try to get from cache first
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+        
+        # Limit to first 100 people per category to prevent slowdowns
+        # with huge datasets - add pagination if needed
+        people = Person.objects.filter(role_filter)[:100]
+        
+        # Prefetch all media relations in a single query 
+        # to avoid N+1 database hits
+        person_ids = [p.id for p in people]
+        
+        # Get all media relations for all people in one query
+        media_relations = MediaPerson.objects.filter(
+            person_id__in=person_ids
+        ).values('person_id', 'content_type_id', 'object_id')
+        
+        # Group media relations by person
+        person_media = {}
+        for relation in media_relations:
+            person_id = relation['person_id']
+            if person_id not in person_media:
+                person_media[person_id] = []
+            person_media[person_id].append(
+                (relation['content_type_id'], relation['object_id'])
+            )
+        
+        # Batch collect all content types and object IDs for reviews
+        all_media_identifiers = []
+        for relations in person_media.values():
+            all_media_identifiers.extend(relations)
+        
+        # Build a map of all media ratings at once
+        media_ratings = {}
+        if all_media_identifiers:
+            q_objects = Q()
+            for ct_id, obj_id in all_media_identifiers:
+                q_objects |= Q(content_type_id=ct_id, object_id=obj_id)
+                
+            # Get aggregated review data in one query
+            review_data = Review.objects.filter(q_objects).values(
+                'content_type_id', 'object_id'
+            ).annotate(
+                avg_rating=Avg('rating'),
+                count=models.Count('id')
+            )
+            
+            # Create a map for fast lookups
+            for data in review_data:
+                key = (data['content_type_id'], data['object_id'])
+                media_ratings[key] = {
+                    'avg_rating': data['avg_rating'],
+                    'count': data['count']
+                }
+        
+        # Assign ratings to people
+        people_with_ratings = []
+        for person in people:
+            # Get this person's media
+            person_media_list = person_media.get(person.id, [])
+            
+            if not person_media_list:
+                person.avg_rating = None
+                person.rating_count = 0
+                people_with_ratings.append(person)
+                continue
+                
+            # Calculate average rating across all media
+            total_rating = 0
+            total_count = 0
+            
+            for media_key in person_media_list:
+                if media_key in media_ratings:
+                    rating_data = media_ratings[media_key]
+                    # Weighted average: Rating * Count
+                    total_rating += rating_data['avg_rating'] * rating_data['count']
+                    total_count += rating_data['count']
+            
+            if total_count > 0:
+                person.avg_rating = round(total_rating / total_count, 1)
+                person.rating_count = total_count
+            else:
+                person.avg_rating = None
+                person.rating_count = 0
+                
+            people_with_ratings.append(person)
+            
+        # Sort by average rating
+        result = sorted(
+            people_with_ratings,
+            key=lambda p: (p.avg_rating is not None, p.avg_rating or 0),
+            reverse=True
+        )
+        
+        # Cache the result
+        cache.set(cache_key, result, cache_timeout)
+        
+        return result
+    
+    # Get people by category with optimized queries
+    directors = get_people_by_role(
+        Q(is_director=True), 
+        f"{cache_key_prefix}directors"
+    )
+    
+    writers = get_people_by_role(
+        Q(is_screenwriter=True) | Q(is_writer=True) | Q(is_story=True),
+        f"{cache_key_prefix}writers"
+    )
+    
+    actors = get_people_by_role(
+        Q(is_actor=True),
+        f"{cache_key_prefix}actors"
+    )
+    
+    tv_creators = get_people_by_role(
+        Q(is_tv_creator=True),
+        f"{cache_key_prefix}tv_creators"
+    )
+    
+    musicians = get_people_by_role(
+        Q(is_musician=True) | Q(is_original_music_composer=True),
+        f"{cache_key_prefix}musicians"
+    )
+    
+    other_creators = get_people_by_role(
+        Q(is_original_story=True) | Q(is_novelist=True) | 
+        Q(is_comic_artist=True) | Q(is_graphic_novelist=True),
+        f"{cache_key_prefix}other_creators"
+    )
+    
+    return render(request, 'browse_by_people.html', {
+        'directors': directors,
+        'writers': writers,
+        'actors': actors,
+        'tv_creators': tv_creators,
+        'musicians': musicians,
+        'other_creators': other_creators,
+    })
+
 
 
