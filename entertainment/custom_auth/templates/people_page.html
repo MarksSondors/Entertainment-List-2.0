@@ -62,7 +62,11 @@ body {
             </p>
 
             {% if average_rating is not None %}
-            <p><strong>Average Rating of Works:</strong> {{ average_rating }} / 10</p>
+            <p><strong>Average Rating of Works (All Users):</strong> {{ average_rating }} / 10</p>
+            {% endif %}
+
+            {% if user_average_rating is not None %}
+            <p><strong>Average Rating of Works (Your Reviews):</strong> {{ user_average_rating }} / 10</p>
             {% endif %}
             
             {% if person.imdb_id %}
