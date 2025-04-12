@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login, logout  # Import the logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.http import JsonResponse
-from django.db.models import Q
+from django.db.models import Q, Avg
 from django.contrib.contenttypes.models import ContentType
 # Create your views here.
 # import services
@@ -11,6 +11,7 @@ from django.contrib.contenttypes.models import ContentType
 from .models import *
 from movies.models import Movie
 from tvshows.models import TVShow
+from datetime import date # Import date
 
 def login_page(request):
     if request.user.is_authenticated:
@@ -259,37 +260,66 @@ def person_detail(request, person_id):
     person = get_object_or_404(Person, id=person_id)
     
     # Get all media credits for this person
-    person_credits = MediaPerson.objects.filter(person=person).select_related(
+    person_credits_qs = MediaPerson.objects.filter(person=person).select_related(
         'content_type'
     )
     
-    # For each credit, ensure we have the actual media object
-    valid_credits = []
-    for credit in person_credits:
+    # Group credits by media and collect media identifiers
+    grouped_credits = {}
+    media_identifiers = set()
+    
+    for credit in person_credits_qs:
         try:
             # Get the actual movie or TV show object via the generic relation
-            credit.media = credit.content_type.get_object_for_this_type(id=credit.object_id)
-            valid_credits.append(credit)
+            media = credit.content_type.get_object_for_this_type(id=credit.object_id)
+            key = (credit.content_type_id, credit.object_id)
+            media_identifiers.add(key)
+            
+            if key not in grouped_credits:
+                grouped_credits[key] = {
+                    'media': media,
+                    'roles': set(), # Use set to avoid duplicate roles
+                    'characters': set() # Use set for unique characters
+                }
+            
+            grouped_credits[key]['roles'].add(credit.role)
+            if credit.character_name:
+                grouped_credits[key]['characters'].add(credit.character_name)
+                
         except (Movie.DoesNotExist, TVShow.DoesNotExist):
-            continue
+            continue # Skip if the related media object doesn't exist
+            
+    # Calculate average rating for the person's works
+    average_rating = None
+    if media_identifiers:
+        # Build Q objects for filtering reviews
+        q_objects = Q()
+        for ct_id, obj_id in media_identifiers:
+            q_objects |= Q(content_type_id=ct_id, object_id=obj_id)
+            
+        # Calculate average rating
+        rating_data = Review.objects.filter(q_objects).aggregate(Avg('rating'))
+        if rating_data['rating__avg'] is not None:
+            average_rating = round(rating_data['rating__avg'], 1)
+
+    # Convert grouped credits to a list for sorting and template iteration
+    combined_credits_list = list(grouped_credits.values())
     
-    # Replace person_credits with only valid credits
-    person_credits = valid_credits
-    
-    # Sort credits by release date (newest first)
-    person_credits = sorted(
-        person_credits,
+    # Sort combined credits by release date (newest first)
+    combined_credits_list = sorted(
+        combined_credits_list,
         key=lambda x: (
-            x.media.release_date.year if hasattr(x.media, 'release_date') and x.media.release_date else 
-            x.media.first_air_date.year if hasattr(x.media, 'first_air_date') and x.media.first_air_date else 
-            0
+            getattr(x['media'], 'release_date', None) or 
+            getattr(x['media'], 'first_air_date', None) or 
+            date.min # Fallback for items without a date
         ),
         reverse=True
     )
     
     context = {
         'person': person,
-        'person_credits': person_credits,
+        'combined_credits': combined_credits_list,
+        'average_rating': average_rating, # Add average rating to context
     }
     
     return render(request, 'people_page.html', context)
