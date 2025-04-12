@@ -9,11 +9,24 @@
 <style>
 body {
     font-family: 'MS Sans Serif', Arial, sans-serif;
-    background: url('{{ person.profile_picture|default:"" }}') no-repeat center center fixed;
+    background: url('{{ random_backdrop|default:person.profile_picture|default:"" }}') no-repeat center center fixed;
     background-size: cover;
     color: black;
     margin: 0;
     padding: 0;
+    position: relative;
+}
+
+/* Add overlay for better text readability when backdrop is used */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: -1;
 }
 
 .profile-container {
@@ -141,6 +154,13 @@ body {
 }
 </style>
 
+<!-- Add a small attribution for the backdrop if available -->
+{% if random_backdrop %}
+<div style="position: fixed; bottom: 5px; right: 10px; color: rgba(255,255,255,0.7); font-size: 12px; z-index: 2;">
+    Backdrop from {{ person.name }}'s filmography
+</div>
+{% endif %}
+
 <div class="profile-container">
     <div>
         <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
@@ -179,13 +199,7 @@ body {
             {% endif %}
             
             <p><strong>Roles:</strong> 
-                {% if person.is_actor %}<span>Actor</span>{% endif %}
-                {% if person.is_director %}{% if person.is_actor %}, {% endif %}<span>Director</span>{% endif %}
-                {% if person.is_screenwriter %}{% if person.is_actor or person.is_director %}, {% endif %}<span>Screenwriter</span>{% endif %}
-                {% if person.is_writer %}{% if person.is_actor or person.is_director or person.is_screenwriter %}, {% endif %}<span>Writer</span>{% endif %}
-                {% if person.is_original_music_composer %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer %}, {% endif %}<span>Composer</span>{% endif %}
-                {% if person.is_tv_creator %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer or person.is_original_music_composer %}, {% endif %}<span>TV Creator</span>{% endif %}
-                {% if not person.is_actor and not person.is_director and not person.is_screenwriter and not person.is_writer and not person.is_original_music_composer and not person.is_tv_creator %}Unknown{% endif %}
+                {% if person.is_actor %}<span>Actor</span>{% endif %}{% if person.is_director %}{% if person.is_actor %}, {% endif %}<span>Director</span>{% endif %}{% if person.is_screenwriter %}{% if person.is_actor or person.is_director %}, {% endif %}<span>Screenwriter</span>{% endif %}{% if person.is_writer %}{% if person.is_actor or person.is_director or person.is_screenwriter %}, {% endif %}<span>Writer</span>{% endif %}{% if person.is_original_music_composer %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer %}, {% endif %}<span>Composer</span>{% endif %}{% if person.is_tv_creator %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer or person.is_original_music_composer %}, {% endif %}<span>TV Creator</span>{% endif %}{% if not person.is_actor and not person.is_director and not person.is_screenwriter and not person.is_writer and not person.is_original_music_composer and not person.is_tv_creator %}Unknown{% endif %}
             </p>
 
             {% if average_rating is not None %}
