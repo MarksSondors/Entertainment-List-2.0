@@ -29,7 +29,7 @@
                         <div class="col">
                             <a href="{% url 'browse_by_country_detail' country.id %}" class="text-decoration-none text-dark">
                                 <div class="text-center">
-                                    <img src="https://www.crwflags.com/fotw/images/{{ country.iso_3166_1|lower|slice:':1' }}/{{ country.iso_3166_1|lower }}.gif" alt="{{ country.name }} flag" width="64" height="40" onerror="this.src='{% static 'images/flag-placeholder.png' %}';" style="border: 1px solid #ccc;">
+                                    <img src="https://www.crwflags.com/fotw/images/{{ country.iso_3166_1|lower|slice:':1' }}/{{ country.iso_3166_1|lower }}.gif" alt="{{ country.name }} flag" height="50" onerror="this.src='{% static 'images/flag-placeholder.png' %}';" style="border: 1px solid #ccc;">
                                     <div style="max-width: 80px; margin: auto; overflow: hidden; text-overflow: ellipsis;">{{ country.name }}</div>
                                 </div>
                             </a>
