@@ -61,6 +61,22 @@
                                 <p>Hours Watched</p>
                             </div>
                         </div>
+                        <div class="stats-summary" style="margin-top: 15px;">
+                            <div class="stat-item">
+                                <h3>{% if shortest_movie %}{{ shortest_movie.runtime }}{% else %}N/A{% endif %}</h3>
+                                <p>Shortest Movie (min)</p>
+                                {% if shortest_movie %}
+                                <p class="movie-title"><a href="{% url 'movie_page' shortest_movie.tmdb_id %}">{{ shortest_movie.title|truncatechars:20 }}</a></p>
+                                {% endif %}
+                            </div>
+                            <div class="stat-item">
+                                <h3>{% if longest_movie %}{{ longest_movie.runtime }}{% else %}N/A{% endif %}</h3>
+                                <p>Longest Movie (min)</p>
+                                {% if longest_movie %}
+                                <p class="movie-title"><a href="{% url 'movie_page' longest_movie.tmdb_id %}">{{ longest_movie.title|truncatechars:20 }}</a></p>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -309,6 +325,24 @@
     .top-movies-list {
         max-height: 300px;
         overflow-y: auto;
+    }
+    
+    .movie-title {
+        font-size: 12px;
+        color: #888;
+        margin-top: 5px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .movie-title a {
+        color: #0000AA;
+        text-decoration: none;
+    }
+    
+    .movie-title a:hover {
+        text-decoration: underline;
     }
     
     /* Responsive adjustments */

@@ -928,6 +928,15 @@ def movie_statistics(request):
     # Get all genres for the filter dropdown
     genres = Genre.objects.all().order_by('name')
     
+    # Find the shortest and longest movies
+    shortest_movie = None
+    longest_movie = None
+    if movies:
+        valid_movies = [m for m in movies if m.runtime is not None]
+        if valid_movies:
+            shortest_movie = min(valid_movies, key=lambda x: x.runtime)
+            longest_movie = max(valid_movies, key=lambda x: x.runtime)
+    
     context = {
         'total_movies': total_movies,
         'avg_rating': avg_rating,
@@ -944,7 +953,9 @@ def movie_statistics(request):
         'genres': genres,
         'available_years': available_years,
         'selected_year': int(selected_year) if selected_year else None,
-        'selected_genre': int(selected_genre) if selected_genre else None
+        'selected_genre': int(selected_genre) if selected_genre else None,
+        'shortest_movie': shortest_movie,
+        'longest_movie': longest_movie,
     }
     
     return render(request, 'statistics_movies.html', context)

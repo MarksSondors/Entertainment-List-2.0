@@ -20,4 +20,8 @@ urlpatterns = [
     path('reviews/', views.MovieReviewView.as_view(), name='movie_reviews'),
     path('recommendations/', views.movie_recommendations, name='movie_recommendations'),
     path('task-status/', MovieTaskStatusView.as_view(), name='movie-task-status'),
+
+    # almost API
+    path('random-unwatched/', views.random_unwatched_movie, name='random_unwatched_movie'),
+    path('shortest-watchlist/', views.shortest_watchlist_movie, name='shortest_watchlist_movie'),
 ] + router.urls
