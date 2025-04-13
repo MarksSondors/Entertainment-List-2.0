@@ -35,4 +35,6 @@ urlpatterns = [
     # activity
     path('activity/recent/', views.recent_activity, name='recent_activity'),
 
+    # statistics
+    path('statistics/movies/', views.movie_statistics, name='movie_statistics'),
 ]
