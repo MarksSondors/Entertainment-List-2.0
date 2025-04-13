@@ -49,16 +49,25 @@
                 </div>
             </form>
 
-            {% comment %} <!-- Accordion Sections --> {% endcomment %}
-            <div class="accordion-container">
-                <!-- Reviewed/Watched Movies Section -->
-                <details open>
-                    <summary class="accordion-header">
-                        <div class="title-bar">
-                            <div class="title-bar-text">Movies You've Reviewed or Watched</div>
-                        </div>
-                    </summary>
-                    <div class="accordion-content p-3">
+            <!-- Tab Navigation -->
+            <div class="tab-navigation">
+                <ul class="nav-tabs">
+                    <li class="tab-item active" data-tab="reviewed">Reviewed/Watched</li>
+                    <li class="tab-item" data-tab="watchlist">Your Watchlist</li>
+                    <li class="tab-item" data-tab="others">Others' Watchlists</li>
+                    <li class="tab-item" data-tab="friends">Friends' Reviews</li>
+                    <li class="tab-item" data-tab="undiscovered">Undiscovered</li>
+                </ul>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="tab-content-container">
+                <!-- Reviewed/Watched Movies Tab -->
+                <div id="reviewed" class="tab-content active">
+                    <div class="tab-header">
+                        <h3>Movies You've Reviewed or Watched</h3>
+                    </div>
+                    <div class="tab-body">
                         {% if reviewed_movies %}
                             {% if view_type == 'grid' %}
                             <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
@@ -145,16 +154,14 @@
                             </div>
                         {% endif %}
                     </div>
-                </details>
+                </div>
 
-                <!-- My Watchlist Section with Other Users' Ratings -->
-                <details>
-                    <summary class="accordion-header">
-                        <div class="title-bar">
-                            <div class="title-bar-text">Your Watchlist Movies</div>
-                        </div>
-                    </summary>
-                    <div class="accordion-content p-3">
+                <!-- Your Watchlist Movies Tab -->
+                <div id="watchlist" class="tab-content">
+                    <div class="tab-header">
+                        <h3>Your Watchlist Movies</h3>
+                    </div>
+                    <div class="tab-body">
                         {% if watchlist_movies %}
                             {% if view_type == 'grid' %}
                             <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
@@ -272,16 +279,14 @@
                             </div>
                         {% endif %}
                     </div>
-                </details>
+                </div>
 
-                <!-- Others' Watchlists Section -->
-                <details>
-                    <summary class="accordion-header">
-                        <div class="title-bar">
-                            <div class="title-bar-text">Movies in Other Users' Watchlists</div>
-                        </div>
-                    </summary>
-                    <div class="accordion-content p-3">
+                <!-- Others' Watchlists Tab -->
+                <div id="others" class="tab-content">
+                    <div class="tab-header">
+                        <h3>Movies in Other Users' Watchlists</h3>
+                    </div>
+                    <div class="tab-body">
                         {% if others_watchlist_movies %}
                             {% if view_type == 'grid' %}
                             <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
@@ -357,16 +362,14 @@
                             </div>
                         {% endif %}
                     </div>
-                </details>
+                </div>
 
-                <!-- New Section: Movies Reviewed by Others -->
-                <details>
-                    <summary class="accordion-header">
-                        <div class="title-bar">
-                            <div class="title-bar-text">Movies Reviewed by Other Users</div>
-                        </div>
-                    </summary>
-                    <div class="accordion-content p-3">
+                <!-- Friends' Reviews Tab -->
+                <div id="friends" class="tab-content">
+                    <div class="tab-header">
+                        <h3>Movies Reviewed by Other Users</h3>
+                    </div>
+                    <div class="tab-body">
                         {% if friends_reviewed_movies %}
                             {% if view_type == 'grid' %}
                             <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
@@ -474,16 +477,14 @@
                             </div>
                         {% endif %}
                     </div>
-                </details>
-                
-                <!-- Undiscovered Movies Section -->
-                <details>
-                    <summary class="accordion-header">
-                        <div class="title-bar">
-                            <div class="title-bar-text">Undiscovered Movies</div>
-                        </div>
-                    </summary>
-                    <div class="accordion-content p-3">
+                </div>
+
+                <!-- Undiscovered Movies Tab -->
+                <div id="undiscovered" class="tab-content">
+                    <div class="tab-header">
+                        <h3>Undiscovered Movies</h3>
+                    </div>
+                    <div class="tab-body">
                         <p class="text-muted">Movies that no one has added to their watchlist or reviewed yet.</p>
                         {% if undiscovered_movies %}
                             {% if view_type == 'grid' %}
@@ -555,44 +556,84 @@
                             </div>
                         {% endif %}
                     </div>
-                </details>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <style>
-    /* Accordion styles */
-    .accordion-container {
+    /* Tab Navigation Styles */
+    .tab-navigation {
         width: 100%;
+        margin-bottom: 15px;
     }
     
-    .accordion-container details {
-        margin-bottom: 10px;
-    }
-    
-    .accordion-header {
-        cursor: pointer;
-        user-select: none;
-    }
-    
-    .accordion-header .title-bar {
-        width: 100%;
-    }
-    
-    .accordion-content {
-        padding: 10px;
-        background-color: #EFEFEF;
-        border: 1px solid #C0C0C0;
-    }
-    
-    /* Remove default triangle from details element */
-    details > summary {
+    .nav-tabs {
+        display: flex;
+        flex-wrap: nowrap;
         list-style: none;
+        padding: 0;
+        margin: 0;
+        border-bottom: 1px solid #c0c0c0;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
     
-    details > summary::-webkit-details-marker {
+    .tab-item {
+        padding: 10px 15px;
+        cursor: pointer;
+        background-color: #d9d9d9;
+        border: 1px solid #c0c0c0;
+        border-bottom: none;
+        margin-right: 2px;
+        border-top-left-radius: 4px;
+        border-top-right-radius: 4px;
+        white-space: nowrap;
+    }
+    
+    .tab-item.active {
+        background-color: #ffffff;
+        border-bottom: 1px solid #ffffff;
+        margin-bottom: -1px;
+        font-weight: bold;
+    }
+    
+    /* Tab Content Styles */
+    .tab-content-container {
+        width: 100%;
+        background-color: #ffffff;
+        border: 1px solid #c0c0c0;
+        border-top: none;
+        padding: 15px;
+    }
+    
+    .tab-content {
         display: none;
+    }
+    
+    .tab-content.active {
+        display: block;
+    }
+    
+    .tab-header {
+        margin-bottom: 15px;
+    }
+    
+    .tab-header h3 {
+        margin: 0;
+    }
+    
+    /* Mobile Optimization */
+    @media (max-width: 768px) {
+        .nav-tabs {
+            padding-bottom: 5px;
+        }
+        
+        .tab-item {
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
     }
     
     /* Rating badge styles */
@@ -659,20 +700,43 @@
     .card-friends {
         border: 4px solid #9C27B0;
     }
-    
-    .card-watchlist {
-        border: 4px solid #4CAF50;
-    }
 </style>
 
 <script>
-    // JavaScript to automatically submit the form when view type changes
-    document.getElementById('grid').addEventListener('change', function() {
-        this.form.submit();
-    });
-    
-    document.getElementById('table').addEventListener('change', function() {
-        this.form.submit();
+    // Tab switching functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const tabItems = document.querySelectorAll('.tab-item');
+        
+        tabItems.forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Remove active class from all tabs
+                tabItems.forEach(item => {
+                    item.classList.remove('active');
+                });
+                
+                // Add active class to clicked tab
+                this.classList.add('active');
+                
+                // Hide all tab content
+                const tabContents = document.querySelectorAll('.tab-content');
+                tabContents.forEach(content => {
+                    content.classList.remove('active');
+                });
+                
+                // Show the corresponding tab content
+                const tabId = this.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+        
+        // JavaScript to automatically submit the form when view type changes
+        document.getElementById('grid').addEventListener('change', function() {
+            this.form.submit();
+        });
+        
+        document.getElementById('table').addEventListener('change', function() {
+            this.form.submit();
+        });
     });
 </script>
 {% endblock %}
