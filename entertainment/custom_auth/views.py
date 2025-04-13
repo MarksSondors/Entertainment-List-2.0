@@ -492,7 +492,10 @@ def recent_activity(request):
         
         if isinstance(content_object, Movie):
             content_type = "Movie"
-            title = content_object.title
+            if content_object.title == content_object.original_title:
+                title = content_object.title
+            else:
+                title = f"{content_object.title} ({content_object.original_title})"
             poster_path = content_object.poster
             tmdb_id = content_object.tmdb_id
         elif isinstance(content_object, TVShow):
@@ -532,7 +535,10 @@ def recent_activity(request):
         
         if isinstance(content_object, Movie):
             content_type = "Movie"
-            title = content_object.title
+            if content_object.title == content_object.original_title:
+                title = content_object.title
+            else:
+                title = f"{content_object.title} ({content_object.original_title})"
             poster_path = content_object.poster
             tmdb_id = content_object.tmdb_id
         elif isinstance(content_object, TVShow):
@@ -567,7 +573,7 @@ def recent_activity(request):
         activities.append({
             'type': 'new_content',
             'username': movie.added_by.username if movie.added_by else 'System',
-            'title': movie.title,
+            'title': movie.title if movie.title == movie.original_title else f"{movie.title} ({movie.original_title})",
             'content_type': 'Movie',
             'date': movie.date_added,
             'timestamp': timestamp_key,
