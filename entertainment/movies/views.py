@@ -1,4 +1,4 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from api.services.movies import MoviesService
 from django.http import JsonResponse, Http404
 from rest_framework.views import APIView
@@ -9,6 +9,7 @@ from rest_framework.authentication import SessionAuthentication, BasicAuthentica
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 import json
+import random
 
 from .serializers import MovieSerializer
 from .parsers import create_movie
@@ -17,7 +18,7 @@ from django.contrib.auth.decorators import login_required
 from .models import *
 from django.http import JsonResponse
 
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Min
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -760,3 +761,76 @@ class MovieTaskStatusView(APIView):
             
         except Task.DoesNotExist:
             return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+@login_required
+def random_unwatched_movie(request):
+    """Redirects to a random movie that no one has watched yet"""
+    # Get content type for Movie model
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    
+    # Find movies that have no reviews (unwatched by anyone)
+    reviewed_movie_ids = Review.objects.filter(
+        content_type=movie_content_type
+    ).values_list('object_id', flat=True)
+    
+    unwatched_movies = Movie.objects.exclude(id__in=reviewed_movie_ids, status='Released')
+    
+    # If there are no completely unwatched movies, get movies with fewest reviews
+    if not unwatched_movies.exists():
+        # Count reviews per movie and get those with minimum reviews
+        movie_review_counts = Review.objects.filter(
+            content_type=movie_content_type
+        ).values('object_id').annotate(count=Count('id')).order_by('count')
+        
+        if movie_review_counts:
+            min_count = movie_review_counts[0]['count']
+            least_watched_ids = [
+                item['object_id'] for item in movie_review_counts 
+                if item['count'] == min_count
+            ]
+            unwatched_movies = Movie.objects.filter(id__in=least_watched_ids)
+    
+    if unwatched_movies.exists():
+        # Get a random movie from the unwatched/least watched movies
+        random_movie = random.choice(list(unwatched_movies))
+        return redirect('movie_page', movie_id=random_movie.tmdb_id)
+    else:
+        # Fallback to a completely random movie if something went wrong
+        random_movie = random.choice(list(Movie.objects.all()))
+        return redirect('movie_page', movie_id=random_movie.tmdb_id)
+
+@login_required
+def shortest_watchlist_movie(request):
+    """Redirects to one of the three shortest movies in the user's watchlist, selected randomly.
+    If watchlist is empty, selects from the three shortest movies in the database."""
+    
+    # Get content type for Movie model
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    
+    # Get user's watchlist items
+    watchlist_movie_ids = Watchlist.objects.filter(
+        user=request.user,
+        content_type=movie_content_type
+    ).values_list('object_id', flat=True)
+    
+    # Find the three shortest movies in watchlist by runtime
+    shortest_movies = list(Movie.objects.filter(
+        id__in=watchlist_movie_ids,
+        runtime__isnull=False,  # Ensure runtime is not null
+        status='Released'  # Ensure the movie is released
+    ).order_by('runtime')[:3])
+    
+    # If no movies in watchlist, get the three shortest movies in the database
+    if not shortest_movies:
+        shortest_movies = list(Movie.objects.filter(
+            runtime__isnull=False,
+            status='Released'
+        ).order_by('runtime')[:3])
+    
+    if shortest_movies:
+        # Randomly select one of the three shortest movies
+        selected_movie = random.choice(shortest_movies)
+        return redirect('movie_page', movie_id=selected_movie.tmdb_id)
+    else:
+        # If no movies with runtime found at all, redirect to watchlist page
+        return redirect('watchlist_page')
