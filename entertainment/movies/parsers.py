@@ -18,6 +18,10 @@ def extract_movie_data(movie_details, movie_poster=None, movie_backdrop=None, is
         production_countries = movie_details.get('production_countries', [])
         is_anime = any(country.get('iso_3166_1') == 'JP' for country in production_countries)
 
+    release_date = movie_details.get('release_date')
+    if release_date and len(release_date) < 10:
+        release_date = None
+
     return {
         'title': movie_details.get('title'),
         'original_title': movie_details.get('original_title'),

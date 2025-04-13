@@ -14,6 +14,16 @@ from tvshows.models import TVShow
 from datetime import date # Import date
 import random
 
+# Add these imports if they're not already at the top
+from django.db.models import Count, Avg, F, Q, Case, When, IntegerField
+from django.db.models.functions import ExtractMonth, ExtractYear
+from collections import defaultdict
+import json
+from datetime import timedelta, datetime
+from django.contrib.contenttypes.models import ContentType
+from movies.models import Movie, Genre
+from custom_auth.models import Review
+
 def login_page(request):
     if request.user.is_authenticated:
         return redirect('home_page')
@@ -769,6 +779,169 @@ def browse_by_people(request):
         'musicians': musicians,
         'other_creators': other_creators,
     })
+
+# Add this view function
+@login_required
+def movie_statistics(request):
+    """
+    Display personalized movie statistics for the current user.
+    """
+    # Get content type for Movie model
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    
+    # Get filter parameters
+    selected_year = request.GET.get('year', '')
+    selected_genre = request.GET.get('genre', '')
+    
+    # Base query for user's movie reviews
+    reviews = Review.objects.filter(
+        user=request.user,
+        content_type=movie_content_type
+    ).select_related('user')
+    
+    # Apply filters
+    if selected_year:
+        reviews = reviews.filter(date_added__year=selected_year)
+    
+    if selected_genre:
+        # This is more complex as we need to filter on the GenericForeignKey
+        genre = get_object_or_404(Genre, id=selected_genre)
+        movie_ids_with_genre = Movie.objects.filter(genres=genre).values_list('id', flat=True)
+        reviews = reviews.filter(object_id__in=movie_ids_with_genre)
+    
+    # Get available years for the filter dropdown
+    available_years = reviews.dates('date_added', 'year')
+    available_years = [date.year for date in available_years]
+    
+    # Calculate totals
+    total_movies = reviews.count()
+    avg_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
+    
+    # Get movies for these reviews
+    movie_ids = reviews.values_list('object_id', flat=True)
+    movies = Movie.objects.filter(id__in=movie_ids)
+    
+    # Calculate total hours watched (based on movie runtime)
+    total_minutes = sum(movie.runtime or 0 for movie in movies)
+    total_hours = round(total_minutes / 60, 1)
+    
+    # Monthly activity data
+    monthly_data = [0] * 12
+    for review in reviews:
+        month = review.date_added.month
+        monthly_data[month-1] += 1
+    
+    # Genre distribution
+    genre_counts = defaultdict(int)
+    genre_labels = []
+    genre_data = []
+    
+    for movie in movies:
+        for genre in movie.genres.all():
+            genre_counts[genre.name] += 1
+    
+    # Sort genres by count and get top 10
+    top_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    for genre_name, count in top_genres:
+        genre_labels.append(genre_name)
+        genre_data.append(count)
+    
+    # Rating distribution
+    rating_distribution = [0] * 10
+    for review in reviews:
+        if 1 <= review.rating <= 10:
+            # Convert float rating to integer index
+            index = int(review.rating) - 1
+            rating_distribution[index] += 1
+    
+    # Yearly comparison
+    yearly_data = []
+    yearly_labels = []
+    
+    year_counts = defaultdict(int)
+    for review in Review.objects.filter(
+        user=request.user,
+        content_type=movie_content_type
+    ):
+        year = review.date_added.year
+        year_counts[year] += 1
+    
+    # Sort years chronologically
+    years_sorted = sorted(year_counts.keys())
+    for year in years_sorted:
+        yearly_labels.append(str(year))
+        yearly_data.append(year_counts[year])
+    
+    # Top rated movies
+    top_movies = []
+    for review in reviews.order_by('-rating', '-date_added')[:10]:
+        try:
+            movie = Movie.objects.get(id=review.object_id)
+            top_movies.append({
+                'movie': movie,
+                'rating': review.rating,
+                'date_added': review.date_added
+            })
+        except Movie.DoesNotExist:
+            continue
+    
+    # Determine top director
+    director_counts = defaultdict(list)
+    for movie in movies:
+        # Get director(s) from the crew
+        for person, roles in movie.get_crew().items():  # Add parentheses to call the method
+            if 'Director' in roles:
+                director_counts[person].append(movie)
+    
+    top_director = {"name": "None", "count": 0, "movies": []}
+    if director_counts:
+        top_director_name = max(director_counts.items(), key=lambda x: len(x[1]))[0]
+        top_director = {
+            "name": top_director_name,
+            "count": len(director_counts[top_director_name]),
+            "movies": director_counts[top_director_name][:5]  # Limit to 5 movies
+        }
+    
+    # Calculate best streak
+    if reviews:
+        # Sort reviews by date
+        sorted_reviews = sorted(reviews, key=lambda x: x.date_added)
+        dates = [review.date_added.date() for review in sorted_reviews]
+        
+        current_streak = 1
+        best_streak = 1
+        for i in range(1, len(dates)):
+            if (dates[i] - dates[i-1]) == timedelta(days=1):
+                current_streak += 1
+                best_streak = max(best_streak, current_streak)
+            else:
+                current_streak = 1
+    else:
+        best_streak = 0
+    
+    # Get all genres for the filter dropdown
+    genres = Genre.objects.all().order_by('name')
+    
+    context = {
+        'total_movies': total_movies,
+        'avg_rating': avg_rating,
+        'total_hours': total_hours,
+        'monthly_data': json.dumps(monthly_data),
+        'genre_labels': json.dumps(genre_labels),
+        'genre_data': json.dumps(genre_data),
+        'rating_distribution': json.dumps(rating_distribution),
+        'yearly_labels': json.dumps(yearly_labels),
+        'yearly_data': json.dumps(yearly_data),
+        'top_movies': top_movies,
+        'top_director': top_director,
+        'best_streak': best_streak,
+        'genres': genres,
+        'available_years': available_years,
+        'selected_year': int(selected_year) if selected_year else None,
+        'selected_genre': int(selected_genre) if selected_genre else None
+    }
+    
+    return render(request, 'statistics_movies.html', context)
 
 
 

@@ -25,7 +25,7 @@ class Movie(Media):
     poster = models.URLField(blank=True, null=True)
     backdrop = models.URLField(blank=True, null=True)
 
-    release_date = models.DateField()
+    release_date = models.DateField(blank=True, null=True)
     
     # ids
     tmdb_id = models.IntegerField(unique=True)

@@ -105,6 +105,19 @@ def update_single_movie(movie_id):
         if data.get('original_title') and data.get('original_title') != movie.original_title:
             updates['original_title'] = data.get('original_title')
         
+        # if the release date is not set, set the release date to None
+        if data.get('release_date'):
+            if data['release_date'] == '':
+                updates['release_date'] = None
+            elif data['release_date'] != str(movie.release_date):
+                try:
+                    # Parse and validate the date format (YYYY-MM-DD)
+                    new_date = date.fromisoformat(data['release_date'])
+                    updates['release_date'] = new_date
+                except (ValueError, TypeError):
+                    logger.error(f"Invalid release date format for movie {movie.title}: {data['release_date']}")
+                    updates['release_date'] = None
+        
         if data.get('belongs_to_collection'):
             print(f"Collection data: {data['belongs_to_collection']}")
             collection_id = data['belongs_to_collection'].get('id')
@@ -128,7 +141,7 @@ def update_single_movie(movie_id):
                             poster=f"https://image.tmdb.org/t/p/original{poster_path}" if poster_path else None,
                             backdrop=f"https://image.tmdb.org/t/p/original{backdrop_path}" if backdrop_path else None,
                         )
-                        updates['collection'] = collection
+                        updates['collection'] = collection.id
 
         # Update release date if it changed
         if data.get('release_date') and data.get('release_date') != str(movie.release_date):
