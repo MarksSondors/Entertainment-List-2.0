@@ -4,6 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Avg, Q, F, Sum
 from movies.models import Movie
 from custom_auth.models import Review
+from datetime import date
 
 User = get_user_model()
 
@@ -144,6 +145,8 @@ class MovieRecommender:
         # Find movies with similar attributes, excluding already rated ones
         candidate_movies = Movie.objects.exclude(
             id__in=user_rated_movie_ids
+        ).filter(
+            release_date__lte=date.today()  # Only include movies that have been released
         ).select_related('collection')
         
         # Calculate content similarity scores
