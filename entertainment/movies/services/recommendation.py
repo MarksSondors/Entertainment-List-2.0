@@ -127,16 +127,25 @@ class MovieRecommender:
         
         # Extract genres, people, and collections from liked movies
         genre_ids = set()
-        person_ids = set()
+        director_ids = set()
+        cast_ids = set()
+        crew_ids = set()
         collection_ids = set()
         
         for movie in liked_movies:
             # Add genres
             genre_ids.update(movie.genres.values_list('id', flat=True))
             
-            # Add cast and crew
-            person_ids.update(movie.cast.values_list('id', flat=True))
-            person_ids.update(movie.crew.values_list('id', flat=True))
+            # Separate directors from other crew members
+            directors = movie.crew.filter(role='Director').values_list('id', flat=True)
+            director_ids.update(directors)
+            
+            # Add cast
+            cast_ids.update(movie.cast.values_list('id', flat=True))
+            
+            # Add other crew (excluding directors)
+            other_crew = movie.crew.exclude(role='Director').values_list('id', flat=True)
+            crew_ids.update(other_crew)
             
             # Add collection
             if movie.collection_id:
@@ -155,25 +164,43 @@ class MovieRecommender:
         for movie in candidate_movies:
             score = 0
             
-            # Genre similarity (50% weight)
+            # Genre similarity (40% weight)
             movie_genre_ids = set(movie.genres.values_list('id', flat=True))
             genre_overlap = len(genre_ids.intersection(movie_genre_ids))
             if genre_ids:
                 genre_score = genre_overlap / len(genre_ids)
-                score += 0.5 * genre_score
+                score += 0.4 * genre_score
             
-            # People similarity (40% weight)
-            movie_person_ids = set()
-            movie_person_ids.update(movie.cast.values_list('id', flat=True))
-            movie_person_ids.update(movie.crew.values_list('id', flat=True))
-            person_overlap = len(person_ids.intersection(movie_person_ids))
-            if person_ids:
-                person_score = person_overlap / len(person_ids)
-                score += 0.4 * person_score
+            # Director similarity (25% weight) - higher weight for directors
+            movie_director_ids = set(movie.crew.filter(role='Director').values_list('id', flat=True))
+            director_overlap = len(director_ids.intersection(movie_director_ids))
+            if director_ids:
+                director_score = director_overlap / len(director_ids)
+                score += 0.25 * director_score
             
-            # Collection similarity (10% weight)
+            # Cast similarity (20% weight)
+            movie_cast_ids = set(movie.cast.values_list('id', flat=True))
+            cast_overlap = len(cast_ids.intersection(movie_cast_ids))
+            if cast_ids:
+                cast_score = cast_overlap / len(cast_ids)
+                score += 0.2 * cast_score
+
+            # Other crew similarity (10% weight)
+            movie_crew_ids = set(movie.crew.exclude(role='Director').values_list('id', flat=True))
+            crew_overlap = len(crew_ids.intersection(movie_crew_ids))
+            if crew_ids:
+                crew_score = crew_overlap / len(crew_ids)
+                score += 0.1 * crew_score
+            
+            # Collection similarity (5% weight) - reduced from 10%
             if movie.collection_id and movie.collection_id in collection_ids:
-                score += 0.1
+                score += 0.05
+            
+            # Slight penalty for sequels (based on title containing numbers or common sequel indicators)
+            import re
+            sequel_indicators = re.search(r'\b(2|3|4|5|6|7|8|9|II|III|IV|V|VI|VII|VIII|IX|Part\s+\d+)\b', movie.title)
+            if sequel_indicators:
+                score -= 0.05  # Small penalty for likely sequels
             
             if score > 0:
                 movie_scores.append((movie, score))
