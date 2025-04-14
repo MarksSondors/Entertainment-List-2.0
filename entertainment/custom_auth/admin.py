@@ -16,7 +16,7 @@ admin.site.register(Watchlist)
 
 class PersonAdmin(admin.ModelAdmin):
     search_fields = ['name', 'imdb_id']
-    list_display = ('name', 'is_director', 'is_writer', 'is_original_music_composer')
+    list_display = ('name', 'is_director', 'is_actor')
     list_filter = ('is_director', 'is_writer', 'is_screenwriter', 'is_story', 'is_original_music_composer')
     readonly_fields = ('display_connected_movies',)
     
