@@ -123,16 +123,6 @@ body {
         <img src="{{ movie.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" alt="{{ movie.title }} Poster" style="width: 200px; border: 2px solid black; cursor: pointer;" onclick="openPosterModal()">
 
         {% include "components/poster_modal.html" with poster_url=movie.poster title=movie.title %}
-
-        <script>
-            function openPosterModal() {
-            document.getElementById('posterModal').style.display = 'block';
-            }
-
-            function closePosterModal() {
-            document.getElementById('posterModal').style.display = 'none';
-            }
-        </script>
     </div>
     <div class="movie-details" style="flex-grow: 1;">
         <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
