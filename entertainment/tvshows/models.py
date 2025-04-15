@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 from custom_auth.models import *
 
@@ -11,7 +12,9 @@ class TVShow(Media):
     
     first_air_date = models.DateField(blank=True, null=True)
     last_air_date = models.DateField(blank=True, null=True)
+
     tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=20, blank=True, null=True)
     
     status = models.CharField(max_length=50, blank=True, null=True)  # e.g., "Ended", "Returning Series"
     rating = models.FloatField(blank=True, null=True)
@@ -85,6 +88,24 @@ class TVShow(Media):
     def episodes_count(self):
         """Get the total number of episodes across all seasons."""
         return Episode.objects.filter(season__show=self).count()
+    
+    def get_upcoming_episodes(self, limit=None):
+        """Get upcoming episodes for this TV show."""
+        today = timezone.now().date()
+        upcoming = Episode.objects.filter(
+            season__show=self,
+            air_date__gt=today
+        ).order_by('air_date')
+        
+        if limit:
+            upcoming = upcoming[:limit]
+        
+        return upcoming
+
+    def get_next_episode(self):
+        """Get the next episode to air."""
+        upcoming = self.get_upcoming_episodes(limit=1)
+        return upcoming.first()
 
 class Season(models.Model):
     """Model for TV show seasons."""
@@ -109,6 +130,22 @@ class Season(models.Model):
     def episodes_count(self):
         """Get the number of episodes in this season."""
         return self.episodes.count()
+    
+    def user_completion_percentage(self, user):
+        """Calculate what percentage of episodes the user has watched."""
+        total_episodes = self.episodes.count()
+        if total_episodes == 0:
+            return 0
+        
+        watched_episodes = user.watched_episodes.filter(
+            episode__season=self
+        ).count()
+        
+        return (watched_episodes / total_episodes) * 100
+    
+    def user_has_completed(self, user):
+        """Check if a user has watched all episodes in this season."""
+        return self.user_completion_percentage(user) == 100
 
 class Episode(models.Model):
     """Model for TV show episodes."""
@@ -139,6 +176,47 @@ class Episode(models.Model):
         if hours > 0:
             return f"{hours}h {minutes}m"
         return f"{minutes}m"
+    
+    @property
+    def is_aired(self):
+        """Check if the episode has already aired."""
+        if not self.air_date:
+            return False
+        return self.air_date <= timezone.now().date()
+
+class EpisodeGroup(models.Model):
+    """Model for grouping episodes into story arcs or other logical units."""
+    tmdb_id = models.CharField(max_length=20, blank=True, null=True)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    show = models.ForeignKey(TVShow, related_name='episode_groups', on_delete=models.CASCADE)
+    episodes = models.ManyToManyField(Episode, related_name='episode_groups')
+    
+    # Optional fields for ordering and display
+    order = models.PositiveIntegerField(default=0)
+    poster = models.URLField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['order', 'name']
+        
+    def __str__(self):
+        return f"{self.show.title} - {self.name}"
+    
+    def user_completion_percentage(self, user):
+        """Calculate what percentage of episodes the user has watched."""
+        total_episodes = self.episodes.count()
+        if total_episodes == 0:
+            return 0
+        
+        watched_episodes = user.watched_episodes.filter(
+            episode__in=self.episodes.all()
+        ).count()
+        
+        return (watched_episodes / total_episodes) * 100
+    
+    def user_has_completed(self, user):
+        """Check if a user has watched all episodes in this group."""
+        return self.user_completion_percentage(user) == 100
 
 class WatchedEpisode(models.Model):
     """Model for tracking which episodes a user has watched."""

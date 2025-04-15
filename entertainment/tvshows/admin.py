@@ -52,3 +52,14 @@ class TVShowAdmin(admin.ModelAdmin):
         return format_html(html)
 
 admin.site.register(TVShow, TVShowAdmin)
+
+from .models import EpisodeGroup
+
+@admin.register(EpisodeGroup)
+class EpisodeGroupAdmin(admin.ModelAdmin):
+    list_display = ('name', 'show', 'episode_count')
+    search_fields = ('name', 'show__title')
+    list_filter = ('show',)
+    
+    def episode_count(self, obj):
+        return obj.episodes.count()

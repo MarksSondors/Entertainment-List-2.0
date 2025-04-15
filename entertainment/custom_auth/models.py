@@ -190,6 +190,7 @@ class Review(models.Model):
     
     # For TV shows, we can link to a specific season
     season = models.ForeignKey('tvshows.Season', on_delete=models.CASCADE, blank=True, null=True, related_name='reviews')
+    episode_group = models.ForeignKey('tvshows.EpisodeGroup', on_delete=models.CASCADE, blank=True, null=True, related_name='reviews')
     
     # Review content
     rating = models.FloatField()
@@ -198,16 +199,15 @@ class Review(models.Model):
     
     class Meta:
         ordering = ['-date_added']
-        # Update unique constraint to include season for TV shows
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'content_type', 'object_id', 'season'],
-                name='unique_review_with_season'
+                fields=['user', 'content_type', 'object_id', 'season', 'episode_group'],
+                name='unique_review_with_season_or_group'
             ),
             models.UniqueConstraint(
                 fields=['user', 'content_type', 'object_id'],
-                condition=models.Q(season__isnull=True),
-                name='unique_review_without_season'
+                condition=models.Q(season__isnull=True) & models.Q(episode_group__isnull=True),
+                name='unique_review_without_season_or_group'
             ),
         ]
         
@@ -217,17 +217,30 @@ class Review(models.Model):
         return f"{self.user.username}'s review of {self.media} - {self.rating}/10"
     
     def save(self, *args, **kwargs):
-        # Get TVShow model dynamically to avoid circular import
+        # Get models dynamically to avoid circular import
         from django.apps import apps
         TVShow = apps.get_model('tvshows', 'TVShow')
         
-        # For TV shows, check if the content type is TVShow
-        if self.content_type.model_class() == TVShow and not self.season:
-            raise ValueError("Reviews for TV shows must include a season")
+        if self.content_type.model_class() == TVShow:
+            # A review for a TV show must be associated with either a season or an episode group
+            if not self.season and not self.episode_group:
+                raise ValueError("Reviews for TV shows must include a season or episode group")
+            
+            # Can't have both season and episode group
+            if self.season and self.episode_group:
+                raise ValueError("Reviews for TV shows can't have both season and episode group")
+            
+            # Check if all episodes have been watched before reviewing
+            if self.season and not self.season.user_has_completed(self.user):
+                raise ValueError(f"Can't review season {self.season} until all episodes have been watched")
+            
+            if self.episode_group and not self.episode_group.user_has_completed(self.user):
+                raise ValueError(f"Can't review episode group {self.episode_group} until all episodes have been watched")
         
-        # For non-TV shows, ensure season is None
+        # For non-TV shows, ensure season and episode_group are None
         if self.content_type.model_class() != TVShow:
             self.season = None
+            self.episode_group = None
         
         # Remove from watchlist when reviewed
         Watchlist.objects.filter(
