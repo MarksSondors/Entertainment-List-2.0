@@ -72,14 +72,7 @@ body {
             <p><strong>Rating:</strong> {{ tv_show.rating }}</p>
             <p><strong>Country:</strong> 
                 {% for country in tv_show.countries.all %}
-                    <a href="country" style="text-decoration: none; color: black;">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
-                {% endfor %}
-            </p>
-            <p><strong>Creator:</strong> 
-                {% for creator in tv_show.creators %}
-                    <a href="{% url 'person_detail' person_id=creator.id %}" style="text-decoration: none; color: black;">{{ creator.name }}</a>{% if not forloop.last %}, {% endif %}
-                {% empty %}
-                    Unknown
+                    <a href="{{ country.get_absolute_url }}" style="text-decoration: none; color: black;">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
                 {% endfor %}
             </p>
             <p><strong>Keywords:</strong>
@@ -87,6 +80,21 @@ body {
                     <a href="keyword" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
                 {% endfor %}
             </p>
+
+            <div class="crew-scroll" style="display: flex; overflow-x: auto; gap: 8px; margin-bottom: 10px; padding-bottom: 5px; -webkit-overflow-scrolling: touch;">
+                {% for person, roles in tv_show.get_crew.items %}
+                    <div style="flex: 0 0 auto; min-width: 120px; max-width: 180px; text-align: left; background-color: #C3C3C3; color: black; padding: 6px; border: 2px outset; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <a href="{% url 'person_detail' person.id %}" style="text-decoration: none; color: black; font-weight: bold; font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ person.name }}
+                        </a>
+                        <p style="margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ roles|join:", " }}
+                        </p>
+                    </div>
+                {% empty %}
+                    <div style="text-align: center; font-style: italic; width: 100%; background-color: #C3C3C3; padding: 5px; border: 2px inset;">No crew information available</div>
+                {% endfor %}
+            </div>
 
             <div style="margin-top: 10px;">
                 <p><strong>Your Progress:</strong></p>
