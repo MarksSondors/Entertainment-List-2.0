@@ -74,21 +74,28 @@ def process_cast(tvshow, cast, tvshows_service):
     tvshow_content_type = ContentType.objects.get_for_model(tvshow)
     
     for index, person in enumerate(cast):
-        person_details = MoviesService().get_person_details(person.get('id'))
-        person_instance, _ = Person.objects.get_or_create(
-            tmdb_id=person_details.get('id'),
-            defaults={
-                'name': person_details.get('name'),
-                'profile_picture': f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
-                'date_of_birth': person_details.get('birthday'),
-                'date_of_death': person_details.get('deathday'),
-                'bio': person_details.get('biography'),
-                'imdb_id': person_details.get('imdb_id')
-            }
-        )
-
-        person_instance.is_actor = True
-        person_instance.save()
+        # Check if person already exists in the database
+        person_instance = Person.objects.filter(tmdb_id=person.get('id')).first()
+        
+        # If person doesn't exist, fetch details and create a new instance
+        if not person_instance:
+            person_details = MoviesService().get_person_details(person.get('id'))
+            person_instance, _ = Person.objects.get_or_create(
+                tmdb_id=person_details.get('id'),
+                defaults={
+                    'name': person_details.get('name'),
+                    'profile_picture': f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
+                    'date_of_birth': person_details.get('birthday'),
+                    'date_of_death': person_details.get('deathday'),
+                    'bio': person_details.get('biography'),
+                    'imdb_id': person_details.get('imdb_id')
+                }
+            )
+        
+        # Set as actor if not already set
+        if not person_instance.is_actor:
+            person_instance.is_actor = True
+            person_instance.save()
 
         # characters can be more than one, so we need to handle that
         # you can find the character names in list roles
@@ -264,5 +271,62 @@ def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=
     
     # Process seasons and episodes
     process_seasons(tvshow, tvshow_details.get('seasons', []), tvshows_service)
-    
+
+
+    # Type	Name
+    # 1	Original air date
+    # 2	Absolute
+    # 3	DVD
+    # 4	Digital
+    # 5	Story arc
+    # 6	Production
+    # 7	TV
+    # if is_anime is on lets try and look for episode groups
+    if is_anime:
+        # lets only get the episode groups that are useful like: Production and story arc
+        episode_groups_response = tvshows_service.get_episode_groups(tvshow_id)
+        
+        # Check if we have a proper response and extract the results array
+        if episode_groups_response and isinstance(episode_groups_response, dict):
+            episode_groups = episode_groups_response.get('results', [])
+            filtered_groups = [group for group in episode_groups if group.get('type') in [6, 5]]
+            
+            for group in filtered_groups:
+                # Create the top-level episode group
+                episode_group = EpisodeGroup.objects.create(
+                    show=tvshow,
+                    name=group.get('name'),
+                    tmdb_id=group.get('id')
+                )
+                
+                # get the episodes and subgroups
+                group_details = tvshows_service.get_episode_group_details(group.get('id'))
+                if group_details and 'groups' in group_details:
+                    for idx, season_group in enumerate(group_details.get('groups', [])):
+                        # Create a subgroup for each group returned from the API
+                        subgroup_name = season_group.get('name', f"Part {idx+1}")
+                        subgroup = EpisodeSubGroup.objects.create(
+                            parent_group=episode_group,
+                            name=subgroup_name,
+                            tmdb_id=season_group.get('id', None),
+                            order=idx  # Maintain the order from the API
+                        )
+                        
+                        # Find and associate episodes with this subgroup
+                        episode_instances = []
+                        for episode_item in season_group.get('episodes', []):
+                            try:
+                                season = Season.objects.get(show=tvshow, season_number=episode_item.get('season_number'))
+                                episode = Episode.objects.get(
+                                    season=season, 
+                                    episode_number=episode_item.get('episode_number')
+                                )
+                                episode_instances.append(episode)
+                            except (Season.DoesNotExist, Episode.DoesNotExist):
+                                # Skip if we can't find the corresponding episode
+                                continue
+                        
+                        # Associate all found episodes with this subgroup
+                        if episode_instances:
+                            subgroup.episodes.add(*episode_instances)
     return tvshow

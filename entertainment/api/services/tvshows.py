@@ -122,3 +122,11 @@ class TVShowsService(BaseService):
         if end_date:
             params['end_date'] = end_date
         return self._get(f'tv/{show_id}/changes', params=params)
+    
+    def get_episode_groups(self, show_id):
+        """Get episode groups for a TV show"""
+        return self._get(f'tv/{show_id}/episode_groups')
+    
+    def get_episode_group_details(self, group_id):
+        """Get details for a specific episode group"""
+        return self._get(f'tv/episode_group/{group_id}')
