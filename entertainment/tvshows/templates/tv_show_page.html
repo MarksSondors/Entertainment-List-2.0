@@ -253,6 +253,16 @@ body {
                 <span id="season-progress-{{ season.id }}">
                     {{ season.watched_episodes_count|default:0 }}/{{ season.episodes.count }}
                 </span>
+                
+                <!-- Review button - only visible when all episodes are watched -->
+                <button 
+                    id="review-button-{{ season.id }}"
+                    class="season-review-button"
+                    onclick="event.stopPropagation(); openSeasonReviewModal('{{ season.id }}', '{{ season.title }}');"
+                    style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 3px 8px; margin-top: 8px; display: {% if season.watched_episodes_count == season.episodes.count and season.episodes.count > 0 %}block{% else %}none{% endif %};">
+                    Review Season
+                </button>
+                {% include "components/season_review_modal.html" with season_id=season.id season_title=season.title %}
             </div>
             
             <!-- Updating the season episodes container with buttons instead of checkboxes -->
@@ -297,17 +307,19 @@ body {
     </div>
 </div>
 
-<!-- Windows 95 style dialog for marking previous episodes -->
-<div id="previous-episodes-dialog" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; width: 300px; font-family: 'MS Sans Serif', Arial, sans-serif; box-shadow: 2px 2px 10px rgba(0,0,0,0.3);">
-    <div style="background-color: #000080; color: white; padding: 3px 5px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-weight: bold; font-size: 12px;">Mark Previous Episodes</span>
-        <button onclick="closeDialog()" style="background-color: #C3C3C3; color: black; border: 1px outset; font-size: 10px; cursor: pointer; height: 14px; width: 14px; display: flex; align-items: center; justify-content: center;">✕</button>
+<!-- Windows 98 style dialog using 98.css -->
+<div id="previous-episodes-dialog" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; width: 300px;">
+    <div class="title-bar">
+        <div class="title-bar-text">Mark Previous Episodes</div>
+        <div class="title-bar-controls">
+            <button aria-label="Close" onclick="closeDialog()"></button>
+        </div>
     </div>
-    <div style="background-color: #C3C3C3; padding: 10px; border: 2px inset;">
+    <div class="window-body">
         <p>Do you want to mark all previous episodes as watched as well?</p>
-        <div style="display: flex; justify-content: center; gap: 10px; margin-top: 10px;">
-            <button id="yes-button" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px; min-width: 70px;">Yes</button>
-            <button id="no-button" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px; min-width: 70px;">No</button>
+        <div class="field-row" style="justify-content: center; margin-top: 10px;">
+            <button id="yes-button">Yes</button>
+            <button id="no-button">No</button>
         </div>
     </div>
 </div>
