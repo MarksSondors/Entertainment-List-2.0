@@ -88,13 +88,19 @@ def process_cast(tvshow, cast, tvshows_service):
 
         person_instance.is_actor = True
         person_instance.save()
+
+        # characters can be more than one, so we need to handle that
+        # you can find the character names in list roles
+        roles = person.get('roles', [])
+        # combine all character names into a single string
+        character_names = ', '.join([role.get('character') for role in roles if role.get('character')])
         
         MediaPerson.objects.create(
             content_type=tvshow_content_type,
             object_id=tvshow.id,
             person=person_instance,
             role="Actor",
-            character_name=person.get('character'),
+            character_name=character_names,
             order=person.get('order', index)
         )
 
@@ -143,10 +149,6 @@ def process_seasons(tvshow, seasons_data, tvshows_service):
     """Process seasons and episodes for a TV show"""
     for season_data in seasons_data:
         season_number = season_data.get('season_number')
-        
-        # Skip specials (season 0) if desired
-        if season_number == 0:
-            continue
         
         # Get detailed season information
         season_details = tvshows_service.get_season_details(tvshow.tmdb_id, season_number)
@@ -213,7 +215,7 @@ def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=
         add_to_tvshow_watchlist(tvshow, user_id)
     
     # Process cast and crew
-    credits = tvshow_details.get('credits', {})
+    credits = tvshows_service.get_show_credits(tvshow_id)
     process_cast(tvshow, credits.get('cast', []), tvshows_service)
     process_crew(tvshow, credits.get('crew', []), tvshows_service)
     

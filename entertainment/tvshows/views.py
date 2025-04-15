@@ -12,7 +12,7 @@ from .tasks import create_tvshow_async
 
 import json
 
-from .models import TVShow
+from .models import TVShow, Episode, WatchedEpisode, Season
 from .serializers import TVShowSerializer
 from .parsers import create_tvshow
 from django.contrib.contenttypes.models import ContentType
@@ -341,3 +341,91 @@ class TaskStatusView(APIView):
             
         except Task.DoesNotExist:
             return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class EpisodeWatchedView(APIView):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, episode_id):
+        episode = get_object_or_404(Episode, id=episode_id)
+        watched = request.data.get('watched', True)
+        season_number = request.data.get('season_number')
+        episode_number = request.data.get('episode_number')
+        mark_previous = request.data.get('mark_previous', False)
+        
+        marked_episodes = []
+        
+        # Handle marking as watched
+        if watched:
+            # Mark the selected episode as watched
+            WatchedEpisode.objects.get_or_create(
+                user=request.user,
+                episode=episode
+            )
+            
+            # If mark_previous is True and not a special (season 0), mark all previous episodes as watched
+            if mark_previous and season_number != 0:
+                # Get all previous episodes in the same season
+                season = episode.season
+                previous_episodes = Episode.objects.filter(
+                    season=season,
+                    episode_number__lt=episode_number
+                ).order_by('episode_number')
+                
+                # Mark each previous episode as watched
+                for prev_episode in previous_episodes:
+                    _, created = WatchedEpisode.objects.get_or_create(
+                        user=request.user,
+                        episode=prev_episode
+                    )
+                    if created:
+                        marked_episodes.append(prev_episode.id)
+        else:
+            # Remove the episode from watched episodes
+            WatchedEpisode.objects.filter(
+                user=request.user,
+                episode=episode
+            ).delete()
+        
+        # Calculate season progress
+        season_progress = {}
+        for user_season in episode.season.show.seasons.all():
+            total_episodes = user_season.episodes.count()
+            watched_episodes = WatchedEpisode.objects.filter(
+                user=request.user,
+                episode__season=user_season
+            ).count()
+            
+            percentage = 0
+            if total_episodes > 0:
+                percentage = (watched_episodes / total_episodes) * 100
+                
+            season_progress[user_season.id] = {
+                'total': total_episodes,
+                'watched': watched_episodes,
+                'percentage': percentage
+            }
+        
+        # Calculate overall show progress
+        total_episodes = episode.season.show.episodes_count
+        watched_episodes = WatchedEpisode.objects.filter(
+            user=request.user,
+            episode__season__show=episode.season.show
+        ).count()
+        
+        show_percentage = 0
+        if total_episodes > 0:
+            show_percentage = (watched_episodes / total_episodes) * 100
+            
+        show_progress = {
+            'total': total_episodes,
+            'watched': watched_episodes,
+            'percentage': show_percentage
+        }
+        
+        return Response({
+            'success': True,
+            'season_progress': season_progress,
+            'show_progress': show_progress,
+            'marked_episodes': marked_episodes
+        })

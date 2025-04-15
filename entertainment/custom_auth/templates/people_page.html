@@ -244,7 +244,7 @@ body::before {
                         {% if media.release_date %}
                             <a href="{% url 'movie_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
                         {% elif media.first_air_date %}
-                            <a href="{% url 'tvshow_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
+                            <a href="{% url 'tv_show_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
                         {% else %}
                             {{ media.title }}
                         {% endif %}
