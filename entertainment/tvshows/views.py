@@ -12,7 +12,7 @@ from .tasks import create_tvshow_async
 
 import json
 
-from .models import TVShow, Episode, WatchedEpisode, Season
+from .models import *
 from .serializers import TVShowSerializer
 from .parsers import create_tvshow
 from django.contrib.contenttypes.models import ContentType
@@ -454,3 +454,176 @@ class EpisodeWatchedView(APIView):
             'show_progress': show_progress,
             'marked_episodes': marked_episodes
         })
+
+class TVShowReviewView(APIView):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Create TV Show Review",
+        description="Create a review for a TV show, either for a specific season or episode subgroup. Season is the default choice.",
+        request=OpenApiExample("Review Request", value={
+            "tv_show_id": 1,
+            "season_id": 5,  # Optional if episode_subgroup_id is provided
+            "episode_subgroup_id": None,  # Optional if season_id is provided
+            "rating": 8.5,
+            "review_text": "Great season with unexpected twists"
+        }),
+        responses={
+            201: OpenApiExample("Review Created", value={"message": "Review created successfully"}),
+            400: OpenApiExample("Bad Request", value={"error": "Error message"}),
+            404: OpenApiExample("Not Found", value={"error": "TV Show/Season/Episode subgroup not found"})
+        }
+    )
+    def post(self, request):
+        tv_show_id = request.data.get('tv_show_id')
+        season_id = request.data.get('season_id')
+        episode_subgroup_id = request.data.get('episode_subgroup_id')
+        rating = request.data.get('rating')
+        review_text = request.data.get('review_text', '')
+        
+        # Validate required fields
+        if not tv_show_id:
+            return Response({"error": "TV Show ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not rating:
+            return Response({"error": "Rating is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not season_id and not episode_subgroup_id:
+            return Response({"error": "Either Season ID or Episode Subgroup ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if season_id and episode_subgroup_id:
+            return Response({"error": "Cannot provide both Season ID and Episode Subgroup ID"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Get the TV show
+            tv_show = get_object_or_404(TVShow, id=tv_show_id)
+            
+            # Get the content type for TVShow
+            content_type = ContentType.objects.get_for_model(TVShow)
+            
+            # Check if season or episode subgroup exists
+            season = None
+            episode_subgroup = None
+            
+            if season_id:
+                season = get_object_or_404(Season, id=season_id, show=tv_show)
+                
+                # Check if user has completed the season
+                if not season.user_has_completed(request.user):
+                    return Response(
+                        {"error": f"You must watch all episodes in {season.name} before reviewing"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            if episode_subgroup_id:
+                episode_subgroup = get_object_or_404(EpisodeSubGroup, id=episode_subgroup_id, show=tv_show)
+                
+                # Check if user has completed the episode subgroup
+                if not episode_subgroup.user_has_completed(request.user):
+                    return Response(
+                        {"error": f"You must watch all episodes in {episode_subgroup.name} before reviewing"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Check for existing review
+            existing_review = Review.objects.filter(
+                user=request.user,
+                content_type=content_type,
+                object_id=tv_show.id,
+                season=season,
+                episode_subgroup=episode_subgroup
+            ).first()
+            
+            if existing_review:
+                # Update existing review
+                existing_review.rating = float(rating)
+                existing_review.review_text = review_text
+                existing_review.save()
+                return Response({"message": "Review updated successfully"}, status=status.HTTP_200_OK)
+            
+            # Create new review
+            try:
+                review = Review.objects.create(
+                    user=request.user,
+                    content_type=content_type,
+                    object_id=tv_show.id,
+                    season=season,
+                    episode_subgroup=episode_subgroup,
+                    rating=float(rating),
+                    review_text=review_text
+                )
+                
+                return Response({
+                    "message": "Review created successfully",
+                    "review_id": review.id
+                }, status=status.HTTP_201_CREATED)
+                
+            except ValueError as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+        except TVShow.DoesNotExist:
+            return Response({"error": f"TV Show with ID {tv_show_id} not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @extend_schema(
+        summary="Get TV Show Reviews",
+        description="Get reviews for a TV show, optionally filtered by season or episode subgroup.",
+        parameters=[
+            OpenApiParameter(name="tv_show_id", description="ID of the TV show", required=True, type=int),
+            OpenApiParameter(name="season_id", description="ID of the season (optional)", required=False, type=int),
+            OpenApiParameter(name="episode_subgroup_id", description="ID of the episode subgroup (optional)", required=False, type=int),
+        ],
+        responses={200: OpenApiExample("Reviews", value=[
+            {
+                "id": 1,
+                "user": "username",
+                "rating": 8.5,
+                "review_text": "Great season!",
+                "date_added": "2023-04-15T12:34:56Z"
+            }
+        ])}
+    )
+    def get(self, request):
+        tv_show_id = request.query_params.get('tv_show_id')
+        season_id = request.query_params.get('season_id')
+        episode_subgroup_id = request.query_params.get('episode_subgroup_id')
+        
+        if not tv_show_id:
+            return Response({"error": "TV Show ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            tv_show = get_object_or_404(TVShow, id=tv_show_id)
+            content_type = ContentType.objects.get_for_model(TVShow)
+            
+            # Base query for reviews of this TV show
+            reviews_query = Review.objects.filter(
+                content_type=content_type,
+                object_id=tv_show.id
+            )
+            
+            # Add filters if provided
+            if season_id:
+                reviews_query = reviews_query.filter(season_id=season_id)
+            
+            if episode_subgroup_id:
+                reviews_query = reviews_query.filter(episode_subgroup_id=episode_subgroup_id)
+            
+            # Serialize the reviews
+            reviews_data = []
+            for review in reviews_query:
+                reviews_data.append({
+                    'id': review.id,
+                    'user': review.user.username,
+                    'rating': review.rating,
+                    'review_text': review.review_text,
+                    'date_added': review.date_added,
+                    'season': review.season.name if review.season else None,
+                    'episode_subgroup': review.episode_subgroup.name if review.episode_subgroup else None
+                })
+            
+            return Response(reviews_data)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

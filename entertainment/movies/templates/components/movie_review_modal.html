@@ -1,43 +1,48 @@
 {% load static %}
-<div id="reviewModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #C3C3C3; border: 2px solid black; z-index: 1000; width: min(90%, 400px); box-shadow: 5px 5px 10px rgba(0,0,0,0.3);">
+<!-- Add overlay div for darkening the background when modal is open -->
+<div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999;"></div>
+
+<!-- Movie Review Modal -->
+<div id="reviewModal" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 400px; max-width: 90%;">
     <div class="title-bar">
         <div class="title-bar-text" id="reviewModalTitle">Write a Review</div>
         <div class="title-bar-controls">
             <button aria-label="Close" onclick="closeReviewModal()"></button>
         </div>
     </div>
-    <div style="padding: 15px; background-color: #C3C3C3;">
+    <div class="window-body">
         <form id="reviewForm" onsubmit="event.preventDefault(); submitReview({{ content_id }}, '{{ content_type }}')">
-            <div style="background-color: white; border: 2px inset; padding: 10px; margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
-                    <div style="flex: 1; min-width: 150px;">
-                        <label for="watchDate" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Date Watched:</label>
-                        <input type="date" id="reviewDate" name="reviewDate" style="width: 100%; font-family: 'MS Sans Serif'; border: 2px inset; padding: 5px;" value="{% now 'Y-m-d' %}" required>
-                    </div>
-                </div>
-                
-                <label for="rating" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Rating:</label>
-                <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                    <input type="range" id="rating" name="rating" min="1" max="10" value="5" style="flex: 1; margin-right: 10px;" oninput="updateRatingDisplay(this.value)">
-                    <div style="font-family: 'MS Sans Serif'; background-color: white; border: 2px inset; padding: 5px; min-width: 50px; text-align: center;">
+            <div class="field-row-stacked">
+                <label for="reviewDate">Date Watched:</label>
+                <input type="date" id="reviewDate" name="reviewDate" value="{% now 'Y-m-d' %}" required>
+            </div>
+            
+            <div class="field-row-stacked">
+                <label for="rating">Rating:</label>
+                <div class="field-row">
+                    <input type="range" id="rating" name="rating" min="1" max="10" value="5" oninput="updateRatingDisplay(this.value)">
+                    <div class="status-bar" style="width: auto; margin-left: 10px; padding: 2px 8px;">
                         <span id="ratingValue">5</span>/10
                     </div>
                 </div>
-                
-                <label for="reviewText" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Review:</label>
-                <textarea id="reviewText" name="reviewText" rows="4" style="width: 100%; font-family: 'MS Sans Serif'; margin-bottom: 5px; border: 2px inset; padding: 5px;" placeholder="Write your review here..." required></textarea>
-                <div id="charCount" style="font-family: 'MS Sans Serif'; font-size: 0.8em; text-align: right;">0</div>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div id="reviewLoadingIndicator" style="display: none;">
+            
+            <div class="field-row-stacked">
+                <label for="reviewText">Review:</label>
+                <textarea id="reviewText" name="reviewText" rows="4" placeholder="Write your review here..." required></textarea>
+                <p id="charCount" style="text-align: right; font-size: 0.8em; margin: 2px 0;">0 characters</p>
+            </div>
+            
+            <section class="field-row" style="justify-content: space-between; margin-top: 16px;">
+                <div id="reviewLoadingIndicator" style="display: none; align-items: center;">
                     <img src="{% static 'images/hourglass.webp' %}" alt="Loading" style="width: 20px; height: 20px; margin-right: 5px;">
-                    <span style="font-family: 'MS Sans Serif'; font-size: 0.9em;">Submitting...</span>
+                    <span>Submitting...</span>
                 </div>
                 <div style="margin-left: auto;">
-                    <button type="button" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="closeReviewModal()">Cancel</button>
-                    <button type="submit" id="submitBtn" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px; margin-left: 5px;">Submit</button>
+                    <button type="button" onclick="closeReviewModal()">Cancel</button>
+                    <button type="submit" id="submitBtn">Submit</button>
                 </div>
-            </div>
+            </section>
         </form>
     </div>
 </div>
@@ -47,15 +52,57 @@ function updateRatingDisplay(value) {
     document.getElementById('ratingValue').textContent = value;
 }
 
+function openReviewModal(contentId, contentType, title) {
+    const modal = document.getElementById('reviewModal');
+    const overlay = document.getElementById('overlay');
+    
+    // Update modal title if title is provided
+    if (title) {
+        document.getElementById('reviewModalTitle').textContent = `Review ${title}`;
+    }
+    
+    // Reset form
+    document.getElementById('reviewForm').reset();
+    document.getElementById('reviewDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('rating').value = 5;
+    document.getElementById('ratingValue').textContent = '5';
+    document.getElementById('reviewText').value = '';
+    document.getElementById('charCount').textContent = '0 characters';
+    
+    // Make sure overlay is below modal
+    overlay.style.zIndex = "999";
+    modal.style.zIndex = "1000";
+    
+    modal.style.display = 'block';
+    overlay.style.display = 'block';
+    
+    // Prevent background scrolling when modal is open
+    document.body.style.overflow = 'hidden';
+}
+
+function closeReviewModal() {
+    document.getElementById('reviewModal').style.display = 'none';
+    document.getElementById('overlay').style.display = 'none';
+    // Re-enable scrolling when modal is closed
+    document.body.style.overflow = 'auto';
+}
+
 document.getElementById('reviewText').addEventListener('input', function() {
-    // Remove the maxLength constant and just count characters
     const currentLength = this.value.length;
     document.getElementById('charCount').textContent = currentLength + ' characters';
-    
-    // Remove the if-else block that was enforcing the limit
 });
 
-// Update the initial counter text
-document.getElementById('charCount').textContent = '0 characters';
+// Add overlay click handler to close the modal
+document.getElementById('overlay').addEventListener('click', function(event) {
+    closeReviewModal();
+    event.stopPropagation();
+});
+
+// Prevent clicks inside the modal from bubbling up
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('reviewModal').addEventListener('click', function(event) {
+        event.stopPropagation();
+    });
+});
 </script>
 <script src="{% static 'js/review.js' %}"></script>
