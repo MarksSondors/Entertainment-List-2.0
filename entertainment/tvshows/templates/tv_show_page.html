@@ -1,5 +1,5 @@
 {% extends "components/base.html" %}
-
+{% load static %}
 {% block content %}
 <style>
 body {
@@ -24,12 +24,22 @@ body {
 }
 .episode-item {
     display: flex;
-    align-items: center;
-    padding: 5px;
+    align-items: flex-start;
+    padding: 8px;
     border-bottom: 1px solid #ddd;
 }
+
 .episode-item:last-child {
     border-bottom: none;
+}
+
+.episode-image {
+    flex-shrink: 0;
+    margin-right: 10px;
+}
+
+.episode-info {
+    flex-grow: 1;
 }
 .watched-checkbox {
     margin-right: 10px;
@@ -48,9 +58,112 @@ body {
         background-color: #000080;
         color: white;
     }
+.seasons-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-gap: 15px;
+}
+
+.season-card {
+    background-color: #C3C3C3;
+    border: 2px outset;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    text-align: center;
+}
+
+.season-poster {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    border: 1px solid black;
+    margin-bottom: 5px;
+}
+
+.episodes-container {
+    display: none;
+    grid-column: 1 / -1;
+    background-color: white;
+    border: 2px inset;
+    padding: 10px;
+    margin: 5px 0 15px;
+}
+
+.watched-checkbox {
+    margin-right: 10px;
+    width: 16px;
+    height: 16px;
+    visibility: visible !important;
+    opacity: 1 !important;
+    appearance: auto !important;
+    -webkit-appearance: checkbox !important;
+}
+
+.episode-item {
+    display: flex;
+    align-items: center;
+    padding: 5px;
+    border-bottom: 1px solid #ddd;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    .tv-show-container {
+        flex-direction: column;
+    }
+    
+    .tv_poster img {
+        width: 150px !important;
+        margin: 0 auto 15px;
+        display: block;
+    }
+    
+    .seasons-grid {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        grid-gap: 10px;
+    }
+    
+    .season-poster {
+        height: 160px;
+    }
+    
+    .episode-item {
+        flex-direction: column;
+    }
+    
+    .episode-image img {
+        width: 100% !important;
+        height: auto !important;
+        margin-bottom: 10px;
+    }
+    
+    .episode-info {
+        margin: 10px 0 !important;
+    }
+    
+    .watch-button {
+        margin-top: 10px;
+        width: 100%;
+    }
+    
+    .crew-scroll {
+        gap: 5px;
+    }
+    
+    button {
+        margin: 5px 3px !important;
+    }
+    
+    #previous-episodes-dialog {
+        width: 90% !important;
+        max-width: 300px;
+    }
+}
 </style>
 
-<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; display: flex; align-items: flex-start; gap: 20px; margin: 20px;">
+<div class="tv-show-container" style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 15px; border: 2px solid black; display: flex; align-items: flex-start; gap: 20px; margin: 10px;">
     <div class="tv_poster" style="flex-shrink: 0;">
         <img src="{{ tv_show.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" alt="{{ movie.title }} Poster" style="width: 200px; border: 2px solid black; cursor: pointer;" onclick="openPosterModal()">
 
@@ -99,188 +212,246 @@ body {
                     <div style="text-align: center; font-style: italic; width: 100%; background-color: #C3C3C3; padding: 5px; border: 2px inset;">No crew information available</div>
                 {% endfor %}
             </div>
-
-            <div style="margin-top: 10px;">
-                <p><strong>Your Progress:</strong></p>
-                <div class="progress-bar">
-                    <div class="progress" style="width: {{ user_progress }}%"></div>
-                </div>
-                <p style="text-align: right; font-size: 0.8em;">{{ watched_episodes_count }}/{{ total_episodes_count }} episodes watched</p>
-            </div>
         </div>
         <div style="margin-top: 10px;">
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openTrailerModal()">Watch Trailer</button>
             {% include "components/trailer_modal.html" with trailer_url=tv_show.trailer %}
 
             {% if user_watchlist %}
-                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="removeFromWatchlist()">Remove from Watchlist</button>
+                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" 
+                    onclick="removeFromWatchlist()" data-tvshow-id="{{ tv_show.id }}">Remove from Watchlist</button>
             {% else %}
-                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="addToWatchlist()">Add to Watchlist</button>
+                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" 
+                    onclick="addToWatchlist()" data-tvshow-id="{{ tv_show.id }}">Add to Watchlist</button>
             {% endif %}
-            <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openReviewModal()">Write a Review</button>
+            <script src="{% static 'js/watchlist_tv.js' %}"></script>
+
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openCastModal()">Cast</button>
-
-
-
-            <div id="reviewModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #C3C3C3; border: 2px solid black; z-index: 1000; width: 350px;">
-                <div class="title-bar">
-                    <div class="title-bar-text">Write a Review</div>
-                    <div class="title-bar-controls">
-                        <button aria-label="Close" onclick="closeReviewModal()"></button>
-                    </div>
-                </div>
-                <div style="padding: 15px; background-color: #C3C3C3;">
-                    <div style="background-color: white; border: 2px inset; padding: 10px; margin-bottom: 10px;">
-                        <label for="rating" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Rating: <span id="ratingValue">5</span>/10</label>
-                        <input type="range" id="rating" name="rating" min="1" max="10" value="5" style="width: 100%; margin-bottom: 10px;">
-                        
-                        <label for="reviewText" style="font-family: 'MS Sans Serif'; display: block; margin-bottom: 5px;">Review:</label>
-                        <textarea id="reviewText" name="reviewText" rows="4" style="width: 100%; font-family: 'MS Sans Serif'; margin-bottom: 5px; border: 2px inset; padding: 5px;" placeholder="Write your review here..."></textarea>
-                    </div>
-                    <div style="text-align: right;">
-                        <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="submitReview()">Submit</button>
-                        <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="closeReviewModal()">Cancel</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="castModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 400px;">
-                <div class="title-bar">
-                    <div class="title-bar-text">Cast</div>
-                    <div class="title-bar-controls">
-                        <button aria-label="Close" onclick="closeCastModal()"></button>
-                    </div>
-                </div>
-                <div style="padding: 10px; background-color: white; max-height: 70vh; overflow-y: auto;">
-                    <h3 style="margin: 5px 0; font-size: 16px;">Actors</h3>
-                    <ul style="margin: 0; padding-left: 20px;">
-                        {% for cast_member in tv_show.cast %}
-                        <li style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <div class="cast-image-placeholder" 
-                                 data-image-src="{{ cast_member.person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                 data-person-name="{{ cast_member.person.name }}"
-                                 style="width: 75px; height: 75px; background-color: #eee; display: flex; align-items: center; justify-content: center; border: 2px solid black; margin-right: 10px;">
-                                <span>{{ cast_member.person.name|slice:":1" }}</span>
-                            </div>
-                            <div>
-                                <div><a href="{% url 'person_detail' person_id=cast_member.person.id %}" style="text-decoration: none; color: black;">{{ cast_member.person.name }}</a></div>
-                                <div style="font-size: 0.9em; color: #666;">
-                                    {% if cast_member.character_name %}
-                                        as {{ cast_member.character_name }}
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </li>
-                        {% empty %}
-                        <li>No cast information available</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
+            {% include "components/cast_modal_tv.html" %}
         </div>
     </div>
 </div>
 
-<!-- Seasons and Episodes Section -->
+<!-- Seasons Component with Grid Layout -->
 <div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; margin: 20px;">
     <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
-        <h2 style="margin: 0; font-size: 18px;">Seasons and Episodes</h2>
+        <h2 style="margin: 0; font-size: 16px;">Seasons</h2>
     </div>
     
-    <!-- Seasons Grid -->
-    <div class="seasons-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+    <div class="seasons-grid">
         {% for season in tv_show.seasons.all %}
-        <div class="season-card" onclick="showSeasonEpisodes({{ season.season_number }})" style="cursor: pointer; text-align: center; background-color: white; border: 2px outset; padding: 10px;">
-            <img src="{{ season.poster|default:'https://via.placeholder.com/150x225?text=Season+' }}" alt="Season {{ season.season_number }}" style="width: 100%; height: 200px; object-fit: cover; margin-bottom: 5px;">
-            <div style="font-weight: bold;">Season {{ season.season_number }}{% if season.title %}: {{ season.title }}{% endif %}</div>
-            <div style="font-size: 0.8em; color: #666;">{{ season.episodes_count }} episodes</div>
-            <div style="margin-top: 5px;">
-                <div class="progress-bar">
-                    <div class="progress" style="width: {{ season.watched_percentage }}%"></div>
+            <div class="season-card" onclick="toggleSeason('season-{{ season.id }}')">
+                <img src="{{ season.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                     alt="Season {{ season.season_number }} Poster" class="season-poster">
+                <div>
+                    <strong>{{ season.title }}</strong>
+                    {% if season.name and season.name != '' %}<p>{{ season.name }}</p>{% endif %}
                 </div>
-                <p style="text-align: right; font-size: 0.8em; margin: 2px 0;">{{ season.watched_episodes }}/{{ season.episodes_count }}</p>
+                <div class="progress-bar">
+                    <div class="progress" id="progress-bar-{{ season.id }}" style="width: {{ season.progress|default:0 }}%;"></div>
+                </div>
+                <span id="season-progress-{{ season.id }}">
+                    {{ season.watched_episodes_count|default:0 }}/{{ season.episodes.count }}
+                </span>
             </div>
-        </div>
+            
+            <!-- Updating the season episodes container with buttons instead of checkboxes -->
+            <div class="episodes-container" id="season-{{ season.id }}">
+                <h3>Season {{ season.season_number }} Episodes</h3>
+                
+                {% for episode in season.episodes.all %}
+                    <div class="episode-item" id="episode-{{ episode.id }}">
+                        <div class="episode-image">
+                            <img src="{{ episode.still|default:'https://via.placeholder.com/160x90?text=No+Image' }}" 
+                                 alt="Episode {{ episode.episode_number }} Still" 
+                                 style="width: 160px; height: 90px; object-fit: cover; border: 1px solid #888;">
+                        </div>
+                        <div class="episode-info" style="flex: 1; margin: 0 10px;">
+                            <strong>{{ episode.episode_number }}. {{ episode.title }}</strong>
+                            <div style="display: flex; align-items: center; margin: 3px 0;">
+                                <span style="margin-right: 15px;">⭐ {{ episode.rating|default:"N/A" }}</span>
+                                <span>⏱️ {{ episode.runtime|default:"?" }} min</span>
+                            </div>
+                            <p>{{ episode.overview|truncatechars:150 }}</p>
+                        </div>
+                        <button 
+                            class="watch-button" 
+                            data-episode-id="{{ episode.id }}"
+                            data-season-number="{{ season.season_number }}"
+                            data-episode-number="{{ episode.episode_number }}"
+                            data-watched="{% if episode.is_watched %}true{% else %}false{% endif %}"
+                            onclick="toggleWatchStatus(this)"
+                            style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 3px 8px; min-width: 80px; align-self: center;">
+                            {% if episode.is_watched %}Watched{% else %}Mark Watched{% endif %}
+                        </button>
+                    </div>
+                {% empty %}
+                    <div class="episode-item">No episodes available for this season.</div>
+                {% endfor %}
+            </div>
         {% empty %}
-        <div style="padding: 20px; text-align: center; grid-column: 1/-1;">No seasons available for this show.</div>
+            <div style="text-align: center; font-style: italic; background-color: white; padding: 10px; border: 2px inset; grid-column: 1 / -1;">
+                No seasons information available.
+            </div>
         {% endfor %}
     </div>
-    
-    <!-- Episodes Container (Initially Hidden) -->
-    {% for season in tv_show.seasons.all %}
-    <div id="season-episodes-{{ season.season_number }}" class="season-episodes" style="display: none; background-color: white; border: 2px inset; padding: 10px; margin-top: 10px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0; font-size: 16px;">Season {{ season.season_number }}{% if season.title %}: {{ season.title }}{% endif %}</h3>
-            <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 2px 5px;" onclick="hideSeasonEpisodes({{ season.season_number }})">Back to Seasons</button>
-        </div>
-        
-        <div class="episodes-list" style="max-height: 500px; overflow-y: auto;">
-            {% for episode in season.episodes.all %}
-            <div class="episode-item" style="display: flex; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 10px;" data-episode-id="{{ episode.id }}">
-                <div style="flex: 0 0 120px; margin-right: 15px;">
-                    <div class="episode-image-placeholder" 
-                         data-image-src="{{ episode.still|default:'https://via.placeholder.com/120x68?text=Episode+' }}" 
-                         data-episode-number="{{ episode.episode_number }}"
-                         style="width: 120px; height: 68px; background-color: #eee; display: flex; align-items: center; justify-content: center; border: 1px solid #ddd;">
-                        <span>Ep. {{ episode.episode_number }}</span>
-                    </div>
-                </div>
-                <div style="flex: 1;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong>{{ episode.episode_number }}. {{ episode.title }}</strong>
-                        <input type="checkbox" class="watched-checkbox" {% if episode.watched %}checked{% endif %} onchange="markEpisodeWatched({{ episode.id }}, this.checked)">
-                    </div>
-                    <div style="font-size: 0.9em; color: #666;">
-                        Air date: {{ episode.air_date|date:"F d, Y"|default:"Unknown" }} • {{ episode.runtime|default:"?" }} min
-                        {% if episode.rating %}
-                        • Rating: {{ episode.rating }}/10
-                        {% endif %}
-                    </div>
-                    {% if episode.overview %}
-                    <div style="font-size: 0.9em; margin-top: 5px;">
-                        {{ episode.overview|truncatechars:150 }}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-            {% empty %}
-            <div style="padding: 10px; text-align: center;">No episodes available for this season.</div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endfor %}
 </div>
 
-<!-- User Reviews Section -->
-<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; margin: 20px;">
-    <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
-        <h2 style="margin: 0; font-size: 18px;">User Reviews</h2>
+<!-- Windows 95 style dialog for marking previous episodes -->
+<div id="previous-episodes-dialog" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; width: 300px; font-family: 'MS Sans Serif', Arial, sans-serif; box-shadow: 2px 2px 10px rgba(0,0,0,0.3);">
+    <div style="background-color: #000080; color: white; padding: 3px 5px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-weight: bold; font-size: 12px;">Mark Previous Episodes</span>
+        <button onclick="closeDialog()" style="background-color: #C3C3C3; color: black; border: 1px outset; font-size: 10px; cursor: pointer; height: 14px; width: 14px; display: flex; align-items: center; justify-content: center;">✕</button>
     </div>
-    <div class="sunken-panel" style="background-color: white; border: 2px inset; padding: 10px; height: 300px; overflow-y: auto;">
-        <table class="interactive" style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="background-color: #C3C3C3;">
-                    <th style="text-align: left; padding: 4px;">User</th>
-                    <th style="text-align: center; padding: 4px;">Rating</th>
-                    <th style="text-align: left; padding: 4px;">Review</th>
-                    <th style="text-align: right; padding: 4px;">Date</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for review in tv_show_reviews %}
-                <tr>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">{{ review.user.username }}</td>
-                    <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">{{ review.rating }}/10</td>
-                    <td style="padding: 4px; border-bottom: 1px solid #ddd;">{{ review.review_text }}</td>
-                    <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">{{ review.date_added|date:"M d, Y" }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4" style="text-align: center; padding: 20px;">No reviews yet. Be the first to review!</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div style="background-color: #C3C3C3; padding: 10px; border: 2px inset;">
+        <p>Do you want to mark all previous episodes as watched as well?</p>
+        <div style="display: flex; justify-content: center; gap: 10px; margin-top: 10px;">
+            <button id="yes-button" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px; min-width: 70px;">Yes</button>
+            <button id="no-button" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px; min-width: 70px;">No</button>
+        </div>
     </div>
 </div>
+
+<!-- Add an overlay for the dialog -->
+<div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 9998;"></div>
+
+<!-- JavaScript for handling seasons and episodes -->
+<script>
+    function toggleSeason(seasonId) {
+        const episodesContainer = document.getElementById(seasonId);
+        if (episodesContainer.style.display === "block") {
+            episodesContainer.style.display = "none";
+        } else {
+            // Close all other episode containers first
+            document.querySelectorAll('.episodes-container').forEach(container => {
+                container.style.display = "none";
+            });
+            episodesContainer.style.display = "block";
+        }
+    }
+    
+    // New dialog functions
+    function showDialog(episodeId, seasonNumber, episodeNumber) {
+        const dialog = document.getElementById('previous-episodes-dialog');
+        const overlay = document.getElementById('overlay');
+        const yesButton = document.getElementById('yes-button');
+        const noButton = document.getElementById('no-button');
+        
+        // Set up button click handlers
+        yesButton.onclick = function() {
+            markEpisodeWatched(episodeId, true, seasonNumber, episodeNumber, true);
+            closeDialog();
+        };
+        
+        noButton.onclick = function() {
+            markEpisodeWatched(episodeId, true, seasonNumber, episodeNumber, false);
+            closeDialog();
+        };
+        
+        // Show the dialog and overlay
+        dialog.style.display = 'block';
+        overlay.style.display = 'block';
+    }
+    
+    function closeDialog() {
+        document.getElementById('previous-episodes-dialog').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+    }
+    
+    // New function to toggle watch status
+    function toggleWatchStatus(button) {
+        const episodeId = button.dataset.episodeId;
+        const seasonNumber = button.dataset.seasonNumber;
+        const episodeNumber = button.dataset.episodeNumber;
+        const isWatched = button.dataset.watched === 'true';
+        
+        if (isWatched) {
+            // If already watched, simply mark as unwatched without showing dialog
+            markEpisodeWatched(episodeId, false, seasonNumber, episodeNumber, false);
+            button.textContent = 'Mark Watched';
+            button.dataset.watched = 'false';
+            return;
+        }
+        
+        // Only proceed with this logic when marking as watched
+        // If it's the first episode of a season or part of season 0, mark as watched without showing dialog
+        if (episodeNumber === '1' || seasonNumber === '0') {
+            markEpisodeWatched(episodeId, true, seasonNumber, episodeNumber, false);
+            button.textContent = 'Watched';
+            button.dataset.watched = 'true';
+        } else {
+            const previousEpisodeId = parseInt(episodeId) - 1; // Assuming episode IDs are sequential
+            const previousEpisodeButton = document.querySelector(`button[data-episode-id="${previousEpisodeId}"]`);
+            if (previousEpisodeButton && previousEpisodeButton.dataset.watched === 'true') {
+                markEpisodeWatched(episodeId, true, seasonNumber, episodeNumber, false);
+                button.textContent = 'Watched';
+                button.dataset.watched = 'true';
+            } else {
+                // Show dialog to mark previous episodes as watched
+                showDialog(episodeId, seasonNumber, episodeNumber);
+            }
+        }
+    }
+    
+    // Updated markEpisodeWatched function
+    function markEpisodeWatched(episodeId, watched, seasonNumber = null, episodeNumber = null, markPrevious = false) {
+        fetch(`/tvshows/episodes/${episodeId}/watched/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                watched: watched,
+                season_number: seasonNumber,
+                episode_number: episodeNumber,
+                mark_previous: markPrevious
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update season progress
+                for (const seasonId in data.season_progress) {
+                    const progress = data.season_progress[seasonId];
+                    const progressElement = document.getElementById(`season-progress-${seasonId}`);
+                    const progressBar = document.getElementById(`progress-bar-${seasonId}`);
+                    
+                    if (progressElement) {
+                        progressElement.textContent = `${progress.watched}/${progress.total} Episodes`;
+                    }
+                    
+                    if (progressBar) {
+                        progressBar.style.width = `${progress.percentage}%`;
+                    }
+                }
+                
+                // Update buttons for marked episodes
+                if (data.marked_episodes && data.marked_episodes.length > 0) {
+                    data.marked_episodes.forEach(epId => {
+                        const button = document.querySelector(`#episode-${epId} .watch-button`);
+                        if (button) {
+                            button.textContent = 'Watched';
+                            button.dataset.watched = 'true';
+                        }
+                    });
+                }
+                
+                // Update the current episode button if not included in marked_episodes
+                const currentButton = document.querySelector(`button[data-episode-id="${episodeId}"]`);
+                if (currentButton && !data.marked_episodes.includes(episodeId)) {
+                    if (watched) {
+                        currentButton.textContent = 'Watched';
+                        currentButton.dataset.watched = 'true';
+                    } else {
+                        currentButton.textContent = 'Mark Watched';
+                        currentButton.dataset.watched = 'false';
+                    }
+                }
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+</script>
+
 {% endblock %}

@@ -28,7 +28,9 @@ def tv_show_page(request, show_id):
         tv_show_db = TVShow.objects.prefetch_related(
             'genres', 
             'countries', 
-            'keywords'
+            'keywords',
+            'seasons',
+            'seasons__episodes'
         ).get(tmdb_id=show_id)
     except TVShow.DoesNotExist:
         tv_show_db = create_tvshow(show_id)
@@ -39,6 +41,29 @@ def tv_show_page(request, show_id):
         content_type=ContentType.objects.get_for_model(TVShow),
         object_id=tv_show_db.id
     ).exists()
+    
+    # Get all watched episodes for this user and this show
+    watched_episodes = WatchedEpisode.objects.filter(
+        user=request.user,
+        episode__season__show=tv_show_db
+    ).values_list('episode_id', flat=True)
+    
+    # For each season, calculate progress
+    for season in tv_show_db.seasons.all():
+        # Get all episodes for this season
+        total_episodes = season.episodes.count()
+        
+        # Mark episodes as watched or not
+        for episode in season.episodes.all():
+            episode.is_watched = episode.id in watched_episodes
+        
+        # Count watched episodes
+        watched_count = sum(1 for episode in season.episodes.all() if episode.id in watched_episodes)
+        
+        # Calculate progress percentage
+        season.watched_episodes_count = watched_count
+        season.progress = (watched_count / total_episodes * 100) if total_episodes > 0 else 0
+    
     context = {
         'tv_show': tv_show_db,
         'user_watchlist': user_watchlist,
