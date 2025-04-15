@@ -72,8 +72,8 @@
                                 
                                 <!-- User Rating Badge (if available) -->
                                 {% if movie.user_rating %}
-                                <div class="user-rating-badge">
-                                    {{ movie.user_rating }}
+                                <div class="user-rating-badge {% if movie.user_rating >= 7 %}high-rating{% elif movie.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
+                                    {{ movie.user_rating }}<span class="rating-max">/10</span>
                                 </div>
                                 {% endif %}
                                 
@@ -114,7 +114,9 @@
                                 <!-- For Movies Table View -->
                                 <td>
                                     {% if movie.user_rating %}
-                                    <span class="badge badge-rating-user">Your: {{ movie.user_rating }}</span>
+                                    <span class="badge badge-rating-user {% if movie.user_rating >= 7 %}high-rating{% elif movie.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
+                                        {{ movie.user_rating }}<span class="rating-max">/10</span>
+                                    </span>
                                     {% endif %}
                                     {% if movie.avg_rating %}
                                     <span class="badge badge-rating-avg">Avg: {{ movie.avg_rating }} ({{ movie.rating_count }})</span>
@@ -163,8 +165,8 @@
                                 
                                 <!-- User Rating Badge (if available) -->
                                 {% if show.user_rating %}
-                                <div class="user-rating-badge">
-                                    {{ show.user_rating }}
+                                <div class="user-rating-badge {% if show.user_rating >= 7 %}high-rating{% elif show.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
+                                    {{ show.user_rating }}<span class="rating-max">/10</span>
                                 </div>
                                 {% endif %}
                                 
@@ -205,7 +207,9 @@
                                 <!-- For TV Shows Table View -->
                                 <td>
                                     {% if show.user_rating %}
-                                    <span class="badge badge-rating-user">Your: {{ show.user_rating }}</span>
+                                    <span class="badge badge-rating-user {% if show.user_rating >= 7 %}high-rating{% elif show.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
+                                        {{ show.user_rating }}<span class="rating-max">/10</span>
+                                    </span>
                                     {% endif %}
                                     {% if show.avg_rating %}
                                     <span class="badge badge-rating-avg">Avg: {{ show.avg_rating }} ({{ show.rating_count }})</span>
@@ -268,9 +272,7 @@
         position: absolute;
         top: 5px;
         right: 5px;
-        background-color: #E0B020;
-        color: black;
-        padding: 3px 6px;
+        padding: 2px 6px;
         border-radius: 3px;
         font-weight: bold;
         box-shadow: 0 0 3px rgba(0,0,0,0.5);
@@ -283,7 +285,7 @@
         right: 5px;
         background-color: #6c757d;
         color: white;
-        padding: 3px 6px;
+        padding: 2px 6px;
         border-radius: 3px;
         font-weight: bold;
         font-size: 0.85em;
@@ -291,15 +293,40 @@
         z-index: 5;
     }
     
+    /* Rating color classes */
+    .high-rating {
+        background-color: #4CAF50;
+        color: white;
+    }
+    
+    .mid-rating {
+        background-color: #FFC107;
+        color: black;
+    }
+    
+    .low-rating {
+        background-color: #F44336;
+        color: white;
+    }
+    
+    .rating-max {
+        font-size: 10px;
+        font-weight: normal;
+        vertical-align: text-top;
+    }
+    
     /* Style for the table ratings to match */
     .badge-rating-user {
-        background-color: #E0B020;
-        color: black;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: bold;
     }
     
     .badge-rating-avg {
         background-color: #6c757d;
         color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
     }
     
     /* Improved table styling */
