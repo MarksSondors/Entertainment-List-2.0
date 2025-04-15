@@ -205,12 +205,26 @@ class Episode(models.Model):
         return self.air_date <= timezone.now().date()
 
 class EpisodeGroup(models.Model):
-    """Model for grouping episodes into story arcs or other logical units."""
-    tmdb_id = models.CharField(max_length=20, blank=True, null=True)
+    """Top-level episode grouping category (like 'Story Arcs', 'Viewing Orders', etc.)"""
+    tmdb_id = models.CharField(max_length=30, blank=True, null=True)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     show = models.ForeignKey(TVShow, related_name='episode_groups', on_delete=models.CASCADE)
-    episodes = models.ManyToManyField(Episode, related_name='episode_groups')
+    order = models.PositiveIntegerField(default=0)
+    
+    class Meta:
+        ordering = ['order', 'name']
+        
+    def __str__(self):
+        return f"{self.show.title} - {self.name}"
+
+class EpisodeSubGroup(models.Model):
+    """Specific episode groupings that belong to a parent group"""
+    tmdb_id = models.CharField(max_length=30, blank=True, null=True)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    parent_group = models.ForeignKey(EpisodeGroup, related_name='sub_groups', on_delete=models.CASCADE)
+    episodes = models.ManyToManyField(Episode, related_name='sub_groups')
     
     # Optional fields for ordering and display
     order = models.PositiveIntegerField(default=0)
@@ -220,7 +234,7 @@ class EpisodeGroup(models.Model):
         ordering = ['order', 'name']
         
     def __str__(self):
-        return f"{self.show.title} - {self.name}"
+        return f"{self.parent_group} - {self.name}"
     
     def user_completion_percentage(self, user):
         """Calculate what percentage of episodes the user has watched."""

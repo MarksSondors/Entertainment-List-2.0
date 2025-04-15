@@ -188,9 +188,9 @@ class Review(models.Model):
     object_id = models.PositiveIntegerField()
     media = GenericForeignKey('content_type', 'object_id')
     
-    # For TV shows, we can link to a specific season
+    # For TV shows, we can link to a specific season or episode subgroup
     season = models.ForeignKey('tvshows.Season', on_delete=models.CASCADE, blank=True, null=True, related_name='reviews')
-    episode_group = models.ForeignKey('tvshows.EpisodeGroup', on_delete=models.CASCADE, blank=True, null=True, related_name='reviews')
+    episode_subgroup = models.ForeignKey('tvshows.EpisodeSubGroup', on_delete=models.CASCADE, blank=True, null=True, related_name='reviews')
     
     # Review content
     rating = models.FloatField()
@@ -201,19 +201,21 @@ class Review(models.Model):
         ordering = ['-date_added']
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'content_type', 'object_id', 'season', 'episode_group'],
-                name='unique_review_with_season_or_group'
+                fields=['user', 'content_type', 'object_id', 'season', 'episode_subgroup'],
+                name='unique_review_with_season_or_subgroup'
             ),
             models.UniqueConstraint(
                 fields=['user', 'content_type', 'object_id'],
-                condition=models.Q(season__isnull=True) & models.Q(episode_group__isnull=True),
-                name='unique_review_without_season_or_group'
+                condition=models.Q(season__isnull=True) & models.Q(episode_subgroup__isnull=True),
+                name='unique_review_without_season_or_subgroup'
             ),
         ]
         
     def __str__(self):
         if self.season:
             return f"{self.user.username}'s review of {self.season} - {self.rating}/10"
+        elif self.episode_subgroup:
+            return f"{self.user.username}'s review of {self.episode_subgroup} - {self.rating}/10"
         return f"{self.user.username}'s review of {self.media} - {self.rating}/10"
     
     def save(self, *args, **kwargs):
@@ -222,25 +224,25 @@ class Review(models.Model):
         TVShow = apps.get_model('tvshows', 'TVShow')
         
         if self.content_type.model_class() == TVShow:
-            # A review for a TV show must be associated with either a season or an episode group
-            if not self.season and not self.episode_group:
-                raise ValueError("Reviews for TV shows must include a season or episode group")
+            # A review for a TV show must be associated with either a season or an episode subgroup
+            if not self.season and not self.episode_subgroup:
+                raise ValueError("Reviews for TV shows must include a season or episode subgroup")
             
-            # Can't have both season and episode group
-            if self.season and self.episode_group:
-                raise ValueError("Reviews for TV shows can't have both season and episode group")
+            # Can't have both season and episode subgroup
+            if self.season and self.episode_subgroup:
+                raise ValueError("Reviews for TV shows can't have both season and episode subgroup")
             
             # Check if all episodes have been watched before reviewing
             if self.season and not self.season.user_has_completed(self.user):
                 raise ValueError(f"Can't review season {self.season} until all episodes have been watched")
             
-            if self.episode_group and not self.episode_group.user_has_completed(self.user):
-                raise ValueError(f"Can't review episode group {self.episode_group} until all episodes have been watched")
+            if self.episode_subgroup and not self.episode_subgroup.user_has_completed(self.user):
+                raise ValueError(f"Can't review episode subgroup {self.episode_subgroup} until all episodes have been watched")
         
-        # For non-TV shows, ensure season and episode_group are None
+        # For non-TV shows, ensure season and episode_subgroup are None
         if self.content_type.model_class() != TVShow:
             self.season = None
-            self.episode_group = None
+            self.episode_subgroup = None
         
         # Remove from watchlist when reviewed
         Watchlist.objects.filter(
