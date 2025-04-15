@@ -5,6 +5,8 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.db.models import Q, Avg
 from django.contrib.contenttypes.models import ContentType
+
+from django.utils import timezone
 # Create your views here.
 # import services
 
@@ -550,7 +552,9 @@ def recent_activity(request):
             content_type = item.content_type.model.capitalize()
             title = getattr(content_object, 'title', 'Unknown')
         
-        timestamp_key = item.date_added.strftime('%Y-%m-%d %H:%M')
+        # Convert UTC time to local time
+        local_timestamp = timezone.localtime(item.date_added)
+        timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
             
         activities.append({
             'type': 'watchlist',
@@ -568,7 +572,9 @@ def recent_activity(request):
     
     # Format new movies
     for movie in movies:
-        timestamp_key = movie.date_added.strftime('%Y-%m-%d %H:%M')
+        # Convert UTC time to local time
+        local_timestamp = timezone.localtime(movie.date_added)
+        timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
         
         activities.append({
             'type': 'new_content',
