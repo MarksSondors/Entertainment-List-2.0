@@ -107,6 +107,26 @@ class TVShow(Media):
         upcoming = self.get_upcoming_episodes(limit=1)
         return upcoming.first()
 
+    def get_crew(self):
+        """
+        Returns crew members with their combined roles.
+        Example: {'Person1': ['Director', 'Writer'], 'Person2': ['Producer']}
+        """
+        # Get all crew members (not actors)
+        crew_members = MediaPerson.objects.filter(
+            content_type_id=self._get_content_type_id,
+            object_id=self.id
+        ).exclude(role="Actor")
+        
+        # Group by person and combine roles
+        crew_by_person = {}
+        for member in crew_members:
+            if member.person not in crew_by_person:
+                crew_by_person[member.person] = []
+            crew_by_person[member.person].append(member.role)
+        
+        return crew_by_person
+
 class Season(models.Model):
     """Model for TV show seasons."""
     show = models.ForeignKey(TVShow, related_name='seasons', on_delete=models.CASCADE)

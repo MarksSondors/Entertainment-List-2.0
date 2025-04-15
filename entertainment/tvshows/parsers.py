@@ -28,6 +28,7 @@ def extract_tvshow_data(tvshow_details, tvshow_poster=None, tvshow_backdrop=None
         'first_air_date': tvshow_details.get('first_air_date'),
         'last_air_date': tvshow_details.get('last_air_date'),
         'tmdb_id': tvshow_details.get('id'),
+        'imdb_id': tvshow_details.get('external_ids', {}).get('imdb_id'),
         'description': tvshow_details.get('overview'),
         'rating': tvshow_details.get('vote_average'),
         'trailer': trailer_link,
@@ -109,10 +110,15 @@ def process_crew(tvshow, crew, tvshows_service):
     tvshow_content_type = ContentType.objects.get_for_model(tvshow)
     
     for person in crew:
-        job = person.get('job')
+        jobs = person.get('jobs', [])
         
-        # Skip if not a creator/writer/producer
-        if job not in ['Creator', 'Executive Producer', 'Writer']:
+        # If jobs list is empty, try to use the direct job field
+        if not jobs and person.get('job'):
+            jobs = [{'job': person.get('job')}]
+        
+        # Skip if no relevant jobs
+        relevant_jobs = [job for job in jobs if job.get('job') in ['Novel', 'Comic Book', 'Graphic Novel']]
+        if not relevant_jobs:
             continue
         
         person_details = MoviesService().get_person_details(person.get('id'))
@@ -128,22 +134,30 @@ def process_crew(tvshow, crew, tvshows_service):
             }
         )
         
-        # Set appropriate role
-        if job == 'Creator':
-            person_instance.is_creator = True
-        elif job == 'Writer':
-            person_instance.is_writer = True
-        elif job == 'Executive Producer':
-            person_instance.is_producer = True
+        # Set role flags based on all jobs
+        for job_data in relevant_jobs:
+            job = job_data.get('job')
+            
+            if job == 'Novel':
+                person_instance.is_novelist = True
+            if job == 'Comic Book':
+                person_instance.is_comic_artist = True
+            if job == 'Graphic Novel':
+                person_instance.is_graphic_novelist = True
         
+        # Save the person instance with updated flags
         person_instance.save()
         
-        MediaPerson.objects.create(
-            content_type=tvshow_content_type,
-            object_id=tvshow.id,
-            person=person_instance,
-            role=job
-        )
+        # Create MediaPerson entries for each job
+        for job_data in relevant_jobs:
+            job = job_data.get('job')
+            
+            MediaPerson.objects.create(
+                content_type=tvshow_content_type,
+                object_id=tvshow.id,
+                person=person_instance,
+                role=job
+            )
 
 def process_seasons(tvshow, seasons_data, tvshows_service):
     """Process seasons and episodes for a TV show"""
@@ -180,6 +194,31 @@ def process_seasons(tvshow, seasons_data, tvshows_service):
                 tmdb_id=episode_data.get('id')
             )
 
+def process_creators(tvshow, creators):
+    """Process creators for a TV show"""
+    tvshow_content_type = ContentType.objects.get_for_model(tvshow)
+    
+    for person in creators:
+        person_details = MoviesService().get_person_details(person.get('id'))
+        person_instance, _ = Person.objects.get_or_create(
+            tmdb_id=person_details.get('id'),
+            defaults={
+                'name': person_details.get('name'),
+                'profile_picture': f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
+                'date_of_birth': person_details.get('birthday'),
+                'date_of_death': person_details.get('deathday'),
+                'bio': person_details.get('biography'),
+                'imdb_id': person_details.get('imdb_id')
+            }
+        )
+        
+        MediaPerson.objects.create(
+            content_type=tvshow_content_type,
+            object_id=tvshow.id,
+            person=person_instance,
+            role="Creator"
+        )
+
 def add_to_tvshow_watchlist(tvshow, user_id):
     """Add TV show to watchlist"""
     Watchlist.objects.create(
@@ -193,7 +232,7 @@ def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=
     tvshows_service = TVShowsService()
     
     # Get TV show details from API
-    tvshow_details = tvshows_service.get_show_details(tvshow_id, append_to_response='videos,credits,keywords')
+    tvshow_details = tvshows_service.get_show_details(tvshow_id, append_to_response='videos,credits,keywords,external_ids')
     if not tvshow_details:
         return None
     
@@ -202,7 +241,7 @@ def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=
     
     # Process metadata
     genre_instances, country_instances, keyword_instances = process_genres_countries_keywords(tvshow_details)
-    
+
     # Create the TV show instance with proper user assignment
     user = CustomUser.objects.filter(id=user_id).first() if user_id else None
     tvshow = TVShow.objects.create(**tvshow_dict, added_by=user)
@@ -214,6 +253,10 @@ def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=
     if add_to_watchlist and user_id:
         add_to_tvshow_watchlist(tvshow, user_id)
     
+    # process creators
+    creators = tvshow_details.get('created_by', [])
+    process_creators(tvshow, creators)
+
     # Process cast and crew
     credits = tvshows_service.get_show_credits(tvshow_id)
     process_cast(tvshow, credits.get('cast', []), tvshows_service)
