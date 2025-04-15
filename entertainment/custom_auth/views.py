@@ -512,7 +512,8 @@ def recent_activity(request):
             title = getattr(content_object, 'title', 'Unknown')
         
         # Use the minute as the key for grouping
-        timestamp_key = review.date_added.strftime('%Y-%m-%d %H:%M')
+        local_timestamp = timezone.localtime(review.date_added)
+        timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
         
         activities.append({
             'type': 'review',
