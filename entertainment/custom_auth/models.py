@@ -4,7 +4,7 @@ from django.conf import settings
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.db.models.signals import pre_delete
+from django.db.models.signals import pre_delete, post_save
 from django.dispatch import receiver
 
 
@@ -252,3 +252,40 @@ class Review(models.Model):
         ).delete()
         
         super().save(*args, **kwargs)
+
+class UserSettings(models.Model):
+    """User settings and preferences"""
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='settings')
+    
+    # Content display settings
+    show_keywords = models.BooleanField(default=True, help_text="Show keywords in media details")
+    show_review_text = models.BooleanField(default=True, help_text="Show review text in media details")
+    show_plot = models.BooleanField(default=True, help_text="Show plot in media details")
+    
+    # Theme settings (if you want to add these in the future)
+    # theme = models.CharField(max_length=50, default="windows98", choices=[...])
+    
+    # Other potential settings you might add:
+    # default_language = models.CharField(...)
+    # notifications_enabled = models.BooleanField(...)
+    
+    def __str__(self):
+        return f"{self.user.username}'s settings"
+
+
+# Signal to create settings when a user is created
+@receiver(post_save, sender=CustomUser)
+def create_user_settings(sender, instance, created, **kwargs):
+    """Create UserSettings when a new user is created"""
+    if created:
+        UserSettings.objects.create(user=instance)
+
+@receiver(post_save, sender=CustomUser)
+def save_user_settings(sender, instance, **kwargs):
+    """Save UserSettings when the user is saved"""
+    # This ensures the settings are saved if the user is updated
+    if hasattr(instance, 'settings'):
+        instance.settings.save()
+    else:
+        # If for some reason the settings don't exist, create them
+        UserSettings.objects.create(user=instance)

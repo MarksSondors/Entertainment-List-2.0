@@ -31,6 +31,14 @@ from .tasks import create_movie_async
 
 @login_required
 def movie_page(request, movie_id):
+    if request.user.is_authenticated:
+        try:
+            user_settings = request.user.settings
+        except:
+            # Create default settings if they don't exist
+            from custom_auth.models import UserSettings
+            user_settings = UserSettings.objects.create(user=request.user)
+
     try:
         movie_db = Movie.objects.prefetch_related(
             'genres', 
@@ -77,6 +85,7 @@ def movie_page(request, movie_id):
     context = {
         'movie': movie_db,
         'user_watchlist': user_watchlist,
+        'user_settings': user_settings
     }
     return render(request, 'movie_page.html', context)
 

@@ -21,6 +21,7 @@ urlpatterns = [
     # profile
     path('profile/', views.profile_page, name='profile_page'),
     path('profile/<str:username>/', views.profile_page, name='profile_with_username'),
+    path('settings/', views.settings_page, name='settings_page'),
 
     # watchlist
     path('watchlist/', views.watchlist_page, name='watchlist_page'),
