@@ -967,5 +967,25 @@ def movie_statistics(request):
     
     return render(request, 'statistics_movies.html', context)
 
-
-
+def settings_page(request):
+    """View to display and update user settings"""
+    try:
+        user_settings = request.user.settings
+    except:
+        user_settings = UserSettings.objects.create(user=request.user)
+        
+    if request.method == 'POST':
+        # Process form data
+        user_settings.show_keywords = 'show_keywords' in request.POST
+        user_settings.show_review_text = 'show_review_text' in request.POST
+        user_settings.show_plot = 'show_plot' in request.POST
+        user_settings.save()
+        
+        # Add a success message if django messages is configured
+        from django.contrib import messages
+        messages.success(request, "Settings updated successfully!")
+        return redirect('settings_page')
+        
+    return render(request, 'setttings_page.html', {
+        'user_settings': user_settings
+    })

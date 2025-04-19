@@ -1,0 +1,69 @@
+{% extends 'components/base.html' %}
+
+{% block title %}User Settings | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">User Settings</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="field-row-stacked" style="margin-bottom: 15px;">
+                    <h4>Content Display Preferences</h4>
+                    <div class="sunken-panel" style="padding: 10px;">
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="show_keywords" name="show_keywords" {% if user_settings.show_keywords %}checked{% endif %}>
+                            <label for="show_keywords">Show keywords</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: #666;">
+                            Display keywords in media details
+                        </small>
+                        
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="show_review_text" name="show_review_text" {% if user_settings.show_review_text %}checked{% endif %}>
+                            <label for="show_review_text">Show review text</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: #666;">
+                            Display full review text on media pages
+                        </small>
+                        
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="show_plot" name="show_plot" {% if user_settings.show_plot %}checked{% endif %}>
+                            <label for="show_plot">Show plot descriptions</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: #666;">
+                            Display plot details on media pages
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="field-row" style="justify-content: flex-end;">
+                    <button type="submit" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">User: {{ request.user.username }}</div>
+            <div class="status-bar-field">Last updated: {% now "F j, Y" %}</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Add a confirmation message when settings are saved
+    document.querySelector('form').addEventListener('submit', function() {
+        // You could add form validation here if needed
+    });
+</script>
+{% endblock %}

@@ -130,7 +130,13 @@ body {
             </h1>
         </div>
         <div style="background-color: rgba(255, 255, 255, 0.86); padding: 10px; border: 2px inset;">
+            <!-- Plot section - hide based on show_plot setting -->
+            {% if not request.user.is_authenticated or user_settings.show_plot %}
             <p><strong>Plot:</strong> {{movie.description}}</p>
+            {% else %}
+            <p><strong>Plot:</strong> <em>Plot hidden based on your settings</em>
+            </p>
+            {% endif %}
             <p><strong>Release Year:</strong> {{movie.release_date|date:"Y"}}</p>
             <p><strong>Genre:</strong> 
                 {% for genre in movie.genres.all %}
@@ -144,19 +150,17 @@ body {
                     <a href="{{ country.get_absolute_url }}" style="text-decoration: none; color: black;">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
                 {% endfor %}
             </p>
+            <!-- Keywords section - hide based on show_keywords setting -->
+            {% if not request.user.is_authenticated or user_settings.show_keywords %}
             <p><strong>Keywords:</strong>
-                {% if user_watchlist != True %}
-                    {% for keyword in movie.keywords.all %}
-                        <a href="#" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
-                    {% endfor %}
-                {% else %}
-                    <span style="filter: blur(4px); user-select: none;" title="Review this movie to see keywords">
-                        {% for keyword in movie.keywords.all %}
-                            <a href="javascript:void(0)" style="text-decoration: none; color: black; pointer-events: none;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
-                        {% endfor %}
-                    </span>
-                {% endif %}
+                {% for keyword in movie.keywords.all %}
+                    <a href="#" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
+                {% endfor %}
             </p>
+            {% else %}
+            <p><strong>Keywords:</strong> <em>Keywords hidden based on your settings</em>
+            </p>
+            {% endif %}
             {% if movie.collection %}
             <p><strong>Collection:</strong>
                 <a href="{% url 'collection_detail' movie.collection.id %}" style="text-decoration: none; color: black;">{{ movie.collection.name }}</a>
