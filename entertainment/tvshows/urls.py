@@ -17,4 +17,6 @@ urlpatterns = [
     path('watchlist/', views.WatchlistTVShow.as_view(), name='watchlist_tv_show'),
     path('task-status/', TaskStatusView.as_view(), name='task-status'),
     path('episodes/<int:episode_id>/watched/', views.EpisodeWatchedView.as_view(), name='episode_watched'),
+    path('subgroup/<int:subgroup_id>/episodes/', views.subgroup_episodes, name='subgroup_episodes'),
+
 ] + router.urls
