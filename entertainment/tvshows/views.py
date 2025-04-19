@@ -64,11 +64,74 @@ def tv_show_page(request, show_id):
         season.watched_episodes_count = watched_count
         season.progress = (watched_count / total_episodes * 100) if total_episodes > 0 else 0
     
+    # For each episode subgroup, calculate progress
+    subgroups_data = {}
+    for group in tv_show_db.episode_groups.prefetch_related('sub_groups', 'sub_groups__episodes').all():
+        for subgroup in group.sub_groups.all():
+            # Get all episodes for this subgroup
+            total_episodes = subgroup.episodes.count()
+            
+            if total_episodes > 0:  # Prevent division by zero
+                # Count watched episodes in this subgroup
+                watched_count = subgroup.episodes.filter(id__in=watched_episodes).count()
+                
+                # Set the progress attributes (keep these for compatibility)
+                subgroup.watched_episodes_count = watched_count
+                subgroup.progress = (watched_count / total_episodes) * 100
+                
+                # Store in dictionary for reliable access in template
+                subgroups_data[subgroup.id] = {
+                    'watched_count': watched_count,
+                    'total': total_episodes,
+                    'progress': (watched_count / total_episodes) * 100,
+                    'completed': watched_count == total_episodes  # Add this line
+                }
+            else:
+                subgroup.watched_episodes_count = 0
+                subgroup.progress = 0
+                subgroups_data[subgroup.id] = {
+                    'watched_count': 0,
+                    'total': 0,
+                    'progress': 0,
+                    'completed': False  # Add this line
+                }
+
     context = {
         'tv_show': tv_show_db,
         'user_watchlist': user_watchlist,
+        'subgroups_data': subgroups_data,
     }
     return render(request, 'tv_show_page.html', context)
+
+
+@login_required
+def subgroup_episodes(request, subgroup_id):
+    """Get all episodes for a specific subgroup."""
+    subgroup = get_object_or_404(EpisodeSubGroup, id=subgroup_id)
+    
+    # Get all watched episodes for this user
+    watched_episodes = WatchedEpisode.objects.filter(
+        user=request.user
+    ).values_list('episode_id', flat=True)
+    
+    episodes_data = []
+    for episode in subgroup.episodes.all().order_by('season__season_number', 'episode_number'):
+        episodes_data.append({
+            'id': episode.id,
+            'title': episode.title,
+            'season_number': episode.season.season_number,
+            'episode_number': episode.episode_number,
+            'still': episode.still,
+            'overview': episode.overview,
+            'rating': episode.rating,
+            'runtime': episode.runtime,
+            'is_watched': episode.id in watched_episodes
+        })
+    
+    return JsonResponse({
+        'episodes': episodes_data,
+        'subgroup_name': subgroup.name
+    })
 
 
 class TMDBTVSearchView(APIView):
@@ -431,6 +494,25 @@ class EpisodeWatchedView(APIView):
                 'percentage': percentage
             }
         
+        # Calculate subgroup progress for any subgroups this episode belongs to
+        subgroup_progress = {}
+        subgroups = episode.sub_groups.all()
+        for subgroup in subgroups:
+            total_sg_episodes = subgroup.episodes.count()
+            if total_sg_episodes > 0:
+                watched_sg_episodes = WatchedEpisode.objects.filter(
+                    user=request.user,
+                    episode__in=subgroup.episodes.all()
+                ).count()
+                
+                percentage = (watched_sg_episodes / total_sg_episodes) * 100
+                
+                subgroup_progress[subgroup.id] = {
+                    'total': total_sg_episodes,
+                    'watched': watched_sg_episodes,
+                    'percentage': percentage
+                }
+        
         # Calculate overall show progress
         total_episodes = episode.season.show.episodes_count
         watched_episodes = WatchedEpisode.objects.filter(
@@ -452,7 +534,8 @@ class EpisodeWatchedView(APIView):
             'success': True,
             'season_progress': season_progress,
             'show_progress': show_progress,
-            'marked_episodes': marked_episodes
+            'marked_episodes': marked_episodes,
+            'subgroup_progress': subgroup_progress
         })
 
 class TVShowReviewView(APIView):

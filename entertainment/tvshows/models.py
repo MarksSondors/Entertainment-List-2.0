@@ -249,8 +249,17 @@ class EpisodeSubGroup(models.Model):
         return (watched_episodes / total_episodes) * 100
     
     def user_has_completed(self, user):
-        """Check if a user has watched all episodes in this group."""
-        return self.user_completion_percentage(user) == 100
+        """Check if a user has watched all episodes in this subgroup."""
+        total_episodes = self.episodes.count()
+        if total_episodes == 0:
+            return False
+            
+        watched_count = WatchedEpisode.objects.filter(
+            user=user,
+            episode__in=self.episodes.all()
+        ).count()
+        
+        return watched_count == total_episodes
 
 class WatchedEpisode(models.Model):
     """Model for tracking which episodes a user has watched."""

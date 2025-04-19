@@ -1,0 +1,152 @@
+<!-- Subgroup Review Modal -->
+{% load static %}
+<div id="subgroupReviewModal" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 400px; max-width: 90%;">
+    <div class="title-bar">
+        <div class="title-bar-text" id="subgroupReviewModalTitle">Review Group</div>
+        <div class="title-bar-controls">
+            <button aria-label="Close" onclick="closeSubgroupReviewModal()"></button>
+        </div>
+    </div>
+    <div class="window-body">
+        <form id="subgroupReviewForm" onsubmit="event.preventDefault(); submitSubgroupReview()">
+            <input type="hidden" id="subgroupId" name="subgroupId" value="">
+            
+            <div class="field-row-stacked">
+                <label for="subgroupWatchDate">Date Completed:</label>
+                <input type="date" id="subgroupWatchDate" name="subgroupWatchDate" value="{% now 'Y-m-d' %}" required>
+            </div>
+            
+            <div class="field-row-stacked">
+                <label for="subgroupRating">Rating:</label>
+                <div class="field-row">
+                    <input type="range" id="subgroupRating" name="subgroupRating" min="1" max="10" value="5" oninput="updateSubgroupRatingDisplay(this.value)">
+                    <div class="status-bar" style="width: auto; margin-left: 10px; padding: 2px 8px;">
+                        <span id="subgroupRatingValue">5</span>/10
+                    </div>
+                </div>
+            </div>
+            
+            <div class="field-row-stacked">
+                <label for="subgroupReviewText">Review:</label>
+                <textarea id="subgroupReviewText" name="subgroupReviewText" rows="4" placeholder="Write your review here..." required></textarea>
+                <p id="subgroupCharCount" style="text-align: right; font-size: 0.8em; margin: 2px 0;">0 characters</p>
+            </div>
+            
+            <section class="field-row" style="justify-content: space-between; margin-top: 16px;">
+                <div id="subgroupReviewLoadingIndicator" style="display: none; align-items: center;">
+                    <img src="{% static 'images/hourglass.webp' %}" alt="Loading" style="width: 20px; height: 20px; margin-right: 5px;">
+                    <span>Submitting...</span>
+                </div>
+                <div style="margin-left: auto;">
+                    <button type="button" onclick="closeSubgroupReviewModal()">Cancel</button>
+                    <button type="submit" id="subgroupSubmitBtn">Submit</button>
+                </div>
+            </section>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Subgroup review modal functions
+    function openSubgroupReviewModal(subgroupId, subgroupName) {
+        const modal = document.getElementById('subgroupReviewModal');
+        const overlay = document.getElementById('overlay');
+        document.getElementById('subgroupId').value = subgroupId;
+        document.getElementById('subgroupReviewModalTitle').textContent = `Review ${subgroupName}`;
+        
+        // Reset form
+        document.getElementById('subgroupReviewForm').reset();
+        document.getElementById('subgroupWatchDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('subgroupRating').value = 5;
+        document.getElementById('subgroupRatingValue').textContent = '5';
+        document.getElementById('subgroupReviewText').value = '';
+        document.getElementById('subgroupCharCount').textContent = '0 characters';
+        
+        // Make sure overlay is below modal
+        overlay.style.zIndex = "999";
+        modal.style.zIndex = "1000";
+        
+        modal.style.display = 'block';
+        overlay.style.display = 'block';
+        
+        // Optional: Prevent background scrolling when modal is open
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function closeSubgroupReviewModal() {
+        document.getElementById('subgroupReviewModal').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+        // Re-enable scrolling when modal is closed
+        document.body.style.overflow = 'auto';
+    }
+    
+    function updateSubgroupRatingDisplay(value) {
+        document.getElementById('subgroupRatingValue').textContent = value;
+    }
+    
+    function submitSubgroupReview() {
+        const subgroupId = document.getElementById('subgroupId').value;
+        const rating = document.getElementById('subgroupRating').value;
+        const watchDate = document.getElementById('subgroupWatchDate').value;
+        const reviewText = document.getElementById('subgroupReviewText').value;
+        
+        // Show loading indicator
+        const loadingIndicator = document.getElementById('subgroupReviewLoadingIndicator');
+        const submitButton = document.getElementById('subgroupSubmitBtn');
+        loadingIndicator.style.display = 'flex';
+        submitButton.disabled = true;
+        
+        // Send data to server
+        fetch(`/tvshows/subgroup/${subgroupId}/review/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                rating: rating,
+                watch_date: watchDate,
+                review_text: reviewText
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            loadingIndicator.style.display = 'none';
+            submitButton.disabled = false;
+            
+            if (data.success) {
+                closeSubgroupReviewModal();
+                // Optional: Show success message or update UI
+                alert('Review submitted successfully!');
+            } else {
+                alert('Error submitting review: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            loadingIndicator.style.display = 'none';
+            submitButton.disabled = false;
+            alert('Error submitting review. Please try again.');
+        });
+    }
+    
+    // Add character counter for review text area
+    document.addEventListener('DOMContentLoaded', function() {
+        const reviewTextArea = document.getElementById('subgroupReviewText');
+        if (reviewTextArea) {
+            reviewTextArea.addEventListener('input', function() {
+                const currentLength = this.value.length;
+                document.getElementById('subgroupCharCount').textContent = currentLength + ' characters';
+            });
+        }
+        
+        // Prevent clicks inside the modal from bubbling up
+        const reviewModal = document.getElementById('subgroupReviewModal');
+        if (reviewModal) {
+            reviewModal.addEventListener('click', function(event) {
+                // Stop click event from propagating to parent elements
+                event.stopPropagation();
+            });
+        }
+    });
+</script>
