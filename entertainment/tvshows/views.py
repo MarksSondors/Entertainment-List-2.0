@@ -17,7 +17,8 @@ from .serializers import TVShowSerializer
 from .parsers import create_tvshow
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
-from custom_auth.models import Watchlist, Genre
+from django.views.decorators.csrf import csrf_protect
+from custom_auth.models import Watchlist, Genre, Review
 
 
 # Create your views here.
@@ -48,7 +49,18 @@ def tv_show_page(request, show_id):
         episode__season__show=tv_show_db
     ).values_list('episode_id', flat=True)
     
-    # For each season, calculate progress
+    # For each season, calculate progress and get reviews
+    tv_show_content_type = ContentType.objects.get_for_model(TVShow)
+    user_season_reviews = Review.objects.filter(
+        user=request.user,
+        content_type=tv_show_content_type,
+        object_id=tv_show_db.id,
+        season__isnull=False
+    ).select_related('season')
+    
+    # Create a dict of season_id -> review for easy lookup
+    season_reviews = {review.season_id: review for review in user_season_reviews}
+    
     for season in tv_show_db.seasons.all():
         # Get all episodes for this season
         total_episodes = season.episodes.count()
@@ -63,6 +75,23 @@ def tv_show_page(request, show_id):
         # Calculate progress percentage
         season.watched_episodes_count = watched_count
         season.progress = (watched_count / total_episodes * 100) if total_episodes > 0 else 0
+
+        # Add user's review data if available
+        if season.id in season_reviews:
+            season.user_rating = season_reviews[season.id].rating
+            season.user_review = season_reviews[season.id].review_text
+            season.user_review_id = season_reviews[season.id].id
+    
+    # Get user's reviews for this show's subgroups
+    user_subgroup_reviews = Review.objects.filter(
+        user=request.user,
+        content_type=tv_show_content_type,
+        object_id=tv_show_db.id,
+        episode_subgroup__isnull=False
+    ).select_related('episode_subgroup')
+    
+    # Create a dict of subgroup_id -> review for easy lookup
+    subgroup_reviews = {review.episode_subgroup_id: review for review in user_subgroup_reviews}
     
     # For each episode subgroup, calculate progress
     subgroups_data = {}
@@ -79,12 +108,21 @@ def tv_show_page(request, show_id):
                 subgroup.watched_episodes_count = watched_count
                 subgroup.progress = (watched_count / total_episodes) * 100
                 
+                # Get user's review for this subgroup if it exists
+                user_rating = None
+                review_id = None
+                if subgroup.id in subgroup_reviews:
+                    user_rating = subgroup_reviews[subgroup.id].rating
+                    review_id = subgroup_reviews[subgroup.id].id
+                
                 # Store in dictionary for reliable access in template
                 subgroups_data[subgroup.id] = {
                     'watched_count': watched_count,
                     'total': total_episodes,
                     'progress': (watched_count / total_episodes) * 100,
-                    'completed': watched_count == total_episodes  # Add this line
+                    'completed': watched_count == total_episodes,
+                    'user_rating': user_rating,
+                    'review_id': review_id
                 }
             else:
                 subgroup.watched_episodes_count = 0
@@ -93,7 +131,9 @@ def tv_show_page(request, show_id):
                     'watched_count': 0,
                     'total': 0,
                     'progress': 0,
-                    'completed': False  # Add this line
+                    'completed': False,
+                    'user_rating': None,
+                    'review_id': None
                 }
 
     context = {
@@ -115,7 +155,7 @@ def subgroup_episodes(request, subgroup_id):
     ).values_list('episode_id', flat=True)
     
     episodes_data = []
-    for episode in subgroup.episodes.all().order_by('season__season_number', 'episode_number'):
+    for episode in subgroup.episodes.all().order_by('air_date'):
         episodes_data.append({
             'id': episode.id,
             'title': episode.title,
@@ -125,6 +165,7 @@ def subgroup_episodes(request, subgroup_id):
             'overview': episode.overview,
             'rating': episode.rating,
             'runtime': episode.runtime,
+            'air_date': episode.air_date,
             'is_watched': episode.id in watched_episodes
         })
     
@@ -132,6 +173,150 @@ def subgroup_episodes(request, subgroup_id):
         'episodes': episodes_data,
         'subgroup_name': subgroup.name
     })
+
+
+@login_required
+@csrf_protect
+def subgroup_review(request, subgroup_id):
+    """
+    Endpoint to create or update a review for a TV show episode subgroup.
+    """
+    # Get the subgroup or return 404
+    subgroup = get_object_or_404(EpisodeSubGroup, id=subgroup_id)
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        # Parse JSON data from request body
+        data = json.loads(request.body)
+        rating = data.get('rating')
+        watch_date = data.get('watch_date')
+        review_text = data.get('review_text')
+        
+        # Validate required fields
+        if not rating or not watch_date:
+            return JsonResponse({'success': False, 'error': 'Rating and watch date are required'}, status=400)
+        
+        # Convert rating to float
+        try:
+            rating = float(rating)
+            if not (1 <= rating <= 10):
+                return JsonResponse({'success': False, 'error': 'Rating must be between 1 and 10'}, status=400)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid rating value'}, status=400)
+        
+        # Check if user has completed watching all episodes in the subgroup
+        if not subgroup.user_has_completed(request.user):
+            return JsonResponse({
+                'success': False, 
+                'error': 'You must watch all episodes in this group before reviewing'
+            }, status=400)
+        
+        # Get the TV show related to this subgroup through the parent group
+        tv_show = subgroup.parent_group.show
+        
+        # Get TV show content type
+        tv_show_content_type = ContentType.objects.get_for_model(TVShow)
+        
+        # Check if review exists already and update, or create new
+        review, created = Review.objects.update_or_create(
+            user=request.user,
+            content_type=tv_show_content_type,
+            object_id=tv_show.id,
+            episode_subgroup=subgroup,
+            defaults={
+                'rating': rating,
+                'review_text': review_text
+            }
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Review added successfully',
+            'review_id': review.id
+        })
+        
+    except AttributeError as e:
+        # Handle the case where the model relationships aren't what we expected
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        # Log the exception if needed
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@csrf_protect
+def season_review(request, season_id):
+    """
+    Endpoint to create or update a review for a TV show season.
+    """
+    # Get the season or return 404
+    season = get_object_or_404(Season, id=season_id)
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        # Parse JSON data from request body
+        data = json.loads(request.body)
+        rating = data.get('rating')
+        watch_date = data.get('watch_date')
+        review_text = data.get('review_text')
+        
+        # Validate required fields
+        if not rating or not watch_date:
+            return JsonResponse({'success': False, 'error': 'Rating and watch date are required'}, status=400)
+        
+        # Convert rating to float
+        try:
+            rating = float(rating)
+            if not (1 <= rating <= 10):
+                return JsonResponse({'success': False, 'error': 'Rating must be between 1 and 10'}, status=400)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid rating value'}, status=400)
+        
+        # Check if user has completed watching all episodes in the season
+        if not season.user_has_completed(request.user):
+            return JsonResponse({
+                'success': False, 
+                'error': 'You must watch all episodes in this season before reviewing'
+            }, status=400)
+        
+        # Get the TV show related to this season
+        tv_show = season.show
+        
+        # Get TV show content type
+        tv_show_content_type = ContentType.objects.get_for_model(TVShow)
+        
+        # Check if review exists already and update, or create new
+        review, created = Review.objects.update_or_create(
+            user=request.user,
+            content_type=tv_show_content_type,
+            object_id=tv_show.id,
+            season=season,
+            defaults={
+                'rating': rating,
+                'review_text': review_text
+            }
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Review added successfully',
+            'review_id': review.id
+        })
+        
+    except AttributeError as e:
+        # Handle the case where the model relationships aren't what we expected
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        # Log the exception if needed
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 class TMDBTVSearchView(APIView):

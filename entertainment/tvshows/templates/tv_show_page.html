@@ -255,15 +255,21 @@ body {
                     {{ season.watched_episodes_count|default:0 }}/{{ season.episodes.count }}
                 </span>
                 
+                <!-- Add user rating display if it exists -->
+                {% if season.user_rating %}
+                <div id="season-rating-{{ season.id }}" class="user-rating" style="margin-top: 5px; font-weight: bold;">
+                    <span style="color: #000080;">Your Rating: ⭐ {{ season.user_rating }}/10</span>
+                </div>
+                {% endif %}
+                
                 <!-- Review button - only visible when all episodes are watched -->
                 <button 
                     id="review-button-{{ season.id }}"
                     class="season-review-button"
                     onclick="event.stopPropagation(); openSeasonReviewModal('{{ season.id }}', '{{ season.title }}');"
                     style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 3px 8px; margin-top: 8px; display: {% if season.watched_episodes_count == season.episodes.count and season.episodes.count > 0 %}block{% else %}none{% endif %};">
-                    Review Season
+                    {% if season.user_rating %}Edit Review{% else %}Review Season{% endif %}
                 </button>
-                {% include "components/season_review_modal.html" with season_id=season.id season_title=season.title %}
             </div>
             
             <!-- Updating the season episodes container with buttons instead of checkboxes -->
@@ -308,6 +314,8 @@ body {
     </div>
 </div>
 
+{% include "components/season_review_modal.html" %}
+
 {% if tv_show.episode_groups.exists %}
 <!-- Episode Groups Component -->
 <div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; margin: 20px;">
@@ -348,7 +356,7 @@ body {
                             {% if subgroup.description %}<p style="font-size: 12px; margin: 5px 0;">{{ subgroup.description|truncatechars:50 }}</p>{% endif %}
                         </div>
                         
-                        <!-- Replace the existing subgroup progress code with this -->
+                        <!-- Progress bar section -->
                         <div class="progress-bar" style="margin-top: 5px;">
                             <div class="progress" id="subgroup-progress-bar-{{ subgroup.id }}" 
                                  style="width: {{ subgroups_data|get_item:subgroup.id|get_item:'progress'|default:0 }}%;"></div>
@@ -357,18 +365,25 @@ body {
                             {{ subgroups_data|get_item:subgroup.id|get_item:'watched_count'|default:0 }}/{{ subgroup.episodes.count }}
                         </span>
                         
+                        <!-- Add user rating display if it exists -->
+                        {% if subgroups_data|get_item:subgroup.id|get_item:'user_rating' %}
+                        <div class="user-rating" style="margin-top: 5px; font-weight: bold;">
+                            <span style="color: #000080;">Your Rating: ⭐ {{ subgroups_data|get_item:subgroup.id|get_item:'user_rating' }}/10</span>
+                        </div>
+                        {% endif %}
+                        
                         <button onclick="openSubgroupEpisodes('{{ subgroup.id }}')" 
                                 style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 3px 8px; margin-top: 5px;">
                             View Episodes
                         </button>
                         
-                        <!-- Review button - only visible when all episodes are watched -->
+                        <!-- Review button - update text if review exists -->
                         <button 
                             id="subgroup-review-button-{{ subgroup.id }}"
                             class="subgroup-review-button"
                             onclick="event.stopPropagation(); openSubgroupReviewModal('{{ subgroup.id }}', '{{ subgroup.name }}');"
                             style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 3px 8px; margin-top: 5px; display: {% if subgroups_data|get_item:subgroup.id|get_item:'watched_count'|default:0 == subgroup.episodes.count and subgroup.episodes.count > 0 %}block{% else %}none{% endif %};">
-                            Review Group
+                            {% if subgroups_data|get_item:subgroup.id|get_item:'user_rating' %}Edit Review{% else %}Review Group{% endif %}
                         </button>
                     </div>
                 {% endfor %}
@@ -678,6 +693,35 @@ body {
         
         // The original function's response will also include subgroup progress data
         // which we'll handle in the then() callback of the fetch request
+    };
+
+    // Store subgroups data for JavaScript use
+    const subgroupsData = {
+        {% for subgroup_id, data in subgroups_data.items %}
+            "{{ subgroup_id }}": {
+                "watched_count": {{ data.watched_count|default:0 }},
+                "total": {{ data.total|default:0 }},
+                "progress": {{ data.progress|default:0 }},
+                "completed": {% if data.completed %}true{% else %}false{% endif %},
+                "user_rating": {% if data.user_rating %}{{ data.user_rating }}{% else %}null{% endif %},
+                "review_id": {% if data.review_id %}{{ data.review_id }}{% else %}null{% endif %}
+            }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    };
+
+    // Season reviews data storage
+    const seasonReviews = {
+        {% for season in tv_show.seasons.all %}
+            {% with season_review=season.reviews.filter.first %}
+                {% if season_review %}
+                    "{{ season.id }}": {
+                        "rating": {{ season_review.rating }},
+                        "review_text": "{{ season_review.review_text|escapejs }}",
+                        "review_id": {{ season_review.id }}
+                    }{% if not forloop.last %},{% endif %}
+                {% endif %}
+            {% endwith %}
+        {% endfor %}
     };
 </script>
 
