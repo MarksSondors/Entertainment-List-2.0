@@ -18,5 +18,7 @@ urlpatterns = [
     path('task-status/', TaskStatusView.as_view(), name='task-status'),
     path('episodes/<int:episode_id>/watched/', views.EpisodeWatchedView.as_view(), name='episode_watched'),
     path('subgroup/<int:subgroup_id>/episodes/', views.subgroup_episodes, name='subgroup_episodes'),
+    path('subgroup/<int:subgroup_id>/review/', views.subgroup_review, name='subgroup_review'),
+    path('season/<int:season_id>/review/', views.season_review, name='season_review'),
 
 ] + router.urls

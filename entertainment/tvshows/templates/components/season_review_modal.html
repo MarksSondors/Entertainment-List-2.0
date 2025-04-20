@@ -22,7 +22,7 @@
             <div class="field-row-stacked">
                 <label for="seasonRating">Rating:</label>
                 <div class="field-row">
-                    <input type="range" id="seasonRating" name="seasonRating" min="1" max="10" value="5" oninput="updateSeasonRatingDisplay(this.value)">
+                    <input type="range" id="seasonRating" name="seasonRating" min="1" max="10" value="5" step="0.5" oninput="updateSeasonRatingDisplay(this.value)">
                     <div class="status-bar" style="width: auto; margin-left: 10px; padding: 2px 8px;">
                         <span id="seasonRatingValue">5</span>/10
                     </div>
@@ -31,7 +31,7 @@
             
             <div class="field-row-stacked">
                 <label for="seasonReviewText">Review:</label>
-                <textarea id="seasonReviewText" name="seasonReviewText" rows="4" placeholder="Write your season review here..." required></textarea>
+                <textarea id="seasonReviewText" name="seasonReviewText" rows="4" placeholder="Write your review here..." required></textarea>
                 <p id="seasonCharCount" style="text-align: right; font-size: 0.8em; margin: 2px 0;">0 characters</p>
             </div>
             
@@ -50,31 +50,28 @@
 </div>
 
 <script>
-    // Add these functions to your existing JavaScript section
-    
     // Season review modal functions
-    function openSeasonReviewModal(seasonId, seasonTitle) {
-        const modal = document.getElementById('seasonReviewModal');
-        const overlay = document.getElementById('overlay');
-        document.getElementById('seasonId').value = seasonId;
-        document.getElementById('seasonReviewModalTitle').textContent = `Review ${seasonTitle}`;
+    function openSeasonReviewModal(seasonId, seasonName) {
+        // Get existing rating if available
+        const existingRating = seasonReviews[seasonId] ? seasonReviews[seasonId].rating : 5;
+        const existingReviewText = seasonReviews[seasonId] ? seasonReviews[seasonId].review_text : '';
         
-        // Reset form
-        document.getElementById('seasonReviewForm').reset();
-        document.getElementById('seasonWatchDate').value = new Date().toISOString().split('T')[0];
-        document.getElementById('seasonRating').value = 5;
-        document.getElementById('seasonRatingValue').textContent = '5';
-        document.getElementById('seasonReviewText').value = '';
-        document.getElementById('seasonCharCount').textContent = '0 characters';
+        // Set values in the form
+        document.getElementById('seasonId').value = seasonId;
+        document.getElementById('seasonReviewModalTitle').textContent = `Review: ${seasonName}`;
+        document.getElementById('seasonRating').value = existingRating;
+        document.getElementById('seasonRatingValue').textContent = existingRating;
+        document.getElementById('seasonReviewText').value = existingReviewText;
+        document.getElementById('seasonCharCount').textContent = `${existingReviewText.length} characters`;
         
         // Make sure overlay is below modal
-        overlay.style.zIndex = "999";
-        modal.style.zIndex = "1000";
+        document.getElementById('overlay').style.zIndex = "999";
+        document.getElementById('seasonReviewModal').style.zIndex = "1000";
         
-        modal.style.display = 'block';
-        overlay.style.display = 'block';
+        document.getElementById('seasonReviewModal').style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
         
-        // Optional: Prevent background scrolling when modal is open
+        // Prevent background scrolling when modal is open
         document.body.style.overflow = 'hidden';
     }
     
@@ -94,6 +91,9 @@
         const rating = document.getElementById('seasonRating').value;
         const watchDate = document.getElementById('seasonWatchDate').value;
         const reviewText = document.getElementById('seasonReviewText').value;
+        
+        // Update character count display
+        document.getElementById('seasonCharCount').textContent = `${reviewText.length} characters`;
         
         // Show loading indicator
         const loadingIndicator = document.getElementById('seasonReviewLoadingIndicator');
@@ -121,7 +121,39 @@
             
             if (data.success) {
                 closeSeasonReviewModal();
-                // Optional: Show success message or update UI
+                
+                // Update the UI to show the rating
+                if (!seasonReviews[seasonId]) {
+                    seasonReviews[seasonId] = {};
+                }
+                seasonReviews[seasonId].rating = parseFloat(rating);
+                seasonReviews[seasonId].review_text = reviewText;
+                
+                // Update the review button text to "Edit Review"
+                const reviewButton = document.getElementById(`review-button-${seasonId}`);
+                if (reviewButton) {
+                    reviewButton.textContent = 'Edit Review';
+                }
+                
+                // Add a rating display if it doesn't exist
+                let ratingDisplay = document.getElementById(`season-rating-${seasonId}`);
+                if (!ratingDisplay) {
+                    ratingDisplay = document.createElement('div');
+                    ratingDisplay.id = `season-rating-${seasonId}`;
+                    ratingDisplay.className = 'user-rating';
+                    ratingDisplay.style.marginTop = '5px';
+                    ratingDisplay.style.fontWeight = 'bold';
+                    
+                    const seasonCard = document.querySelector(`#review-button-${seasonId}`).parentNode;
+                    const reviewButton = document.getElementById(`review-button-${seasonId}`);
+                    seasonCard.insertBefore(ratingDisplay, reviewButton);
+                }
+                
+                if (ratingDisplay) {
+                    ratingDisplay.innerHTML = `<span style="color: #000080;">Your Rating: ⭐ ${rating}/10</span>`;
+                }
+                
+                // Optional: Show success message
                 alert('Review submitted successfully!');
             } else {
                 alert('Error submitting review: ' + (data.error || 'Unknown error'));
@@ -134,49 +166,4 @@
             alert('Error submitting review. Please try again.');
         });
     }
-    
-    // Add character counter for review text area
-    document.getElementById('seasonReviewText').addEventListener('input', function() {
-        const currentLength = this.value.length;
-        document.getElementById('seasonCharCount').textContent = currentLength + ' characters';
-    });
-    
-    // Update season review button visibility when episodes are marked watched
-    function updateSeasonReviewButtonVisibility(seasonId, watchedCount, totalCount) {
-        const reviewButton = document.getElementById(`review-button-${seasonId}`);
-        if (reviewButton) {
-            reviewButton.style.display = (watchedCount === totalCount && totalCount > 0) ? 'block' : 'none';
-        }
-    }
-    
-    // Add overlay click handler to close the modal
-    document.getElementById('overlay').addEventListener('click', function(event) {
-        // Only close if the season review modal is currently visible
-        if (document.getElementById('seasonReviewModal').style.display === 'block') {
-            closeSeasonReviewModal();
-            // Stop event propagation to prevent toggling seasons underneath
-            event.stopPropagation();
-        }
-    });
-    
-    // Wait for DOM content to load before trying to extend functions
-    document.addEventListener('DOMContentLoaded', function() {
-        // Prevent clicks inside the modal from bubbling up
-        document.getElementById('seasonReviewModal').addEventListener('click', function(event) {
-            // Stop click event from propagating to parent elements
-            event.stopPropagation();
-        });
-        
-        // Extend the markEpisodeWatched function only if it exists and hasn't been extended already
-        if (typeof window.markEpisodeWatched === 'function' && typeof window.episodeWatchFunctionExtended === 'undefined') {
-            window.episodeWatchFunctionExtended = true;
-            const originalMarkEpisodeWatched = window.markEpisodeWatched;
-            window.markEpisodeWatched = function(episodeId, watched, seasonNumber, episodeNumber, markPrevious) {
-                originalMarkEpisodeWatched(episodeId, watched, seasonNumber, episodeNumber, markPrevious);
-                
-                // Additional code to handle the review button visibility after the fetch request completes
-                // This will be triggered by the season_progress update in your existing code
-            }
-        }
-    });
 </script>

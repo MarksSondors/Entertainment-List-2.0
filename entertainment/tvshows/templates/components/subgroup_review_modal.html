@@ -49,27 +49,24 @@
 <script>
     // Subgroup review modal functions
     function openSubgroupReviewModal(subgroupId, subgroupName) {
-        const modal = document.getElementById('subgroupReviewModal');
-        const overlay = document.getElementById('overlay');
-        document.getElementById('subgroupId').value = subgroupId;
-        document.getElementById('subgroupReviewModalTitle').textContent = `Review ${subgroupName}`;
+        // Get existing rating if available
+        const subgroupData = subgroupsData[subgroupId];
+        let existingRating = subgroupData && subgroupData.user_rating ? subgroupData.user_rating : 5;
         
-        // Reset form
-        document.getElementById('subgroupReviewForm').reset();
-        document.getElementById('subgroupWatchDate').value = new Date().toISOString().split('T')[0];
-        document.getElementById('subgroupRating').value = 5;
-        document.getElementById('subgroupRatingValue').textContent = '5';
-        document.getElementById('subgroupReviewText').value = '';
-        document.getElementById('subgroupCharCount').textContent = '0 characters';
+        // Set values in the form
+        document.getElementById('subgroupId').value = subgroupId;
+        document.getElementById('subgroupReviewModalTitle').textContent = `Review: ${subgroupName}`; // Changed from subgroupName to subgroupReviewModalTitle
+        document.getElementById('subgroupRating').value = existingRating;
+        document.getElementById('subgroupRatingValue').textContent = existingRating;
         
         // Make sure overlay is below modal
-        overlay.style.zIndex = "999";
-        modal.style.zIndex = "1000";
+        document.getElementById('overlay').style.zIndex = "999";
+        document.getElementById('subgroupReviewModal').style.zIndex = "1000";
         
-        modal.style.display = 'block';
-        overlay.style.display = 'block';
+        document.getElementById('subgroupReviewModal').style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
         
-        // Optional: Prevent background scrolling when modal is open
+        // Prevent background scrolling when modal is open
         document.body.style.overflow = 'hidden';
     }
     
