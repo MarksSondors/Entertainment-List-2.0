@@ -22,6 +22,7 @@ python manage.py qcluster &
 # create tasks
 echo "Creating tasks..."
 python manage.py update_movies --setup
+python manage.py update_tvshows --setup
 
 # Start Django server
 echo "Starting Django server..."

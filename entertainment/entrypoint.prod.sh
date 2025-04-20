@@ -28,6 +28,7 @@ python manage.py qcluster &
 
 echo "Creating tasks..."
 python manage.py update_movies --setup
+python manage.py update_tvshows --setup
 
 # Start Gunicorn
 echo "Starting Gunicorn..."
