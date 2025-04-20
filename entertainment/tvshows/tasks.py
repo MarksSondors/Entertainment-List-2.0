@@ -106,7 +106,7 @@ def update_single_tvshow(tvshow_id):
         
         # Use TVShowsService instead of direct requests
         tvshows_service = TVShowsService()
-        data = tvshows_service.get_tvshow_details(tvshow.tmdb_id, append_to_response="videos,keywords")
+        data = tvshows_service.get_show_details(tvshow.tmdb_id, append_to_response="videos,keywords")
         
         if not data:
             logger.error(f"TMDB API error for TV show {tvshow.title} (ID: {tvshow_id}): Failed to retrieve data")
@@ -201,7 +201,7 @@ def update_tvshow_seasons(tvshow_id):
         
         # Use TVShowsService to get seasons details
         tvshows_service = TVShowsService()
-        data = tvshows_service.get_tvshow_details(tvshow.tmdb_id)
+        data = tvshows_service.get_show_details(tvshow.tmdb_id)
         
         if not data or 'seasons' not in data:
             logger.error(f"TMDB API error for TV show {tvshow.title} (ID: {tvshow_id}): Failed to retrieve data")
@@ -341,7 +341,7 @@ def update_episode_groups(tvshow_id):
         
         # Use TVShowsService to get episode groups
         tvshows_service = TVShowsService()
-        data = tvshows_service.get_tvshow_episode_groups(tvshow.tmdb_id)
+        data = tvshows_service.get_episode_groups(tvshow.tmdb_id)
         
         if not data or 'results' not in data:
             # Some shows might not have episode groups, this is normal
