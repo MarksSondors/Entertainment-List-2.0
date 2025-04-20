@@ -454,9 +454,11 @@ def recent_reviews(request):
             title = content_object.title
         elif isinstance(content_object, TVShow):
             content_type = "TV Show"
-            title = content_object.name
+            title = content_object.title
             if review.season:
                 title += f" - {review.season}"
+            elif review.episode_subgroup:
+                title += f" - {review.episode_subgroup.name}"
         else:
             # Default fallback
             content_type = review.content_type.model.capitalize()
@@ -502,11 +504,16 @@ def recent_activity(request):
             tmdb_id = content_object.tmdb_id
         elif isinstance(content_object, TVShow):
             content_type = "TV Show"
-            title = content_object.title
+            if content_object.title == content_object.original_title:
+                title = content_object.title
+            else:
+                title = f"{content_object.title} ({content_object.original_title})"
             poster_path = content_object.poster
             tmdb_id = content_object.tmdb_id
             if review.season:
                 title += f" - {review.season}"
+            elif review.episode_subgroup:
+                title += f" - {review.episode_subgroup.name}"
         else:
             content_type = review.content_type.model.capitalize()
             title = getattr(content_object, 'title', 'Unknown')
@@ -546,7 +553,10 @@ def recent_activity(request):
             tmdb_id = content_object.tmdb_id
         elif isinstance(content_object, TVShow):
             content_type = "TV Show"
-            title = content_object.title
+            if content_object.title == content_object.original_title:
+                title = content_object.title
+            else:
+                title = f"{content_object.title} ({content_object.original_title})"
             poster_path = content_object.poster
             tmdb_id = content_object.tmdb_id
         else:
