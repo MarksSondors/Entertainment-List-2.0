@@ -19,6 +19,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_protect
 from custom_auth.models import Watchlist, Genre, Review
+from .tasks import create_tvshow_async
 
 
 # Create your views here.
@@ -34,7 +35,23 @@ def tv_show_page(request, show_id):
             'seasons__episodes'
         ).get(tmdb_id=show_id)
     except TVShow.DoesNotExist:
-        tv_show_db = create_tvshow(show_id)
+        task_id = create_tvshow_async(
+            show_id,
+            user_id=request.user.id,
+            add_to_watchlist=False
+            )
+        # Wait for the task to complete
+        from django_q.models import Task
+        from time import sleep
+        max_attempts = 30
+        for _ in range(max_attempts):
+            try:
+                task = Task.objects.get(id=task_id)
+                if task.success is not None:  # Task has completed (success or failure)
+                    break
+            except Task.DoesNotExist:
+                pass
+            sleep(1)
         if not tv_show_db:
             raise Http404(f"TV Show with ID {show_id} could not be created")
     user_watchlist = Watchlist.objects.filter(
@@ -68,6 +85,14 @@ def tv_show_page(request, show_id):
         # Mark episodes as watched or not
         for episode in season.episodes.all():
             episode.is_watched = episode.id in watched_episodes
+
+            # Get all users who watched this episode
+            watched_by = WatchedEpisode.objects.filter(
+                episode=episode
+            ).select_related('user')
+            
+            # Use a different attribute name (watched_users) instead of watched_by
+            episode.watched_users = [watched.user for watched in watched_by]
         
         # Count watched episodes
         watched_count = sum(1 for episode in season.episodes.all() if episode.id in watched_episodes)
@@ -156,6 +181,11 @@ def subgroup_episodes(request, subgroup_id):
     
     episodes_data = []
     for episode in subgroup.episodes.all().order_by('air_date'):
+        # Get all users who watched this episode
+        watched_users = WatchedEpisode.objects.filter(
+            episode=episode
+        ).select_related('user')
+        
         episodes_data.append({
             'id': episode.id,
             'title': episode.title,
@@ -166,7 +196,8 @@ def subgroup_episodes(request, subgroup_id):
             'rating': episode.rating,
             'runtime': episode.runtime,
             'air_date': episode.air_date,
-            'is_watched': episode.id in watched_episodes
+            'is_watched': episode.id in watched_episodes,
+            'watched_by': [watched.user.username for watched in watched_users],
         })
     
     return JsonResponse({
