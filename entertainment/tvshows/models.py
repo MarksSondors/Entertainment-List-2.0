@@ -206,7 +206,7 @@ class Episode(models.Model):
 
 class EpisodeGroup(models.Model):
     """Top-level episode grouping category (like 'Story Arcs', 'Viewing Orders', etc.)"""
-    tmdb_id = models.CharField(max_length=30, blank=True, null=True)
+    tmdb_id = models.CharField(max_length=30, blank=True, null=True, unique=True)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     show = models.ForeignKey(TVShow, related_name='episode_groups', on_delete=models.CASCADE)
@@ -220,7 +220,7 @@ class EpisodeGroup(models.Model):
 
 class EpisodeSubGroup(models.Model):
     """Specific episode groupings that belong to a parent group"""
-    tmdb_id = models.CharField(max_length=30, blank=True, null=True)
+    tmdb_id = models.CharField(max_length=30, blank=True, null=True, unique=True)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     parent_group = models.ForeignKey(EpisodeGroup, related_name='sub_groups', on_delete=models.CASCADE)

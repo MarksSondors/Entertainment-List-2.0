@@ -281,6 +281,8 @@ body {
                         <div class="episode-image">
                             <img src="{{ episode.still|default:'https://via.placeholder.com/160x90?text=No+Image' }}" 
                                  alt="Episode {{ episode.episode_number }} Still" 
+                                 loading="lazy"
+                                 width="160" height="90"
                                  style="width: 160px; height: 90px; object-fit: cover; border: 1px solid #888;">
                         </div>
                         <div class="episode-info" style="flex: 1; margin: 0 10px;">
@@ -405,14 +407,14 @@ body {
 </div>
 
 <!-- Subgroup Episodes Dialog -->
-<div id="subgroup-episodes-dialog" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
-    <div class="title-bar">
+<div id="subgroup-episodes-dialog" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; width: 90%; max-width: 600px; max-height: 80vh; flex-direction: column;">
+    <div class="title-bar" style="flex: 0 0 auto;">
         <div class="title-bar-text" id="subgroup-episodes-title">Episodes</div>
         <div class="title-bar-controls">
             <button aria-label="Close" onclick="closeSubgroupEpisodes()"></button>
         </div>
     </div>
-    <div class="window-body" id="subgroup-episodes-content">
+    <div class="window-body" id="subgroup-episodes-content" style="flex: 1; overflow-y: auto; max-height: calc(80vh - 30px);">
         <!-- Episodes content will be loaded here -->
         <p class="loading-message">Loading episodes...</p>
     </div>
