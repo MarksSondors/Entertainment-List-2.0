@@ -355,6 +355,11 @@ def update_episode_groups(tvshow_id):
         updated_groups = 0
         
         for group_data in data['results']:
+            # Only process groups with type 5 or 6
+            group_type = group_data.get('type')
+            if group_type not in [5, 6]:
+                continue
+                
             group_id = str(group_data['id'])
             
             if group_id in existing_groups:
