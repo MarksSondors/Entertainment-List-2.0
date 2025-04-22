@@ -243,13 +243,12 @@ class Review(models.Model):
         if self.content_type.model_class() != TVShow:
             self.season = None
             self.episode_subgroup = None
-        
-        # Remove from watchlist when reviewed
-        Watchlist.objects.filter(
-            user=self.user,
-            content_type=self.content_type,
-            object_id=self.object_id
-        ).delete()
+            # Remove from watchlist when reviewed
+            Watchlist.objects.filter(
+                user=self.user,
+                content_type=self.content_type,
+                object_id=self.object_id
+            ).delete()
         
         super().save(*args, **kwargs)
 
