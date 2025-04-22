@@ -624,7 +624,7 @@
                     showItem.className = 'poster-item';
                     showItem.innerHTML = `
                         <div class="poster-card">
-                            <a href="#" style="text-decoration:none; color:inherit; display:block; height:100%;">
+                            <a href="/tvshows/${show.id}" style="text-decoration:none; color:inherit; display:block; height:100%;">
                                 <img src="${show.poster_path || '{% static "images/no-poster.png" %}'}" 
                                      alt="${show.name}">
                                 <div class="info-overlay">

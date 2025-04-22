@@ -287,9 +287,21 @@ body {
                             <strong>{{ episode.episode_number }}. {{ episode.title }}</strong>
                             <div style="display: flex; align-items: center; margin: 3px 0;">
                                 <span style="margin-right: 15px;">⭐ {{ episode.rating|default:"N/A" }}</span>
-                                <span>⏱️ {{ episode.runtime|default:"?" }} min</span>
+                                <span style="margin-right: 15px;">⏱️ {{ episode.runtime|default:"?" }} min</span>
+                                <span>📅 {{ episode.air_date|date:"M d, Y"|default:"TBA" }}</span>
                             </div>
                             <p>{{ episode.overview|truncatechars:150 }}</p>
+                            
+                            <!-- Add watched users section -->
+                            {% if episode.watched_users %}
+                                <div class="watched-users" style="font-size: 12px; margin-top: 5px; color: #444;">
+                                    <span>👤 Watched by: 
+                                        {% for user in episode.watched_users %}
+                                            {{ user.username }}{% if not forloop.last %}, {% endif %}
+                                        {% endfor %}
+                                    </span>
+                                </div>
+                            {% endif %}
                         </div>
                         <button 
                             class="watch-button" 
@@ -651,9 +663,15 @@ body {
                                 <strong>S${episode.season_number}E${episode.episode_number} - ${episode.title}</strong>
                                 <div style="display: flex; align-items: center; margin: 3px 0;">
                                     <span style="margin-right: 15px;">⭐ ${episode.rating || 'N/A'}</span>
-                                    <span>⏱️ ${episode.runtime || '?'} min</span>
+                                    <span style="margin-right: 15px;">⏱️ ${episode.runtime || '?'} min</span>
+                                    <span>📅 ${episode.air_date ? new Date(episode.air_date).toLocaleDateString() : 'TBA'}</span>
                                 </div>
                                 <p>${episode.overview ? (episode.overview.length > 150 ? episode.overview.substring(0, 150) + '...' : episode.overview) : 'No description available.'}</p>
+                                
+                                ${episode.watched_by ? `
+                                <div class="watched-users" style="font-size: 12px; margin-top: 5px; color: #444;">
+                                    <span>👤 Watched by: ${episode.watched_by.join(', ')}</span>
+                                </div>` : ''}
                             </div>
                             <button 
                                 class="watch-button" 
