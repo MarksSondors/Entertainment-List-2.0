@@ -52,8 +52,19 @@ def tv_show_page(request, show_id):
             except Task.DoesNotExist:
                 pass
             sleep(1)
-        if not tv_show_db:
+            
+        # Try to fetch the TV show again after task completes
+        try:
+            tv_show_db = TVShow.objects.prefetch_related(
+                'genres', 
+                'countries', 
+                'keywords',
+                'seasons',
+                'seasons__episodes'
+            ).get(tmdb_id=show_id)
+        except TVShow.DoesNotExist:
             raise Http404(f"TV Show with ID {show_id} could not be created")
+            
     user_watchlist = Watchlist.objects.filter(
         user=request.user,
         content_type=ContentType.objects.get_for_model(TVShow),
