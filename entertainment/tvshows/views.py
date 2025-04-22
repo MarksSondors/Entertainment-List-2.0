@@ -217,10 +217,162 @@ def tv_show_page(request, show_id):
                     'still_image': first_episode_still
                 }
 
+    # Get episodes excluding specials (season 0) - ADD select_related here
+    regular_episodes = Episode.objects.filter(
+        season__show=tv_show_db,
+        season__season_number__gt=0
+    ).select_related('season').order_by('season__season_number', 'episode_number')
+    
+    # Group episodes by season for better organization
+    episodes_by_season = {}
+    total_regular_episodes = 0
+    
+    for episode in regular_episodes:
+        season_num = episode.season.season_number
+        if season_num not in episodes_by_season:
+            episodes_by_season[season_num] = []
+        episodes_by_season[season_num].append({
+            'id': episode.id,
+            'season_num': season_num,
+            'episode_num': episode.episode_number,
+            'title': episode.title,
+            'is_watched': episode.id in user_watched_episodes,
+        })
+        total_regular_episodes += 1
+    
+    # Get all users who watched at least one episode of this show
+    users_with_progress = CustomUser.objects.filter(
+        watched_episodes__episode__season__show=tv_show_db,
+        watched_episodes__episode__season__season_number__gt=0
+    ).distinct()
+    
+    # Calculate progress for each user
+    users_progress = []
+    for user in users_with_progress:
+        watched_episodes_ids = set(WatchedEpisode.objects.filter(
+            user=user,
+            episode__season__show=tv_show_db,
+            episode__season__season_number__gt=0
+        ).values_list('episode_id', flat=True))
+        
+        # Get the user's season and subgroup reviews in a single query with all needed relationships
+        user_reviews = Review.objects.filter(
+            user=user,
+            content_type=tv_show_content_type,
+            object_id=tv_show_db.id
+        ).select_related('season', 'episode_subgroup', 'episode_subgroup__parent_group')
+        
+        # Get all season reviews
+        season_reviews = []
+        for review in user_reviews.filter(season__isnull=False):
+            season_reviews.append({
+                'season_number': review.season.season_number,
+                'rating': review.rating,
+                'id': review.season_id
+            })
+        
+        # Sort season reviews by season_number
+        season_reviews.sort(key=lambda x: x['season_number'])
+        
+        # Convert season reviews to an easy-to-access dictionary format
+        season_ratings = {}
+        for review in season_reviews:
+            season_ratings[review['season_number']] = review['rating']
+        
+        # Get all subgroup reviews efficiently using a single query
+        subgroup_reviews_queryset = user_reviews.filter(episode_subgroup__isnull=False)
+        
+        # Create a map of subgroup IDs to their order values directly from the query results
+        subgroup_orders = {}
+        subgroup_reviews = []
+        
+        # Process all subgroup reviews at once
+        for review in subgroup_reviews_queryset:
+            # Get parent group order and subgroup order
+            parent_group_order = review.episode_subgroup.parent_group.order
+            subgroup_order = review.episode_subgroup.order
+            
+            # Store the order information
+            subgroup_orders[review.episode_subgroup_id] = (parent_group_order, subgroup_order)
+            
+            # Create the subgroup review entry
+            subgroup_reviews.append({
+                'name': review.episode_subgroup.name,
+                'rating': review.rating,
+                'id': review.episode_subgroup_id
+            })
+        
+        # Sort by the predefined order in the database
+        subgroup_reviews.sort(key=lambda x: subgroup_orders.get(x['id'], (999, 999)))
+
+        # Calculate user's average rating from season and subgroup reviews
+        all_ratings = [review['rating'] for review in season_reviews] + [review['rating'] for review in subgroup_reviews]
+        average_rating = sum(all_ratings) / len(all_ratings) if all_ratings else None
+
+        # Find all episodes that are part of reviewed subgroups
+        reviewed_episodes = set()
+        
+        # Get all subgroup IDs from the reviews
+        reviewed_subgroup_ids = [review['id'] for review in subgroup_reviews]
+        
+        # Get all episodes belonging to reviewed subgroups in a single efficient query
+        if reviewed_subgroup_ids:
+            # This single query replaces multiple individual queries
+            episode_subgroup_mapping = {}
+            episode_subgroup_entries = EpisodeSubGroup.objects.filter(
+                id__in=reviewed_subgroup_ids
+            ).prefetch_related('episodes').values_list('id', 'episodes__id')
+            
+            # Organize the episodes by subgroup id
+            for subgroup_id, episode_id in episode_subgroup_entries:
+                if episode_id is not None:  # Ensure episode_id is not None
+                    if subgroup_id not in episode_subgroup_mapping:
+                        episode_subgroup_mapping[subgroup_id] = []
+                    episode_subgroup_mapping[subgroup_id].append(episode_id)
+                    reviewed_episodes.add(episode_id)
+                    
+            # Create a mapping between episodes and their subgroup reviews
+            episode_review_map = {}
+            for review in subgroup_reviews:
+                subgroup_id = review['id']
+                if subgroup_id in episode_subgroup_mapping:
+                    for episode_id in episode_subgroup_mapping[subgroup_id]:
+                        episode_review_map[episode_id] = {
+                            'rating': review['rating'],
+                            'name': review['name']
+                        }
+        else:
+            # No subgroup reviews, so empty mappings
+            episode_review_map = {}
+
+        user_progress = {
+            'username': user.username,
+            'is_current_user': user.id == request.user.id,
+            'watched_count': len(watched_episodes_ids),
+            'total_episodes': total_regular_episodes,
+            'progress_percentage': (len(watched_episodes_ids) / total_regular_episodes * 100) if total_regular_episodes > 0 else 0,
+            'watched_episodes': watched_episodes_ids,
+            'season_reviews': season_reviews,
+            'season_ratings': season_ratings,
+            'subgroup_reviews': subgroup_reviews,
+            'reviewed_episodes': reviewed_episodes,
+            'episode_review_map': episode_review_map,
+            'average_rating': average_rating  # Add average rating for this user
+        }
+        users_progress.append(user_progress)
+    
+    # Calculate combined average rating from all users
+    all_user_ratings = [up['average_rating'] for up in users_progress if up['average_rating'] is not None]
+    combined_average_rating = sum(all_user_ratings) / len(all_user_ratings) if all_user_ratings else None
+    
     context = {
         'tv_show': tv_show_db,
         'user_watchlist': user_watchlist,
         'subgroups_data': subgroups_data,
+        'episodes_by_season': episodes_by_season,
+        'total_regular_episodes': total_regular_episodes,
+        'users_progress': users_progress,
+        'combined_average_rating': combined_average_rating  # Add combined average to context
     }
     
     return render(request, 'tv_show_page.html', context)

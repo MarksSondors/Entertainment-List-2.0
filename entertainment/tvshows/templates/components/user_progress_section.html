@@ -1,0 +1,237 @@
+<!-- User Progress Section -->
+{% load tvshow_extras %}
+
+<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; margin: 20px;">
+    <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="margin: 0; font-size: 16px;">User Progress</h2>
+        {% if combined_average_rating %}
+            <span style="font-weight: bold; font-size: 14px;">Combined Average: ⭐{{ combined_average_rating|floatformat:1 }}</span>
+        {% endif %}
+    </div>
+    
+    {% if users_progress %}
+        {% for user_progress in users_progress %}
+            <div class="user-progress-item" style="margin-bottom: 15px; padding: 10px; position: relative; {% if user_progress.is_current_user %}background-color: rgba(255, 255, 255, 0.2); border: 2px outset;{% endif %}">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <span style="font-weight: bold;">{{ user_progress.username }}</span>
+                    <div>
+                        <span style="color: #444; font-size: 0.9em;">
+                            {{ user_progress.watched_count }}/{{ user_progress.total_episodes }} episodes ({{ user_progress.progress_percentage|floatformat:1 }}%)
+                        </span>
+                        {% if user_progress.average_rating %}
+                            <span style="margin-left: 10px; font-weight: bold; color: #000080; font-size: 0.9em;">
+                                Average Rating: ⭐{{ user_progress.average_rating|floatformat:1 }}
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Display user ratings -->
+                <div style="margin-bottom: 8px;">
+                    <!-- Season ratings -->
+                    {% if user_progress.season_reviews %}
+                        <div style="margin-bottom: 5px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+                            <span style="font-size: 11px; font-weight: bold;">Season Ratings:</span>
+                            {% for review in user_progress.season_reviews %}
+                                <span style="font-size: 11px; background-color: #000080; color: white; padding: 2px 5px; border: 1px solid black;">
+                                    S{{ review.season_number }}: ⭐{{ review.rating }}
+                                </span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Group ratings -->
+                    {% if user_progress.subgroup_reviews %}
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+                            <span style="font-size: 11px; font-weight: bold;">Group Ratings:</span>
+                            {% for review in user_progress.subgroup_reviews %}
+                                <span style="font-size: 11px; background-color: #008080; color: white; padding: 2px 5px; border: 1px solid black;">
+                                    {{ review.name|truncatechars:15 }}: ⭐{{ review.rating }}
+                                </span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Episode progress bar -->
+                <div class="episode-progress-container" style="background-color: white; border: 2px inset; height: 24px; overflow: hidden; display: flex; position: relative;">
+                    {% for season_num, episodes in episodes_by_season.items %}
+                        <div class="season-group" style="display: flex; border-right: 2px solid #C3C3C3; height: 100%;">
+                            {% for episode in episodes %}
+                                <div class="episode-progress-indicator" 
+                                     data-season="{{ episode.season_num }}"
+                                     data-episode="{{ episode.episode_num }}"
+                                     data-title="{{ episode.title }}"
+                                     {% for review in user_progress.season_reviews %}
+                                         {% if review.season_number == episode.season_num %}
+                                         data-season-rating="{{ review.rating }}"
+                                         {% endif %}
+                                     {% endfor %}
+                                     {% if episode.id in user_progress.episode_review_map %}
+                                         {% with episode_review=user_progress.episode_review_map|get_item:episode.id %}
+                                             data-subgroup-rating="{{ episode_review.rating }}"
+                                             data-subgroup-name="{{ episode_review.name }}"
+                                         {% endwith %}
+                                     {% endif %}
+                                     style="width: 8px; height: 100%; 
+                                            background-color: {% if episode.id in user_progress.watched_episodes %}
+                                              {% if episode.id in user_progress.episode_review_map %}
+                                                {% with episode_review=user_progress.episode_review_map|get_item:episode.id %}
+                                                  {% if episode_review.rating == 10 %}#00FFAA{% comment %}Excellent - Bright Teal{% endcomment %}
+                                                  {% elif episode_review.rating == 9 %}#00DDFF{% comment %}Great - Bright Blue{% endcomment %}
+                                                  {% elif episode_review.rating == 8 %}#00AAFF{% comment %}Very Good - Blue{% endcomment %}
+                                                  {% elif episode_review.rating == 7 %}#00FF00{% comment %}Good - Green{% endcomment %}
+                                                  {% elif episode_review.rating == 6 %}#88FF00{% comment %}Above Average - Light Green{% endcomment %}
+                                                  {% elif episode_review.rating == 5 %}#FFFF00{% comment %}Average - Yellow{% endcomment %}
+                                                  {% elif episode_review.rating == 4 %}#FFAA00{% comment %}Below Average - Orange{% endcomment %}
+                                                  {% elif episode_review.rating == 3 %}#FF5500{% comment %}Poor - Light Red{% endcomment %}
+                                                  {% elif episode_review.rating == 2 %}#FF0000{% comment %}Very Poor - Red{% endcomment %}
+                                                  {% elif episode_review.rating == 1 %}#AA0000{% comment %}Terrible - Dark Red{% endcomment %}
+                                                  {% else %}#008080{% comment %}Default for reviewed - Teal{% endcomment %}
+                                                  {% endif %}
+                                                {% endwith %}
+                                              {% elif episode.season_num in user_progress.season_ratings %}
+                                                {% with season_rating=user_progress.season_ratings|get_item:episode.season_num %}
+                                                  {% if season_rating == 10 %}#00FFAA{% comment %}Excellent - Bright Teal{% endcomment %}
+                                                  {% elif season_rating == 9 %}#00DDFF{% comment %}Great - Bright Blue{% endcomment %}
+                                                  {% elif season_rating == 8 %}#00AAFF{% comment %}Very Good - Blue{% endcomment %}
+                                                  {% elif season_rating == 7 %}#00FF00{% comment %}Good - Green{% endcomment %}
+                                                  {% elif season_rating == 6 %}#88FF00{% comment %}Above Average - Light Green{% endcomment %}
+                                                  {% elif season_rating == 5 %}#FFFF00{% comment %}Average - Yellow{% endcomment %}
+                                                  {% elif season_rating == 4 %}#FFAA00{% comment %}Below Average - Orange{% endcomment %}
+                                                  {% elif season_rating == 3 %}#FF5500{% comment %}Poor - Light Red{% endcomment %}
+                                                  {% elif season_rating == 2 %}#FF0000{% comment %}Very Poor - Red{% endcomment %}
+                                                  {% elif season_rating == 1 %}#AA0000{% comment %}Terrible - Dark Red{% endcomment %}
+                                                  {% else %}#4169E1{% comment %}Default for season reviews - Royal Blue{% endcomment %}
+                                                  {% endif %}
+                                                {% endwith %}
+                                              {% else %}#000080{% comment %}Watched but not reviewed{% endcomment %}
+                                              {% endif %}
+                                            {% else %}#ddd{% comment %}Not watched{% endcomment %}
+                                            {% endif %}; 
+                                            margin-right: 1px;">
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+                <!-- Custom tooltip that will appear above episodes -->
+                <div class="episode-rating-tooltip" style="display: none; position: absolute; background-color: #000080; color: white; border: 2px outset white; padding: 3px 6px; font-size: 11px; z-index: 1000; pointer-events: none;"></div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div style="text-align: center; font-style: italic; background-color: white; padding: 10px; border: 2px inset;">
+            No users have watched episodes from this show yet.
+        </div>
+    {% endif %}
+
+    <!-- Add this after the progress bars section -->
+    <div style="margin-top: 15px; font-size: 11px; border: 1px solid #888; padding: 5px; background-color: white;">
+        <div style="font-weight: bold; margin-bottom: 3px;">Rating Color Legend</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #ddd; margin-right: 3px;"></span>
+                Not watched
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #000080; margin-right: 3px;"></span>
+                Watched
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #AA0000; margin-right: 3px;"></span>
+                1
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #FF0000; margin-right: 3px;"></span>
+                2
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #FF5500; margin-right: 3px;"></span>
+                3
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #FFAA00; margin-right: 3px;"></span>
+                4
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #FFFF00; margin-right: 3px;"></span>
+                5
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #88FF00; margin-right: 3px;"></span>
+                6
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #00FF00; margin-right: 3px;"></span>
+                7
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #00AAFF; margin-right: 3px;"></span>
+                8
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #00DDFF; margin-right: 3px;"></span>
+                9
+            </span>
+            <span style="display: inline-flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background-color: #00FFAA; margin-right: 3px;"></span>
+                10
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Updated tooltip support for ratings above episodes -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle each user progress section
+    document.querySelectorAll('.user-progress-item').forEach(userProgress => {
+        const indicators = userProgress.querySelectorAll('.episode-progress-indicator');
+        const tooltip = userProgress.querySelector('.episode-rating-tooltip');
+        
+        // Add event listeners to all indicators
+        indicators.forEach(indicator => {
+            indicator.addEventListener('mouseover', function(e) {
+                // Get episode data
+                const season = this.getAttribute('data-season');
+                const episode = this.getAttribute('data-episode');
+                const title = this.getAttribute('data-title');
+                const seasonRating = this.getAttribute('data-season-rating');
+                const subgroupRating = this.getAttribute('data-subgroup-rating');
+                const subgroupName = this.getAttribute('data-subgroup-name');
+                
+                // Build tooltip content
+                let tooltipContent = `S${season}E${episode}: ${title}`;
+                
+                // Add ratings if available
+                if (seasonRating) {
+                    tooltipContent += `<br><span style="color: yellow;">Season Rating: ⭐${seasonRating}</span>`;
+                }
+                
+                if (subgroupRating && subgroupName) {
+                    tooltipContent += `<br><span style="color: #00FFFF;">${subgroupName}: ⭐${subgroupRating}</span>`;
+                }
+                
+                // Set tooltip content
+                tooltip.innerHTML = tooltipContent;
+                
+                // Position tooltip above this episode indicator
+                const rect = this.getBoundingClientRect();
+                const containerRect = userProgress.getBoundingClientRect();
+                
+                // Calculate position (centered above the episode)
+                tooltip.style.left = (rect.left - containerRect.left + (rect.width/2) - (tooltip.offsetWidth/2)) + 'px';
+                tooltip.style.bottom = (userProgress.offsetHeight - (rect.top - containerRect.top)) + 'px';
+                
+                // Show tooltip
+                tooltip.style.display = 'block';
+            });
+            
+            indicator.addEventListener('mouseout', function() {
+                // Hide tooltip
+                tooltip.style.display = 'none';
+            });
+        });
+    });
+});
+</script>
