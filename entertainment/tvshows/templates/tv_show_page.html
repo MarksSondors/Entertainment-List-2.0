@@ -359,12 +359,11 @@ body {
             <div class="subgroups-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); grid-gap: 15px;">
                 {% for subgroup in group.sub_groups.all %}
                     <div class="subgroup-card" style="background-color: #C3C3C3; border: 2px outset; padding: 5px; display: flex; flex-direction: column; text-align: center;">
-                        <div style="width: 100%; height: 200px; background-color: #445; color: white; display: flex; align-items: center; justify-content: center; border: 1px solid black; margin-bottom: 5px; background-size: cover; background-position: center; {% if subgroup.episodes.first.still %}background-image: url('{{ subgroup.episodes.first.still }}');{% endif %}">
+                        <div style="width: 100%; height: 200px; background-color: #445; color: white; display: flex; align-items: center; justify-content: center; border: 1px solid black; margin-bottom: 5px; background-size: cover; background-position: center; {% if subgroups_data|get_item:subgroup.id|get_item:'still_image' %}background-image: url('{{ subgroups_data|get_item:subgroup.id|get_item:'still_image' }}');{% endif %}">
                             <div style="background-color: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 3px;">
                                 {{ subgroup.name }}
                             </div>
                         </div>
-                        
                         <div>
                             <strong>{{ subgroup.name }}</strong>
                             {% if subgroup.description %}<p style="font-size: 12px; margin: 5px 0;">{{ subgroup.description|truncatechars:50 }}</p>{% endif %}
@@ -376,7 +375,7 @@ body {
                                  style="width: {{ subgroups_data|get_item:subgroup.id|get_item:'progress'|default:0 }}%;"></div>
                         </div>
                         <span id="subgroup-progress-{{ subgroup.id }}">
-                            {{ subgroups_data|get_item:subgroup.id|get_item:'watched_count'|default:0 }}/{{ subgroup.episodes.count }}
+                            {{ subgroups_data|get_item:subgroup.id|get_item:'progress_display' }}
                         </span>
                         
                         <!-- Add user rating display if it exists -->

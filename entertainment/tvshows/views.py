@@ -20,6 +20,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_protect
 from custom_auth.models import Watchlist, Genre, Review
 from .tasks import create_tvshow_async
+from django.db.models import Count, Q, Prefetch, Min
 
 
 # Create your views here.
@@ -32,7 +33,16 @@ def tv_show_page(request, show_id):
             'countries', 
             'keywords',
             'seasons',
-            'seasons__episodes'
+            'seasons__episodes',
+            Prefetch(
+                'episode_groups__sub_groups',
+                queryset=EpisodeSubGroup.objects.prefetch_related(
+                    Prefetch(
+                        'episodes',
+                        queryset=Episode.objects.order_by('air_date')
+                    )
+                )
+            )
         ).get(tmdb_id=show_id)
     except TVShow.DoesNotExist:
         task_id = create_tvshow_async(
@@ -60,7 +70,16 @@ def tv_show_page(request, show_id):
                 'countries', 
                 'keywords',
                 'seasons',
-                'seasons__episodes'
+                'seasons__episodes',
+                Prefetch(
+                    'episode_groups__sub_groups',
+                    queryset=EpisodeSubGroup.objects.prefetch_related(
+                        Prefetch(
+                            'episodes',
+                            queryset=Episode.objects.order_by('air_date')
+                        )
+                    )
+                )
             ).get(tmdb_id=show_id)
         except TVShow.DoesNotExist:
             raise Http404(f"TV Show with ID {show_id} could not be created")
@@ -76,6 +95,18 @@ def tv_show_page(request, show_id):
         user=request.user,
         episode__season__show=tv_show_db
     ).values_list('episode_id', flat=True)
+    
+    # Prefetch all watched episodes with their users for this show
+    watched_episodes_with_users = WatchedEpisode.objects.filter(
+        episode__season__show=tv_show_db
+    ).select_related('user', 'episode').all()
+    
+    # Create a mapping from episode ID to list of users
+    episode_watched_by_users = {}
+    for watched in watched_episodes_with_users:
+        if watched.episode_id not in episode_watched_by_users:
+            episode_watched_by_users[watched.episode_id] = []
+        episode_watched_by_users[watched.episode_id].append(watched.user)
     
     # For each season, calculate progress and get reviews
     tv_show_content_type = ContentType.objects.get_for_model(TVShow)
@@ -96,14 +127,9 @@ def tv_show_page(request, show_id):
         # Mark episodes as watched or not
         for episode in season.episodes.all():
             episode.is_watched = episode.id in watched_episodes
-
-            # Get all users who watched this episode
-            watched_by = WatchedEpisode.objects.filter(
-                episode=episode
-            ).select_related('user')
             
-            # Use a different attribute name (watched_users) instead of watched_by
-            episode.watched_users = [watched.user for watched in watched_by]
+            # Use the pre-fetched data instead of making a new query
+            episode.watched_users = episode_watched_by_users.get(episode.id, [])
         
         # Count watched episodes
         watched_count = sum(1 for episode in season.episodes.all() if episode.id in watched_episodes)
@@ -129,16 +155,33 @@ def tv_show_page(request, show_id):
     # Create a dict of subgroup_id -> review for easy lookup
     subgroup_reviews = {review.episode_subgroup_id: review for review in user_subgroup_reviews}
     
+    # Pre-calculate all watched counts for all subgroups at once
+    subgroup_watched_counts = {}
+    all_subgroups = EpisodeSubGroup.objects.filter(
+        parent_group__show=tv_show_db
+    ).annotate(
+        watched_count=Count('episodes', filter=Q(episodes__id__in=watched_episodes))
+    )
+
+    for sg in all_subgroups:
+        subgroup_watched_counts[sg.id] = sg.watched_count
+
     # For each episode subgroup, calculate progress
     subgroups_data = {}
-    for group in tv_show_db.episode_groups.prefetch_related('sub_groups', 'sub_groups__episodes').all():
+    for group in tv_show_db.episode_groups.all():
         for subgroup in group.sub_groups.all():
-            # Get all episodes for this subgroup
-            total_episodes = subgroup.episodes.count()
+            # Get all episodes for this subgroup (already prefetched and ordered)
+            episodes = list(subgroup.episodes.all())
+            total_episodes = len(episodes)
+            
+            # Get first episode still image if available - no extra query needed
+            first_episode_still = None
+            if episodes and episodes[0].still:
+                first_episode_still = episodes[0].still
             
             if total_episodes > 0:  # Prevent division by zero
-                # Count watched episodes in this subgroup
-                watched_count = subgroup.episodes.filter(id__in=watched_episodes).count()
+                # Use the pre-calculated count when needed
+                watched_count = subgroup_watched_counts[subgroup.id]
                 
                 # Set the progress attributes (keep these for compatibility)
                 subgroup.watched_episodes_count = watched_count
@@ -158,7 +201,9 @@ def tv_show_page(request, show_id):
                     'progress': (watched_count / total_episodes) * 100,
                     'completed': watched_count == total_episodes,
                     'user_rating': user_rating,
-                    'review_id': review_id
+                    'review_id': review_id,
+                    'progress_display': f"{watched_count}/{total_episodes}",  # Pre-formatted display string
+                    'still_image': first_episode_still  # Add this line
                 }
             else:
                 subgroup.watched_episodes_count = 0
@@ -169,7 +214,9 @@ def tv_show_page(request, show_id):
                     'progress': 0,
                     'completed': False,
                     'user_rating': None,
-                    'review_id': None
+                    'review_id': None,
+                    'progress_display': "0/0",  # Handle zero case
+                    'still_image': first_episode_still  # Add this line
                 }
 
     context = {

@@ -178,13 +178,19 @@ def update_single_tvshow(tvshow_id):
             
             # After updating the show's basic info, check for new seasons and episode groups
             async_task(update_tvshow_seasons, tvshow.id)
-            async_task(update_episode_groups, tvshow.id)
+            if tvshow.is_anime:
+                async_task(update_episode_groups, tvshow.id)
+            else:
+                pass
             
             return f"Updated TV show {tvshow.title} with {len(updates)} changes: {', '.join([f'{k}={v}' for k, v in updates.items()])}"
         else:
             # Even if no basic show details changed, we should still check for new episodes and episode groups
             async_task(update_tvshow_seasons, tvshow.id)
-            async_task(update_episode_groups, tvshow.id)
+            if tvshow.is_anime:
+                async_task(update_episode_groups, tvshow.id)
+            else:
+                pass
             return f"No basic updates needed for TV show {tvshow.title}, checking for new episodes and episode groups"
             
     except TVShow.DoesNotExist:
