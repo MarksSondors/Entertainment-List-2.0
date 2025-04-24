@@ -172,7 +172,7 @@ class Movie(Media):
         crew_members = MediaPerson.objects.filter(
             content_type=movie_content_type,
             object_id=self.id
-        ).exclude(role="Actor")
+        ).exclude(role="Actor").select_related('person')
         
         # Group by person and combine roles
         crew_by_person = {}

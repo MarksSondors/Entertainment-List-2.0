@@ -732,16 +732,14 @@ body {
 
     // Season reviews data storage
     const seasonReviews = {
-        {% for season in tv_show.seasons.all %}
-            {% with season_review=season.reviews.filter.first %}
-                {% if season_review %}
-                    "{{ season.id }}": {
-                        "rating": {{ season_review.rating }},
-                        "review_text": "{{ season_review.review_text|escapejs }}",
-                        "review_id": {{ season_review.id }}
-                    }{% if not forloop.last %},{% endif %}
-                {% endif %}
-            {% endwith %}
+        {% for season in seasons_with_reviews %}
+            {% if season.review_id %}
+                "{{ season.id }}": {
+                    "rating": {{ season.review_rating }},
+                    "review_text": "{{ season.review_text|escapejs }}",
+                    "review_id": {{ season.review_id }}
+                }{% if not forloop.last %},{% endif %}
+            {% endif %}
         {% endfor %}
     };
 </script>

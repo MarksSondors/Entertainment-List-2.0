@@ -21,7 +21,7 @@ from django.views.decorators.csrf import csrf_protect
 from custom_auth.models import Watchlist, Genre, Review
 from .tasks import create_tvshow_async
 
-from django.db.models import Prefetch, Count, Q
+from django.db.models import Prefetch, Count, Q, OuterRef, Subquery, F
 
 # Create your views here.
 
@@ -246,15 +246,28 @@ def tv_show_page(request, show_id):
         watched_episodes__episode__season__season_number__gt=0
     ).distinct()
     
-    # Calculate progress for each user
+    # Replace the users_progress loop with this approach:
+    # Get all watched episodes for all relevant users in one query
+    all_watched = WatchedEpisode.objects.filter(
+        user__in=users_with_progress,
+        episode__season__show=tv_show_db,
+        episode__season__season_number__gt=0
+    ).select_related('user').values('user_id', 'episode_id')
+
+    # Create a dictionary mapping users to their watched episodes
+    user_watched_map = {}
+    for entry in all_watched:
+        user_id = entry['user_id']
+        episode_id = entry['episode_id']
+        if user_id not in user_watched_map:
+            user_watched_map[user_id] = set()
+        user_watched_map[user_id].add(episode_id)
+
+    # Now process each user using the pre-collected data
     users_progress = []
     for user in users_with_progress:
-        watched_episodes_ids = set(WatchedEpisode.objects.filter(
-            user=user,
-            episode__season__show=tv_show_db,
-            episode__season__season_number__gt=0
-        ).values_list('episode_id', flat=True))
-        
+        watched_episodes_ids = user_watched_map.get(user.id, set())
+        # Continue with your existing processing...
         # Get the user's season and subgroup reviews in a single query with all needed relationships
         user_reviews = Review.objects.filter(
             user=user,
@@ -280,28 +293,31 @@ def tv_show_page(request, show_id):
             season_ratings[review['season_number']] = review['rating']
         
         # Get all subgroup reviews efficiently using a single query
-        subgroup_reviews_queryset = user_reviews.filter(episode_subgroup__isnull=False)
-        
-        # Create a map of subgroup IDs to their order values directly from the query results
+        subgroup_reviews_data = user_reviews.filter(episode_subgroup__isnull=False).values(
+            'id',
+            'rating',
+            'episode_subgroup_id',
+            'episode_subgroup__name',
+            'episode_subgroup__order',
+            'episode_subgroup__parent_group__order'
+        )
+
         subgroup_orders = {}
         subgroup_reviews = []
-        
-        # Process all subgroup reviews at once
-        for review in subgroup_reviews_queryset:
-            # Get parent group order and subgroup order
-            parent_group_order = review.episode_subgroup.parent_group.order
-            subgroup_order = review.episode_subgroup.order
+
+        for data in subgroup_reviews_data:
+            subgroup_id = data['episode_subgroup_id']
+            subgroup_orders[subgroup_id] = (
+                data['episode_subgroup__parent_group__order'], 
+                data['episode_subgroup__order']
+            )
             
-            # Store the order information
-            subgroup_orders[review.episode_subgroup_id] = (parent_group_order, subgroup_order)
-            
-            # Create the subgroup review entry
             subgroup_reviews.append({
-                'name': review.episode_subgroup.name,
-                'rating': review.rating,
-                'id': review.episode_subgroup_id
+                'name': data['episode_subgroup__name'],
+                'rating': data['rating'],
+                'id': subgroup_id
             })
-        
+
         # Sort by the predefined order in the database
         subgroup_reviews.sort(key=lambda x: subgroup_orders.get(x['id'], (999, 999)))
 
@@ -364,7 +380,20 @@ def tv_show_page(request, show_id):
     # Calculate combined average rating from all users
     all_user_ratings = [up['average_rating'] for up in users_progress if up['average_rating'] is not None]
     combined_average_rating = sum(all_user_ratings) / len(all_user_ratings) if all_user_ratings else None
-    
+
+    # Get the most recent review for each season in one query
+    latest_reviews = Review.objects.filter(
+        season=OuterRef('pk')
+    ).order_by('-date_added')
+
+    # Annotate seasons with review data
+    seasons = tv_show_db.seasons.all().annotate(
+        review_id=Subquery(latest_reviews.values('id')[:1]),
+        review_rating=Subquery(latest_reviews.values('rating')[:1]),
+        review_text=Subquery(latest_reviews.values('review_text')[:1])
+    )
+
+    # Add to context (replace tv_show.seasons with this)
     context = {
         'tv_show': tv_show_db,
         'user_watchlist': user_watchlist,
@@ -372,7 +401,8 @@ def tv_show_page(request, show_id):
         'episodes_by_season': episodes_by_season,
         'total_regular_episodes': total_regular_episodes,
         'users_progress': users_progress,
-        'combined_average_rating': combined_average_rating  # Add combined average to context
+        'combined_average_rating': combined_average_rating,  # Add combined average to context
+        'seasons_with_reviews': seasons
     }
     
     return render(request, 'tv_show_page.html', context)
