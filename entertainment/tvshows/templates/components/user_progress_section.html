@@ -54,9 +54,9 @@
                 </div>
                 
                 <!-- Episode progress bar -->
-                <div class="episode-progress-container" style="background-color: white; border: 2px inset; height: 24px; overflow: hidden; display: flex; position: relative;">
+                <div class="episode-progress-container" style="background-color: white; border: 2px inset; height: 24px; overflow: hidden; display: flex; position: relative; width: 100%;">
                     {% for season_num, episodes in episodes_by_season.items %}
-                        <div class="season-group" style="display: flex; border-right: 2px solid #C3C3C3; height: 100%;">
+                        <div class="season-group" style="display: flex; border-right: 2px solid #C3C3C3; height: 100%; flex-grow: {{ episodes|length }}; flex-basis: 0;">
                             {% for episode in episodes %}
                                 <div class="episode-progress-indicator" 
                                      data-season="{{ episode.season_num }}"
@@ -73,7 +73,7 @@
                                              data-subgroup-name="{{ episode_review.name }}"
                                          {% endwith %}
                                      {% endif %}
-                                     style="width: 8px; height: 100%; 
+                                     style="flex: 1 1 0; min-width: 4px; height: 100%; 
                                             background-color: {% if episode.id in user_progress.watched_episodes %}
                                               {% if episode.id in user_progress.episode_review_map %}
                                                 {% with episode_review=user_progress.episode_review_map|get_item:episode.id %}
@@ -189,6 +189,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const indicators = userProgress.querySelectorAll('.episode-progress-indicator');
         const tooltip = userProgress.querySelector('.episode-rating-tooltip');
         
+        // Function to update tooltip position
+        const updateTooltipPosition = (indicator, tooltip) => {
+            const rect = indicator.getBoundingClientRect();
+            const containerRect = userProgress.getBoundingClientRect();
+            
+            // Calculate position (centered above the episode)
+            tooltip.style.left = (rect.left - containerRect.left + (rect.width/2) - (tooltip.offsetWidth/2)) + 'px';
+            tooltip.style.bottom = (userProgress.offsetHeight - (rect.top - containerRect.top)) + 'px';
+        };
+        
         // Add event listeners to all indicators
         indicators.forEach(indicator => {
             indicator.addEventListener('mouseover', function(e) {
@@ -214,23 +224,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Set tooltip content
                 tooltip.innerHTML = tooltipContent;
-                
-                // Position tooltip above this episode indicator
-                const rect = this.getBoundingClientRect();
-                const containerRect = userProgress.getBoundingClientRect();
-                
-                // Calculate position (centered above the episode)
-                tooltip.style.left = (rect.left - containerRect.left + (rect.width/2) - (tooltip.offsetWidth/2)) + 'px';
-                tooltip.style.bottom = (userProgress.offsetHeight - (rect.top - containerRect.top)) + 'px';
-                
-                // Show tooltip
                 tooltip.style.display = 'block';
+                
+                // Position tooltip
+                updateTooltipPosition(this, tooltip);
             });
             
             indicator.addEventListener('mouseout', function() {
                 // Hide tooltip
                 tooltip.style.display = 'none';
             });
+        });
+    });
+    
+    // Update tooltip positions on window resize
+    window.addEventListener('resize', function() {
+        document.querySelectorAll('.user-progress-item').forEach(userProgress => {
+            const tooltip = userProgress.querySelector('.episode-rating-tooltip');
+            if (tooltip.style.display !== 'none') {
+                const activeIndicator = userProgress.querySelector('.episode-progress-indicator:hover');
+                if (activeIndicator) {
+                    const rect = activeIndicator.getBoundingClientRect();
+                    const containerRect = userProgress.getBoundingClientRect();
+                    
+                    tooltip.style.left = (rect.left - containerRect.left + (rect.width/2) - (tooltip.offsetWidth/2)) + 'px';
+                    tooltip.style.bottom = (userProgress.offsetHeight - (rect.top - containerRect.top)) + 'px';
+                }
+            }
         });
     });
 });
