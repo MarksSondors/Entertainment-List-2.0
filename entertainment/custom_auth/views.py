@@ -477,23 +477,113 @@ def recent_reviews(request):
 
 def recent_activity(request):
     """
-    Returns recently added reviews, watchlist items and movies added to the database, combines them in the order of most recent first.
+    Returns recently added reviews, watchlist items, episodes watched, and movies added to the database,
+    combines them in the order of most recent first. Supports pagination for "Show More" functionality.
     Groups activities that happened at the same minute.
     """
-    # Fetch recent data
-    reviews = Review.objects.all().order_by('-date_added')[:15]
-    watchlist_items = Watchlist.objects.all().order_by('-date_added')[:15]
-    movies = Movie.objects.all().order_by('-date_added')[:15]
+    # Get pagination parameters
+    page = int(request.GET.get('page', '1'))
+    limit = int(request.GET.get('limit', '15'))
+    
+    # Calculate offset for pagination
+    offset = (page - 1) * limit
+    fetch_limit = limit * 3  # Fetch more items to ensure we have enough after grouping
+    
+    # Fetch recent data with increased limits for pagination
+    reviews = Review.objects.select_related('user', 'season', 'episode_subgroup').order_by('-date_added')[:fetch_limit]
+    watchlist_items = Watchlist.objects.select_related('user').order_by('-date_added')[:fetch_limit]
+    movies = Movie.objects.select_related('added_by').order_by('-date_added')[:fetch_limit]
+    
+    # Prefetch media objects for reviews to avoid N+1 queries
+    from django.contrib.contenttypes.models import ContentType
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    tvshow_content_type = ContentType.objects.get_for_model(TVShow)
+    
+    # Get lists of reviews by content type
+    movie_reviews = [r for r in reviews if r.content_type_id == movie_content_type.id]
+    tvshow_reviews = [r for r in reviews if r.content_type_id == tvshow_content_type.id]
+    
+    # Get all IDs to fetch in bulk
+    movie_ids = [r.object_id for r in movie_reviews]
+    tvshow_ids = [r.object_id for r in tvshow_reviews]
+    
+    # Also handle watchlist items - group by content type
+    watchlist_movie_items = [w for w in watchlist_items if w.content_type_id == movie_content_type.id]
+    watchlist_tvshow_items = [w for w in watchlist_items if w.content_type_id == tvshow_content_type.id]
+    
+    # Add watchlist item IDs to the fetch lists
+    movie_ids.extend([w.object_id for w in watchlist_movie_items])
+    tvshow_ids.extend([w.object_id for w in watchlist_tvshow_items])
+    
+    # Fetch all media objects in bulk
+    movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=movie_ids)}
+    tvshows_by_id = {t.id: t for t in TVShow.objects.filter(id__in=tvshow_ids)}
+    
+    # Fetch recently watched episodes
+    from collections import defaultdict
+    from tvshows.models import WatchedEpisode  # Adjust import path if needed
+    
+    # Get recently watched episodes with proper select_related to follow the relationship chain
+    watched_episodes = WatchedEpisode.objects.select_related('episode', 'episode__season', 'episode__season__show', 'user').order_by('-watched_date')[:fetch_limit * 6]
+    # Group episodes by day, TV show, and user
+    episode_groups = defaultdict(list)
+    for episode in watched_episodes:
+        # Use date as the key for grouping (without time)
+        day_key = episode.watched_date.strftime('%Y-%m-%d')
+        # Access tv_show through the proper relationship chain
+        tv_show = episode.episode.season.show
+        show_key = tv_show.id
+        user_key = episode.user.id  # Add user to the grouping key
+        group_key = (day_key, show_key, user_key)
+        episode_groups[group_key].append(episode)
     
     # Format individual activities
     activities = []
     
+    # Format episode watching activities
+    for (day_key, show_id, user_id), episodes in episode_groups.items():
+        # Sort episodes by watched_date to ensure we get the most recent timestamp
+        episodes.sort(key=lambda e: e.watched_date, reverse=True)
+        most_recent = episodes[0]
+        # Access tv_show through the proper relationship chain
+        tv_show = most_recent.episode.season.show
+        
+        # Use the timestamp of the most recent episode
+        local_timestamp = timezone.localtime(most_recent.watched_date)
+        timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
+        
+        # Create episode count text
+        episode_count = len(episodes)
+        
+        activities.append({
+            'type': 'watched_episodes',
+            'username': most_recent.user.username,
+            'title': tv_show.title if tv_show.title == tv_show.original_title else f"{tv_show.title} ({tv_show.original_title})",
+            'content_type': 'TV Show',
+            'date': most_recent.watched_date,
+            'timestamp': timestamp_key,
+            'timestamp_key': timestamp_key,
+            'media_id': tv_show.id,
+            'action': f'watched {episode_count} episode{"s" if episode_count > 1 else ""}',
+            'poster_path': tv_show.poster,
+            'tmdb_id': tv_show.tmdb_id,
+            'episode_count': episode_count
+        })
+    
     # Format reviews
     for review in reviews:
-        content_object = review.media
+        # Use prefetched objects instead of accessing .media property
+        if review.content_type_id == movie_content_type.id:
+            content_object = movies_by_id.get(review.object_id)
+        elif review.content_type_id == tvshow_content_type.id:
+            content_object = tvshows_by_id.get(review.object_id)
+        else:
+            content_object = review.media  # Fallback for other content types
+        
         poster_path = None
         tmdb_id = None
         
+        # Rest of the processing remains the same
         if isinstance(content_object, Movie):
             content_type = "Movie"
             if content_object.title == content_object.original_title:
@@ -511,7 +601,7 @@ def recent_activity(request):
             poster_path = content_object.poster
             tmdb_id = content_object.tmdb_id
             if review.season:
-                title += f" - {review.season}"
+                title += f" - {review.season.title}"
             elif review.episode_subgroup:
                 title += f" - {review.episode_subgroup.name}"
         else:
@@ -539,7 +629,12 @@ def recent_activity(request):
     
     # Format watchlist items
     for item in watchlist_items:
-        content_object = item.media
+        if item.content_type_id == movie_content_type.id:
+            content_object = movies_by_id.get(item.object_id)
+        elif item.content_type_id == tvshow_content_type.id:
+            content_object = tvshows_by_id.get(item.object_id)
+        else:
+            content_object = item.media
         poster_path = None
         tmdb_id = None
         
@@ -622,6 +717,8 @@ def recent_activity(request):
                 grouped_activities[key]['content'] = activity['content']
             if 'rating' in activity:
                 grouped_activities[key]['rating'] = activity['rating']
+            if 'episode_count' in activity:
+                grouped_activities[key]['episode_count'] = activity['episode_count']
         
         # Add action based on type
         if activity['type'] == 'review':
@@ -630,9 +727,12 @@ def recent_activity(request):
             grouped_activities[key]['actions'].append('added to watchlist')
         elif activity['type'] == 'new_content':
             grouped_activities[key]['actions'].append('added to database')
+        elif activity['type'] == 'watched_episodes':
+            episode_count = activity['episode_count']
+            grouped_activities[key]['actions'].append(f'watched {episode_count} episode{"s" if episode_count > 1 else ""}')
     
     # Convert grouped activities to list and format actions
-    result = []
+    result_list = []
     for _, activity in grouped_activities.items():
         # Format the actions into a readable string
         if len(activity['actions']) == 1:
@@ -642,16 +742,30 @@ def recent_activity(request):
         
         # Remove actions list from final output
         del activity['actions']
-        result.append(activity)
+        result_list.append(activity)
     
     # Sort by timestamp again to ensure newest first
-    result.sort(key=lambda x: x['timestamp'], reverse=True)
+    result_list.sort(key=lambda x: x['timestamp'], reverse=True)
     
-    # Take only the first 15 grouped activities
-    result = result[:15]
+    # Get total count for pagination info
+    total_count = len(result_list)
+    
+    # Apply pagination
+    paginated_results = result_list[offset:offset + limit]
+    
+    # Create response with pagination metadata
+    response = {
+        'results': paginated_results,
+        'pagination': {
+            'page': page,
+            'limit': limit,
+            'total': total_count,
+            'has_more': (offset + limit) < total_count
+        }
+    }
     
     # Return as JSON
-    return JsonResponse(result, safe=False)
+    return JsonResponse(response)
 
 @login_required
 def browse_by_people(request):
