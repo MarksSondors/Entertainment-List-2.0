@@ -271,6 +271,10 @@ class WatchedEpisode(models.Model):
     class Meta:
         unique_together = ['user', 'episode']
         ordering = ['-watched_date']
+        indexes = [
+            models.Index(fields=['user', 'episode']),
+            models.Index(fields=['watched_date']),
+        ]
         
     def __str__(self):
         return f"{self.user.username} watched {self.episode}"
