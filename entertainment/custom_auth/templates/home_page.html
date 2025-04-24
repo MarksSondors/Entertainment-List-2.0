@@ -528,6 +528,29 @@
             font-size: 16px;
             font-weight: bold;
         }
+        .watched-badge {
+        display: inline-block;
+        margin-right: 4px;
+        font-size: 14px;
+        }
+        
+        .load-more-item {
+            text-align: center;
+            list-style-type: none;
+            padding: 10px;
+        }
+        
+        .load-more-button {
+            background-color: #d4d0c8;
+            border: 1px solid #a0a0a0;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-family: 'MS Sans Serif', sans-serif;
+        }
+        
+        .load-more-button:hover {
+            background-color: #c0c0c0;
+        }
     </style>
     
     <script>
@@ -686,8 +709,8 @@
         // Modified variables - removed lastActivityTimestamp since we don't need it
         let activityRefreshInterval = null;
         let isRefreshing = false;
-        
-        // Extract the activity fetching into a reusable function - modified to remove ?since parameter
+
+        // Extract the activity fetching into a reusable function - modified to support episode watching
         function fetchRecentActivity(showRefreshIndicator = true) {
             if (isRefreshing) return; // Prevent multiple concurrent requests
             isRefreshing = true;
@@ -699,7 +722,7 @@
                 indicator.classList.add('spinning');
             }
             
-            fetch('/activity/recent/') // Removed the ?since parameter
+            fetch('/activity/recent/')
                 .then(response => response.json())
                 .then(data => {
                     isRefreshing = false;
@@ -714,16 +737,19 @@
                     document.getElementById('activity-last-updated').textContent = 
                         'Last updated: ' + now.toLocaleTimeString();
                     
+                    // Check if we got the new pagination format
+                    const results = data.results || data;
+                    
                     // Always clear the list to display fresh data in correct order
                     activityList.innerHTML = '';
                     
-                    if (data.length === 0) {
+                    if (results.length === 0) {
                         activityList.innerHTML = '<li class="activity-empty">No activity yet. Be the first to contribute!</li>';
                         return;
                     }
                     
                     // Add activities in the order they come from the server
-                    data.forEach(activity => {
+                    results.forEach(activity => {
                         const activityItem = document.createElement('li');
                         activityItem.className = 'activity-item';
                         
@@ -761,7 +787,28 @@
                                     </div>
                                 </a>
                             `;
-                        } 
+                        }
+                        else if ('episode_count' in activity) {
+                            // This is a watched episodes activity
+                            activityItem.innerHTML = `
+                                <a href="${detailUrl}" class="activity-link">
+                                    <div class="activity-content">
+                                        <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                        <div class="activity-info">
+                                            <div class="activity-header">
+                                                <span class="activity-username">${activity.username}</span>
+                                                <span class="activity-timestamp">${activity.timestamp}</span>
+                                            </div>
+                                            <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                            <div class="activity-action">
+                                                <span class="watched-badge">📺</span> 
+                                                ${activity.action || `Watched ${activity.episode_count} episode${activity.episode_count > 1 ? 's' : ''}`}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            `;
+                        }
                         else {
                             // This is a watchlist or new content activity
                             activityItem.innerHTML = `
@@ -785,9 +832,28 @@
                         activityList.appendChild(activityItem);
                     });
                     
-                    // Limit the list to 10 items to avoid growing too large
-                    while (activityList.children.length > 10) {
-                        activityList.removeChild(activityList.lastChild);
+                    // Add "Show More" button if pagination info is available
+                    if (data.pagination && data.pagination.has_more) {
+                        const loadMoreItem = document.createElement('li');
+                        loadMoreItem.className = 'load-more-item';
+                        loadMoreItem.innerHTML = `
+                            <button id="load-more-activity" class="load-more-button">
+                                Show More Activity
+                            </button>
+                        `;
+                        activityList.appendChild(loadMoreItem);
+                        
+                        // Add event listener to the "Show More" button
+                        document.getElementById('load-more-activity').addEventListener('click', () => {
+                            loadMoreActivity(data.pagination.page + 1);
+                        });
+                    }
+                    
+                    // Limit the list to 10 items if no pagination
+                    if (!data.pagination) {
+                        while (activityList.children.length > 10) {
+                            activityList.removeChild(activityList.lastChild);
+                        }
                     }
                 })
                 .catch(error => {
@@ -799,13 +865,318 @@
                     document.getElementById('refresh-indicator').classList.remove('spinning');
                     
                     // Only show error if it's the initial load
+                    const activityList = document.getElementById('recent_activity');
                     if (activityList.children.length === 0) {
-                        document.getElementById('recent_activity').innerHTML = 
+                        activityList.innerHTML = 
                             '<li>Failed to load activity. Please try again later.</li>';
                     }
                 });
         }
-        
+
+        // Function to load more activity when "Show More" is clicked
+        function loadMoreActivity(page) {
+            fetch(`/activity/recent/?page=${page}`)
+                .then(response => response.json())
+                .then(data => {
+                    const activityList = document.getElementById('recent_activity');
+                    
+                    // Remove the "Show More" button if it exists
+                    const existingButton = document.getElementById('load-more-activity');
+                    if (existingButton) {
+                        existingButton.parentElement.remove();
+                    }
+                    
+                    // Save current page to localStorage
+                    localStorage.setItem('activityPage', page);
+                    
+                    // Add the new activities
+                    data.results.forEach(activity => {
+                        const activityItem = document.createElement('li');
+                        activityItem.className = 'activity-item';
+                        
+                        // Build the poster placeholder
+                        const posterPath = activity.poster_path || 'https://via.placeholder.com/60x90/333333/FFFFFF?text=No+Image';
+                        
+                        // Set URL based on content type
+                        let detailUrl = '#';
+                        if (activity.content_type === 'Movie' && activity.tmdb_id) {
+                            detailUrl = `/movies/${activity.tmdb_id}`;
+                        } else if (activity.content_type === 'TV Show' && activity.tmdb_id) {
+                            detailUrl = `/tvshows/${activity.tmdb_id}`;
+                        }
+                        
+                        // Build activity content based on what data is available
+                        if ('rating' in activity) {
+                            // This is a review activity
+                            const ratingValue = Math.round(activity.rating);
+                            const ratingClass = ratingValue >= 7 ? 'high-rating' : 
+                                              ratingValue >= 5 ? 'mid-rating' : 'low-rating';
+                            
+                            activityItem.innerHTML = `
+                                <a href="${detailUrl}" class="activity-link">
+                                    <div class="activity-content">
+                                        <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                        <div class="activity-info">
+                                            <div class="activity-header">
+                                                <span class="activity-username">${activity.username}</span>
+                                                <span class="activity-timestamp">${activity.timestamp}</span>
+                                            </div>
+                                            <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                            <div class="activity-text">${activity.content ? `"${activity.content}"` : ''}</div>
+                                            <div class="activity-rating ${ratingClass}">${ratingValue}<span class="rating-max">/10</span></div>
+                                        </div>
+                                    </div>
+                                </a>
+                            `;
+                        }
+                        else if ('episode_count' in activity) {
+                            // This is a watched episodes activity
+                            activityItem.innerHTML = `
+                                <a href="${detailUrl}" class="activity-link">
+                                    <div class="activity-content">
+                                        <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                        <div class="activity-info">
+                                            <div class="activity-header">
+                                                <span class="activity-username">${activity.username}</span>
+                                                <span class="activity-timestamp">${activity.timestamp}</span>
+                                            </div>
+                                            <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                            <div class="activity-action">
+                                                <span class="watched-badge">📺</span> 
+                                                ${activity.action || `Watched ${activity.episode_count} episode${activity.episode_count > 1 ? 's' : ''}`}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            `;
+                        }
+                        else {
+                            // This is a watchlist or new content activity
+                            activityItem.innerHTML = `
+                                <a href="${detailUrl}" class="activity-link">
+                                    <div class="activity-content">
+                                        <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                        <div class="activity-info">
+                                            <div class="activity-header">
+                                                <span class="activity-username">${activity.username}</span>
+                                                <span class="activity-timestamp">${activity.timestamp}</span>
+                                            </div>
+                                            <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                            <div class="activity-action">${activity.action}</div>
+                                        </div>
+                                    </div>
+                                </a>
+                            `;
+                        }
+                        
+                        activityList.appendChild(activityItem);
+                    });
+                    
+                    // Add a new "Show More" button if there are more results
+                    if (data.pagination && data.pagination.has_more) {
+                        const loadMoreItem = document.createElement('li');
+                        loadMoreItem.className = 'load-more-item';
+                        loadMoreItem.innerHTML = `
+                            <button id="load-more-activity" class="load-more-button">
+                                Show More Activity
+                            </button>
+                        `;
+                        activityList.appendChild(loadMoreItem);
+                        
+                        // Add event listener to the new "Show More" button
+                        document.getElementById('load-more-activity').addEventListener('click', () => {
+                            loadMoreActivity(data.pagination.page + 1);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading more activity:', error);
+                    // Show error message
+                    const activityList = document.getElementById('recent_activity');
+                    const errorItem = document.createElement('li');
+                    errorItem.className = 'error-item';
+                    errorItem.textContent = 'Failed to load more activity. Please try again.';
+                    activityList.appendChild(errorItem);
+                });
+        }
+
+        // Modify the initial page load to restore previous position
+        document.addEventListener('DOMContentLoaded', function() {
+            // Existing code...
+            
+            // Check if we have a stored page number
+            const storedPage = localStorage.getItem('activityPage');
+            
+            if (storedPage && parseInt(storedPage) > 1) {
+                // Load all pages from 1 to the stored page
+                loadActivityUpToPage(parseInt(storedPage));
+            } else {
+                // Just load the first page as normal
+                fetchRecentActivity(false);
+            }
+            
+            // Set up auto-refresh functionality
+            setupAutoRefresh();
+        });
+
+        // New function to load activity up to a specific page
+        function loadActivityUpToPage(targetPage) {
+            // Start with page 1
+            let currentPage = 1;
+            
+            // Function to recursively load pages
+            function loadNextPageUntilTarget() {
+                fetch(`/activity/recent/?page=${currentPage}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const activityList = document.getElementById('recent_activity');
+                        
+                        // For first page, clear the list
+                        if (currentPage === 1) {
+                            activityList.innerHTML = '';
+                        } else {
+                            // For subsequent pages, remove any existing "Show More" button
+                            const existingButton = document.getElementById('load-more-activity');
+                            if (existingButton) {
+                                existingButton.parentElement.remove();
+                            }
+                        }
+                        
+                        // Add the activities from this page
+                        data.results.forEach(activity => {
+                            // Create and append each activity item (same rendering as above)
+                            // ... (same code as in loadMoreActivity)
+                            const activityItem = document.createElement('li');
+                            activityItem.className = 'activity-item';
+                            
+                            // Build the poster placeholder
+                            const posterPath = activity.poster_path || 'https://via.placeholder.com/60x90/333333/FFFFFF?text=No+Image';
+                            
+                            // Set URL based on content type
+                            let detailUrl = '#';
+                            if (activity.content_type === 'Movie' && activity.tmdb_id) {
+                                detailUrl = `/movies/${activity.tmdb_id}`;
+                            } else if (activity.content_type === 'TV Show' && activity.tmdb_id) {
+                                detailUrl = `/tvshows/${activity.tmdb_id}`;
+                            }
+                            
+                            // Use same rendering logic as in other functions
+                            if ('rating' in activity) {
+                                const ratingValue = Math.round(activity.rating);
+                                const ratingClass = ratingValue >= 7 ? 'high-rating' : 
+                                                  ratingValue >= 5 ? 'mid-rating' : 'low-rating';
+                                
+                                activityItem.innerHTML = `
+                                    <a href="${detailUrl}" class="activity-link">
+                                        <div class="activity-content">
+                                            <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                            <div class="activity-info">
+                                                <div class="activity-header">
+                                                    <span class="activity-username">${activity.username}</span>
+                                                    <span class="activity-timestamp">${activity.timestamp}</span>
+                                                </div>
+                                                <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                                <div class="activity-text">${activity.content ? `"${activity.content}"` : ''}</div>
+                                                <div class="activity-rating ${ratingClass}">${ratingValue}<span class="rating-max">/10</span></div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                `;
+                            }
+                            else if ('episode_count' in activity) {
+                                activityItem.innerHTML = `
+                                    <a href="${detailUrl}" class="activity-link">
+                                        <div class="activity-content">
+                                            <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                            <div class="activity-info">
+                                                <div class="activity-header">
+                                                    <span class="activity-username">${activity.username}</span>
+                                                    <span class="activity-timestamp">${activity.timestamp}</span>
+                                                </div>
+                                                <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                                <div class="activity-action">
+                                                    <span class="watched-badge">📺</span> 
+                                                    ${activity.action || `Watched ${activity.episode_count} episode${activity.episode_count > 1 ? 's' : ''}`}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                `;
+                            }
+                            else {
+                                activityItem.innerHTML = `
+                                    <a href="${detailUrl}" class="activity-link">
+                                        <div class="activity-content">
+                                            <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
+                                            <div class="activity-info">
+                                                <div class="activity-header">
+                                                    <span class="activity-username">${activity.username}</span>
+                                                    <span class="activity-timestamp">${activity.timestamp}</span>
+                                                </div>
+                                                <div class="activity-title">${activity.content_type}: ${activity.title}</div>
+                                                <div class="activity-action">${activity.action}</div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                `;
+                            }
+                            
+                            activityList.appendChild(activityItem);
+                        });
+                        
+                        // Update the last updated time
+                        const now = new Date();
+                        document.getElementById('activity-last-updated').textContent = 
+                            'Last updated: ' + now.toLocaleTimeString();
+                        
+                        // Check if we need to load more pages
+                        if (currentPage < targetPage && data.pagination && data.pagination.has_more) {
+                            currentPage++;
+                            // Load the next page
+                            loadNextPageUntilTarget();
+                        } else {
+                            // We've reached our target page or run out of pages
+                            // Add "Show More" button if there are more pages
+                            if (data.pagination && data.pagination.has_more) {
+                                const loadMoreItem = document.createElement('li');
+                                loadMoreItem.className = 'load-more-item';
+                                loadMoreItem.innerHTML = `
+                                    <button id="load-more-activity" class="load-more-button">
+                                        Show More Activity
+                                    </button>
+                                `;
+                                activityList.appendChild(loadMoreItem);
+                                
+                                // Add event listener to the "Show More" button
+                                document.getElementById('load-more-activity').addEventListener('click', () => {
+                                    loadMoreActivity(data.pagination.page + 1);
+                                });
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading activity:', error);
+                        // Show error but continue with auto-refresh
+                        const activityList = document.getElementById('recent_activity');
+                        if (activityList.children.length === 0) {
+                            activityList.innerHTML = 
+                                '<li>Failed to load activity. Please try again later.</li>';
+                        }
+                    });
+            }
+            
+            // Start loading from page 1
+            loadNextPageUntilTarget();
+        }
+
+        // Also clear the stored page when user navigates away from the page
+        window.addEventListener('beforeunload', function() {
+            // Only clear if user is leaving the site completely, not just refreshing
+            if (performance.navigation.type !== 1) { // 1 is PAGE_RELOAD
+                localStorage.removeItem('activityPage');
+            }
+        });
+
         // Set up auto-refresh toggle
         function setupAutoRefresh() {
             const autoRefreshCheckbox = document.getElementById('auto-refresh-toggle');
@@ -867,6 +1238,19 @@
             
             // Set up auto-refresh functionality
             setupAutoRefresh();
+        });
+
+        // Update the See All Activity button to link to the full activity page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Existing DOMContentLoaded code
+            
+            // Add event listener for the See All Activity button
+            const seeAllButton = document.querySelector('.field-row button');
+            if (seeAllButton) {
+                seeAllButton.addEventListener('click', function() {
+                    window.location.href = '/activity/';  // Adjust this URL to your actual activity page
+                });
+            }
         });
     </script>
 {% endblock %}
