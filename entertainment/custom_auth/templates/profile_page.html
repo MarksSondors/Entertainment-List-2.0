@@ -83,8 +83,8 @@
                             {% if favorite_shows %}
                                 <div class="poster-row">
                                     {% for show in favorite_shows %}
-                                        <a href="{% url 'show_detail' show.id %}" class="poster-link">
-                                            <img src="{{ show.poster_url|default:'#' }}" alt="{{ show.title }}" 
+                                        <a href="{% url 'tv_show_page' show.tmdb_id %}" class="poster-link">
+                                            <img src="{{ show.poster|default:'#' }}" alt="{{ show.title }}" 
                                                  class="poster-image"
                                                  onerror="this.src='{% static 'images/tv-default.png' %}'">
                                             {% if show.user_rating %}
