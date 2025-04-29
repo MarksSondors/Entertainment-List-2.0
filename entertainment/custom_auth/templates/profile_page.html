@@ -52,7 +52,7 @@
                                         <a href="{% url 'movie_page' movie.tmdb_id %}" class="poster-link">
                                             <img src="{{ movie.poster|default:'#' }}" alt="{{ movie.title }}" 
                                                  class="poster-image"
-                                                 onerror="this.src='{% static 'images/movie-default.png' %}'">
+                                                 onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
                                             {% if movie.user_rating %}
                                             <div class="rating-badge">
                                                 {{ movie.user_rating }}
@@ -86,7 +86,7 @@
                                         <a href="{% url 'tv_show_page' show.tmdb_id %}" class="poster-link">
                                             <img src="{{ show.poster|default:'#' }}" alt="{{ show.title }}" 
                                                  class="poster-image"
-                                                 onerror="this.src='{% static 'images/tv-default.png' %}'">
+                                                 onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
                                             {% if show.user_rating %}
                                             <div class="rating-badge">
                                                 {{ show.user_rating }}

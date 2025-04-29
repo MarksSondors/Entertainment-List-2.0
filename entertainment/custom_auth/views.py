@@ -16,6 +16,8 @@ from tvshows.models import TVShow
 from datetime import date # Import date
 import random
 
+from django.views.decorators.http import require_POST
+
 # Add these imports if they're not already at the top
 from django.db.models import Count, Avg, F, Q, Case, When, IntegerField
 from django.db.models.functions import ExtractMonth, ExtractYear
@@ -213,97 +215,396 @@ def profile_page(request, username=None):
 
 @login_required
 def watchlist_page(request):
-    """Display the user's watchlist with filtering options."""
+    """Display the user's watchlist with categorized sections."""
     
-    # Get watchlist items
-    watchlist_items = request.user.get_watchlist()
+    user = request.user
+    # Get content types
+    movie_ct = ContentType.objects.get_for_model(Movie)
+    tv_ct = ContentType.objects.get_for_model(TVShow)
     
-    # Handle filters
-    media_type = request.GET.get('media_type', '')
-    genre_id = request.GET.get('genre')
-    sort_by = request.GET.get('sort_by', '-date_added')  # Default sort by date added
-    filter_title = request.GET.get('title', '')  # Get title filter parameter
+    # Get all watchlist items for the user (for initial page load)
+    watchlist_items = user.get_watchlist()
     
-    # Apply media type filter if provided
-    if media_type == 'movie':
-        watchlist_items = watchlist_items.filter(content_type=ContentType.objects.get_for_model(Movie))
-    elif media_type == 'tvshow':
-        watchlist_items = watchlist_items.filter(content_type=ContentType.objects.get_for_model(TVShow))
-    # If no media_type filter, show both movies and TV shows
+    if not watchlist_items:
+        # Handle empty watchlist case
+        return render(request, 'watchlist_page.html', {'watchlist_empty': True})
     
-    # Apply filters if provided
-    if genre_id:
-        # Filter items by genre (need to handle GenericForeignKey relationship)
-        filtered_items = []
-        for item in watchlist_items:
-            if hasattr(item.media, 'genres') and item.media.genres.filter(id=genre_id).exists():
-                filtered_items.append(item.id)
-        watchlist_items = watchlist_items.filter(id__in=filtered_items)
+    # Group items by content type for efficient media fetching
+    items_by_content_type = {}
+    for item in watchlist_items:
+        if item.content_type_id not in items_by_content_type:
+            items_by_content_type[item.content_type_id] = []
+        items_by_content_type[item.content_type_id].append(item)
     
-    # Filter by title if provided
-    if filter_title:
-        filtered_items = []
-        for item in watchlist_items:
-            if hasattr(item.media, 'title') and filter_title.lower() in item.media.title.lower():
-                filtered_items.append(item.id)
-        watchlist_items = watchlist_items.filter(id__in=filtered_items)
+    # Prefetch all media objects in batches by content type
+    media_objects = {}
+    all_media_by_type = {}  # Store media objects grouped by type
     
-    # Apply sorting
-    if sort_by == 'title':
-        # Sort by title (need custom sorting for GenericForeignKey)
-        watchlist_items = sorted(watchlist_items, key=lambda x: x.media.title)
-    elif sort_by == '-title':
-        watchlist_items = sorted(watchlist_items, key=lambda x: x.media.title, reverse=True)
-    elif sort_by == 'release_date':
-        from datetime import date
-        watchlist_items = sorted(watchlist_items, key=lambda x: getattr(x.media, 'release_date', date(1900, 1, 1)))
-    elif sort_by == '-release_date':
-        from datetime import date
-        watchlist_items = sorted(watchlist_items, key=lambda x: getattr(x.media, 'release_date', date(1900, 1, 1)), reverse=True)
-    # Default sorting by date_added is handled by the model's Meta ordering
+    for ct_id, items in items_by_content_type.items():
+        # Get the model class for this content type
+        content_type = ContentType.objects.get_for_id(ct_id)
+        model_class = content_type.model_class()
+        
+        # Fetch all media objects of this type in one query
+        object_ids = [item.object_id for item in items]
+        objects = model_class.objects.filter(id__in=object_ids)
+        
+        # Store all media objects by type for later use
+        all_media_by_type[ct_id] = objects
+        
+        # Create a lookup dictionary
+        for obj in objects:
+            media_objects[(ct_id, obj.id)] = obj
     
-    # Get only the genres that are in the watchlist items
+    # Attach prefetched media objects to items
+    for item in watchlist_items:
+        # Get the prefetched object or None if not found
+        media_obj = media_objects.get((item.content_type_id, item.object_id))
+        if media_obj:
+            # Set the prefetched object directly
+            item._prefetched_media_object = media_obj
+            # Replace the descriptor with a simple property
+            item.__dict__['media'] = media_obj
+        else:
+            # Mark missing media items to avoid queries
+            item.__dict__['media'] = None
+    
+    # Create a function to safely get media without triggering database queries
+    def get_safe_media(item):
+        """Get media object without triggering a database query."""
+        return item.__dict__.get('media')
+    
+    # Categorize items
+    continue_watching = []
+    havent_started = []
+    finished_shows = []  # Add this line
+    movies = []
+
+    for item in watchlist_items:
+        media = get_safe_media(item)
+        if item.content_type_id == movie_ct.id:
+            movies.append(item)
+        elif item.content_type_id == tv_ct.id and media:
+            # Only process items with valid media objects
+            # Check watch progress for TV shows
+            progress = user.get_watch_progress(media)
+            if progress >= 100:  # Add this condition
+                finished_shows.append(item)  # Add completed shows to finished_shows
+            elif progress > 0:
+                continue_watching.append((item, progress))
+            else:
+                havent_started.append(item)
+    
+    # Add reviews data to items
+    add_review_data_to_items(watchlist_items, user)
+    
+    # Get all genres for filter
     genre_ids = set()
-    for item in watchlist_items:
-        if hasattr(item.media, 'genres'):
-            genre_ids.update(item.media.genres.values_list('id', flat=True))
-    genres = Genre.objects.filter(id__in=genre_ids).distinct()
+    country_ids = set()
     
-    # Add other users' reviews for each watchlist item
-    current_user = request.user
-    for item in watchlist_items:
-        # Get the content type and object id for the media
-        content_type = item.content_type
-        object_id = item.object_id
+    # Get genres and countries from movies more efficiently
+    movie_objects = all_media_by_type.get(movie_ct.id, [])
+    if movie_objects:
+        # Get all genre IDs in a single query
+        movie_ids = [movie.id for movie in movie_objects]
+        movie_genres = Movie.objects.filter(id__in=movie_ids).values('genres').distinct()
+        genre_ids.update(genre.get('genres') for genre in movie_genres if genre.get('genres'))
         
-        # Get reviews for this media from other users
-        other_reviews = Review.objects.filter(
-            content_type=content_type,
-            object_id=object_id
-        ).exclude(user=current_user).select_related('user')
+        # Get all country IDs in a single query
+        movie_countries = Movie.objects.filter(id__in=movie_ids).values('countries').distinct()
+        country_ids.update(country.get('countries') for country in movie_countries if country.get('countries'))
+    
+    # Similarly for TV shows
+    tv_objects = all_media_by_type.get(tv_ct.id, [])
+    if tv_objects:
+        tv_ids = [tv.id for tv in tv_objects]
+        tv_genres = TVShow.objects.filter(id__in=tv_ids).values('genres').distinct()
+        genre_ids.update(genre.get('genres') for genre in tv_genres if genre.get('genres'))
         
-        # Create a list of reviews with username and rating
-        item.other_reviews = [
+        tv_countries = TVShow.objects.filter(id__in=tv_ids).values('countries').distinct()
+        country_ids.update(country.get('countries') for country in tv_countries if country.get('countries'))
+    
+    genres = Genre.objects.filter(id__in=genre_ids).distinct()
+    countries = Country.objects.filter(id__in=country_ids).distinct()
+    
+    # Prepare flattened data for templates to avoid GenericForeignKey lookups
+    movies_for_template = []
+    for item in movies:
+        media = get_safe_media(item)
+        if not media:
+            continue
+            
+        movies_for_template.append({
+            'id': item.id,
+            'date_added': item.date_added,
+            'content_type_model': item.content_type.model,
+            'media_id': media.id,
+            'media_title': media.title,
+            'media_poster': media.poster,
+            'media_tmdb_id': media.tmdb_id,
+            'media_release_date': getattr(media, 'release_date', None),
+            'avg_rating': getattr(item, 'avg_rating', None),
+            'rating_count': getattr(item, 'rating_count', None),
+        })
+    
+    # Do the same for continue_watching
+    continue_watching_for_template = []
+    for item, progress in continue_watching:
+        media = get_safe_media(item)
+        if not media:
+            continue
+            
+        continue_watching_for_template.append({
+            'id': item.id,
+            'progress': progress,
+            'date_added': item.date_added,
+            'content_type_model': item.content_type.model,
+            'media_id': media.id,
+            'media_title': media.title,
+            'media_poster': media.poster,
+            'media_tmdb_id': media.tmdb_id,
+            'media_first_air_date': getattr(media, 'first_air_date', None),
+            'avg_rating': getattr(item, 'avg_rating', None),
+            'rating_count': getattr(item, 'rating_count', None),
+        })
+    
+    # Similarly for havent_started
+    havent_started_for_template = []
+    for item in havent_started:
+        media = get_safe_media(item)
+        if not media:
+            continue
+            
+        havent_started_for_template.append({
+            'id': item.id,
+            'date_added': item.date_added,
+            'content_type_model': item.content_type.model,
+            'media_id': media.id,
+            'media_title': media.title,
+            'media_poster': media.poster,
+            'media_tmdb_id': media.tmdb_id,
+            'media_release_date': getattr(media, 'release_date', None),
+            'avg_rating': getattr(item, 'avg_rating', None),
+            'rating_count': getattr(item, 'rating_count', None),
+        })
+    
+    # Flatten finished shows data
+    finished_shows_for_template = []
+    for item in finished_shows:
+        media = get_safe_media(item)
+        if not media:
+            continue
+            
+        finished_shows_for_template.append({
+            'id': item.id,
+            'date_added': item.date_added,
+            'content_type_model': item.content_type.model,
+            'media_id': media.id,
+            'media_title': media.title,
+            'media_poster': media.poster,
+            'media_tmdb_id': media.tmdb_id,
+            'media_first_air_date': getattr(media, 'first_air_date', None),
+            'avg_rating': getattr(item, 'avg_rating', None),
+            'rating_count': getattr(item, 'rating_count', None),
+        })
+    
+    # Update your context dictionary to include finished_shows
+    context = {
+        'continue_watching': continue_watching_for_template,
+        'havent_started': havent_started_for_template,
+        'finished_shows': finished_shows_for_template,  # Add this line
+        'movies': movies_for_template,
+        'genres': genres,
+        'countries': countries,
+    }
+    
+    return render(request, 'watchlist_page.html', context)
+
+def add_review_data_to_items(items, current_user):
+    """Helper function to add review data to watchlist items."""
+    if not items:
+        return
+        
+    # Group items by content type and object ID
+    grouped_items = {}
+    for item in items:
+        key = (item.content_type_id, item.object_id)
+        if key not in grouped_items:
+            grouped_items[key] = []
+        grouped_items[key].append(item)
+    
+    # Prefetch content types in one query
+    content_type_ids = {item.content_type_id for item in items}
+    content_types = {ct.id: ct for ct in ContentType.objects.filter(id__in=content_type_ids)}
+    
+    # Build a combined query for all reviews at once
+    from django.db.models import Q
+    review_query = Q()
+    for ct_id, obj_id in grouped_items.keys():
+        review_query |= Q(content_type_id=ct_id, object_id=obj_id)
+    
+    # Fetch all reviews in a SINGLE query
+    all_reviews = Review.objects.filter(review_query).exclude(user=current_user).select_related('user')
+    
+    # Group reviews by content type and object ID for fast lookup
+    grouped_reviews = {}
+    for review in all_reviews:
+        key = (review.content_type_id, review.object_id)
+        if key not in grouped_reviews:
+            grouped_reviews[key] = []
+        grouped_reviews[key].append(review)
+    
+    # Process each item group
+    for (ct_id, obj_id), item_group in grouped_items.items():
+        # Get reviews for this specific media item from our cache
+        other_reviews = grouped_reviews.get((ct_id, obj_id), [])
+        
+        # Create review data
+        review_data = [
             {'username': review.user.username, 'rating': review.rating}
             for review in other_reviews
         ]
         
-        # Add average rating and count
+        # Calculate statistics
+        avg_rating = None
+        rating_count = len(other_reviews)
         if other_reviews:
-            item.avg_rating = round(sum(review.rating for review in other_reviews) / len(other_reviews), 1)
-            item.rating_count = len(other_reviews)
+            avg_rating = round(sum(review.rating for review in other_reviews) / rating_count, 1)
+        
+        # Apply to all related items
+        for item in item_group:
+            item.other_reviews = review_data
+            item.avg_rating = avg_rating
+            item.rating_count = rating_count
+
+@login_required
+def api_watchlist(request):
+    """API endpoint for filtering watchlist items."""
     
-    context = {
-        'watchlist_items': watchlist_items,
-        'genres': genres,
-        'current_media_type': media_type,
-        'current_genre': genre_id,
-        'current_sort': sort_by,
-        'filter_title': filter_title,  # Add title filter to context
-        'view_type': request.GET.get('view_type', 'grid')  # Default to grid view
+    user = request.user
+    search_query = request.GET.get('search', '')
+    genre_id = request.GET.get('genre', '')
+    country_id = request.GET.get('country', '')
+    sort_by = request.GET.get('sort_by', 'date_added')
+    
+    # Get user's watchlist items
+    watchlist_items = user.get_watchlist()
+    
+    # Apply search filter if provided
+    if search_query:
+        filtered_items = []
+        for item in watchlist_items:
+            if search_query.lower() in item.media.title.lower():
+                filtered_items.append(item)
+        watchlist_items = filtered_items
+    
+    # Apply genre filter if provided
+    if genre_id:
+        filtered_items = []
+        for item in watchlist_items:
+            if hasattr(item.media, 'genres') and item.media.genres.filter(id=genre_id).exists():
+                filtered_items.append(item)
+        watchlist_items = filtered_items
+    
+    # Apply country filter if provided
+    if country_id:
+        filtered_items = []
+        for item in watchlist_items:
+            if hasattr(item.media, 'countries') and item.media.countries.filter(id=country_id).exists():
+                filtered_items.append(item)
+        watchlist_items = filtered_items
+    
+    # Categorize items
+    continue_watching = []
+    havent_started = []
+    finished_shows = []
+    movies = []
+    
+    movie_ct = ContentType.objects.get_for_model(Movie)
+    tv_ct = ContentType.objects.get_for_model(TVShow)
+    
+    for item in watchlist_items:
+        if item.content_type_id == movie_ct.id:
+            movies.append(serialize_watchlist_item(item))
+        elif item.content_type_id == tv_ct.id:
+            # Check watch progress for TV shows
+            progress = user.get_watch_progress(item.media)
+            if progress >= 100:
+                # Completed shows
+                finished_shows.append(serialize_watchlist_item(item))
+            elif progress > 0:
+                # In-progress shows
+                continue_watching.append({'item': serialize_watchlist_item(item), 'progress': progress})
+            else:
+                # Not started shows
+                havent_started.append(serialize_watchlist_item(item))
+    
+    return JsonResponse({
+        'continue_watching': continue_watching,
+        'havent_started': havent_started,
+        'finished_shows': finished_shows,
+        'movies': movies,
+    })
+
+def serialize_watchlist_item(item):
+    """Helper function to serialize a watchlist item for JSON response."""
+    result = {
+        'id': item.id,
+        'content_type_model': item.content_type.model,  # Flattened
+        'media_id': item.media.id,                      # Flattened
+        'media_title': item.media.title,                # Flattened
+        'media_poster': item.media.poster,              # Flattened
+        'media_tmdb_id': item.media.tmdb_id,            # Flattened
+        'date_added': item.date_added.isoformat(),
     }
     
-    return render(request, 'watchlist_page.html', context)
+    # Add release date if available
+    if hasattr(item.media, 'release_date') and item.media.release_date:
+        result['media_release_date'] = item.media.release_date.isoformat()  # Flattened
+    elif hasattr(item.media, 'first_air_date') and item.media.first_air_date:
+        result['media_first_air_date'] = item.media.first_air_date.isoformat()  # Flattened
+    
+    # Add rating if available
+    if hasattr(item, 'avg_rating'):
+        result['avg_rating'] = item.avg_rating
+        result['rating_count'] = item.rating_count
+    
+    return result
+
+@require_POST
+@login_required
+def remove_from_watchlist(request):
+    """API endpoint to remove an item from watchlist."""
+    try:
+        data = json.loads(request.body)
+        item_id = data.get('item_id')
+        
+        if not item_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Item ID is required'
+            }, status=400)
+        
+        # Find and delete the watchlist item
+        try:
+            watchlist_item = Watchlist.objects.get(id=item_id, user=request.user)
+            watchlist_item.delete()
+            return JsonResponse({
+                'success': True,
+                'message': 'Item removed from watchlist'
+            })
+            
+        except Watchlist.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Item not found in your watchlist'
+            }, status=404)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON in request body'
+        }, status=400)
 
 @login_required
 def people_detail(request, person_id):
