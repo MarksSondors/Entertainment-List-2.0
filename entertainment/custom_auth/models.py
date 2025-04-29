@@ -22,8 +22,8 @@ class CustomUser(AbstractUser):
         return self.username
         
     def get_watchlist(self):
-        """Get all items in the user's watchlist."""
-        return self.watchlist_items.all()
+        """Get all watchlist items for the user with related content types."""
+        return Watchlist.objects.filter(user=self).select_related('content_type')
     
     def get_reviews(self):
         """Get all reviews by the user."""
@@ -43,7 +43,10 @@ class CustomUser(AbstractUser):
 
     def get_watch_progress(self, tv_show):
         """Get the watch progress for a TV show (percentage of episodes watched)."""
-        total_episodes = Episode.objects.filter(season__show=tv_show).count()
+        from django.apps import apps
+        Episode = apps.get_model('tvshows', 'Episode')
+        
+        total_episodes = Episode.objects.filter(season__show=tv_show).exclude(season__season_number=0).count()
         if total_episodes == 0:
             return 0
         watched_episodes = self.watched_episodes.filter(episode__season__show=tv_show).count()

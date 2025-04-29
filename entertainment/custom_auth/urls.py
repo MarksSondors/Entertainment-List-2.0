@@ -25,6 +25,8 @@ urlpatterns = [
 
     # watchlist
     path('watchlist/', views.watchlist_page, name='watchlist_page'),
+    path('api/watchlist/', views.api_watchlist, name='api_watchlist'),
+    path('api/watchlist/remove/', views.remove_from_watchlist, name='remove_from_watchlist'),
 
     # People
     path('people/<int:person_id>/', views.people_detail, name='person_detail'),
