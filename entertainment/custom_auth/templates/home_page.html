@@ -209,7 +209,7 @@
                         </ul>
                     </div>
                     <div class="field-row" style="justify-content: flex-end; margin-top: 8px;">
-                        <button>See All Activity</button>
+                        <button id="see-all-activity">See All Activity</button>
                     </div>
                 </div>
                 <div class="status-bar">
@@ -1245,7 +1245,7 @@
             // Existing DOMContentLoaded code
             
             // Add event listener for the See All Activity button
-            const seeAllButton = document.querySelector('.field-row button');
+            const seeAllButton = document.getElementById('see-all-activity');
             if (seeAllButton) {
                 seeAllButton.addEventListener('click', function() {
                     window.location.href = '/activity/';  // Adjust this URL to your actual activity page

@@ -24,6 +24,7 @@ import json
 from datetime import timedelta, datetime
 from django.contrib.contenttypes.models import ContentType
 from movies.models import Movie, Genre
+from tvshows.models import TVShow
 from custom_auth.models import Review
 
 def login_page(request):
@@ -149,14 +150,54 @@ def profile_page(request, username=None):
     
     # Create a list of movies with their review scores
     favorite_movies = []
-    for review in movie_reviews[:11]:  # Limit to top 5 rated movies
-        movie = Movie.objects.filter(id=review.object_id).first()
+    movie_ids = [review.object_id for review in movie_reviews[:11]]
+    movies_dict = {movie.id: movie for movie in Movie.objects.filter(id__in=movie_ids)}
+    
+    for review in movie_reviews[:11]:  # Limit to top 11 rated movies
+        movie = movies_dict.get(review.object_id)
         if movie:
             movie.user_rating = review.rating  # Add the user's rating to the movie object
             favorite_movies.append(movie)
     
     # Get user's favorite TV shows
-    favorite_shows = []  # Replace with: TVShow.objects.filter(user=user)
+    tv_show_content_type = ContentType.objects.get_for_model(TVShow)
+    tv_show_reviews = Review.objects.filter(
+        user=user,
+        content_type=tv_show_content_type
+    ).select_related('content_type', 'season', 'episode_subgroup').order_by('-rating')
+    
+    # Prefetch all TV shows in a single query
+    tv_show_ids = set(review.object_id for review in tv_show_reviews)
+    tv_shows_dict = {tv.id: tv for tv in TVShow.objects.filter(id__in=tv_show_ids)}
+    
+    # Group reviews by TV show to handle multiple reviews per show
+    tv_show_ratings = {}
+    for review in tv_show_reviews:
+        tv_show = tv_shows_dict.get(review.object_id)
+        if not tv_show:
+            continue
+            
+        if tv_show.id not in tv_show_ratings:
+            tv_show_ratings[tv_show.id] = {
+                'tv_show': tv_show,
+                'reviews': [],
+                'total_rating': 0,
+                'count': 0
+            }
+        
+        tv_show_ratings[tv_show.id]['reviews'].append(review)
+        tv_show_ratings[tv_show.id]['total_rating'] += review.rating
+        tv_show_ratings[tv_show.id]['count'] += 1
+    
+    # Create a list of favorite TV shows with average ratings
+    favorite_shows = []
+    for show_data in sorted(tv_show_ratings.values(), 
+                           key=lambda x: x['total_rating']/x['count'] if x['count'] > 0 else 0, 
+                           reverse=True)[:10]:
+        show = show_data['tv_show']
+        show.user_rating = round(show_data['total_rating'] / show_data['count'], 1) if show_data['count'] > 0 else 0
+        show.review_count = show_data['count']  # Add the count of reviews for this show
+        favorite_shows.append(show)
     
     # Get user's watchlist
     watchlist_items = []  # Replace with: WatchlistItem.objects.filter(user=user)
