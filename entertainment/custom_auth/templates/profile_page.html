@@ -117,11 +117,22 @@
                             {% if watchlist_items %}
                                 <div class="poster-row">
                                     {% for item in watchlist_items %}
-                                        <a href="{% url 'media_detail' item.id item.media_type|lower %}" class="poster-link">
+                                        {% if item.media_type == 'Movie' %}
+                                            <a href="{% url 'movie_page' item.tmdb_id %}" class="poster-link">
+                                        {% elif item.media_type == 'TVShow' %}
+                                            <a href="{% url 'tv_show_page' item.tmdb_id %}" class="poster-link">
+                                        {% else %}
+                                            <a href="#" class="poster-link">
+                                        {% endif %}
                                             <img src="{{ item.poster_url|default:'#' }}" alt="{{ item.title }}" 
-                                                 class="poster-image"
-                                                 onerror="this.src='{% static 'images/media-default.png' %}'">
-                                            <span class="poster-title">{{ item.title }}</span>
+                                                class="poster-image"
+                                                onerror="this.src='{% static 'images/media-default.png' %}'">
+                                            {% if item.avg_rating %}
+                                                <div class="rating-badge avg-rating-badge">
+                                                    {{ item.avg_rating }}
+                                                </div>
+                                            {% endif %}
+                                            <span class="poster-title" title="{{ item.title }}">{{ item.title|truncatechars:15 }}</span>
                                         </a>
                                     {% endfor %}
                                 </div>
@@ -189,6 +200,10 @@
         border-radius: 3px;
         font-weight: bold;
         box-shadow: 0 0 3px rgba(0,0,0,0.5);
+    }
+    .avg-rating-badge {
+        background-color: #1E90FF;
+        color: white;
     }
 </style>
 
