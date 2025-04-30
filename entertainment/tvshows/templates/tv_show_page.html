@@ -737,7 +737,8 @@ body {
                 "{{ season.id }}": {
                     "rating": {{ season.review_rating }},
                     "review_text": "{{ season.review_text|escapejs }}",
-                    "review_id": {{ season.review_id }}
+                    "review_id": {{ season.review_id }},
+                    "user_id": {{ season.reviewer_id }}  // Add the user ID who created the review
                 }{% if not forloop.last %},{% endif %}
             {% endif %}
         {% endfor %}

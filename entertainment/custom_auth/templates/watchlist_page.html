@@ -68,6 +68,10 @@
       {% endif %}
     </a>
     
+    {% if item.avg_rating %}
+    <div class="avg-rating-badge">{{ item.avg_rating }} ({{ item.rating_count }})</div>
+    {% endif %}
+    
     <div class="progress-badge">{{ item.progress|floatformat:0 }}%</div>
     
     <div class="card-body p-2">
