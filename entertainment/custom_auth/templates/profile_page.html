@@ -5,154 +5,193 @@
 
 {% block content %}
 <div class="container py-4">
-    <div class="window">
-        <div class="title-bar">
-            <div class="title-bar-text">MSN Messenger - {{ user.username }}</div>
-            <div class="title-bar-controls">
-                <button aria-label="Minimize"></button>
-                <button aria-label="Maximize"></button>
-                <button aria-label="Close"></button>
+    <div class="profile-layout">
+        <!-- User Selection Sidebar -->
+        <div class="sidebar">
+            <div class="window">
+                <div class="title-bar">
+                    <div class="title-bar-text">User Directory</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body">
+                    <div class="field-row" style="margin-bottom: 10px;">
+                        <input type="text" id="userSearch" placeholder="Search users..." style="width: 100%;">
+                    </div>
+                    <div class="sunken-panel" style="height: 300px; overflow-y: auto;">
+                        <ul class="user-list">
+                            {% for list_user in all_users %}
+                            <li class="user-list-item {% if list_user.username == current_user.username %}current-user{% endif %} {% if list_user.username == user.username %}selected-user{% endif %}">
+                                <a href="{% url 'profile_with_username' username=list_user.username %}">
+                                    <img src="{% static 'images/default-avatar.png' %}" alt="User Avatar" class="user-avatar">
+                                    <span>{{ list_user.username }}</span>
+                                    {% if list_user.username == current_user.username %}
+                                    <span class="user-status">(You)</span>
+                                    {% endif %}
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="window-body">
-            <!-- User Profile Section -->
-            <div class="field-row" style="align-items: center; margin-bottom: 15px; padding: 10px; background: #f0f0f0; border: 1px inset;">
-                <div style="margin-right: 15px;">
-                    {% if user.profile.profile_picture %}
-                        <img src="{{ user.profile.profile_picture.url }}" alt="Profile Picture" style="width: 80px; height: 80px; border: 2px inset #c0c0c0;">
-                    {% else %}
-                        <img src="{% static 'images/default-avatar.png' %}" alt="Default Avatar" style="width: 80px; height: 80px; border: 2px inset #c0c0c0;">
-                    {% endif %}
-                </div>
-                <div>
-                    <div style="font-weight: bold; color: #0000AA; font-size: 18px;">{{ user.username }}</div>
-                    <div style="color: #008800; font-style: italic;">Online</div>
-                    <div style="color: #555; margin-top: 5px;">
-                        "{{ user.profile.status_message|default:"Hey there! I'm using Entertainment List" }}"
+        
+        <!-- Main Profile Content -->
+        <div class="main-content">
+            <div class="window">
+                <div class="title-bar">
+                    <div class="title-bar-text">MSN Messenger - {{ user.username }}</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
                     </div>
                 </div>
-            </div>
-
-            <!-- Section Navigation - No Longer Tabs -->
-            <div class="field-row" style="margin-bottom: 10px;">
-                <h4>Entertainment Collections</h4>
-            </div>
-
-            <!-- Favorite Movies Section -->
-            <div id="favorites-movies" class="content-section">
-                <div class="window" style="width: 100%;">
-                    <div class="title-bar">
-                        <div class="title-bar-text">Favorite Movies</div>
-                    </div>
-                    <div class="window-body">
-                        <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
-                            {% if favorite_movies %}
-                                <div class="poster-row">
-                                    {% for movie in favorite_movies %}
-                                        <a href="{% url 'movie_page' movie.tmdb_id %}" class="poster-link">
-                                            <img src="{{ movie.poster|default:'#' }}" alt="{{ movie.title }}" 
-                                                 class="poster-image"
-                                                 onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
-                                            {% if movie.user_rating %}
-                                            <div class="rating-badge">
-                                                {{ movie.user_rating }}
-                                            </div>
-                                            {% endif %}
-                                            <span class="poster-title" title="{{ movie.title }}">{{ movie.title|truncatechars:15 }}</span>
-                                        </a>
-                                    {% endfor %}
-                                </div>
+                <div class="window-body">
+                    <!-- User Profile Section -->
+                    <div class="field-row" style="align-items: center; margin-bottom: 15px; padding: 10px; background: #f0f0f0; border: 1px inset;">
+                        <div style="margin-right: 15px;">
+                            {% if user.profile.profile_picture %}
+                                <img src="{{ user.profile.profile_picture }}" alt="Profile Picture" style="width: 80px; height: 80px; border: 2px inset #c0c0c0;">
                             {% else %}
-                                <div class="field-row" style="justify-content: center;">
-                                    <p>No favorite movies added yet.</p>
-                                </div>
+                                <img src="{% static 'images/default-avatar.png' %}" alt="Default Avatar" style="width: 80px; height: 80px; border: 2px inset #c0c0c0;">
                             {% endif %}
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Favorite TV Shows Section -->
-            <div id="favorites-shows" class="content-section">
-                <div class="window" style="width: 100%; margin-top: 20px;">
-                    <div class="title-bar">
-                        <div class="title-bar-text">Favorite TV Shows</div>
-                    </div>
-                    <div class="window-body">
-                        <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
-                            {% if favorite_shows %}
-                                <div class="poster-row">
-                                    {% for show in favorite_shows %}
-                                        <a href="{% url 'tv_show_page' show.tmdb_id %}" class="poster-link">
-                                            <img src="{{ show.poster|default:'#' }}" alt="{{ show.title }}" 
-                                                 class="poster-image"
-                                                 onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
-                                            {% if show.user_rating %}
-                                            <div class="rating-badge">
-                                                {{ show.user_rating }}
-                                            </div>
-                                            {% endif %}
-                                            <span class="poster-title">{{ show.title }}</span>
-                                        </a>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <div class="field-row" style="justify-content: center;">
-                                    <p>No favorite TV shows added yet.</p>
-                                </div>
-                            {% endif %}
+                        <div>
+                            <div style="font-weight: bold; color: #0000AA; font-size: 18px;">{{ user.username }}</div>
+                            <div style="color: #008800; font-style: italic;">Online</div>
+                            <div style="color: #555; margin-top: 5px;">
+                                "{{ user.profile.status_message|default:"Hey there! I'm using Entertainment List" }}"
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Watchlist Section -->
-            <div id="watchlist" class="content-section">
-                <div class="window" style="width: 100%; margin-top: 20px;">
-                    <div class="title-bar">
-                        <div class="title-bar-text">Watchlist</div>
+                    <!-- Section Navigation - No Longer Tabs -->
+                    <div class="field-row" style="margin-bottom: 10px;">
+                        <h4>Entertainment Collections</h4>
                     </div>
-                    <div class="window-body">
-                        <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
-                            {% if watchlist_items %}
-                                <div class="poster-row">
-                                    {% for item in watchlist_items %}
-                                        {% if item.media_type == 'Movie' %}
-                                            <a href="{% url 'movie_page' item.tmdb_id %}" class="poster-link">
-                                        {% elif item.media_type == 'TVShow' %}
-                                            <a href="{% url 'tv_show_page' item.tmdb_id %}" class="poster-link">
-                                        {% else %}
-                                            <a href="#" class="poster-link">
-                                        {% endif %}
-                                            <img src="{{ item.poster_url|default:'#' }}" alt="{{ item.title }}" 
-                                                class="poster-image"
-                                                onerror="this.src='{% static 'images/media-default.png' %}'">
-                                            {% if item.avg_rating %}
-                                                <div class="rating-badge avg-rating-badge">
-                                                    {{ item.avg_rating }}
-                                                </div>
-                                            {% endif %}
-                                            <span class="poster-title" title="{{ item.title }}">{{ item.title|truncatechars:15 }}</span>
-                                        </a>
-                                    {% endfor %}
+
+                    <!-- Favorite Movies Section -->
+                    <div id="favorites-movies" class="content-section">
+                        <div class="window" style="width: 100%;">
+                            <div class="title-bar">
+                                <div class="title-bar-text">Favorite Movies</div>
+                            </div>
+                            <div class="window-body">
+                                <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
+                                    {% if favorite_movies %}
+                                        <div class="poster-row">
+                                            {% for movie in favorite_movies %}
+                                                <a href="{% url 'movie_page' movie.tmdb_id %}" class="poster-link">
+                                                    <img src="{{ movie.poster|default:'#' }}" alt="{{ movie.title }}" 
+                                                         class="poster-image"
+                                                         onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
+                                                    {% if movie.user_rating %}
+                                                    <div class="rating-badge">
+                                                        {{ movie.user_rating }}
+                                                    </div>
+                                                    {% endif %}
+                                                    <span class="poster-title" title="{{ movie.title }}">{{ movie.title|truncatechars:15 }}</span>
+                                                </a>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="field-row" style="justify-content: center;">
+                                            <p>No favorite movies added yet.</p>
+                                        </div>
+                                    {% endif %}
                                 </div>
-                            {% else %}
-                                <div class="field-row" style="justify-content: center;">
-                                    <p>No items in watchlist yet.</p>
-                                </div>
-                            {% endif %}
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Bottom Controls -->
-            <div class="field-row mt-3" style="justify-content: space-between;">
-                <div>
-                    <span>{{ user.username }}'s profile</span>
-                </div>
-                <div>
-                    <button class="btn" onclick="window.history.back()">Back</button>
+                    <!-- Favorite TV Shows Section -->
+                    <div id="favorites-shows" class="content-section">
+                        <div class="window" style="width: 100%; margin-top: 20px;">
+                            <div class="title-bar">
+                                <div class="title-bar-text">Favorite TV Shows</div>
+                            </div>
+                            <div class="window-body">
+                                <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
+                                    {% if favorite_shows %}
+                                        <div class="poster-row">
+                                            {% for show in favorite_shows %}
+                                                <a href="{% url 'tv_show_page' show.tmdb_id %}" class="poster-link">
+                                                    <img src="{{ show.poster|default:'#' }}" alt="{{ show.title }}" 
+                                                         class="poster-image"
+                                                         onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
+                                                    {% if show.user_rating %}
+                                                    <div class="rating-badge">
+                                                        {{ show.user_rating }}
+                                                    </div>
+                                                    {% endif %}
+                                                    <span class="poster-title">{{ show.title }}</span>
+                                                </a>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="field-row" style="justify-content: center;">
+                                            <p>No favorite TV shows added yet.</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Watchlist Section -->
+                    <div id="watchlist" class="content-section">
+                        <div class="window" style="width: 100%; margin-top: 20px;">
+                            <div class="title-bar">
+                                <div class="title-bar-text">Watchlist</div>
+                            </div>
+                            <div class="window-body">
+                                <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
+                                    {% if watchlist_items %}
+                                        <div class="poster-row">
+                                            {% for item in watchlist_items %}
+                                                {% if item.media_type == 'Movie' %}
+                                                    <a href="{% url 'movie_page' item.tmdb_id %}" class="poster-link">
+                                                {% elif item.media_type == 'TVShow' %}
+                                                    <a href="{% url 'tv_show_page' item.tmdb_id %}" class="poster-link">
+                                                {% else %}
+                                                    <a href="#" class="poster-link">
+                                                {% endif %}
+                                                    <img src="{{ item.poster_url|default:'#' }}" alt="{{ item.title }}" 
+                                                        class="poster-image"
+                                                        onerror="this.src='{% static 'images/media-default.png' %}'">
+                                                    {% if item.avg_rating %}
+                                                        <div class="rating-badge avg-rating-badge">
+                                                            {{ item.avg_rating }}
+                                                        </div>
+                                                    {% endif %}
+                                                    <span class="poster-title" title="{{ item.title }}">{{ item.title|truncatechars:15 }}</span>
+                                                </a>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="field-row" style="justify-content: center;">
+                                            <p>No items in watchlist yet.</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Controls -->
+                    <div class="field-row mt-3" style="justify-content: space-between;">
+                        <div>
+                            <span>{{ user.username }}'s profile</span>
+                        </div>
+                        <div>
+                            <button class="btn" onclick="window.history.back()">Back</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -160,6 +199,64 @@
 </div>
 
 <style>
+    /* Layout styles */
+    .profile-layout {
+        display: flex;
+        gap: 20px;
+    }
+    
+    .sidebar {
+        flex: 0 0 250px;
+    }
+    
+    .main-content {
+        flex: 1;
+    }
+    
+    /* User list styles */
+    .user-list {
+        list-style-type: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .user-list-item {
+        padding: 5px;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .user-list-item a {
+        display: flex;
+        align-items: center;
+        text-decoration: none;
+        color: inherit;
+    }
+    
+    .user-list-item:hover {
+        background-color: #ddf;
+    }
+    
+    .user-avatar {
+        width: 24px;
+        height: 24px;
+        margin-right: 8px;
+    }
+    
+    .user-status {
+        font-size: 12px;
+        color: #666;
+        margin-left: 5px;
+    }
+    
+    .selected-user {
+        background-color: #cdf;
+    }
+    
+    .current-user {
+        font-weight: bold;
+    }
+    
+    /* Keep your existing styles */
     .active-tab {
         background-color: #c0c0c0;
         border-bottom: 1px solid #c0c0c0;
@@ -208,6 +305,20 @@
 </style>
 
 <script>
+    // Add search functionality for users
+    document.getElementById('userSearch').addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        document.querySelectorAll('.user-list-item').forEach(item => {
+            const username = item.querySelector('span').textContent.toLowerCase();
+            if (username.includes(searchTerm)) {
+                item.style.display = '';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    });
+    
+    // Your existing script
     function showTab(tabId) {
         // Hide all tab contents
         document.querySelectorAll('.tab-content').forEach(tab => {

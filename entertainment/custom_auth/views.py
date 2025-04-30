@@ -138,9 +138,12 @@ def profile_page(request, username=None):
     Otherwise, show the logged-in user's profile.
     """
     if username:
-        user = get_object_or_404(User, username=username)
+        user = get_object_or_404(CustomUser, username=username)
     else:
         user = request.user
+    
+    # Get all users for the sidebar (limit to a reasonable number)
+    all_users = CustomUser.objects.all().order_by('username')[:50]
     
     # Get user's favorite movies by finding movies they've reviewed
     # and sorting by rating (highest first)
@@ -230,6 +233,8 @@ def profile_page(request, username=None):
         'favorite_movies': favorite_movies,
         'favorite_shows': favorite_shows,
         'watchlist_items': watchlist_for_template,
+        'all_users': all_users,  # Add all users to context
+        'current_user': request.user,  # Add current user for highlighting
     }
     
     return render(request, 'profile_page.html', context)
