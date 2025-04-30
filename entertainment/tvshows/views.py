@@ -382,15 +382,17 @@ def tv_show_page(request, show_id):
     combined_average_rating = sum(all_user_ratings) / len(all_user_ratings) if all_user_ratings else None
 
     # Get the most recent review for each season in one query
-    latest_reviews = Review.objects.filter(
-        season=OuterRef('pk')
-    ).order_by('-date_added')
-
-    # Annotate seasons with review data
+    user_reviews = Review.objects.filter(
+    season=OuterRef('pk'),
+    user=request.user
+    )
+    
+    # Annotate seasons with the user's review data
     seasons = tv_show_db.seasons.all().annotate(
-        review_id=Subquery(latest_reviews.values('id')[:1]),
-        review_rating=Subquery(latest_reviews.values('rating')[:1]),
-        review_text=Subquery(latest_reviews.values('review_text')[:1])
+        review_id=Subquery(user_reviews.values('id')[:1]),
+        review_rating=Subquery(user_reviews.values('rating')[:1]),
+        review_text=Subquery(user_reviews.values('review_text')[:1]),
+        reviewer_id=Subquery(user_reviews.values('user_id')[:1])
     )
 
     # Add to context (replace tv_show.seasons with this)

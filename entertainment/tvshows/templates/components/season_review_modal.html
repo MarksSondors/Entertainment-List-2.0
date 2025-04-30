@@ -52,9 +52,14 @@
 <script>
     // Season review modal functions
     function openSeasonReviewModal(seasonId, seasonName) {
-        // Get existing rating if available
-        const existingRating = seasonReviews[seasonId] ? seasonReviews[seasonId].rating : 5;
-        const existingReviewText = seasonReviews[seasonId] ? seasonReviews[seasonId].review_text : '';
+        // Check if there's an existing review AND it belongs to current user
+        const currentUserId = {{ user.id }};
+        const existingRating = seasonReviews[seasonId] && seasonReviews[seasonId].user_id == currentUserId 
+            ? seasonReviews[seasonId].rating 
+            : 5;
+        const existingReviewText = seasonReviews[seasonId] && seasonReviews[seasonId].user_id == currentUserId 
+            ? seasonReviews[seasonId].review_text 
+            : '';
         
         // Set values in the form
         document.getElementById('seasonId').value = seasonId;
@@ -128,8 +133,9 @@
                 }
                 seasonReviews[seasonId].rating = parseFloat(rating);
                 seasonReviews[seasonId].review_text = reviewText;
+                seasonReviews[seasonId].user_id = {{ user.id }};
                 
-                // Update the review button text to "Edit Review"
+                // Update the review button text to "Edit Review" ONLY if it's the current user's review
                 const reviewButton = document.getElementById(`review-button-${seasonId}`);
                 if (reviewButton) {
                     reviewButton.textContent = 'Edit Review';
