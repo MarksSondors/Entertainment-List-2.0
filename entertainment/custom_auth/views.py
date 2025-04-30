@@ -195,20 +195,41 @@ def profile_page(request, username=None):
     favorite_shows = []
     for show_data in sorted(tv_show_ratings.values(), 
                            key=lambda x: x['total_rating']/x['count'] if x['count'] > 0 else 0, 
-                           reverse=True)[:10]:
+                           reverse=True)[:11]:
         show = show_data['tv_show']
         show.user_rating = round(show_data['total_rating'] / show_data['count'], 1) if show_data['count'] > 0 else 0
         show.review_count = show_data['count']  # Add the count of reviews for this show
         favorite_shows.append(show)
     
     # Get user's watchlist
-    watchlist_items = []  # Replace with: WatchlistItem.objects.filter(user=user)
+    watchlist_items = user.get_watchlist()[:11]  # Limit to top 10 items
+    
+    # Prepare watchlist items for template display
+    watchlist_for_template = []
+    if watchlist_items:
+        # Add reviews data to items
+        add_review_data_to_items(watchlist_items, user)
+        
+        # Process items for template
+        for item in watchlist_items:
+            media = item.media  # This will use the GenericForeignKey
+            if media:
+                watchlist_for_template.append({
+                    'id': item.id,
+                    'title': media.title,
+                    'poster_url': media.poster,
+                    'media_type': item.content_type.model,
+                    'avg_rating': getattr(item, 'avg_rating', None),
+                    'rating_count': getattr(item, 'rating_count', None),
+                    'tmdb_id': media.tmdb_id,  # Add tmdb_id for URL construction
+                    'object_id': media.id      # Add the actual media object ID
+                })
     
     context = {
         'user': user,
         'favorite_movies': favorite_movies,
         'favorite_shows': favorite_shows,
-        'watchlist_items': watchlist_items,
+        'watchlist_items': watchlist_for_template,
     }
     
     return render(request, 'profile_page.html', context)
