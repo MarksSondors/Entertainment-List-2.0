@@ -161,6 +161,9 @@ def update_single_movie(movie_id):
             async_task(update_single_collection, collection.id)
             return f"Updated movie {movie.title} with {len(updates)} changes: {', '.join([f'{k}={v}' for k, v in updates.items()])}"
         else:
+            # Even when no content changes, update the date_updated field
+            # This ensures rotation in the update_random_movies function
+            movie.save(update_fields=['date_updated'])
             return f"No updates needed for movie {movie.title}"
             
     except Movie.DoesNotExist:

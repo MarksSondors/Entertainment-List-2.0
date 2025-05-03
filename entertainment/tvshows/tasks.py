@@ -82,7 +82,7 @@ def update_ongoing_tvshows():
 def update_random_tvshows():
     """Update information for 10 oldest updated TV shows in the database."""
     # Get 10 TV shows with the oldest updated dates
-    tvshows = TVShow.objects.order_by('date_updated')[:10]
+    tvshows = TVShow.objects.order_by('date_updated')[:8]
     
     # Log how many shows will be updated
     logger.info(f"Updating {len(tvshows)} TV shows with oldest update dates")
@@ -186,6 +186,8 @@ def update_single_tvshow(tvshow_id):
             return f"Updated TV show {tvshow.title} with {len(updates)} changes: {', '.join([f'{k}={v}' for k, v in updates.items()])}"
         else:
             # Even if no basic show details changed, we should still check for new episodes and episode groups
+            # Update the date_updated field to ensure rotation in the update queue
+            tvshow.save(update_fields=['date_updated'])
             async_task(update_tvshow_seasons, tvshow.id)
             if tvshow.is_anime:
                 async_task(update_episode_groups, tvshow.id)
