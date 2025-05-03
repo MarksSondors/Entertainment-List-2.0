@@ -302,6 +302,79 @@
         background-color: #1E90FF;
         color: white;
     }
+    
+    /* Enhanced Mobile Responsive Styles */
+    @media (max-width: 768px) {
+        .profile-layout {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .sidebar {
+            flex: none;
+            width: 100%;
+        }
+        
+        .main-content {
+            flex: 1;
+            width: 100%;
+        }
+        
+        /* Improve user profile section on mobile */
+        .field-row[style*="align-items: center"] {
+            flex-direction: column;
+            align-items: center !important;
+            text-align: center;
+        }
+        
+        .field-row[style*="align-items: center"] > div:first-child {
+            margin-right: 0;
+            margin-bottom: 15px;
+        }
+        
+        /* Adjust content padding for mobile */
+        .window-body {
+            padding: 6px;
+        }
+        
+        /* Adjust poster sizes for better mobile viewing */
+        .poster-link {
+            width: calc(50% - 10px);  /* Two posters per row on phones */
+        }
+        
+        /* Prevent text overflow in movie/show titles */
+        .poster-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        
+        /* Better container padding on mobile */
+        .container.py-4 {
+            padding-top: 10px !important;
+            padding-bottom: 10px !important;
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+        }
+        
+        /* Make mobile title bars more obvious for interaction */
+        .title-bar {
+            padding: 8px;
+        }
+    }
+    
+    /* Small phones optimization */
+    @media (max-width: 480px) {
+        .poster-link {
+            width: calc(33.33% - 10px);  /* Three smaller posters per row */
+        }
+        
+        .poster-image {
+            height: auto;
+            aspect-ratio: 2/3;
+        }
+    }
 </style>
 
 <script>
@@ -318,23 +391,57 @@
         });
     });
     
-    // Your existing script
-    function showTab(tabId) {
-        // Hide all tab contents
-        document.querySelectorAll('.tab-content').forEach(tab => {
-            tab.style.display = 'none';
+    // Enhanced mobile sidebar toggle
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebarTitleBar = document.querySelector('.sidebar .title-bar');
+        const sidebar = document.querySelector('.sidebar');
+        
+        // Check if we're on mobile and collapse sidebar by default
+        function checkMobile() {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('expanded');
+                
+                // Add visual indicator for expandable sidebar
+                if (!sidebarTitleBar.querySelector('.expand-indicator')) {
+                    const indicator = document.createElement('span');
+                    indicator.className = 'expand-indicator';
+                    indicator.innerHTML = '▼';
+                    indicator.style.marginLeft = '10px';
+                    indicator.style.fontSize = '10px';
+                    sidebarTitleBar.querySelector('.title-bar-text').appendChild(indicator);
+                }
+            } else {
+                sidebar.classList.add('expanded');
+                // Remove indicator if exists
+                const indicator = sidebarTitleBar.querySelector('.expand-indicator');
+                if (indicator) indicator.remove();
+            }
+        }
+        
+        // Toggle sidebar on title bar click (mobile only)
+        sidebarTitleBar.addEventListener('click', function() {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.toggle('expanded');
+                
+                // Update indicator
+                const indicator = sidebarTitleBar.querySelector('.expand-indicator');
+                if (indicator) {
+                    indicator.innerHTML = sidebar.classList.contains('expanded') ? '▲' : '▼';
+                }
+            }
         });
         
-        // Remove active class from all buttons
-        document.querySelectorAll('.field-row button').forEach(button => {
-            button.classList.remove('active-tab');
+        // Initial check and on resize
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+    });
+    
+    // Add "double tap to zoom" hint for mobile users
+    if ('ontouchstart' in window) {
+        const posters = document.querySelectorAll('.poster-image');
+        posters.forEach(poster => {
+            poster.setAttribute('title', 'Double tap to zoom');
         });
-        
-        // Show the selected tab
-        document.getElementById(tabId).style.display = 'block';
-        
-        // Add active class to clicked button
-        event.target.classList.add('active-tab');
     }
 </script>
 {% endblock %}

@@ -155,10 +155,10 @@ def profile_page(request, username=None):
     
     # Create a list of movies with their review scores
     favorite_movies = []
-    movie_ids = [review.object_id for review in movie_reviews[:11]]
+    movie_ids = [review.object_id for review in movie_reviews[:16]]
     movies_dict = {movie.id: movie for movie in Movie.objects.filter(id__in=movie_ids)}
     
-    for review in movie_reviews[:11]:  # Limit to top 11 rated movies
+    for review in movie_reviews[:16]:  # Limit to top 11 rated movies
         movie = movies_dict.get(review.object_id)
         if movie:
             movie.user_rating = review.rating  # Add the user's rating to the movie object
@@ -198,14 +198,14 @@ def profile_page(request, username=None):
     favorite_shows = []
     for show_data in sorted(tv_show_ratings.values(), 
                            key=lambda x: x['total_rating']/x['count'] if x['count'] > 0 else 0, 
-                           reverse=True)[:11]:
+                           reverse=True)[:16]:
         show = show_data['tv_show']
         show.user_rating = round(show_data['total_rating'] / show_data['count'], 1) if show_data['count'] > 0 else 0
         show.review_count = show_data['count']  # Add the count of reviews for this show
         favorite_shows.append(show)
     
     # Get user's watchlist
-    watchlist_items = user.get_watchlist()[:11]  # Limit to top 10 items
+    watchlist_items = user.get_watchlist()[:16]  # Limit to top 10 items
     
     # Prepare watchlist items for template display
     watchlist_for_template = []
