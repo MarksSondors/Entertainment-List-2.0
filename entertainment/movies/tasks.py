@@ -151,6 +151,69 @@ def update_single_movie(movie_id):
                 updates['release_date'] = new_date
             except (ValueError, TypeError):
                 logger.error(f"Invalid release date format for movie {movie.title}: {data.get('release_date')}")
+
+        # update keywords
+        if 'keywords' in data and data['keywords'].get('keywords', []):
+            # Get keyword names from current movie for comparison
+            current_keyword_names = set(movie.keywords.values_list('name', flat=True))
+            # Get keyword names from API data
+            new_keyword_names = {k['name'] for k in data['keywords']['keywords']}
+            
+            if current_keyword_names != new_keyword_names:
+                # Get or create keyword instances
+                keyword_instances = []
+                for keyword in data['keywords']['keywords']:
+                    keyword_instance, _ = Keyword.objects.get_or_create(
+                        tmdb_id=keyword.get('id'),
+                        defaults={'name': keyword.get('name')}
+                    )
+                    keyword_instances.append(keyword_instance)
+                
+                # Set new keywords directly on the movie
+                movie.keywords.set(keyword_instances)
+                logger.info(f"Updated keywords for {movie.title}")
+        
+        # update genres
+        if 'genres' in data and data['genres']:
+            # Get genre names from current movie for comparison
+            current_genre_names = set(movie.genres.values_list('name', flat=True))
+            # Get genre names from API data
+            new_genre_names = {g['name'] for g in data['genres']}
+            
+            if current_genre_names != new_genre_names:
+                # Get or create genre instances
+                genre_instances = []
+                for genre in data['genres']:
+                    genre_instance, _ = Genre.objects.get_or_create(
+                        tmdb_id=genre.get('id'),
+                        defaults={'name': genre.get('name')}
+                    )
+                    genre_instances.append(genre_instance)
+                
+                # Set new genres directly on the movie
+                movie.genres.set(genre_instances)
+                logger.info(f"Updated genres for {movie.title}")
+        
+        # update production countries
+        if 'production_countries' in data and data['production_countries']:
+            # Get country names from current movie for comparison
+            current_country_codes = set(movie.countries.values_list('iso_3166_1', flat=True))
+            # Get country codes from API data
+            new_country_codes = {c['iso_3166_1'] for c in data['production_countries']}
+            
+            if current_country_codes != new_country_codes:
+                # Get or create country instances
+                country_instances = []
+                for country in data['production_countries']:
+                    country_instance, _ = Country.objects.get_or_create(
+                        iso_3166_1=country.get('iso_3166_1'),
+                        defaults={'name': country.get('name')}
+                    )
+                    country_instances.append(country_instance)
+                
+                # Set new countries directly on the movie
+                movie.countries.set(country_instances)
+                logger.info(f"Updated countries for {movie.title}")
         
         # Apply updates if there are any
         if updates:
