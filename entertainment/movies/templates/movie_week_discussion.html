@@ -1,0 +1,283 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="window mb-4">
+        <div class="title-bar">
+            <div class="title-bar-text">Movie of the Week: {{ movie.title }}</div>
+            <div class="title-bar-controls">
+                <a href="{% url 'community_page' %}"><button aria-label="Back"></button></a>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="row">
+                <!-- Movie Info -->
+                <div class="col-md-4 text-center">
+                    <img src="{{ movie.poster }}" alt="{{ movie.title }}" 
+                         style="max-height: 300px; border: 2px solid #c0c0c0; margin-bottom: 10px;">
+                    
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><strong>Rating:</strong> {{ movie.rating }}/10</span>
+                            <span><strong>Runtime:</strong> {{ movie.minutes_to_hours }}</span>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <strong>Genres:</strong>
+                            {% for genre in movie.genres.all %}
+                                <span class="badge badge-pill badge-secondary">{{ genre.name }}</span>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="mb-2">
+                            <strong>Release Date:</strong> {{ movie.release_date|date:"F d, Y" }}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Movie Details and Status -->
+                <div class="col-md-8">
+                    <h3 class="mb-2">{{ movie.title }}</h3>
+                    <p class="text-muted">
+                        <em>Suggested by {{ pick.suggested_by.username }}</em>
+                    </p>
+                    
+                    <!-- Suggestion Reason -->
+                    <div class="card p-3 mb-3" style="background-color: #f0f0f0; border: 1px solid #c0c0c0;">
+                        <h5>Why this movie was suggested:</h5>
+                        <p>{{ pick.suggestion_reason }}</p>
+                    </div>
+                    
+                    <!-- Movie Description -->
+                    <p>{{ movie.description }}</p>
+                    
+                    <!-- Status Info -->
+                    <div class="mt-3">
+                        {% if pick.status == 'active' %}
+                            <p>This movie is currently active until {{ pick.end_date|date:"F j, Y" }}</p>
+                            <div class="progress mb-3" style="height: 25px; border: 1px solid #000;">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: {% widthratio pick.watched_count 10 100 %}%; background-color: #008080; color: #fff;"
+                                     aria-valuenow="{{ pick.watched_count }}" aria-valuemin="0" aria-valuemax="10">
+                                    {{ pick.watched_count }} watchers
+                                </div>
+                            </div>
+                        {% elif pick.status == 'completed' %}
+                            <p>This movie was watched from {{ pick.start_date|date:"F j, Y" }} to 
+                               {{ pick.end_date|date:"F j, Y" }}</p>
+                            <p>{{ pick.watched_count }} community members watched this movie.</p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="button-group mt-3">
+                        {% if user.is_authenticated and pick.status == 'active' and not user_has_reviewed %}
+                            <button type="button" class="btn btn-primary" 
+                                    onclick="openReviewModal({{ movie.id }}, 'movie', '{{ movie.title }}')">
+                                Write a Review
+                            </button>
+                        {% endif %}
+                        <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-secondary">View Full Movie Details</a>
+                        {% if movie.trailer %}
+                            <a href="{{ movie.trailer }}" target="_blank" class="btn btn-outline-secondary">Watch Trailer</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Your Review (if exists) -->
+    {% if user_has_reviewed %}
+        <div class="window mb-4">
+            <div class="title-bar">
+                <div class="title-bar-text">Your Review</div>
+            </div>
+            <div class="window-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">
+                        Your Rating: 
+                        <span class="badge" style="background-color: {% if user_review.rating >= 7 %}#28a745{% elif user_review.rating >= 5 %}#ffc107{% else %}#dc3545{% endif %}; color: #fff;">
+                            {{ user_review.rating }}/10
+                        </span>
+                    </h5>
+                    <small class="text-muted">{{ user_review.date_added|date:"F j, Y" }}</small>
+                </div>
+                
+                {% if user_review.review_text %}
+                    <p>{{ user_review.review_text|linebreaks }}</p>
+                {% else %}
+                    <p class="text-muted">(No written review provided)</p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+    
+    <!-- Community Reviews -->
+    <div class="window mb-4">
+        <div class="title-bar">
+            <div class="title-bar-text">Community Reviews</div>
+        </div>
+        <div class="window-body">
+            {% if reviews %}
+                <div class="review-summary mb-4">
+                    <h5>Average Community Rating: 
+                        <span class="badge" style="background-color: #007bff; color: #fff;">
+                            {{ reviews|dictsort:"rating"|last }}/10
+                        </span>
+                        from {{ reviews.count }} reviews
+                    </h5>
+                </div>
+                
+                <div class="reviews-list">
+                    {% for review in reviews %}
+                        {% if review.user != user or not user.is_authenticated %}
+                            <div class="review-item mb-3 p-3" style="border: 1px solid #ddd; border-radius: 5px;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="d-flex align-items-center">
+                                        <img src="{{ review.user.get_profile_picture }}" 
+                                             alt="{{ review.user.username }}" width="32" height="32" class="rounded-circle me-2">
+                                        <strong>{{ review.user.username }}</strong>
+                                    </div>
+                                    <div>
+                                        <span class="badge" style="background-color: {% if review.rating >= 7 %}#28a745{% elif review.rating >= 5 %}#ffc107{% else %}#dc3545{% endif %}; color: #fff;">
+                                            {{ review.rating }}/10
+                                        </span>
+                                        <small class="text-muted ms-2">{{ review.date_added|date:"M d, Y" }}</small>
+                                    </div>
+                                </div>
+                                
+                                {% if review.review_text %}
+                                    <p class="mb-0">{{ review.review_text|linebreaks }}</p>
+                                {% else %}
+                                    <p class="text-muted mb-0">(No written review provided)</p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-4">
+                    <p>No reviews yet. Be the first to review this movie!</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Include the review modal but modify it for our use case -->
+<div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999;"></div>
+
+<!-- Movie Review Modal -->
+<div id="reviewModal" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 400px; max-width: 90%;">
+    <div class="title-bar">
+        <div class="title-bar-text" id="reviewModalTitle">Review Movie of the Week</div>
+        <div class="title-bar-controls">
+            <button aria-label="Close" onclick="closeReviewModal()"></button>
+        </div>
+    </div>
+    <div class="window-body">
+        <form id="reviewForm" method="post" action="{% url 'movie_week_discussion' pick.id %}">
+            {% csrf_token %}
+            <div class="field-row-stacked">
+                <label for="reviewDate">Date Watched:</label>
+                <input type="date" id="reviewDate" name="review_date" value="{% now 'Y-m-d' %}" required>
+            </div>
+            
+            <div class="field-row-stacked">
+                <label for="rating">Rating:</label>
+                <div class="field-row">
+                    <input type="range" id="rating" name="rating" min="1" max="10" value="5" step="1" oninput="updateRatingDisplay(this.value)">
+                    <div class="status-bar" style="width: auto; margin-left: 10px; padding: 2px 8px;">
+                        <span id="ratingValue">5.0</span>/10
+                    </div>
+                </div>
+            </div>
+            
+            <div class="field-row-stacked">
+                <label for="reviewText">Review:</label>
+                <textarea id="reviewText" name="review_text" rows="4" placeholder="Write your review here..."></textarea>
+                <p id="charCount" style="text-align: right; font-size: 0.8em; margin: 2px 0;">0 characters</p>
+            </div>
+            
+            <section class="field-row" style="justify-content: space-between; margin-top: 16px;">
+                <div id="reviewLoadingIndicator" style="display: none; align-items: center;">
+                    <img src="{% static 'images/hourglass.webp' %}" alt="Loading" style="width: 20px; height: 20px; margin-right: 5px;">
+                    <span>Submitting...</span>
+                </div>
+                <div style="margin-left: auto;">
+                    <button type="button" onclick="closeReviewModal()">Cancel</button>
+                    <button type="submit" id="submitBtn">Submit</button>
+                </div>
+            </section>
+        </form>
+    </div>
+</div>
+
+<script>
+function updateRatingDisplay(value) {
+    document.getElementById('ratingValue').textContent = parseFloat(value).toFixed(1);
+}
+
+function openReviewModal(contentId, contentType, title) {
+    const modal = document.getElementById('reviewModal');
+    const overlay = document.getElementById('overlay');
+    
+    // Update modal title if title is provided
+    if (title) {
+        document.getElementById('reviewModalTitle').textContent = `Review ${title}`;
+    }
+    
+    // Reset form
+    document.getElementById('reviewForm').reset();
+    document.getElementById('reviewDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('rating').value = 5;
+    document.getElementById('ratingValue').textContent = '5.0';
+    document.getElementById('reviewText').value = '';
+    document.getElementById('charCount').textContent = '0 characters';
+    
+    // Make sure overlay is below modal
+    overlay.style.zIndex = "999";
+    modal.style.zIndex = "1000";
+    
+    modal.style.display = 'block';
+    overlay.style.display = 'block';
+    
+    // Prevent background scrolling when modal is open
+    document.body.style.overflow = 'hidden';
+}
+
+function closeReviewModal() {
+    document.getElementById('reviewModal').style.display = 'none';
+    document.getElementById('overlay').style.display = 'none';
+    // Re-enable scrolling when modal is closed
+    document.body.style.overflow = 'auto';
+}
+
+document.getElementById('reviewText').addEventListener('input', function() {
+    const currentLength = this.value.length;
+    document.getElementById('charCount').textContent = currentLength + ' characters';
+});
+
+// Add overlay click handler to close the modal
+document.getElementById('overlay').addEventListener('click', function(event) {
+    closeReviewModal();
+    event.stopPropagation();
+});
+
+// Prevent clicks inside the modal from bubbling up
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('reviewModal').addEventListener('click', function(event) {
+        event.stopPropagation();
+    });
+    
+    // Add form submission loading indicator
+    document.getElementById('reviewForm').addEventListener('submit', function() {
+        document.getElementById('submitBtn').disabled = true;
+        document.getElementById('reviewLoadingIndicator').style.display = 'flex';
+    });
+});
+</script>
+{% endblock %}

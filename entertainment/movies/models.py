@@ -182,3 +182,31 @@ class Movie(Media):
             crew_by_person[member.person].append(member.role)
         
         return crew_by_person
+
+
+class MovieOfWeekPick(models.Model):
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
+    suggested_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='movie_week_suggestions')
+    suggestion_reason = models.TextField()
+    
+    # When this movie was/will be featured
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    
+    # Status: 'queued', 'active', 'completed'
+    status = models.CharField(max_length=20, default='queued')
+    
+    # Track who has watched it
+    watched_by = models.ManyToManyField(CustomUser, related_name='movies_of_week_watched', blank=True)
+    
+    date_created = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-start_date', 'date_created']
+    
+    def __str__(self):
+        return f"{self.movie.title} (suggested by {self.suggested_by.username})"
+    
+    @property
+    def watched_count(self):
+        return self.watched_by.count()
