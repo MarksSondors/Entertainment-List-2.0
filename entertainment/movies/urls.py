@@ -20,8 +20,17 @@ urlpatterns = [
     path('reviews/', views.MovieReviewView.as_view(), name='movie_reviews'),
     path('recommendations/', views.movie_recommendations, name='movie_recommendations'),
     path('task-status/', MovieTaskStatusView.as_view(), name='movie-task-status'),
+    path('search-local/', views.movie_search, name='movie_search_local'),
 
     # almost API
     path('random-unwatched/', views.random_unwatched_movie, name='random_unwatched_movie'),
     path('shortest-watchlist/', views.shortest_watchlist_movie, name='shortest_watchlist_movie'),
+
+    path('movies/review-current-movie/', views.review_current_movie, name='review_current_movie'),
+    path('community/current-pick/', views.current_community_pick, name='current_community_pick'),
+    # Community
+    path('community/', views.community_page, name='community_page'),
+    path('community/suggest/', views.suggest_movie, name='suggest_movie'),
+    path('community/movie/<int:pick_id>/watched/', views.mark_movie_watched, name='mark_movie_watched'),
+    path('community/movie/<int:pick_id>/discussion/', views.movie_week_discussion, name='movie_week_discussion'),
 ] + router.urls

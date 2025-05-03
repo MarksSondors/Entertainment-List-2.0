@@ -1,0 +1,531 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Page Header -->
+    <div class="window mb-4">
+        <div class="title-bar">
+            <div class="title-bar-text">Community Movie Club</div>
+        </div>
+        <div class="window-body">
+            <h4>Watch movies together with the community!</h4>
+            <p>Every week, a new movie suggested by a community member becomes our focus. 
+               Watch it, review it, and discuss with others.</p>
+        </div>
+    </div>
+    
+    <!-- Current Movie of the Week Section -->
+    <div class="window mb-4">
+        <div class="title-bar">
+            <div class="title-bar-text">Current Movie of the Week</div>
+        </div>
+        <div class="window-body">
+            {% if current_pick %}
+                <div class="row">
+                    <!-- Movie Poster -->
+                    <div class="col-md-4 text-center">
+                        <img src="{{ current_pick.movie.poster }}" alt="{{ current_pick.movie.title }}" 
+                             style="max-height: 300px; border: 2px solid #c0c0c0; margin-bottom: 10px;">
+                        
+                        <div class="mt-2">
+                            <strong>Runtime:</strong> {{ current_pick.movie.minutes_to_hours }}
+                            <br>
+                            <strong>Rating:</strong> {{ current_pick.movie.rating }}/10
+                        </div>
+                    </div>
+                    
+                    <!-- Movie Details -->
+                    <div class="col-md-8">
+                        <h3 class="mb-2">{{ current_pick.movie.title }}</h3>
+                        <p class="text-muted">
+                            <em>Suggested by {{ current_pick.suggested_by.username }}</em>
+                        </p>
+                        
+                        <!-- Suggestion Reason -->
+                        <div class="card p-3 mb-3" style="background-color: #f0f0f0; border: 1px solid #c0c0c0;">
+                            <h5>Why watch this movie:</h5>
+                            <p>{{ current_pick.suggestion_reason }}</p>
+                        </div>
+                        
+                        <p>{{ current_pick.movie.description|truncatewords:50 }}</p>
+                        
+                        <!-- Watch Progress -->
+                        <div class="mb-3">
+                            <label><strong>Community Watch Progress:</strong></label>
+                            <div class="progress" style="height: 25px; border: 1px solid #000;">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: {% widthratio current_pick.watched_count 10 100 %}%; background-color: #008080; color: #fff;"
+                                     aria-valuenow="{{ current_pick.watched_count }}" aria-valuemin="0" aria-valuemax="10">
+                                    {{ current_pick.watched_count }} watchers
+                                </div>
+                            </div>
+                            <small class="text-muted">Ends on: {{ current_pick.end_date|date:"F j, Y" }}</small>
+                            
+                            <!-- User Watch Status Section -->
+                            <div class="mt-3 mb-2">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#watchStatusCollapse" aria-expanded="false">
+                                    Show Watchers <i class="fas fa-chevron-down ms-1"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="collapse" id="watchStatusCollapse">
+                                <div class="card card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6 class="text-success"><i class="fas fa-check-circle me-1"></i> Have Watched:</h6>
+                                            <ul class="list-group">
+                                                {% if current_pick.watched_by.exists %}
+                                                    {% for watcher in current_pick.watched_by.all %}
+                                                        <li class="list-group-item d-flex align-items-center py-2">
+                                                            <img src="{{ watcher.get_profile_picture }}" alt="{{ watcher.username }}" 
+                                                                 class="rounded-circle me-2" style="width: 24px; height: 24px;">
+                                                            <span>{{ watcher.username }}</span>
+                                                            {% if watcher.id == user.id %}
+                                                                <span class="badge bg-primary ms-2">You</span>
+                                                            {% endif %}
+                                                        </li>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <li class="list-group-item text-muted">No one has watched yet</li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+                                        
+                                        <div class="col-md-6">
+                                            <h6 class="text-secondary"><i class="fas fa-clock me-1"></i> Haven't Watched Yet:</h6>
+                                            <ul class="list-group">
+                                                {% if not_watched_users %}
+                                                    {% for user_item in not_watched_users %}
+                                                        <li class="list-group-item d-flex align-items-center py-2">
+                                                            <img src="{{ user_item.get_profile_picture }}" alt="{{ user_item.username }}" 
+                                                                 class="rounded-circle me-2" style="width: 24px; height: 24px;">
+                                                            <span>{{ user_item.username }}</span>
+                                                            {% if user_item.id == user.id %}
+                                                                <span class="badge bg-secondary ms-2">You</span>
+                                                            {% endif %}
+                                                        </li>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <li class="list-group-item text-muted">Everyone has watched!</li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="button-group">
+                            {% if user.is_authenticated %}
+                                {% if user_context.has_watched_current %}
+                                    <button class="btn btn-success" disabled>✓ Watched</button>
+                                    
+                                    {% if user_context.has_reviewed_current %}
+                                        <button class="btn btn-info" onclick="openReviewModal()">Edit Review</button>
+                                    {% else %}
+                                        <button class="btn btn-outline-primary" onclick="openReviewModal()">Add Review</button>
+                                    {% endif %}
+                                {% else %}
+                                    <form method="post" action="{% url 'mark_movie_watched' current_pick.id %}" style="display:inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-primary">Mark as Watched</button>
+                                    </form>
+                                    <button class="btn btn-outline-primary" onclick="openReviewModal()">Watch & Review</button>
+                                {% endif %}
+                            {% endif %}
+                            <a href="{% url 'movie_page' current_pick.movie.tmdb_id %}" class="btn btn-outline-secondary">Movie Details</a>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="text-center py-4">
+                    <h5>No active movie currently selected.</h5>
+                    <p>Be the first to suggest a movie for the community to watch!</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Movie Reviews Section (for current movie) -->
+    {% if current_pick %}
+    <div class="window mb-4" id="movie-reviews-section">
+        <div class="title-bar">
+            <div class="title-bar-text">Reviews for {{ current_pick.movie.title }}</div>
+        </div>
+        <div class="window-body">
+            <!-- User's Review (or Review Form) -->
+            <div class="mb-4">
+                {% if user.is_authenticated %}
+                    {% if user_context.has_reviewed_current %}
+                        <!-- Show user's review -->
+                        <div class="card mb-3">
+                            <div class="card-header d-flex justify-content-between">
+                                <span>Your Review</span>
+                                <span class="badge" style="background-color: {% if user_context.current_review.rating >= 7 %}#28a745{% elif user_context.current_review.rating >= 5 %}#ffc107{% else %}#dc3545{% endif %}; color: #fff;">
+                                    {{ user_context.current_review.rating }}/10
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                {% if user_context.current_review.review_text %}
+                                    <p>{{ user_context.current_review.review_text|linebreaks }}</p>
+                                {% else %}
+                                    <p class="text-muted">(No written review provided)</p>
+                                {% endif %}
+                                <button class="btn btn-sm btn-outline-secondary" onclick="openReviewModal()">Edit Review</button>
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Button to add review -->
+                        <div class="text-center py-3">
+                            <button class="btn btn-primary" onclick="openReviewModal()">Write a Review</button>
+                            <p class="small text-muted mt-2">Writing a review will automatically mark the movie as watched.</p>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="alert alert-secondary">
+                        Please <a href="{% url 'login' %}">log in</a> to review this movie.
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Community Reviews -->
+            <h5 class="mb-3">Community Reviews</h5>
+            {% if current_pick.reviews %}
+                {% for review in current_pick.reviews %}
+                    {% if review.user != user or not user.is_authenticated %}
+                        <div class="card mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <img src="{{ review.user.get_profile_picture }}" alt="{{ review.user.username }}" 
+                                         class="rounded-circle me-2" style="width: 24px; height: 24px;">
+                                    <span>{{ review.user.username }}</span>
+                                </div>
+                                <span class="badge" style="background-color: {% if review.rating >= 7 %}#28a745{% elif review.rating >= 5 %}#ffc107{% else %}#dc3545{% endif %}; color: #fff;">
+                                    {{ review.rating }}/10
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                {% if review.review_text %}
+                                    <p>{{ review.review_text|linebreaks }}</p>
+                                {% else %}
+                                    <p class="text-muted">(No written review provided)</p>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer text-muted">
+                                <small>{{ review.date_added|date:"M d, Y" }}</small>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <p class="text-center text-muted">No reviews yet. Be the first to review this movie!</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Suggest a Movie Section -->
+    <div class="window mb-4">
+        <div class="title-bar">
+            <div class="title-bar-text">Suggest a Movie</div>
+        </div>
+        <div class="window-body">
+            {% if user.is_authenticated %}
+                {% if not user_context.has_active_suggestion %}
+                    <form method="post" action="{% url 'suggest_movie' %}">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="movie-search">Search for a movie:</label>
+                                <div class="input-group">
+                                    <input type="text" id="movie-search" class="form-control" placeholder="Type to search...">
+                                    <button type="button" class="btn btn-outline-secondary" id="search-btn">Search</button>
+                                </div>
+                                <div id="movie-results" class="mt-2" style="max-height: 300px; overflow-y: auto;"></div>
+                                <input type="hidden" name="movie_id" id="selected-movie-id" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="reason">Why should the community watch this movie?</label>
+                                <textarea name="reason" id="reason" class="form-control" rows="5" required></textarea>
+                                <small class="text-muted">Explain what makes this movie special or worth discussing.</small>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit Suggestion</button>
+                    </form>
+                {% else %}
+                    <div class="alert alert-info">
+                        <p>You already have an active movie suggestion in the queue. 
+                           You can suggest another movie after your current suggestion has been completed.</p>
+                    </div>
+                {% endif %}
+            {% else %}
+                <div class="alert alert-secondary">
+                    Please <a href="{% url 'login' %}">log in</a> to suggest a movie.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Upcoming Movies Queue -->
+    <div class="window mb-4">
+        <div class="title-bar">
+            <div class="title-bar-text">Upcoming Movie Suggestions</div>
+        </div>
+        <div class="window-body">
+            {% if queued_picks %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Position</th>
+                                <th>Movie</th>
+                                <th>Suggested By</th>
+                                <th>Date Suggested</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pick in queued_picks %}
+                                <tr>
+                                    <td>#{{ forloop.counter }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <img src="{{ pick.movie.poster }}" alt="{{ pick.movie.title }}" 
+                                                 style="height: 50px; margin-right: 10px;">
+                                            <a href="{% url 'movie_page' pick.movie.tmdb_id %}">{{ pick.movie.title }}</a>
+                                        </div>
+                                    </td>
+                                    <td>{{ pick.suggested_by.username }}</td>
+                                    <td>{{ pick.date_created|date:"M d, Y" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-center py-3">No movies in the queue. Be the first to suggest one!</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Previously Watched Movies -->
+    <div class="window mb-4">
+        <div class="title-bar">
+            <div class="title-bar-text">Previously Watched Movies</div>
+        </div>
+        <div class="window-body">
+            {% if completed_picks %}
+                <div class="row">
+                    {% for pick in completed_picks|slice:":6" %}
+                        <div class="col-6 col-md-4 col-lg-2 mb-3">
+                            <div class="card h-100" style="border: 1px solid #c0c0c0;">
+                                <img src="{{ pick.movie.poster }}" class="card-img-top" alt="{{ pick.movie.title }}">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title mb-1">{{ pick.movie.title }}</h6>
+                                    <p class="card-text small mb-1">{{ pick.start_date|date:"M d, Y" }}</p>
+                                    <a href="{% url 'movie_week_discussion' pick.id %}" class="btn btn-sm btn-outline-secondary w-100">
+                                        View Discussion
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                {% if completed_picks.count > 6 %}
+                    <div class="text-center mt-3">
+                        <a href="#" class="btn btn-outline-secondary">View All Past Movies</a>
+                    </div>
+                {% endif %}
+            {% else %}
+                <p class="text-center py-3">No movies have been completed yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Review Modal -->
+<div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999;"></div>
+
+<div id="reviewModal" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 400px; max-width: 90%;">
+    <div class="title-bar">
+        <div class="title-bar-text">Review Movie of the Week</div>
+        <div class="title-bar-controls">
+            <button aria-label="Close" onclick="closeReviewModal()"></button>
+        </div>
+    </div>
+    <div class="window-body">
+        <form id="reviewForm" method="post" action="{% url 'review_current_movie' %}">
+            {% csrf_token %}
+            {% if current_pick %}
+                <input type="hidden" name="movie_id" value="{{ current_pick.movie.id }}">
+            {% endif %}
+            <div class="field-row-stacked">
+                <label for="rating">Rating:</label>
+                <div class="field-row">
+                    <input type="range" id="rating" name="rating" min="1" max="10" value="5" step="1" oninput="updateRatingDisplay(this.value)">
+                    <div class="status-bar" style="width: auto; margin-left: 10px; padding: 2px 8px;">
+                        <span id="ratingValue">5.0</span>/10
+                    </div>
+                </div>
+            </div>
+            
+            <div class="field-row-stacked">
+                <label for="reviewText">Review:</label>
+                <textarea id="reviewText" name="review_text" rows="4" placeholder="Write your review here..."></textarea>
+                <p id="charCount" style="text-align: right; font-size: 0.8em; margin: 2px 0;">0 characters</p>
+            </div>
+            
+            <section class="field-row" style="justify-content: space-between; margin-top: 16px;">
+                <div id="reviewLoadingIndicator" style="display: none; align-items: center;">
+                    <img src="{% static 'images/hourglass.webp' %}" alt="Loading" style="width: 20px; height: 20px; margin-right: 5px;">
+                    <span>Submitting...</span>
+                </div>
+                <div style="margin-left: auto;">
+                    <button type="button" onclick="closeReviewModal()">Cancel</button>
+                    <button type="submit" id="submitBtn">Submit</button>
+                </div>
+            </section>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchBtn = document.getElementById('search-btn');
+        const searchInput = document.getElementById('movie-search');
+        const resultsContainer = document.getElementById('movie-results');
+        const selectedMovieIdInput = document.getElementById('selected-movie-id');
+        
+        if (searchBtn) {
+            searchBtn.addEventListener('click', performSearch);
+        }
+        
+        if (searchInput) {
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    performSearch();
+                }
+            });
+        }
+        
+        function performSearch() {
+            const query = searchInput.value.trim();
+            
+            if (query.length < 2) {
+                resultsContainer.innerHTML = '<div class="alert alert-warning">Please enter at least 2 characters</div>';
+                return;
+            }
+            
+            resultsContainer.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Searching...</div>';
+            
+            // Using the new local search endpoint instead of TMDB API directly
+            fetch(`/movies/search-local/?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.results && data.results.length > 0) {
+                        let html = '';
+                        data.results.forEach(movie => {
+                            const posterUrl = movie.poster_path || '/static/img/no-poster.png';
+                            const year = movie.release_date ? movie.release_date.substring(0, 4) : 'N/A';
+                            
+                            html += `
+                                <div class="movie-result p-2" style="border-bottom: 1px solid #eee; cursor: pointer;" 
+                                     data-id="${movie.id}" data-title="${movie.title}">
+                                    <div class="d-flex align-items-center">
+                                        <img src="${posterUrl}" style="width: 45px; height: auto; margin-right: 10px;">
+                                        <div>
+                                            <strong>${movie.title}</strong> 
+                                            <small>(${year})</small>
+                                            <div class="small text-muted">
+                                                ${movie.rating.toFixed(1)}/10 · ${movie.runtime} min
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        resultsContainer.innerHTML = html;
+                        
+                        // Add click handlers to results
+                        document.querySelectorAll('.movie-result').forEach(item => {
+                            item.addEventListener('click', function() {
+                                const id = this.dataset.id;
+                                const title = this.dataset.title;
+                                searchInput.value = title;
+                                selectedMovieIdInput.value = id;
+                                resultsContainer.innerHTML = '';
+                            });
+                        });
+                    } else {
+                        resultsContainer.innerHTML = '<div class="alert alert-info">No movies found</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching movies:', error);
+                    resultsContainer.innerHTML = '<div class="alert alert-danger">Error searching. Please try again.</div>';
+                });
+        }
+    });
+
+    function updateRatingDisplay(value) {
+        document.getElementById('ratingValue').textContent = parseFloat(value).toFixed(1);
+    }
+
+    function openReviewModal() {
+        const modal = document.getElementById('reviewModal');
+        const overlay = document.getElementById('overlay');
+        
+        // Pre-fill with existing review if the user has one
+        {% if user_context.has_reviewed_current %}
+            document.getElementById('rating').value = {{ user_context.current_review.rating|default:5 }};
+            document.getElementById('reviewText').value = `{{ user_context.current_review.review_text|default:""|escapejs }}`;
+            updateRatingDisplay({{ user_context.current_review.rating|default:5 }});
+            const textLength = document.getElementById('reviewText').value.length;
+            document.getElementById('charCount').textContent = textLength + ' characters';
+        {% else %}
+            document.getElementById('rating').value = 5;
+            document.getElementById('reviewText').value = '';
+            updateRatingDisplay(5);
+            document.getElementById('charCount').textContent = '0 characters';
+        {% endif %}
+        
+        // Show modal
+        overlay.style.zIndex = "999";
+        modal.style.zIndex = "1000";
+        modal.style.display = 'block';
+        overlay.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeReviewModal() {
+        document.getElementById('reviewModal').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+
+    document.getElementById('reviewText').addEventListener('input', function() {
+        const currentLength = this.value.length;
+        document.getElementById('charCount').textContent = currentLength + ' characters';
+    });
+
+    document.getElementById('overlay').addEventListener('click', function(event) {
+        closeReviewModal();
+        event.stopPropagation();
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('reviewModal').addEventListener('click', function(event) {
+            event.stopPropagation();
+        });
+        
+        document.getElementById('reviewForm').addEventListener('submit', function() {
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('reviewLoadingIndicator').style.display = 'flex';
+        });
+    });
+</script>
+{% endblock %}

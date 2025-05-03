@@ -25,6 +25,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .services.recommendation import MovieRecommender
 from .tasks import create_movie_async
+from datetime import timedelta
+from django.contrib import messages
+from custom_auth.models import CustomUser, Review
 
 # Create your views here.
 
@@ -843,3 +846,362 @@ def shortest_watchlist_movie(request):
     else:
         # If no movies with runtime found at all, redirect to watchlist page
         return redirect('watchlist_page')
+
+def community_page(request):
+    """Main community page with Movie of the Week feature"""
+    # Get current active movie of the week
+    current_pick = MovieOfWeekPick.objects.filter(status='active').first()
+    
+    # If no active pick but there are queued picks, activate the next one
+    if not current_pick and MovieOfWeekPick.objects.filter(status='queued').exists():
+        next_pick = MovieOfWeekPick.objects.filter(status='queued').order_by('date_created').first()
+        # Code to activate the next pick
+    
+    # Get queued movie suggestions
+    queued_picks = MovieOfWeekPick.objects.filter(status='queued').order_by('date_created')
+    
+    # Get completed movies of the week
+    completed_picks = MovieOfWeekPick.objects.filter(status='completed').order_by('-end_date')
+    
+    # Get reviews for current movie if one exists
+    movie_reviews = []
+    not_watched_users = []
+    
+    if current_pick:
+        movie_content_type = ContentType.objects.get_for_model(Movie)
+        movie_reviews = Review.objects.filter(
+            content_type=movie_content_type,
+            object_id=current_pick.movie.id
+        ).select_related('user').order_by('-date_added')
+        
+        # Add reviews to current pick for easy access in template
+        current_pick.reviews = movie_reviews
+        
+        # Get active users (active in last 30 days)
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        active_users = CustomUser.objects.filter(
+            last_login__gte=thirty_days_ago
+        ).exclude(is_active=False)
+        
+        # If there are fewer than 5 active users, include all users
+        if active_users.count() < 5:
+            active_users = CustomUser.objects.filter(is_active=True)
+        
+        # Find users who haven't watched
+        watched_user_ids = current_pick.watched_by.values_list('id', flat=True)
+        not_watched_users = active_users.exclude(id__in=watched_user_ids)
+    
+    # Get user statistics
+    user_context = {}
+    if request.user.is_authenticated:
+        if current_pick:
+            # Check if user watched current movie
+            user_context['has_watched_current'] = current_pick.watched_by.filter(id=request.user.id).exists()
+            
+            # Check if user has reviewed current movie
+            if movie_reviews:
+                user_review = movie_reviews.filter(user=request.user).first()
+                user_context['has_reviewed_current'] = user_review is not None
+                user_context['current_review'] = user_review
+        
+        # Check if user has an active suggestion
+        user_context['has_active_suggestion'] = MovieOfWeekPick.objects.filter(
+            suggested_by=request.user, 
+            status__in=['active', 'queued']
+        ).exists()
+    
+    context = {
+        'current_pick': current_pick,
+        'queued_picks': queued_picks,
+        'completed_picks': completed_picks,
+        'user_context': user_context,
+        'not_watched_users': not_watched_users,
+    }
+    
+    return render(request, 'community_page.html', context)
+
+@login_required
+def suggest_movie(request):
+    """Handle movie suggestions for Movie of the Week"""
+    if request.method != 'POST':
+        return redirect('community_page')
+    
+    # Check if user already has an active suggestion
+    if MovieOfWeekPick.objects.filter(
+        suggested_by=request.user,
+        status__in=['queued', 'active']
+    ).exists():
+        messages.error(request, "You already have an active movie suggestion.")
+        return redirect('community_page')
+    
+    movie_id = request.POST.get('movie_id')
+    reason = request.POST.get('reason')
+    
+    if not movie_id or not reason:
+        messages.error(request, "Please provide both a movie and a reason.")
+        return redirect('community_page')
+    
+    try:
+        movie = Movie.objects.get(pk=movie_id)
+        
+        # Create the suggestion
+        pick = MovieOfWeekPick.objects.create(
+            movie=movie,
+            suggested_by=request.user,
+            suggestion_reason=reason
+        )
+        
+        messages.success(request, f"Your suggestion '{movie.title}' has been added to the queue!")
+        
+        # If no active pick, make this one active
+        if not MovieOfWeekPick.objects.filter(status='active').exists():
+            activate_next_movie()
+            
+    except Movie.DoesNotExist:
+        messages.error(request, "The selected movie was not found.")
+    
+    return redirect('community_page')
+
+@login_required
+def mark_movie_watched(request, pick_id):
+    """Mark a movie of the week as watched"""
+    pick = get_object_or_404(MovieOfWeekPick, pk=pick_id)
+    
+    # Verify this is the active movie
+    if pick.status != 'active':
+        messages.error(request, "You can only mark the current movie of the week as watched.")
+        return redirect('community_page')
+    
+    # Add user to watched list if not already there
+    if request.user not in pick.watched_by.all():
+        pick.watched_by.add(request.user)
+        messages.success(request, f"You've marked '{pick.movie.title}' as watched!")
+        
+        # Check if enough people have watched to move to next movie
+        check_and_update_movie_status(pick)
+    
+    return redirect('community_page', pick_id=pick.id)
+
+@login_required
+def movie_week_discussion(request, pick_id):
+    """Discussion page for a movie of the week"""
+    pick = get_object_or_404(MovieOfWeekPick, pk=pick_id)
+    movie = pick.movie
+    
+    # Get movie content type for reviews
+    movie_type = ContentType.objects.get_for_model(Movie)
+    
+    # Get all reviews for this movie
+    reviews = Review.objects.filter(
+        content_type=movie_type,
+        object_id=movie.id
+    ).select_related('user').order_by('-date_added')
+    
+    # Check if user has already reviewed
+    user_has_reviewed = False
+    user_review = None
+    
+    if request.user.is_authenticated:
+        user_review = Review.objects.filter(
+            content_type=movie_type,
+            object_id=movie.id,
+            user=request.user
+        ).first()
+        user_has_reviewed = user_review is not None
+    
+    # Handle new review submission
+    if request.method == 'POST' and not user_has_reviewed:
+        rating = request.POST.get('rating')
+        review_text = request.POST.get('review_text', '')
+        review_date = request.POST.get('review_date')
+        
+        try:
+            rating = float(rating)
+            if 1 <= rating <= 10:
+                # Create review
+                review = Review.objects.create(
+                    user=request.user,
+                    content_type=movie_type,
+                    object_id=movie.id,
+                    rating=rating,
+                    review_text=review_text
+                )
+                
+                # If review date was provided and is valid, update the review date
+                if review_date:
+                    try:
+                        from datetime import datetime
+                        date_obj = datetime.strptime(review_date, '%Y-%m-%d')
+                        review.date_watched = date_obj
+                        review.save()
+                    except (ValueError, TypeError):
+                        # If date parsing fails, just continue - it's not critical
+                        pass
+                
+                # Mark as watched
+                if request.user not in pick.watched_by.all():
+                    pick.watched_by.add(request.user)
+                    # Check if enough people have watched
+                    check_and_update_movie_status(pick)
+                
+                messages.success(request, "Your review has been added!")
+                return redirect('movie_week_discussion', pick_id=pick.id)
+            else:
+                messages.error(request, "Rating must be between 1 and 10.")
+        except (ValueError, TypeError):
+            messages.error(request, "Please provide a valid rating.")
+    
+    context = {
+        'pick': pick,
+        'movie': movie,
+        'reviews': reviews,
+        'user_has_reviewed': user_has_reviewed,
+        'user_review': user_review
+    }
+    
+    return render(request, 'movie_week_discussion.html', context)
+
+def check_and_update_movie_status(pick):
+    """Check if enough users have watched the current movie and update status if needed"""
+    # Get count of active users (active in last 30 days)
+    thirty_days_ago = timezone.now() - timedelta(days=30)
+    active_users = CustomUser.objects.all().count()
+    
+    # If no active users or very few, set a minimum threshold
+    if active_users < 3:
+        active_users = 3
+    
+    # Calculate percentage of users who watched
+    watched_percentage = (pick.watched_by.count() / active_users) * 100
+    
+    # Check if end date passed or enough users watched (70%)
+    end_date_passed = pick.end_date and timezone.now().date() >= pick.end_date
+    enough_watched = watched_percentage >= 100
+    
+    if end_date_passed or enough_watched:
+        # Mark current pick as completed
+        pick.status = 'completed'
+        pick.save()
+        
+        # Activate next movie
+        activate_next_movie()
+
+def activate_next_movie():
+    """Activate the next movie in the queue"""
+    next_pick = MovieOfWeekPick.objects.filter(status='queued').order_by('date_created').first()
+    
+    if next_pick:
+        start_date = timezone.now().date()
+        # Set end date to 7 days from now
+        end_date = start_date + timedelta(days=7)
+        
+        next_pick.status = 'active'
+        next_pick.start_date = start_date
+        next_pick.end_date = end_date
+        next_pick.save()
+        
+        return next_pick
+    
+    return None
+
+@login_required
+def review_current_movie(request):
+    """Handle submission of movie reviews for the current movie of the week"""
+    if request.method != 'POST':
+        return redirect('community_page')
+    
+    movie_id = request.POST.get('movie_id')
+    rating = request.POST.get('rating')
+    review_text = request.POST.get('review_text')
+    
+    if not movie_id or not rating:
+        messages.error(request, "Missing required review information")
+        return redirect('community_page')
+    
+    # Get current active pick
+    current_pick = MovieOfWeekPick.objects.filter(status='active', movie_id=movie_id).first()
+    
+    if not current_pick:
+        messages.error(request, "Invalid movie or movie is not currently active")
+        return redirect('community_page')
+    
+    # Create or update review
+    content_type = ContentType.objects.get_for_model(Movie)
+    review, created = Review.objects.update_or_create(
+        user=request.user,
+        content_type=content_type,
+        object_id=movie_id,
+        defaults={
+            'rating': float(rating),
+            'review_text': review_text
+        }
+    )
+    
+    # Mark movie as watched if not already
+    if not current_pick.watched_by.filter(id=request.user.id).exists():
+        current_pick.watched_by.add(request.user)
+        current_pick.watched_count = current_pick.watched_by.count()
+        current_pick.save()
+        
+    if created:
+        messages.success(request, "Review added successfully!")
+    else:
+        messages.success(request, "Review updated successfully!")
+        
+    return redirect('community_page')
+
+from django.http import JsonResponse
+from django.db.models import Q
+
+@login_required
+def movie_search(request):
+    """Search endpoint for finding movies in the database when suggesting movies of the week"""
+    query = request.GET.get('q', '').strip()
+    
+    if not query or len(query) < 2:
+        return JsonResponse({'results': []})
+    
+    # Search in the database for movies matching the query
+    # Limited to 20 results for performance
+    movies = Movie.objects.filter(
+        Q(title__icontains=query) | 
+        Q(original_title__icontains=query)
+    ).order_by('-rating', '-release_date')[:20]
+    
+    results = []
+    for movie in movies:
+        results.append({
+            'id': movie.id,
+            'tmdb_id': movie.tmdb_id,
+            'title': movie.title,
+            'release_date': movie.release_date.strftime('%Y-%m-%d') if movie.release_date else None,
+            'poster_path': movie.poster,
+            'rating': movie.rating,
+            'runtime': movie.runtime,
+            'genres': [genre.name for genre in movie.genres.all()[:3]]
+        })
+    
+    return JsonResponse({'results': results})
+
+@api_view(['GET'])
+def current_community_pick(request):
+    """Return the current movie of the week for the home page"""
+    current_pick = MovieOfWeekPick.objects.filter(status='active').first()
+    
+    if not current_pick:
+        return Response({})
+    
+    data = {
+        'id': current_pick.id,
+        'movie': {
+            'id': current_pick.movie.id,
+            'tmdb_id': current_pick.movie.tmdb_id,
+            'title': current_pick.movie.title,
+            'poster': current_pick.movie.poster,
+        },
+        'suggested_by': current_pick.suggested_by.username,
+        'watched_count': current_pick.watched_count,
+        'end_date': current_pick.end_date.strftime('%b %d, %Y'),
+    }
+    
+    return Response(data)

@@ -132,6 +132,35 @@
                     <div class="status-bar-field">Based on your ratings</div>
                 </div>
             </div>
+
+            <!-- Community Movie of the Week -->
+            <div class="window" style="width: 100%; margin-top: 20px;">
+                <div class="title-bar">
+                    <div class="title-bar-text">Community Movie of the Week</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body" style="padding: 8px; background-color: #eee;">
+                    <div id="community_pick_container">
+                        <div class="text-center py-2">
+                            <img src="{% static 'images/hourglass.webp' %}" alt="Loading" style="width: 20px; height: 20px;">
+                            <span>Loading community pick...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="status-bar">
+                    <div class="status-bar-field">Watch together with the community</div>
+                    <div class="status-bar-field">
+                        <a href="{% url 'community_page' %}" style="text-decoration: none; color: inherit;">
+                            <button style="font-size: 12px; padding: 2px 8px;">Join Movie Club</button>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
         </div>
         
         <!-- Right column - Content (made much smaller) -->
@@ -705,7 +734,70 @@
                 document.getElementById('recommended_movies_block').innerHTML = 
                     '<div class="poster-item"><div class="alert alert-danger">Failed to load recommendations</div></div>';
             });
-            
+
+        // Fetch current community movie pick
+        fetch('/movies/community/current-pick/')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('community_pick_container');
+                
+                if (!data || !data.movie) {
+                    container.innerHTML = `
+                        <div class="text-center py-3">
+                            <p>No active movie currently selected.</p>
+                            <a href="{% url 'community_page' %}" class="btn btn-sm btn-outline-secondary">
+                                Suggest a Movie
+                            </a>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const pick = data;
+                const watchedCount = pick.watched_count || 0;
+                const progressWidth = Math.min((watchedCount / 10) * 100, 100);
+                
+                container.innerHTML = `
+                    <div class="d-flex align-items-start">
+                        <div class="me-3" style="flex-shrink: 0;">
+                            <a href="/movies/${pick.movie.tmdb_id}" style="text-decoration:none;">
+                                <img src="${pick.movie.poster || '{% static "images/no-poster.png" %}'}" 
+                                     alt="${pick.movie.title}" style="width: 80px; border: 1px solid #a0a0a0;">
+                            </a>
+                        </div>
+                        <div style="flex-grow: 1;">
+                            <h5 class="mb-1" style="font-size: 14px; margin-top: 0;">${pick.movie.title}</h5>
+                            <p class="text-muted mb-2" style="font-size: 12px;">
+                                Suggested by ${pick.suggested_by}
+                            </p>
+                            <div class="mb-2" style="font-size: 12px;">
+                                <div class="progress" style="height: 15px; border: 1px solid #000;">
+                                    <div class="progress-bar" role="progressbar" 
+                                         style="width: ${progressWidth}%; background-color: #008080; color: #fff; font-size: 11px;"
+                                         aria-valuenow="${watchedCount}" aria-valuemin="0" aria-valuemax="10">
+                                        ${watchedCount} watchers
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-between mt-1">
+                                    <span>Ends: ${pick.end_date}</span>
+                                    <a href="{% url 'community_page' %}" style="text-decoration: none;">
+                                        <button style="font-size: 12px; padding: 1px 5px;">Join Discussion</button>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error fetching community pick:', error);
+                document.getElementById('community_pick_container').innerHTML = `
+                    <div class="alert alert-secondary">
+                        Unable to load community pick. <a href="{% url 'community_page' %}">Visit Community Page</a>
+                    </div>
+                `;
+            });
+
         // Modified variables - removed lastActivityTimestamp since we don't need it
         let activityRefreshInterval = null;
         let isRefreshing = false;
