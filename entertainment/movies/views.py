@@ -664,7 +664,7 @@ def all_movies_page(request):
     watchlist_movies = []
     others_watchlist = []
     undiscovered = []
-    friends_reviewed = []  # New category for movies reviewed by others
+    friends_reviewed = []  # Movies reviewed by others
     
     for movie in all_movies:
         # Add average rating if available
@@ -686,6 +686,27 @@ def all_movies_page(request):
             watchlist_movies.append(movie)
         # Is this movie reviewed by others but not in user's watchlist or reviewed by user?
         elif movie.id in other_users_reviews:
+            # Add the friend rating (using the most recent review)
+            most_recent_review = sorted(
+                other_users_reviews[movie.id], 
+                key=lambda x: x['date_added'], 
+                reverse=True
+            )[0]
+            movie.friend_rating = most_recent_review['rating']
+            
+            # For multiple reviewers, we'll add a list of reviewer names
+            if len(other_users_reviews[movie.id]) > 1:
+                reviewers = []
+                for review in other_users_reviews[movie.id][:3]:  # Limit to first 3
+                    reviewers.append(review['username'])
+                
+                if len(other_users_reviews[movie.id]) > 3:
+                    reviewers.append(f"+{len(other_users_reviews[movie.id]) - 3} more")
+                
+                movie.friend_names = ", ".join(reviewers)
+            else:
+                movie.friend_names = most_recent_review['username']
+                
             friends_reviewed.append(movie)
         # Is this movie in any watchlist?
         elif movie.id in watchlist_counts:
@@ -706,7 +727,7 @@ def all_movies_page(request):
         'watchlist_movies': watchlist_movies,
         'others_watchlist_movies': others_watchlist,
         'undiscovered_movies': undiscovered,
-        'friends_reviewed_movies': friends_reviewed,  # Add to context
+        'friends_reviewed_movies': friends_reviewed,
         'genres': genres,
         'current_genre': current_genre,
         'filter_title': filter_title,
