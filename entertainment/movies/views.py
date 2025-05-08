@@ -877,15 +877,7 @@ def community_page(request):
         # Add reviews to current pick for easy access in template
         current_pick.reviews = movie_reviews
         
-        # Get active users (active in last 30 days)
-        thirty_days_ago = timezone.now() - timedelta(days=30)
-        active_users = CustomUser.objects.filter(
-            last_login__gte=thirty_days_ago
-        ).exclude(is_active=False)
-        
-        # If there are fewer than 5 active users, include all users
-        if active_users.count() < 5:
-            active_users = CustomUser.objects.filter(is_active=True)
+        active_users = CustomUser.objects.all()
         
         # Find users who haven't watched
         watched_user_ids = current_pick.watched_by.values_list('id', flat=True)
@@ -916,6 +908,7 @@ def community_page(request):
         'completed_picks': completed_picks,
         'user_context': user_context,
         'not_watched_users': not_watched_users,
+        'amount_of_users': CustomUser.objects.all().count(),
     }
     
     return render(request, 'community_page.html', context)
@@ -980,7 +973,7 @@ def mark_movie_watched(request, pick_id):
         # Check if enough people have watched to move to next movie
         check_and_update_movie_status(pick)
     
-    return redirect('community_page', pick_id=pick.id)
+    return redirect('community_page')
 
 @login_required
 def movie_week_discussion(request, pick_id):
@@ -1045,7 +1038,7 @@ def movie_week_discussion(request, pick_id):
                     check_and_update_movie_status(pick)
                 
                 messages.success(request, "Your review has been added!")
-                return redirect('movie_week_discussion', pick_id=pick.id)
+                return redirect('movie_week_discussion')
             else:
                 messages.error(request, "Rating must be between 1 and 10.")
         except (ValueError, TypeError):
@@ -1056,25 +1049,19 @@ def movie_week_discussion(request, pick_id):
         'movie': movie,
         'reviews': reviews,
         'user_has_reviewed': user_has_reviewed,
-        'user_review': user_review
+        'user_review': user_review,
     }
     
     return render(request, 'movie_week_discussion.html', context)
 
 def check_and_update_movie_status(pick):
     """Check if enough users have watched the current movie and update status if needed"""
-    # Get count of active users (active in last 30 days)
-    thirty_days_ago = timezone.now() - timedelta(days=30)
     active_users = CustomUser.objects.all().count()
-    
-    # If no active users or very few, set a minimum threshold
-    if active_users < 3:
-        active_users = 3
     
     # Calculate percentage of users who watched
     watched_percentage = (pick.watched_by.count() / active_users) * 100
     
-    # Check if end date passed or enough users watched (70%)
+    # Check if end date passed or enough users watched (100%)
     end_date_passed = pick.end_date and timezone.now().date() >= pick.end_date
     enough_watched = watched_percentage >= 100
     
@@ -1140,7 +1127,6 @@ def review_current_movie(request):
     # Mark movie as watched if not already
     if not current_pick.watched_by.filter(id=request.user.id).exists():
         current_pick.watched_by.add(request.user)
-        current_pick.watched_count = current_pick.watched_by.count()
         current_pick.save()
         
     if created:
@@ -1201,6 +1187,7 @@ def current_community_pick(request):
         },
         'suggested_by': current_pick.suggested_by.username,
         'watched_count': current_pick.watched_count,
+        'total_users': CustomUser.objects.all().count(),
         'end_date': current_pick.end_date.strftime('%b %d, %Y'),
     }
     

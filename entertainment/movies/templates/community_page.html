@@ -52,15 +52,15 @@
                         
                         <!-- Watch Progress -->
                         <div class="mb-3">
-                            <label><strong>Community Watch Progress:</strong></label>
-                            <div class="progress" style="height: 25px; border: 1px solid #000;">
-                                <div class="progress-bar" role="progressbar" 
-                                     style="width: {% widthratio current_pick.watched_count 10 100 %}%; background-color: #008080; color: #fff;"
-                                     aria-valuenow="{{ current_pick.watched_count }}" aria-valuemin="0" aria-valuemax="10">
-                                    {{ current_pick.watched_count }} watchers
-                                </div>
+                        <label><strong>Community Watch Progress:</strong></label>
+                        <div class="progress" style="height: 25px; border: 1px solid #000;">
+                            <div class="progress-bar" role="progressbar" 
+                                style="width: {% widthratio current_pick.watched_count amount_of_users 100 %}%; background-color: #008080; color: #fff;"
+                                aria-valuenow="{{ current_pick.watched_count }}" aria-valuemin="0" aria-valuemax="{{ amount_of_users }}">
+                                {{ current_pick.watched_count }} out of {{ amount_of_users }} watchers
                             </div>
-                            <small class="text-muted">Ends on: {{ current_pick.end_date|date:"F j, Y" }}</small>
+                        </div>
+                        <small class="text-muted">Ends on: {{ current_pick.end_date|date:"F j, Y" }}</small>
                             
                             <!-- User Watch Status Section -->
                             <div class="mt-3 mb-2">
