@@ -138,7 +138,7 @@ def process_crew(movie, crew, movies_service):
         
         # Skip if not one of our supported roles
         if (department == 'Directing' and job != 'Director') or \
-           (department == 'Writing' and job not in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel']) or \
+           (department == 'Writing' and job not in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel', 'Book']) or \
            (department == 'Sound' and job != 'Original Music Composer'):
             continue
         
@@ -159,7 +159,9 @@ def process_crew(movie, crew, movies_service):
         role = job
         if job == 'Director':
             person_instance.is_director = True
-        elif job in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel']:
+        elif job in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel','Book']:
+            if job == 'Book':
+                person_instance.is_book = True
             if job == 'Writer':
                 person_instance.is_writer = True
             if job == 'Story':
