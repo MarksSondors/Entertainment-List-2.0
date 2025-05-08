@@ -85,10 +85,19 @@ def movie_page(request, movie_id):
         content_type=ContentType.objects.get_for_model(Movie),
         object_id=movie_db.id
     ).exists()
+    
+    # Get all users who have this movie in their watchlist
+    content_type = ContentType.objects.get_for_model(Movie)
+    watchlist_users = CustomUser.objects.filter(
+        watchlist_items__content_type=content_type,
+        watchlist_items__object_id=movie_db.id
+    ).distinct()
+    
     context = {
         'movie': movie_db,
         'user_watchlist': user_watchlist,
-        'user_settings': user_settings
+        'user_settings': user_settings,
+        'watchlist_users': watchlist_users
     }
     return render(request, 'movie_page.html', context)
 
