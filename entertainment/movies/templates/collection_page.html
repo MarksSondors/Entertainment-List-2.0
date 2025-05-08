@@ -1,85 +1,242 @@
 {% extends "components/base.html" %}
 
 {% block content %}
-<style>
-body {
-    font-family: 'MS Sans Serif', Arial, sans-serif;
-    background: url('{{ collection.backdrop }}') no-repeat center center fixed;
-    background-size: cover;
-    color: black;
-}
-</style>
+<div class="container py-4">
+    <!-- Collection Information Window -->
+    <div class="window mb-4">
+        <div class="title-bar">
+            <div class="title-bar-text">{{ collection.name }}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="collection-info">
+                <div class="poster-container">
+                    <img src="{{ collection.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                         alt="{{ collection.name }} Poster" 
+                         class="collection-poster"
+                         onclick="openPosterModal()">
 
-<div style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; margin: 20px;">
-    <div style="display: flex; align-items: flex-start; gap: 20px;">
-        <div style="flex-shrink: 0;">
-            <img src="{{ collection.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
-                 alt="{{ collection.name }} Poster" 
-                 style="width: 200px; border: 2px solid black; cursor: pointer;" 
-                 onclick="openPosterModal()">
-
-            <div id="posterModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; max-width: 90%; max-height: 90%;">
-                <div class="title-bar">
-                    <div class="title-bar-text">{{ collection.name }} Poster</div>
-                    <div class="title-bar-controls">
-                        <button aria-label="Close" onclick="closePosterModal()"></button>
+                    <div id="posterModal" class="modal-hidden">
+                        <div class="window">
+                            <div class="title-bar">
+                                <div class="title-bar-text">{{ collection.name }} Poster</div>
+                                <div class="title-bar-controls">
+                                    <button aria-label="Close" onclick="closePosterModal()"></button>
+                                </div>
+                            </div>
+                            <div class="window-body text-center">
+                                <img src="{{ collection.poster }}" alt="{{ collection.name }} Poster" class="modal-image">
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div style="padding: 10px; text-align: center;">
-                    <img src="{{ collection.poster }}" alt="{{ collection.name }} Poster" style="max-width: 100%; max-height: 80vh;">
+                
+                <div class="collection-details">
+                    <div class="collection-description">
+                        <p>{{ collection.description }}</p>
+                    </div>
                 </div>
             </div>
-
-            <script>
-                function openPosterModal() {
-                    document.getElementById('posterModal').style.display = 'block';
-                }
-
-                function closePosterModal() {
-                    document.getElementById('posterModal').style.display = 'none';
-                }
-            </script>
         </div>
-        <div style="flex-grow: 1;">
-            <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
-                <h1 style="margin: 0; font-size: 18px;">{{ collection.name }}</h1>
+    </div>
+
+    <!-- Movies Grid Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">Movies in Collection</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
             </div>
-            <div style="background-color: rgba(255, 255, 255, 0.86); padding: 10px; border: 2px inset;">
-                <p>{{ collection.description }}</p>
+        </div>
+        <div class="window-body">
+            <div class="section-content">
+                <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                    {% for movie in movies %}
+                    <div class="col">
+                        <div class="card h-100 movie-card {% if movie.user_rating %}card-reviewed{% elif movie.in_watchlist %}card-watchlist{% endif %}">
+                            <a href="{% url 'movie_page' movie.tmdb_id %}" class="text-decoration-none">
+                                {% if movie.poster %}
+                                <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}">
+                                {% else %}
+                                <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
+                                    <span>No Image</span>
+                                </div>
+                                {% endif %}
+                                
+                                {% if movie.user_rating %}
+                                <div class="user-rating-badge">
+                                    {{ movie.user_rating }}
+                                </div>
+                                {% endif %}
+                                
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ movie.title }}</h5>
+                                    <p class="card-text">
+                                        <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                    </p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12 text-center py-4">
+                        <p class="text-muted">No movies found in this collection.</p>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; padding: 10px; background-color: white; border: 2px inset;">
-    {% for movie in movies %}
-    <div style="text-align: center; position: relative;">
-        <a href="{% url 'movie_page' movie.tmdb_id %}" style="text-decoration: none; color: black;">
-            <img src="{{ movie.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
-                 alt="{{ movie.title }}" 
-                 style="width: 150px; height: 225px; object-fit: cover; 
-                 border: {% if movie.in_watchlist %}4px solid #4CAF50{% elif movie.user_rating %}4px solid #2196F3{% else %}2px solid black{% endif %}; 
-                 margin-bottom: 5px;">
-            {% if movie.user_rating %}
-            <div style="position: absolute; top: 5px; right: 5px; background-color: #E0B020; color: black; 
-                        padding: 3px 6px; border-radius: 3px; font-weight: bold; box-shadow: 0 0 3px rgba(0,0,0,0.5);">
-                {{ movie.user_rating }}
-            </div>
-            {% endif %}
-            <div style="font-weight: bold;">{{ movie.title }}</div>
-            <div style="font-size: 0.9em; color: #666;">{{ movie.release_date|date:"Y" }}</div>
-        </a>
-    </div>
-    {% empty %}
-    <div style="grid-column: 1 / -1; text-align: center; padding: 20px;">
-        <p>No movies found in this collection.</p>
-    </div>
-    {% endfor %}
-</div>
+<style>
+    /* Background image setup */
+    body {
+        background: url('{{ collection.backdrop }}') no-repeat center center fixed;
+        background-size: cover;
+    }
+    
+    /* Collection info styling */
+    .collection-info {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+    }
+    
+    .poster-container {
+        flex-shrink: 0;
+    }
+    
+    .collection-poster {
+        width: 200px;
+        border: 2px outset white;
+        cursor: pointer;
+    }
+    
+    .collection-details {
+        flex-grow: 1;
+    }
+    
+    .collection-description {
+        background-color: white;
+        padding: 10px;
+        border: 2px inset white;
+    }
+    
+    /* Modal styling */
+    .modal-hidden {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1000;
+        max-width: 90%;
+    }
+    
+    .modal-image {
+        max-width: 100%;
+        max-height: 80vh;
+    }
+    
+    /* Movie card styling */
+    .movie-card {
+        position: relative;
+        border: 2px outset white !important;
+    }
+    
+    .card-body {
+        padding: 0.5rem !important;
+    }
+    
+    .card-footer {
+        background-color: rgb(225, 225, 225);
+        border-top: 2px inset white;
+        padding: 0.5rem !important;
+    }
+    
+    /* Rating badge styles */
+    .user-rating-badge {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+        font-size: 0.75rem;
+        box-shadow: 0 0 3px rgba(0,0,0,0.5);
+        z-index: 5;
+    }
+    
+    /* Card type indicators */
+    .card-reviewed img, .card-reviewed .card-img-top {
+        border-top: 3px solid #2196F3;
+        border-left: 3px solid #2196F3;
+        border-right: 3px solid #2196F3;
+    }
+    
+    .card-watchlist img, .card-watchlist .card-img-top {
+        border-top: 3px solid #4CAF50;
+        border-left: 3px solid #4CAF50;
+        border-right: 3px solid #4CAF50;
+    }
+    
+    /* Section styling */
+    .section-content {
+        padding: 8px;
+        background-color: white;
+    }
+    
+    /* Text utilities */
+    .text-center {
+        text-align: center;
+    }
+    
+    .text-decoration-none {
+        text-decoration: none;
+        color: inherit;
+    }
+    
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+        .collection-info {
+            flex-direction: column;
+        }
+        
+        .poster-container {
+            align-self: center;
+            margin-bottom: 20px;
+        }
+        
+        .collection-poster {
+            width: 160px;
+        }
+        
+        .card-title {
+            font-size: 0.85rem;
+        }
+        
+        .card-body {
+            padding: 0.35rem !important;
+        }
+    }
+</style>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Additional scripts if needed
-    });
+    function openPosterModal() {
+        document.getElementById('posterModal').style.display = 'block';
+    }
+
+    function closePosterModal() {
+        document.getElementById('posterModal').style.display = 'none';
+    }
 </script>
 {% endblock %}
