@@ -154,9 +154,9 @@
                                     {% if watchlist_items %}
                                         <div class="poster-row">
                                             {% for item in watchlist_items %}
-                                                {% if item.media_type == 'Movie' %}
+                                                {% if item.media_type == 'Movie' or item.media_type == 'movie' %}
                                                     <a href="{% url 'movie_page' item.tmdb_id %}" class="poster-link">
-                                                {% elif item.media_type == 'TVShow' %}
+                                                {% elif item.media_type == 'TVShow' or item.media_type == 'TV Show' or item.media_type == 'tvshow' or item.media_type == 'tv' %}
                                                     <a href="{% url 'tv_show_page' item.tmdb_id %}" class="poster-link">
                                                 {% else %}
                                                     <a href="#" class="poster-link">
