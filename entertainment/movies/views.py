@@ -450,6 +450,14 @@ class MovieReviewView(APIView):
             review_text=review_text,
             date_added=date_added
         )
+
+        # if movie is movie of the week, then define movie of the week as watched
+        movie_of_the_week = MovieOfWeekPick.objects.filter(status='active').first()
+        if movie_of_the_week and movie_of_the_week.movie.id == movie_id:
+            movie_of_the_week.watched_by.add(request.user)
+            movie_of_the_week.save()
+            check_and_update_movie_status(movie_of_the_week)
+
             
         return Response({"message": "Review added successfully", "id": review.id}, status=status.HTTP_201_CREATED)
 
@@ -780,9 +788,10 @@ def random_unwatched_movie(request):
     # Get content type for Movie model
     movie_content_type = ContentType.objects.get_for_model(Movie)
     
-    # Find movies that have no reviews (unwatched by anyone)
+    # Find movies that have no reviews ((unwatched by anyone))
     reviewed_movie_ids = Review.objects.filter(
-        content_type=movie_content_type
+        content_type=movie_content_type,
+        
     ).values_list('object_id', flat=True)
     
     unwatched_movies = Movie.objects.exclude(id__in=reviewed_movie_ids, status='Released')
