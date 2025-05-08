@@ -163,7 +163,7 @@
                                                 {% endif %}
                                                     <img src="{{ item.poster_url|default:'#' }}" alt="{{ item.title }}" 
                                                         class="poster-image"
-                                                        onerror="this.src='{% static 'images/media-default.png' %}'">
+                                                        onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
                                                     {% if item.avg_rating %}
                                                         <div class="rating-badge avg-rating-badge">
                                                             {{ item.avg_rating }}
