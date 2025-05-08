@@ -124,7 +124,7 @@ def process_crew(tvshow, crew, tvshows_service):
             jobs = [{'job': person.get('job')}]
         
         # Skip if no relevant jobs
-        relevant_jobs = [job for job in jobs if job.get('job') in ['Novel', 'Comic Book', 'Graphic Novel']]
+        relevant_jobs = [job for job in jobs if job.get('job') in ['Novel', 'Comic Book', 'Graphic Novel', 'Book']]
         if not relevant_jobs:
             continue
         
@@ -145,6 +145,8 @@ def process_crew(tvshow, crew, tvshows_service):
         for job_data in relevant_jobs:
             job = job_data.get('job')
             
+            if job == 'Book':
+                person_instance.is_book = True
             if job == 'Novel':
                 person_instance.is_novelist = True
             if job == 'Comic Book':

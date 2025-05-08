@@ -106,6 +106,7 @@ class Person(models.Model):
     is_novelist = models.BooleanField(default=False)
     is_comic_artist = models.BooleanField(default=False)
     is_graphic_novelist = models.BooleanField(default=False)
+    is_book = models.BooleanField(default=False)
 
     # tv show specific
     is_tv_creator = models.BooleanField(default=False)
