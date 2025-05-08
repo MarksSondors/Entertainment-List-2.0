@@ -7,6 +7,7 @@ from django.urls import reverse
 from .models import *
 
 admin.site.register(Collection)
+admin.site.register(MovieOfWeekPick)
 
 class MediaPersonInline(GenericTabularInline):
     model = MediaPerson
