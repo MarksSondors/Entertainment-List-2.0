@@ -1212,6 +1212,11 @@ def movie_search(request):
 def current_community_pick(request):
     """Return the current movie of the week for the home page"""
     current_pick = MovieOfWeekPick.objects.filter(status='active').first()
+
+    # Check if the current pick is still valid and update status if needed
+    check_and_update_movie_status(current_pick)
+
+    current_pick = MovieOfWeekPick.objects.filter(status='active').first()
     
     if not current_pick:
         return Response({})
