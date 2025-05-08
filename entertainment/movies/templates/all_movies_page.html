@@ -68,39 +68,38 @@
                                 <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
                                     {% for movie in reviewed_movies %}
                                     <div class="col">
-                                        <div class="card h-100 movie-card card-reviewed">
-                                            {% if movie.poster %}
-                                            <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border-top: 3px solid #2196F3; border-left: 3px solid #2196F3; border-right: 3px solid #2196F3;">
-                                            {% else %}
-                                            <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border-top: 3px solid #2196F3; border-left: 3px solid #2196F3; border-right: 3px solid #2196F3;">
-                                                <span>No Image</span>
-                                            </div>
-                                            {% endif %}
-                                            
-                                            <!-- User Rating Badge -->
-                                            <div class="user-rating-badge">
-                                                {{ movie.user_rating }}
-                                            </div>
-                                            
-                                            <!-- Average Rating Badge (if different from user rating) -->
-                                            {% if movie.avg_rating and movie.rating_count > 1 %}
-                                            <div class="avg-rating-badge">
-                                                {{ movie.avg_rating }} ({{ movie.rating_count }})
-                                            </div>
-                                            {% endif %}
-                                            
-                                            <div class="card-body">
-                                                <h5 class="card-title">{{ movie.title }}</h5>
-                                                <p class="card-text">
-                                                    {% if movie.release_date %}
-                                                    <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
-                                                    {% endif %}
-                                                </p>
-                                                <div class="mt-2">
-                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
+                                        <a href="{% url 'movie_page' movie.tmdb_id %}" class="text-decoration-none">
+                                            <div class="card h-100 movie-card card-reviewed">
+                                                {% if movie.poster %}
+                                                <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border-top: 3px solid #2196F3; border-left: 3px solid #2196F3; border-right: 3px solid #2196F3;">
+                                                {% else %}
+                                                <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border-top: 3px solid #2196F3; border-left: 3px solid #2196F3; border-right: 3px solid #2196F3;">
+                                                    <span>No Image</span>
+                                                </div>
+                                                {% endif %}
+                                                
+                                                <!-- User Rating Badge -->
+                                                <div class="user-rating-badge {% if movie.user_rating >= 7 %}high-rating{% elif movie.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
+                                                    {{ movie.user_rating }}<span class="rating-max">/10</span>
+                                                </div>
+                                                
+                                                <!-- Average Rating Badge (if different from user rating) -->
+                                                {% if movie.avg_rating and movie.rating_count > 1 %}
+                                                <div class="avg-rating-badge">
+                                                    {{ movie.avg_rating }}<span class="rating-max">/10</span> ({{ movie.rating_count }})
+                                                </div>
+                                                {% endif %}
+                                                
+                                                <div class="card-body">
+                                                    <h5 class="card-title">{{ movie.title }}</h5>
+                                                    <p class="card-text">
+                                                        {% if movie.release_date %}
+                                                        <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                        {% endif %}
+                                                    </p>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </a>
                                     </div>
                                     {% endfor %}
                                 </div>
@@ -127,7 +126,7 @@
                                                     {% endfor %}
                                                 </td>
                                                 <td>
-                                                    <span class="badge bg-warning text-dark">Your: {{ movie.user_rating }}</span>
+                                                    <span class="badge {% if movie.user_rating >= 7 %}high-rating{% elif movie.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">Your: {{ movie.user_rating }}<span class="rating-max">/10</span></span>
                                                     {% if movie.avg_rating and movie.rating_count > 1 %}
                                                     <span class="badge bg-secondary">Avg: {{ movie.avg_rating }} ({{ movie.rating_count }})</span>
                                                     {% endif %}
@@ -168,51 +167,49 @@
                                     {% for movie in watchlist_movies %}
                                     <div class="col">
                                         <div class="card h-100 movie-card card-watchlist">
-                                            {% if movie.poster %}
-                                            <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border-top: 3px solid #4CAF50; border-left: 3px solid #4CAF50; border-right: 3px solid #4CAF50;">
-                                            {% else %}
-                                            <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border-top: 3px solid #4CAF50; border-left: 3px solid #4CAF50; border-right: 3px solid #4CAF50;">
-                                                <span>No Image</span>
-                                            </div>
-                                            {% endif %}
-                                            
-                                            <!-- Average Rating Badge (if available) -->
-                                            {% if movie.avg_rating %}
-                                            <div class="avg-rating-badge">
-                                                {{ movie.avg_rating }} ({{ movie.rating_count }})
-                                            </div>
-                                            {% endif %}
-                                            
-                                            <div class="card-body">
-                                                <h5 class="card-title">{{ movie.title }}</h5>
-                                                <p class="card-text">
-                                                    {% if movie.release_date %}
-                                                    <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
-                                                    {% endif %}
-                                                </p>
-                                                
-                                                <!-- Other Users' Reviews Section -->
-                                                {% if movie.other_reviews %}
-                                                <div class="mt-2 mb-2">
-                                                    <small class="text-muted">User Ratings:</small>
-                                                    <div class="user-reviews-list">
-                                                        {% for review in movie.other_reviews|slice:":3" %}
-                                                        <div class="user-review-item">
-                                                            <span class="badge bg-secondary">{{ review.username }}: {{ review.rating }}</span>
-                                                        </div>
-                                                        {% endfor %}
-                                                        {% if movie.other_reviews|length > 3 %}
-                                                        <small>+{{ movie.other_reviews|length|add:"-3" }} more</small>
-                                                        {% endif %}
-                                                    </div>
+                                            <a href="{% url 'movie_page' movie.tmdb_id %}" class="text-decoration-none">
+                                                {% if movie.poster %}
+                                                <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border-top: 3px solid #4CAF50; border-left: 3px solid #4CAF50; border-right: 3px solid #4CAF50;">
+                                                {% else %}
+                                                <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border-top: 3px solid #4CAF50; border-left: 3px solid #4CAF50; border-right: 3px solid #4CAF50;">
+                                                    <span>No Image</span>
                                                 </div>
                                                 {% endif %}
                                                 
-                                                <div class="mt-2">
-                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
-                                                    <button type="button" class="btn btn-sm btn-warning">Mark Watched</button>
+                                                <!-- Average Rating Badge (if available) -->
+                                                {% if movie.avg_rating %}
+                                                <div class="avg-rating-badge">
+                                                    {{ movie.avg_rating }}<span class="rating-max">/10</span> ({{ movie.rating_count }})
                                                 </div>
-                                            </div>
+                                                {% endif %}
+                                                
+                                                <div class="card-body">
+                                                    <h5 class="card-title">{{ movie.title }}</h5>
+                                                    <p class="card-text">
+                                                        {% if movie.release_date %}
+                                                        <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                        {% endif %}
+                                                    </p>
+                                                    
+                                                    <!-- Other Users' Reviews Section -->
+                                                    {% if movie.other_reviews %}
+                                                    <div class="mt-2 mb-2">
+                                                        <small class="text-muted">User Ratings:</small>
+                                                        <div class="user-reviews-list">
+                                                            {% for review in movie.other_reviews|slice:":3" %}
+                                                            <div class="user-review-item">
+                                                                <span class="badge bg-secondary">{{ review.username }}: {{ review.rating }}</span>
+                                                            </div>
+                                                            {% endfor %}
+                                                            {% if movie.other_reviews|length > 3 %}
+                                                            <small>+{{ movie.other_reviews|length|add:"-3" }} more</small>
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </a>
+                                            
                                             <div class="card-footer text-muted">
                                                 <small>Added on {{ movie.date_added|date:"M d, Y" }}</small>
                                             </div>
@@ -300,27 +297,32 @@
                                     {% for movie in others_watchlist_movies %}
                                     <div class="col">
                                         <div class="card h-100 movie-card card-others">
-                                            {% if movie.poster %}
-                                            <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}">
-                                            {% else %}
-                                            <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
-                                                <span>No Image</span>
-                                            </div>
-                                            {% endif %}
-                                            <div class="card-body">
-                                                <h5 class="card-title">{{ movie.title }}</h5>
-                                                <p class="card-text">
-                                                    {% if movie.release_date %}
-                                                    <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
-                                                    {% endif %}
-                                                </p>
-                                                <p class="card-text">
-                                                    <small class="text-muted">In {{ movie.user_count }} other watchlists</small>
-                                                </p>
-                                                <div class="mt-2">
-                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
-                                                    <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
+                                            <a href="{% url 'movie_page' movie.tmdb_id %}" class="text-decoration-none">
+                                                {% if movie.poster %}
+                                                <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}">
+                                                {% else %}
+                                                <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
+                                                    <span>No Image</span>
                                                 </div>
+                                                {% endif %}
+                                                <div class="card-body">
+                                                    <h5 class="card-title">{{ movie.title }}</h5>
+                                                    <p class="card-text">
+                                                        {% if movie.release_date %}
+                                                        <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                        {% endif %}
+                                                    </p>
+                                                    <p class="card-text">
+                                                        <small class="text-muted">In {{ movie.user_count }} other watchlists</small>
+                                                    </p>
+                                                </div>
+                                            </a>
+                                            
+                                            <!-- Action buttons inside card but outside link -->
+                                            <div class="card-actions">
+                                                <button type="button" class="btn btn-sm btn-success" onclick="addToWatchlist({{ movie.id }}, this)">
+                                                    Add to Watchlist
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -342,7 +344,7 @@
                 <div class="accordion-section mb-3">
                     <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#friends">
                         <h4 class="mb-0">
-                            <span class="chevron">▶</span> Friends' Reviews
+                            <span class="chevron">▶</span> Reviewed Movies
                             <span class="badge" id="friendsCount">{{ friends_reviewed_movies|length }}</span>
                         </h4>
                     </div>
@@ -354,40 +356,37 @@
                                     {% for movie in friends_reviewed_movies %}
                                     <div class="col">
                                         <div class="card h-100 movie-card card-friends">
-                                            {% if movie.poster %}
-                                            <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border-top: 3px solid #9C27B0; border-left: 3px solid #9C27B0; border-right: 3px solid #9C27B0;">
-                                            {% else %}
-                                            <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border-top: 3px solid #9C27B0; border-left: 3px solid #9C27B0; border-right: 3px solid #9C27B0;">
-                                                <span>No Image</span>
-                                            </div>
-                                            {% endif %}
-                                            
-                                            <!-- Friend Review Badge -->
-                                            <div class="friend-review-badge">
-                                                {{ movie.friend_rating }}
-                                            </div>
-                                            
-                                            <!-- Average Rating Badge -->
-                                            {% if movie.avg_rating %}
-                                            <div class="avg-rating-badge">
-                                                {{ movie.avg_rating }} ({{ movie.rating_count }})
-                                            </div>
-                                            {% endif %}
-                                            
-                                            <div class="card-body">
-                                                <h5 class="card-title">{{ movie.title }}</h5>
-                                                <p class="card-text">
-                                                    {% if movie.release_date %}
-                                                    <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
-                                                    {% endif %}
-                                                </p>
-                                                <p class="card-text">
-                                                    <small class="text-muted">Reviewed by: {{ movie.friend_name }}</small>
-                                                </p>
-                                                <div class="mt-2">
-                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
-                                                    <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
+                                            <a href="{% url 'movie_page' movie.tmdb_id %}" class="text-decoration-none">
+                                                {% if movie.poster %}
+                                                <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border-top: 3px solid #9C27B0; border-left: 3px solid #9C27B0; border-right: 3px solid #9C27B0;">
+                                                {% else %}
+                                                <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border-top: 3px solid #9C27B0; border-left: 3px solid #9C27B0; border-right: 3px solid #9C27B0;">
+                                                    <span>No Image</span>
                                                 </div>
+                                                {% endif %}
+                                                
+                                                <!-- Average Rating Badge -->
+                                                {% if movie.avg_rating %}
+                                                <div class="avg-rating-badge">
+                                                    {{ movie.avg_rating }}<span class="rating-max">/10</span> ({{ movie.rating_count }})
+                                                </div>
+                                                {% endif %}
+                                                
+                                                <div class="card-body">
+                                                    <h5 class="card-title">{{ movie.title }}</h5>
+                                                    <p class="card-text">
+                                                        {% if movie.release_date %}
+                                                        <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                        {% endif %}
+                                                    </p>
+                                                </div>
+                                            </a>
+                                            
+                                            <!-- Action buttons inside card but outside link -->
+                                            <div class="card-actions">
+                                                <button type="button" class="btn btn-sm btn-success" onclick="addToWatchlist({{ movie.id }}, this)">
+                                                    Add to Watchlist
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -402,9 +401,7 @@
                                                 <th>Title</th>
                                                 <th>Release Date</th>
                                                 <th>Genres</th>
-                                                <th>Friend Rating</th>
                                                 <th>Avg Rating</th>
-                                                <th>Reviewed By</th>
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>
@@ -419,16 +416,14 @@
                                                     {% endfor %}
                                                 </td>
                                                 <td>
-                                                    <span class="badge bg-primary">{{ movie.friend_name }}: {{ movie.friend_rating }}</span>
-                                                </td>
-                                                <td>
                                                     {% if movie.avg_rating %}{{ movie.avg_rating }} / 10 ({{ movie.rating_count }}){% else %}Not rated{% endif %}
                                                 </td>
-                                                <td>{{ movie.friend_name }}</td>
                                                 <td>
                                                     <div class="btn-group" role="group">
                                                         <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
-                                                        <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
+                                                        <button type="button" class="btn btn-sm btn-success" onclick="addToWatchlist({{ movie.id }}, this)">
+                                                            Add to Watchlist
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -463,30 +458,34 @@
                                     {% for movie in undiscovered_movies %}
                                     <div class="col">
                                         <div class="card h-100 movie-card card-undiscovered">
-                                            {% if movie.poster %}
-                                            <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border-top: 3px solid #FF9800; border-left: 3px solid #FF9800; border-right: 3px solid #FF9800;">
-                                            {% else %}
-                                            <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border-top: 3px solid #FF9800; border-left: 3px solid #FF9800; border-right: 3px solid #FF9800;">
-                                                <span>No Image</span>
-                                            </div>
-                                            {% endif %}
-                                            
-                                            <div class="undiscovered-badge">
-                                                Undiscovered
-                                            </div>
-                                            
-                                            <div class="card-body">
-                                                <h5 class="card-title">{{ movie.title }}</h5>
-                                                <p class="card-text">
-                                                    {% if movie.release_date %}
-                                                    <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
-                                                    {% endif %}
-                                                </p>
-                                                <div class="mt-2">
-                                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View Details</a>
-                                                    <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
-                                                    <button type="button" class="btn btn-sm btn-warning">Rate Movie</button>
+                                            <a href="{% url 'movie_page' movie.tmdb_id %}" class="text-decoration-none">
+                                                {% if movie.poster %}
+                                                <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}" style="border-top: 3px solid #FF9800; border-left: 3px solid #FF9800; border-right: 3px solid #FF9800;">
+                                                {% else %}
+                                                <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px; border-top: 3px solid #FF9800; border-left: 3px solid #FF9800; border-right: 3px solid #FF9800;">
+                                                    <span>No Image</span>
                                                 </div>
+                                                {% endif %}
+                                                
+                                                <div class="undiscovered-badge">
+                                                    Undiscovered
+                                                </div>
+                                                
+                                                <div class="card-body">
+                                                    <h5 class="card-title">{{ movie.title }}</h5>
+                                                    <p class="card-text">
+                                                        {% if movie.release_date %}
+                                                        <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
+                                                        {% endif %}
+                                                    </p>
+                                                </div>
+                                            </a>
+                                            
+                                            <!-- Action buttons inside card but outside link -->
+                                            <div class="card-actions">
+                                                <button type="button" class="btn btn-sm btn-success" onclick="addToWatchlist({{ movie.id }}, this)">
+                                                        Add to Watchlist
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -521,8 +520,10 @@
                                                 <td>
                                                     <div class="btn-group" role="group">
                                                         <a href="{% url 'movie_page' movie.tmdb_id %}" class="btn btn-sm btn-primary">View</a>
-                                                        <button type="button" class="btn btn-sm btn-success">Add to Watchlist</button>
-                                                        <button type="button" class="btn btn-sm btn-warning">Rate Movie</button>
+                                                            <button type="button" class="btn btn-sm btn-success" onclick="addToWatchlist({{ movie.id }}, this)">
+                                                                Add to Watchlist
+                                                            </button>                                                        
+                                                            <button type="button" class="btn btn-sm btn-warning">Rate Movie</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -598,21 +599,35 @@
     
     .card-body {
         padding: 0.5rem !important;
+        flex-grow: 1;
     }
     
     .card-footer {
+        margin-top: auto;
         background-color: rgb(225, 225, 225);
         border-top: 2px inset white;
         padding: 0.5rem !important;
     }
     
-    /* Rating badge styles updated */
-    .user-rating-badge {
+    /* Rating color classes - updated to match home_page */
+    .high-rating {
+        background-color: #4CAF50 !important; /* Green */
+        color: white !important;
+    }
+    
+    .mid-rating {
+        background-color: #FFC107 !important; /* Amber/Yellow */
+        color: black !important;
+    }
+    
+    .low-rating {
+        background-color: #F44336 !important; /* Red */
+        color: white !important;
+    }
+    
+    /* Rating badge styles - fixed positioning */
+    .user-rating-badge, .friend-review-badge, .avg-rating-badge, .badge-rating-user {
         position: absolute;
-        top: 8px;
-        right: 8px;
-        background: rgba(0, 0, 0, 0.7);
-        color: white;
         padding: 2px 6px;
         border-radius: 3px;
         font-weight: bold;
@@ -621,61 +636,33 @@
         z-index: 5;
     }
     
+    /* Primary rating badge (user or friend) */
+    .user-rating-badge, .friend-review-badge, .badge-rating-user {
+        top: 8px;
+        right: 8px;
+    }
+    
+    /* Secondary rating badge (average) */
     .avg-rating-badge {
-        position: absolute;
         top: 40px;
         right: 8px;
         background: rgba(0, 0, 0, 0.7);
         color: white;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-weight: bold;
-        font-size: 0.75rem;
-        box-shadow: 0 0 3px rgba(0,0,0,0.5);
-        z-index: 5;
     }
     
-    /* Friend review badge */
-    .friend-review-badge {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        background: rgba(156, 39, 176, 0.8);
-        color: white;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-weight: bold;
-        font-size: 0.75rem;
-        box-shadow: 0 0 3px rgba(0,0,0,0.5);
-        z-index: 5;
+    /* Required for proper absolute positioning */
+    .text-decoration-none {
+        position: relative;
+        color: inherit;
+        text-decoration: none;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
     }
     
-    /* Undiscovered badge */
-    .undiscovered-badge {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        background: rgba(255, 152, 0, 0.8);
-        color: white;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-weight: bold;
-        font-size: 0.75rem;
-        box-shadow: 0 0 3px rgba(0,0,0,0.5);
-        z-index: 5;
-    }
-    
-    /* Specific status indicators for cards */
-    .card-friends img, .card-friends .card-img-top {
-        border-top: 3px solid #9C27B0 !important;
-        border-left: 3px solid #9C27B0 !important;
-        border-right: 3px solid #9C27B0 !important;
-    }
-
-    .card-undiscovered img, .card-undiscovered .card-img-top {
-        border-top: 3px solid #FF9800 !important;
-        border-left: 3px solid #FF9800 !important;
-        border-right: 3px solid #FF9800 !important;
+    /* Ensure the .card-img-top area has proper positioning context */
+    .card-img-top {
+        position: relative;
     }
 
     /* Form controls */
@@ -741,6 +728,28 @@
             padding: 0.35rem !important;
         }
     }
+
+    /* Card layout structure */
+    .card.h-100 {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    
+    .text-decoration-none {
+        color: inherit;
+        text-decoration: none;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+    
+    /* Card actions section */
+    .card-actions {
+        padding: 0.5rem;
+        border-top: 2px inset white;
+        background-color: rgb(225, 225, 225);
+    }
 </style>
 
 <script>
@@ -770,4 +779,88 @@
         });
     });
 </script>
+<script>
+    // Function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    // Function to add movie to watchlist
+    function addToWatchlist(movieId, buttonElement) {
+        fetch('/movies/watchlist/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: movieId
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                // Update button appearance instead of reloading
+                buttonElement.textContent = 'Remove from Watchlist';
+                buttonElement.classList.add('btn-danger');
+                buttonElement.classList.remove('btn-success');
+                buttonElement.onclick = function() { 
+                    removeFromWatchlist(movieId, buttonElement); 
+                };
+            } else {
+                response.json().then(data => {
+                    alert('Failed to add movie to watchlist: ' + (data.error || 'Unknown error'));
+                }).catch(() => {
+                    alert('Failed to add movie to watchlist');
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding movie to watchlist');
+        });
+    }
+    
+    // Function to remove movie from watchlist
+    function removeFromWatchlist(movieId, buttonElement) {
+        fetch('/movies/watchlist/', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: movieId
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                // Update button appearance instead of reloading
+                buttonElement.textContent = 'Add to Watchlist';
+                buttonElement.classList.add('btn-success');
+                buttonElement.classList.remove('btn-danger');
+                buttonElement.onclick = function() { 
+                    addToWatchlist(movieId, buttonElement); 
+                };
+            } else {
+                alert('Failed to remove movie from watchlist');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error removing movie from watchlist');
+        });
+    }
+</script>
+
 {% endblock %}
