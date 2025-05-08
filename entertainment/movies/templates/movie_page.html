@@ -180,6 +180,20 @@ body {
                     <div style="text-align: center; font-style: italic; width: 100%; background-color: #C3C3C3; padding: 5px; border: 2px inset;">No crew information available</div>
                 {% endfor %}
             </div>
+            <div style="margin-top: 10px;">
+                <p style="font-weight: bold; margin-bottom: 5px;">Fellow Movie Hoarders:</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 5px; max-height: 80px; overflow-y: auto; background-color: #f9f9f9; padding: 5px; border: 1px inset #ddd;">
+                    {% if watchlist_users %}
+                        {% for user in watchlist_users %}
+                            <a href="/profile/{{ user.username }}/" style="text-decoration: none; background-color: #C3C3C3; color: black; padding: 3px 6px; border: 1px outset #ddd; font-size: 12px; white-space: nowrap; display: inline-block; margin-bottom: 3px;">
+                                {{ user.username }}
+                            </a>
+                        {% endfor %}
+                    {% else %}
+                        <span style="font-style: italic; color: #666; font-size: 12px;">No users have added this to their watchlist yet</span>
+                    {% endif %}
+                </div>
+            </div>
         </div>
         <div style="margin-top: 10px;" class="button-container">
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openTrailerModal()">Watch Trailer</button>
