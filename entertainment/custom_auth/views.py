@@ -540,6 +540,37 @@ def api_watchlist(request):
                 filtered_items.append(item)
         watchlist_items = filtered_items
     
+    # Apply sorting before categorizing
+    if sort_by:
+        if sort_by == 'date_added':
+            watchlist_items = sorted(watchlist_items, key=lambda x: x.date_added, reverse=True)
+        elif sort_by == '-date_added':
+            watchlist_items = sorted(watchlist_items, key=lambda x: x.date_added)
+        elif sort_by == 'title':
+            watchlist_items = sorted(watchlist_items, key=lambda x: x.media.title.lower())
+        elif sort_by == '-title':
+            watchlist_items = sorted(watchlist_items, key=lambda x: x.media.title.lower(), reverse=True)
+        elif sort_by == 'release_date':
+            # Handle both movie release_date and TV show first_air_date
+            def get_release_date(item):
+                if hasattr(item.media, 'release_date') and item.media.release_date:
+                    return item.media.release_date
+                elif hasattr(item.media, 'first_air_date') and item.media.first_air_date:
+                    return item.media.first_air_date
+                # Return a far past date for items without release dates
+                return datetime.min
+            watchlist_items = sorted(watchlist_items, key=get_release_date)
+        elif sort_by == '-release_date':
+            # Same function but reversed sort
+            def get_release_date(item):
+                if hasattr(item.media, 'release_date') and item.media.release_date:
+                    return item.media.release_date
+                elif hasattr(item.media, 'first_air_date') and item.media.first_air_date:
+                    return item.media.first_air_date
+                # Return a far past date for items without release dates
+                return datetime.min
+            watchlist_items = sorted(watchlist_items, key=get_release_date, reverse=True)
+    
     # Categorize items
     continue_watching = []
     havent_started = []
