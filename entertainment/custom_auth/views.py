@@ -303,22 +303,63 @@ def watchlist_page(request):
     # Categorize items
     continue_watching = []
     havent_started = []
-    finished_shows = []  # Add this line
+    finished_shows = []
     movies = []
-
+    
+    # First, separate TV shows and movies
+    tv_shows_items = []
+    
     for item in watchlist_items:
         media = get_safe_media(item)
         if item.content_type_id == movie_ct.id:
             movies.append(item)
         elif item.content_type_id == tv_ct.id and media:
-            # Only process items with valid media objects
-            # Check watch progress for TV shows
-            progress = user.get_watch_progress(media)
-            if progress >= 100:  # Add this condition
-                finished_shows.append(item)  # Add completed shows to finished_shows
+            tv_shows_items.append(item)
+    
+    # If there are TV shows, batch-fetch their watch progress
+    if tv_shows_items:
+        # Get all TV show IDs
+        tv_show_ids = [item.object_id for item in tv_shows_items]
+        
+        # Get all episodes for these shows
+        from tvshows.models import Episode
+        total_episodes = Episode.objects.filter(
+            season__show_id__in=tv_show_ids
+        ).values('season__show_id').annotate(
+            count=models.Count('id')
+        )
+        
+        # Get all watched episodes for these shows by this user
+        from tvshows.models import WatchedEpisode
+        watched_episodes = WatchedEpisode.objects.filter(
+            user=user,
+            episode__season__show_id__in=tv_show_ids
+        ).values('episode__season__show_id').annotate(
+            count=models.Count('id')
+        )
+        
+        # Create mappings for fast lookup
+        total_episodes_map = {item['season__show_id']: item['count'] for item in total_episodes}
+        watched_episodes_map = {item['episode__season__show_id']: item['count'] for item in watched_episodes}
+        
+        # Now categorize TV shows with the pre-fetched data
+        for item in tv_shows_items:
+            show_id = item.object_id
+            total = total_episodes_map.get(show_id, 0)
+            watched = watched_episodes_map.get(show_id, 0)
+            
+            # Calculate progress percentage
+            progress = (watched / total * 100) if total > 0 else 0
+            
+            # Categorize based on progress
+            if progress >= 100:
+                # Completed shows
+                finished_shows.append(item)
             elif progress > 0:
+                # In-progress shows
                 continue_watching.append((item, progress))
             else:
+                # Not started shows
                 havent_started.append(item)
     
     # Add reviews data to items
@@ -544,10 +585,67 @@ def api_watchlist(request):
     
     # Apply search filter if provided
     if search_query:
+        # Use PostgreSQL's full-text search capabilities
+        from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
+        
+        # Get content types for efficient filtering
+        movie_ct = ContentType.objects.get_for_model(Movie)
+        tv_ct = ContentType.objects.get_for_model(TVShow)
+        
+        # Group watchlist items by content type
+        movie_items = [item for item in watchlist_items if item.content_type_id == movie_ct.id]
+        tv_items = [item for item in watchlist_items if item.content_type_id == tv_ct.id]
+        other_items = [item for item in watchlist_items if item.content_type_id not in (movie_ct.id, tv_ct.id)]
+        
+        # Extract IDs by content type
+        movie_ids = [item.object_id for item in movie_items]
+        tv_ids = [item.object_id for item in tv_items]
+        
+        # Create search query object with proper config
+        search_query_obj = SearchQuery(search_query, config='english')
+        
+        # Search movies with PostgreSQL full-text search
+        movie_matches = set(Movie.objects.filter(id__in=movie_ids).annotate(
+            search=SearchVector('title', 'original_title', config='english'),
+            rank=SearchRank(SearchVector('title', 'original_title', config='english'), search_query_obj)
+        ).filter(search=search_query_obj).order_by('-rank').values_list('id', flat=True))
+        
+        # Search TV shows with PostgreSQL full-text search
+        tv_matches = set(TVShow.objects.filter(id__in=tv_ids).annotate(
+            search=SearchVector('title', 'original_title', config='english'),
+            rank=SearchRank(SearchVector('title', 'original_title', config='english'), search_query_obj)
+        ).filter(search=search_query_obj).order_by('-rank').values_list('id', flat=True))
+        
+        # Add fallback search for partial text matches if full-text search found nothing
+        if not movie_matches:
+            movie_matches = set(Movie.objects.filter(
+                id__in=movie_ids
+            ).filter(
+                Q(title__icontains=search_query) | 
+                Q(original_title__icontains=search_query)
+            ).values_list('id', flat=True))
+        
+        if not tv_matches:
+            tv_matches = set(TVShow.objects.filter(
+                id__in=tv_ids
+            ).filter(
+                Q(title__icontains=search_query) | 
+                Q(original_title__icontains=search_query)
+            ).values_list('id', flat=True))
+        
+        # Filter watchlist items based on database matches
         filtered_items = []
-        for item in watchlist_items:
-            if search_query.lower() in item.media.title.lower():
+        for item in movie_items:
+            if item.object_id in movie_matches:
                 filtered_items.append(item)
+        
+        for item in tv_items:
+            if item.object_id in tv_matches:
+                filtered_items.append(item)
+        
+        # Add other content types (if any)
+        filtered_items.extend(other_items)
+        
         watchlist_items = filtered_items
     
     # Apply genre filter if provided
@@ -566,7 +664,7 @@ def api_watchlist(request):
                 filtered_items.append(item)
         watchlist_items = filtered_items
 
-    # Add review data to items - this was missing!
+    # Add review data to items
     add_review_data_to_items(watchlist_items, user)
     
     # Apply sorting before categorizing
@@ -609,12 +707,51 @@ def api_watchlist(request):
     movie_ct = ContentType.objects.get_for_model(Movie)
     tv_ct = ContentType.objects.get_for_model(TVShow)
     
+    # First, separate TV shows and movies
+    tv_shows_items = []
+    
     for item in watchlist_items:
         if item.content_type_id == movie_ct.id:
             movies.append(serialize_watchlist_item(item))
         elif item.content_type_id == tv_ct.id:
-            # Check watch progress for TV shows
-            progress = user.get_watch_progress(item.media)
+            tv_shows_items.append(item)
+    
+    # If there are TV shows, batch-fetch their watch progress
+    if tv_shows_items:
+        # Get all TV show IDs
+        tv_show_ids = [item.object_id for item in tv_shows_items]
+        
+        # Get all episodes for these shows
+        from tvshows.models import Episode
+        total_episodes = Episode.objects.filter(
+            season__show_id__in=tv_show_ids
+        ).values('season__show_id').annotate(
+            count=models.Count('id')
+        )
+        
+        # Get all watched episodes for these shows by this user
+        from tvshows.models import WatchedEpisode
+        watched_episodes = WatchedEpisode.objects.filter(
+            user=user,
+            episode__season__show_id__in=tv_show_ids
+        ).values('episode__season__show_id').annotate(
+            count=models.Count('id')
+        )
+        
+        # Create mappings for fast lookup
+        total_episodes_map = {item['season__show_id']: item['count'] for item in total_episodes}
+        watched_episodes_map = {item['episode__season__show_id']: item['count'] for item in watched_episodes}
+        
+        # Now categorize TV shows with the pre-fetched data
+        for item in tv_shows_items:
+            show_id = item.object_id
+            total = total_episodes_map.get(show_id, 0)
+            watched = watched_episodes_map.get(show_id, 0)
+            
+            # Calculate progress percentage
+            progress = (watched / total * 100) if total > 0 else 0
+            
+            # Categorize based on progress
             if progress >= 100:
                 # Completed shows
                 finished_shows.append(serialize_watchlist_item(item))
