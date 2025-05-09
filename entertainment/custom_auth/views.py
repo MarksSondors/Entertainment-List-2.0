@@ -352,8 +352,6 @@ def watchlist_page(request):
             
             # Calculate progress percentage
             progress = (watched / total * 100) if total > 0 else 0
-
-            print(f"Show ID: {show_id}, Total: {total}, Watched: {watched}, Progress: {progress}")
             
             # Categorize based on progress
             if progress >= 100:
@@ -489,7 +487,7 @@ def watchlist_page(request):
         'countries': countries,
     }
     
-    return render(request, 'watchlist_page.html', context)
+    return render(request, 'watchlist_page', context)
 
 def add_review_data_to_items(items, current_user):
     """Helper function to add review data to watchlist items."""
@@ -1341,26 +1339,46 @@ def recent_activity(request):
 @login_required
 def browse_by_people(request):
     """
-    View for displaying people categorized by their roles (directors, writers, actors, etc.)
-    with optimized query performance
+    View for displaying people categorized by their roles with improved role identification
+    and optimized query performance. Only shows people involved in works that have reviews.
     """
     # Cache key prefix for storing sorted people lists
-    cache_key_prefix = "people_browser_"
-    cache_timeout = 20  # 1 hour cache timeout
+    cache_key_prefix = "people_browser_reviewed_"
+    cache_timeout = 1  # 1 hour cache timeout
     
     # Function to efficiently get and sort people by role with caching
     def get_people_by_role(role_filter, cache_key):
         from django.core.cache import cache
         
-        # Limit to first 100 people per category to prevent slowdowns
-        # with huge datasets - add pagination if needed
-        people = Person.objects.filter(role_filter)[:100]
+        # Try to get cached result first
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return cached_result
         
-        # Prefetch all media relations in a single query 
-        # to avoid N+1 database hits
+        # First, identify media that has reviews
+        reviewed_media = Review.objects.values('content_type_id', 'object_id').distinct()
+        
+        # Then get all MediaPerson entries that match those reviewed media
+        reviewed_media_persons = MediaPerson.objects.filter(
+            content_type_id__in=[item['content_type_id'] for item in reviewed_media],
+            object_id__in=[item['object_id'] for item in reviewed_media]
+        ).values('person_id').distinct()
+        
+        # Get people matching the role filter AND who have been in reviewed works
+        people = Person.objects.filter(
+            role_filter,
+            id__in=reviewed_media_persons
+        ).distinct()[:150]
+        
+        # If no people match the criteria, return empty list early
+        if not people:
+            cache.set(cache_key, [], cache_timeout)
+            return []
+        
+        # Prefetch all media relations in a single query
         person_ids = [p.id for p in people]
         
-        # Get all media relations for all people in one query
+        # Get all media relations for these people in one query
         media_relations = MediaPerson.objects.filter(
             person_id__in=person_ids
         ).values('person_id', 'content_type_id', 'object_id')
@@ -1370,15 +1388,15 @@ def browse_by_people(request):
         for relation in media_relations:
             person_id = relation['person_id']
             if person_id not in person_media:
-                person_media[person_id] = set()  # Use a set instead of a list
+                person_media[person_id] = set()
             person_media[person_id].add(
                 (relation['content_type_id'], relation['object_id'])
             )
         
         # Batch collect all content types and object IDs for reviews
-        all_media_identifiers = set()  # Use a set here too
+        all_media_identifiers = set()
         for relations in person_media.values():
-            all_media_identifiers.update(relations)  # Use update for sets
+            all_media_identifiers.update(relations)
         
         # Build a map of all media ratings at once
         media_ratings = {}
@@ -1410,10 +1428,7 @@ def browse_by_people(request):
             person_media_list = person_media.get(person.id, [])
             
             if not person_media_list:
-                person.avg_rating = None
-                person.rating_count = 0
-                people_with_ratings.append(person)
-                continue
+                continue  # Skip people with no media
                 
             # Calculate average rating across all media
             total_rating = 0
@@ -1429,16 +1444,12 @@ def browse_by_people(request):
             if total_count > 0:
                 person.avg_rating = round(total_rating / total_count, 1)
                 person.rating_count = total_count
-            else:
-                person.avg_rating = None
-                person.rating_count = 0
-                
-            people_with_ratings.append(person)
-            
-        # Sort by average rating
+                people_with_ratings.append(person)
+        
+        # Sort by average rating (highest first) and then alphabetically by name
         result = sorted(
             people_with_ratings,
-            key=lambda p: (p.avg_rating is not None, p.avg_rating or 0),
+            key=lambda p: (p.avg_rating is not None, p.avg_rating or 0, p.name),
             reverse=True
         )
         
@@ -1447,13 +1458,14 @@ def browse_by_people(request):
         
         return result
     
-    # Get people by category with optimized queries
+    # Get people by category with improved role identification
     directors = get_people_by_role(
         Q(is_director=True), 
         f"{cache_key_prefix}directors"
     )
     
     writers = get_people_by_role(
+        # Include all writing roles
         Q(is_screenwriter=True) | Q(is_writer=True) | Q(is_story=True),
         f"{cache_key_prefix}writers"
     )
@@ -1474,8 +1486,9 @@ def browse_by_people(request):
     )
     
     other_creators = get_people_by_role(
-        Q(is_original_story=True) | Q(is_novelist=True) | 
-        Q(is_comic_artist=True) | Q(is_graphic_novelist=True),
+        # Visual artists and other creators not covered in other categories
+        Q(is_comic_artist=True) | Q(is_graphic_novelist=True) | Q(is_book=True) | 
+        Q(is_novelist=True) | Q(is_original_story=True),
         f"{cache_key_prefix}other_creators"
     )
     
