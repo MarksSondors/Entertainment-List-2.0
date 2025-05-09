@@ -324,7 +324,8 @@ def watchlist_page(request):
         # Get all episodes for these shows
         from tvshows.models import Episode
         total_episodes = Episode.objects.filter(
-            season__show_id__in=tv_show_ids
+            season__show_id__in=tv_show_ids,
+            season__season_number__gt=0
         ).values('season__show_id').annotate(
             count=models.Count('id')
         )
@@ -333,7 +334,8 @@ def watchlist_page(request):
         from tvshows.models import WatchedEpisode
         watched_episodes = WatchedEpisode.objects.filter(
             user=user,
-            episode__season__show_id__in=tv_show_ids
+            episode__season__show_id__in=tv_show_ids,
+            episode__season__season_number__gt=0 
         ).values('episode__season__show_id').annotate(
             count=models.Count('id')
         )
@@ -350,6 +352,8 @@ def watchlist_page(request):
             
             # Calculate progress percentage
             progress = (watched / total * 100) if total > 0 else 0
+
+            print(f"Show ID: {show_id}, Total: {total}, Watched: {watched}, Progress: {progress}")
             
             # Categorize based on progress
             if progress >= 100:
@@ -724,7 +728,8 @@ def api_watchlist(request):
         # Get all episodes for these shows
         from tvshows.models import Episode
         total_episodes = Episode.objects.filter(
-            season__show_id__in=tv_show_ids
+            season__show_id__in=tv_show_ids,
+            season__season_number__gt=0 
         ).values('season__show_id').annotate(
             count=models.Count('id')
         )
@@ -733,7 +738,8 @@ def api_watchlist(request):
         from tvshows.models import WatchedEpisode
         watched_episodes = WatchedEpisode.objects.filter(
             user=user,
-            episode__season__show_id__in=tv_show_ids
+            episode__season__show_id__in=tv_show_ids,
+            episode__season__season_number__gt=0
         ).values('episode__season__show_id').annotate(
             count=models.Count('id')
         )
