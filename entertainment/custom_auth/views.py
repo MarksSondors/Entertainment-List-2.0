@@ -487,7 +487,7 @@ def watchlist_page(request):
         'countries': countries,
     }
     
-    return render(request, 'watchlist_page', context)
+    return render(request, 'watchlist_page.html', context)
 
 def add_review_data_to_items(items, current_user):
     """Helper function to add review data to watchlist items."""
