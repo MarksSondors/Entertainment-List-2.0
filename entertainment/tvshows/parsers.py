@@ -220,6 +220,9 @@ def process_creators(tvshow, creators):
                 'imdb_id': person_details.get('imdb_id')
             }
         )
+
+        person_instance.is_tv_creator = True
+        person_instance.save()
         
         MediaPerson.objects.create(
             content_type=tvshow_content_type,

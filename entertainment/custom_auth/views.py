@@ -1344,7 +1344,7 @@ def browse_by_people(request):
     """
     # Cache key prefix for storing sorted people lists
     cache_key_prefix = "people_browser_reviewed_"
-    cache_timeout = 1  # 1 hour cache timeout
+    cache_timeout = 3600  # 1 hour cache timeout
     
     # Function to efficiently get and sort people by role with caching
     def get_people_by_role(role_filter, cache_key):
