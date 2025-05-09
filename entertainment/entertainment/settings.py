@@ -48,6 +48,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
+    'django.contrib.postgres',
+
     # Third-party apps
     'django_bootstrap5',
     'rest_framework',
