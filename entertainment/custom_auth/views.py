@@ -463,14 +463,40 @@ def add_review_data_to_items(items, current_user):
     content_type_ids = {item.content_type_id for item in items}
     content_types = {ct.id: ct for ct in ContentType.objects.filter(id__in=content_type_ids)}
     
+    # Identify TV show content type
+    from tvshows.models import TVShow
+    tv_show_content_type_id = ContentType.objects.get_for_model(TVShow).id
+    
     # Build a combined query for all reviews at once
     from django.db.models import Q
     review_query = Q()
+    tv_show_ids = []  # Track TV show IDs for season/subgroup review fetch
+    
     for ct_id, obj_id in grouped_items.keys():
         review_query |= Q(content_type_id=ct_id, object_id=obj_id)
+        # If this is a TV show, track it for later
+        if ct_id == tv_show_content_type_id:
+            tv_show_ids.append(obj_id)
     
-    # Fetch all reviews in a SINGLE query
+    # Fetch all direct reviews in a SINGLE query
     all_reviews = Review.objects.filter(review_query).exclude(user=current_user).select_related('user')
+    
+    # For TV shows, also fetch season and episode subgroup reviews
+    if tv_show_ids:
+        # Get season and subgroup reviews for these TV shows
+        from django.db.models import Q
+        tv_show_season_reviews = Review.objects.filter(
+            content_type_id=tv_show_content_type_id,
+            object_id__in=tv_show_ids
+        ).exclude(
+            user=current_user
+        ).exclude(
+            season=None,
+            episode_subgroup=None
+        ).select_related('user', 'season', 'episode_subgroup')
+        
+        # Add these reviews to our collection
+        all_reviews = list(all_reviews) + list(tv_show_season_reviews)
     
     # Group reviews by content type and object ID for fast lookup
     grouped_reviews = {}
@@ -539,6 +565,9 @@ def api_watchlist(request):
             if hasattr(item.media, 'countries') and item.media.countries.filter(id=country_id).exists():
                 filtered_items.append(item)
         watchlist_items = filtered_items
+
+    # Add review data to items - this was missing!
+    add_review_data_to_items(watchlist_items, user)
     
     # Apply sorting before categorizing
     if sort_by:

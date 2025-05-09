@@ -509,7 +509,7 @@
         </div>
       ` : '';
       
-      // Rating badge
+      // Rating badge - should always be shown if available
       const ratingHtml = item.avg_rating ? `
         <div class="avg-rating-badge">${item.avg_rating} (${item.rating_count})</div>
       ` : '';
@@ -531,7 +531,7 @@
             
             ${progressBadge}
             ${completedBadge}
-            ${progress === null ? ratingHtml : ''}
+            ${ratingHtml}
             
             <div class="card-body p-2">
               <h6 class="card-title mb-1">${item.media_title}</h6>
