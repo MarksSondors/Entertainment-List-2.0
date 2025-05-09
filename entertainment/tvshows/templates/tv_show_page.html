@@ -279,7 +279,7 @@ body {
                 {% for episode in season.episodes.all %}
                     <div class="episode-item" id="episode-{{ episode.id }}">
                         <div class="episode-image">
-                            <img src="{{ episode.still|default:'https://via.placeholder.com/160x90?text=No+Image' }}" 
+                            <img src="{{ episode.still|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-38-picture-grey-c2ebdbb057f2a7614185931650f8cee23fa137b93812ccb132b9df511df1cfac.svg' }}" 
                                  alt="Episode {{ episode.episode_number }} Still" 
                                  loading="lazy"
                                  width="160" height="90"
