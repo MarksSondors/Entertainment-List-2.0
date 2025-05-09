@@ -4,7 +4,7 @@
 {% block title %}Browse by People | Entertainment List{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-2 py-md-4">
+<div class="container-fluid py-4">
     <div class="window">
         <div class="title-bar">
             <div class="title-bar-text">People Explorer</div>
@@ -15,7 +15,8 @@
             </div>
         </div>
         <div class="window-body">
-            <div class="field-row mb-2 d-none d-md-flex">
+            <!-- Address bar - now visible on all screens -->
+            <div class="field-row mb-3">
                 <label>Address:</label>
                 <div class="field-row-stacked" style="width: 100%">
                     <input type="text" readonly value="C:\Entertainment\People\" style="width: 100%">
@@ -46,18 +47,17 @@
                 </menu>
                 
                 <!-- Directors Tab -->
-                <div class="sunken-panel p-2 p-md-3" role="tabpanel" style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" style="min-height: 300px;">
                     {% if directors %}
                         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
                             {% for person in directors %}
                             <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
                                     <div class="text-center">
                                         <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}" width="65" height="65" 
+                                             alt="{{ person.name }}"  
                                              class="person-img"
                                              onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;" 
                                              loading="lazy">
                                         <div class="person-name">{{ person.name }}</div>
                                         {% if person.avg_rating %}
@@ -81,18 +81,17 @@
                 </div>
                 
                 <!-- Writers Tab -->
-                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
                     {% if writers %}
                         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
                             {% for person in writers %}
                             <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
                                     <div class="text-center">
                                         <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}" width="65" height="65" 
+                                             alt="{{ person.name }}"  
                                              class="person-img"
                                              onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
                                              loading="lazy">
                                         <div class="person-name">{{ person.name }}</div>
                                         {% if person.avg_rating %}
@@ -116,18 +115,17 @@
                 </div>
                 
                 <!-- Actors Tab -->
-                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
                     {% if actors %}
                         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
                             {% for person in actors %}
                             <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
                                     <div class="text-center">
                                         <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}" width="65" height="65" 
+                                             alt="{{ person.name }}"  
                                              class="person-img"
                                              onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
                                              loading="lazy">
                                         <div class="person-name">{{ person.name }}</div>
                                         {% if person.avg_rating %}
@@ -151,18 +149,17 @@
                 </div>
                 
                 <!-- TV Creators Tab -->
-                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
                     {% if tv_creators %}
                         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
                             {% for person in tv_creators %}
                             <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
                                     <div class="text-center">
                                         <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}" width="65" height="65" 
+                                             alt="{{ person.name }}"  
                                              class="person-img"
                                              onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
                                              loading="lazy">
                                         <div class="person-name">{{ person.name }}</div>
                                         {% if person.avg_rating %}
@@ -186,18 +183,17 @@
                 </div>
                 
                 <!-- Musicians Tab -->
-                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
                     {% if musicians %}
                         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
                             {% for person in musicians %}
                             <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
                                     <div class="text-center">
                                         <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}" width="65" height="65" 
+                                             alt="{{ person.name }}"  
                                              class="person-img"
                                              onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
                                              loading="lazy">
                                         <div class="person-name">{{ person.name }}</div>
                                         {% if person.avg_rating %}
@@ -221,18 +217,17 @@
                 </div>
                 
                 <!-- Other Creators Tab -->
-                <div class="sunken-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
                     {% if other_creators %}
                         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
                             {% for person in other_creators %}
                             <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="text-decoration-none text-dark">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
                                     <div class="text-center">
                                         <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}" width="65" height="65" 
+                                             alt="{{ person.name }}"  
                                              class="person-img"
                                              onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             style="border: 1px solid #ccc; object-fit: cover; border-radius: 5px;"
                                              loading="lazy">
                                         <div class="person-name">{{ person.name }}</div>
                                         {% if person.avg_rating %}
@@ -256,12 +251,13 @@
                 </div>
             </div>
             
-            <div class="field-row mt-2 mt-md-3" style="justify-content: space-between;">
-                <div>
-                    <span id="item-count" class="small">0 item(s)</span>
+            <!-- Changed to status-bar to match genre page -->
+            <div class="status-bar mt-3">
+                <div class="status-bar-field">
+                    <span id="item-count">0 item(s)</span>
                 </div>
-                <div>
-                    <button class="btn" onclick="window.history.back()">Back</button>
+                <div class="status-bar-field">
+                    <button class="default" onclick="window.history.back()">Back</button>
                 </div>
             </div>
         </div>
@@ -269,36 +265,84 @@
 </div>
 
 <style>
-    /* Mobile-specific styles */
-    @media (max-width: 767.98px) {
+    /* Explorer panel styling to match genre page */
+    .explorer-panel {
+        background-color: white;
+        overflow-y: auto;
+    }
+    
+    /* Person item styling similar to genre-item */
+    .person-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 6px;
+        border: 1px solid transparent;
+    }
+    
+    .person-item:hover {
+        background-color: #d0d1d5;
+        border: 1px dotted #000;
+    }
+    
+    .person-item:active {
+        background-color: #000080;
+        color: white !important;
+    }
+    
+    .person-item:active img {
+        filter: brightness(1.2);
+    }
+    
+    /* Person images */
+    .person-img {
+        width: 64px;
+        height: 64px;
+        border: 1px solid #ccc; 
+        object-fit: cover; 
+        border-radius: 5px;
+    }
+    
+    .person-name {
+        text-align: center;
+        font-size: 0.85rem;
+        max-width: 100px;
+        margin: auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    /* Status bar styling from genre page */
+    .status-bar {
+        display: flex;
+        justify-content: space-between;
+        border: 2px inset white;
+        padding: 2px 4px;
+    }
+    
+    .status-bar-field {
+        font-size: 0.85rem;
+    }
+    
+    /* Alert styling */
+    .alert {
+        border: 2px inset white;
+        border-radius: 0;
+        background-color: rgb(225, 225, 225);
+        padding: 8px;
+        color: black;
+    }
+    
+    /* Mobile adjustments */
+    @media (max-width: 576px) {
         .person-img {
             width: 55px;
             height: 55px;
         }
         
         .person-name {
-            max-width: 80px;
-            margin: auto;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: 0.9em;
-        }
-    }
-    
-    /* Desktop styles */
-    @media (min-width: 768px) {
-        .person-img {
-            width: 80px;
-            height: 80px;
-        }
-        
-        .person-name {
-            max-width: 100px;
-            margin: auto;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-size: 1em;
+            font-size: 0.8em;
         }
     }
 </style>
@@ -342,6 +386,18 @@
         // Set initial item count for first tab
         const initialItems = panels[0].querySelectorAll('.col').length;
         document.getElementById('item-count').textContent = `${initialItems} item(s)`;
+        
+        // Add Windows 95/98 click delay behavior
+        const personLinks = document.querySelectorAll('.person-item');
+        personLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const href = this.getAttribute('href');
+                setTimeout(() => {
+                    window.location.href = href;
+                }, 100);
+            });
+        });
     });
 </script>
 {% endblock %}
