@@ -1367,6 +1367,7 @@ def browse_by_people(request):
         # Get people matching the role filter AND who have been in reviewed works
         people = Person.objects.filter(
             role_filter,
+            profile_picture__isnull=False,
             id__in=reviewed_media_persons
         ).distinct()[:150]
         
