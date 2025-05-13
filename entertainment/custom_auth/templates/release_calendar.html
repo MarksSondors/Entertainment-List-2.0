@@ -1,0 +1,594 @@
+{% extends "components/base.html" %}
+{% load static %}
+{% load calendar_extras %}
+
+{% block content %}
+<div class="container px-2 py-2">
+    <div class="window" style="width: 100%;">
+        <div class="title-bar">
+            <div class="title-bar-text">Release Calendar - {{ month_name }} {{ year }}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <!-- Month navigation -->
+            <div class="calendar-navigation">
+                <a href="?year={{ prev_year }}&month={{ prev_month }}" class="nav-btn prev-btn">
+                    <button>❮ Previous</button>
+                </a>
+                <span class="current-month">{{ month_name }} {{ year }}</span>
+                <a href="?year={{ next_year }}&month={{ next_month }}" class="nav-btn next-btn">
+                    <button>Next ❯</button>
+                </a>
+            </div>
+            
+            <!-- Calendar view -->
+            <div class="sunken-panel" style="padding: 8px; background-color: #eee;">
+                <table class="calendar-table" width="100%" border="0" cellspacing="0" cellpadding="2">
+                    <thead>
+                        <tr>
+                            <th>Mon</th>
+                            <th>Tue</th>
+                            <th>Wed</th>
+                            <th>Thu</th>
+                            <th>Fri</th>
+                            <th>Sat</th>
+                            <th>Sun</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for week in calendar_weeks %}
+                        <tr>
+                            {% for day in week %}
+                            <td class="calendar-day {% if day == 0 %}empty-day{% endif %} {% if day == today.day and month == today.month and year == today.year %}today{% endif %}">
+                                {% if day != 0 %}
+                                <!-- Day number -->
+                                <div class="day-number">{{ day }}</div>
+                                
+                                <!-- Releases for this day - unchanged -->
+                                {% with current_date=year|stringformat:"d" %}
+                                {% with current_date=current_date|add:"-" %}
+                                {% with current_date=current_date|add:month|stringformat:"02d" %}
+                                {% with current_date=current_date|add:"-" %}
+                                {% with current_date=current_date|add:day|stringformat:"02d" %}
+                                {% with releases=releases_by_date|get_item:current_date %}
+                                    
+                                    {% if releases %}
+                                    <div class="day-releases">
+                                        {% if releases.movies %}
+                                        <div class="movie-releases">
+                                            {% for movie in releases.movies %}
+                                            <a href="/movies/{{ movie.tmdb_id }}" class="release-item movie-item">
+                                                <span class="release-title">{{ movie.title }}</span>
+                                            </a>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if releases.tv_shows %}
+                                        <div class="tvshow-releases">
+                                            {% for show in releases.tv_shows %}
+                                            <a href="/tvshows/{{ show.tmdb_id }}" class="release-item tvshow-item">
+                                                <span class="release-title">{{ show.title }}</span>
+                                            </a>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if releases.episodes %}
+                                        <div class="episode-releases">
+                                            {% for episode in releases.episodes %}
+                                            <a href="/tvshows/{{ episode.show_tmdb_id }}" class="release-item episode-item">
+                                                <span class="release-title">{{ episode.title }}</span>
+                                            </a>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    
+                                {% endwith %}
+                                {% endwith %}
+                                {% endwith %}
+                                {% endwith %}
+                                {% endwith %}
+                                {% endwith %}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Mobile-friendly list view for small screens -->
+            <div class="mobile-releases-list">
+                <h3>Upcoming Releases</h3>
+                <div class="mobile-releases-container">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+            
+            <!-- Legend -->
+            <div class="legend-container" style="margin-top: 10px;">
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: #ff9090;"></span>
+                    Movies
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: #90b0ff;"></span>
+                    TV Shows
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: #90ff90;"></span>
+                    Episodes
+                </div>
+            </div>
+            
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Release dates may vary by region</div>
+            <div class="status-bar-field">Total this month: {{ releases_by_date|length }} days with releases</div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .calendar-navigation {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        width: 100%;
+    }
+
+    .calendar-navigation .current-month {
+        font-weight: bold;
+        font-size: 16px;
+        text-align: center;
+        flex: 1;
+    }
+
+    .calendar-navigation .nav-btn {
+        flex: 0 0 auto;
+    }
+    
+    .calendar-table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 2px;
+    }
+    
+    .calendar-table th {
+        background-color: #d4d0c8;
+        border: 1px solid #a0a0a0;
+        padding: 4px;
+        font-weight: bold;
+        text-align: center;
+    }
+    
+    .calendar-day {
+        height: 100px;
+        border: 1px solid #a0a0a0;
+        vertical-align: top;
+        background-color: white;
+        padding: 3px;
+    }
+    
+    .empty-day {
+        background-color: #d4d0c8;
+    }
+    
+    .today {
+        background-color: #ffffcc;
+        font-weight: bold;
+    }
+    
+    .day-number {
+        font-weight: bold;
+        font-size: 14px;
+        margin-bottom: 5px;
+        text-align: right;
+    }
+    
+    .day-releases {
+        font-size: 11px;
+        overflow-y: auto;
+        max-height: 75px;
+    }
+    
+    .release-item {
+        display: block;
+        margin-bottom: 3px;
+        padding: 2px;
+        text-decoration: none;
+        color: inherit;
+        font-size: 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .movie-item {
+        background-color: #ff9090;
+        border: 1px solid #d06060;
+    }
+    
+    .tvshow-item {
+        background-color: #90b0ff;
+        border: 1px solid #6080d0;
+    }
+    
+    .episode-item {
+        background-color: #90ff90;
+        border: 1px solid #60d060;
+    }
+    
+    .legend-container {
+        display: flex;
+        flex-wrap: wrap;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin-right: 15px;
+        margin-bottom: 5px;
+        font-size: 12px;
+    }
+    
+    .legend-color {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        margin-right: 5px;
+        border: 1px solid #808080;
+    }
+    
+    .sunken-panel {
+        border: 2px solid;
+        border-color: #808080 #ffffff #ffffff #808080;
+        padding: 8px;
+    }
+    
+    /* Mobile list view styles */
+    .mobile-releases-list {
+        display: none;  /* Hidden by default */
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .mobile-releases-list h3 {
+        text-align: center;
+        margin-bottom: 10px;
+        font-size: 16px;
+    }
+    
+    .date-releases {
+        margin-bottom: 15px;
+        border: 1px solid #a0a0a0;
+        border-radius: 3px;
+        overflow: hidden;
+        background-color: white;
+    }
+    
+    .date-header {
+        background-color: #d4d0c8;
+        padding: 8px;
+        font-weight: bold;
+        border-bottom: 1px solid #a0a0a0;
+    }
+    
+    .date-content {
+        padding: 8px;
+    }
+    
+    .list-release-item {
+        padding: 5px;
+        margin-bottom: 5px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .list-release-item:last-child {
+        margin-bottom: 0;
+        border-bottom: none;
+    }
+    
+    .list-release-item a {
+        display: flex;
+        align-items: center;
+        text-decoration: none;
+        color: inherit;
+    }
+    
+    .type-indicator {
+        display: inline-block;
+        padding: 2px 6px;
+        margin-right: 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        color: white;
+    }
+    
+    .movie-indicator {
+        background-color: #ff6060;
+    }
+    
+    .tvshow-indicator {
+        background-color: #6080d0;
+    }
+    
+    .episode-indicator {
+        background-color: #60d060;
+    }
+    
+    .list-release-title {
+        flex: 1;
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+        /* Show list view, hide calendar on mobile */
+        .mobile-releases-list {
+            display: block;
+        }
+        
+        .sunken-panel {
+            display: none;
+        }
+        
+        .calendar-table th {
+            font-size: 11px;
+            padding: 2px;
+        }
+        
+        .calendar-day {
+            height: 80px;
+            padding: 2px;
+        }
+        
+        .day-number {
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+        
+        .day-releases {
+            font-size: 9px;
+            max-height: 60px;
+        }
+        
+        .release-item {
+            font-size: 8px;
+            padding: 1px;
+            margin-bottom: 2px;
+        }
+        
+        .legend-item {
+            font-size: 10px;
+            margin-right: 10px;
+        }
+        
+        .legend-color {
+            width: 12px;
+            height: 12px;
+        }
+        
+        .calendar-nav button {
+            font-size: 12px;
+            padding: 2px 5px;
+        }
+        
+        .status-bar-field {
+            font-size: 10px;
+        }
+    }
+    
+    /* Extra small screens */
+    @media (max-width: 480px) {
+        .date-header {
+            font-size: 14px;
+            padding: 6px;
+        }
+        
+        .list-release-title {
+            font-size: 12px;
+        }
+        
+        .type-indicator {
+            font-size: 10px;
+            padding: 1px 4px;
+        }
+        
+        .calendar-table th {
+            font-size: 9px;
+            padding: 1px;
+        }
+        
+        .calendar-day {
+            height: 60px;
+        }
+        
+        .day-releases {
+            max-height: 40px;
+        }
+        
+        .status-bar {
+            flex-direction: column;
+        }
+        
+        .calendar-nav span {
+            font-size: 14px;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Extract releases data from Django context
+        let releasesData = JSON.parse('{{ releases_json|escapejs }}');
+        
+        // For each day in the calendar
+        let calendarDays = document.querySelectorAll('.calendar-day');
+        calendarDays.forEach(function(day) {
+            let dayNumber = day.querySelector('.day-number');
+            if (!dayNumber) return;
+            
+            // Construct the date string (YYYY-MM-DD)
+            let dayNum = parseInt(dayNumber.textContent);
+            if (isNaN(dayNum)) return;
+            
+            let dateStr = `{{ year }}-${String({{ month }}).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+            
+            // Check if there are releases for this date
+            if (releasesData && releasesData[dateStr]) {
+                let dayContent = document.createElement('div');
+                dayContent.className = 'day-releases';
+                
+                // Add movie releases
+                if (releasesData[dateStr].movies && releasesData[dateStr].movies.length > 0) {
+                    let movieDiv = document.createElement('div');
+                    movieDiv.className = 'movie-releases';
+                    
+                    releasesData[dateStr].movies.forEach(function(movie) {
+                        let link = document.createElement('a');
+                        link.href = `/movies/${movie.tmdb_id}`;
+                        link.className = 'release-item movie-item';
+                        link.innerHTML = `<span class="release-title">${movie.title}</span>`;
+                        movieDiv.appendChild(link);
+                    });
+                    
+                    dayContent.appendChild(movieDiv);
+                }
+                
+                // Add TV show releases (keeping this for backward compatibility)
+                if (releasesData[dateStr].tv_shows && releasesData[dateStr].tv_shows.length > 0) {
+                    let tvDiv = document.createElement('div');
+                    tvDiv.className = 'tvshow-releases';
+                    
+                    releasesData[dateStr].tv_shows.forEach(function(show) {
+                        let link = document.createElement('a');
+                        link.href = `/tvshows/${show.tmdb_id}`;
+                        link.className = 'release-item tvshow-item';
+                        link.innerHTML = `<span class="release-title">${show.title}</span>`;
+                        tvDiv.appendChild(link);
+                    });
+                    
+                    dayContent.appendChild(tvDiv);
+                }
+                
+                // Add episode releases
+                if (releasesData[dateStr].episodes && releasesData[dateStr].episodes.length > 0) {
+                    let episodeDiv = document.createElement('div');
+                    episodeDiv.className = 'episode-releases';
+                    
+                    releasesData[dateStr].episodes.forEach(function(episode) {
+                        let link = document.createElement('a');
+                        link.href = `/tvshows/${episode.show_tmdb_id}`;
+                        link.className = 'release-item episode-item';
+                        link.innerHTML = `<span class="release-title">${episode.title}</span>`;
+                        episodeDiv.appendChild(link);
+                    });
+                    
+                    dayContent.appendChild(episodeDiv);
+                }
+                
+                day.appendChild(dayContent);
+            }
+        });
+        
+        // Create mobile list view
+        let mobileContainer = document.querySelector('.mobile-releases-container');
+        
+        // Sort dates to ensure chronological order
+        let dates = Object.keys(releasesData).sort();
+        
+        // Create a list item for each date with releases
+        dates.forEach(function(dateStr) {
+            let releases = releasesData[dateStr];
+            if (!releases) return;
+            
+            // Format the date for display
+            let dateObj = new Date(dateStr);
+            let formattedDate = dateObj.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                month: 'short', 
+                day: 'numeric'
+            });
+            
+            // Create date container
+            let dateItem = document.createElement('div');
+            dateItem.className = 'date-releases';
+            
+            let dateHeader = document.createElement('div');
+            dateHeader.className = 'date-header';
+            dateHeader.textContent = formattedDate;
+            
+            let dateContent = document.createElement('div');
+            dateContent.className = 'date-content';
+            
+            // Add movie releases
+            if (releases.movies && releases.movies.length > 0) {
+                releases.movies.forEach(function(movie) {
+                    let item = createReleaseListItem(movie, 'movie');
+                    dateContent.appendChild(item);
+                });
+            }
+            
+            // Add TV show releases
+            if (releases.tv_shows && releases.tv_shows.length > 0) {
+                releases.tv_shows.forEach(function(show) {
+                    let item = createReleaseListItem(show, 'tvshow');
+                    dateContent.appendChild(item);
+                });
+            }
+            
+            // Add episode releases
+            if (releases.episodes && releases.episodes.length > 0) {
+                releases.episodes.forEach(function(episode) {
+                    let item = createReleaseListItem(episode, 'episode');
+                    dateContent.appendChild(item);
+                });
+            }
+            
+            dateItem.appendChild(dateHeader);
+            dateItem.appendChild(dateContent);
+            mobileContainer.appendChild(dateItem);
+        });
+        
+        // Helper function to create a release list item
+        function createReleaseListItem(item, type) {
+            let container = document.createElement('div');
+            container.className = `list-release-item ${type}-list-item`;
+            
+            let link = document.createElement('a');
+            link.href = type === 'episode' ? 
+                `/tvshows/${item.show_tmdb_id}` : 
+                `/${type === 'movie' ? 'movies' : 'tvshows'}/${item.tmdb_id}`;
+            
+            let typeIndicator = document.createElement('span');
+            typeIndicator.className = `type-indicator ${type}-indicator`;
+            typeIndicator.textContent = type === 'movie' ? 'Movie' : 
+                                       (type === 'tvshow' ? 'TV Show' : 'Episode');
+            
+            let titleSpan = document.createElement('span');
+            titleSpan.className = 'list-release-title';
+            titleSpan.textContent = item.title;
+            
+            link.appendChild(typeIndicator);
+            link.appendChild(titleSpan);
+            container.appendChild(link);
+            
+            return container;
+        }
+    });
+</script>
+{% endblock %}

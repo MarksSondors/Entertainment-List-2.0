@@ -1711,3 +1711,126 @@ def settings_page(request):
     return render(request, 'settings_page.html', {
         'user_settings': user_settings
     })
+
+@login_required
+def release_calendar(request):
+    """
+    Display a calendar of upcoming movie and TV show releases
+    """
+    # Get the year and month from query params, default to current month
+    today = date.today()
+    year = int(request.GET.get('year', today.year))
+    month = int(request.GET.get('month', today.month))
+    
+    # Create date objects for the first and last day of the month
+    first_day = date(year, month, 1)
+    # Get the last day of the month
+    if month == 12:
+        last_day = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        last_day = date(year, month + 1, 1) - timedelta(days=1)
+    
+    # Calculate previous and next month for navigation
+    prev_month = month - 1 if month > 1 else 12
+    prev_year = year if month > 1 else year - 1
+    
+    next_month = month + 1 if month < 12 else 1
+    next_year = year if month < 12 else year + 1
+    
+    # Get all days in the month
+    import calendar as cal_module
+    cal = cal_module.monthcalendar(year, month)
+    
+    # Get movies releasing this month
+    movies = Movie.objects.filter(
+        release_date__range=(first_day, last_day)
+    ).order_by('release_date')
+    
+    # Get episodes releasing this month
+    from tvshows.models import Episode
+    episodes = Episode.objects.filter(
+        air_date__range=(first_day, last_day)
+    ).select_related('season', 'season__show').order_by('air_date')
+    
+    # Create calendar weeks with day numbers
+    calendar_weeks = []
+    for week in cal:
+        calendar_weeks.append(week)
+    
+    # Group the releases by date
+    releases_by_date = {}
+    
+    # Add movies to releases
+    for movie in movies:
+        release_date = movie.release_date
+        if release_date:
+            date_str = release_date.strftime('%Y-%m-%d')
+            if date_str not in releases_by_date:
+                releases_by_date[date_str] = {'movies': [], 'tv_shows': [], 'episodes': []}
+            releases_by_date[date_str]['movies'].append({
+                'title': movie.title,
+                'tmdb_id': movie.tmdb_id
+            })
+    
+    # Group episodes by show for each date
+    episode_groups = {}
+    for episode in episodes:
+        if not episode.air_date:
+            continue
+            
+        date_str = episode.air_date.strftime('%Y-%m-%d')
+        show_id = episode.season.show.id
+        
+        # Create key for grouping
+        key = (date_str, show_id)
+        if key not in episode_groups:
+            episode_groups[key] = {
+                'show': episode.season.show,
+                'episodes': []
+            }
+        
+        episode_groups[key]['episodes'].append(episode)
+    
+    # Add grouped episodes to releases_by_date
+    for (date_str, _), group in episode_groups.items():
+        show = group['show']
+        episodes_count = len(group['episodes'])
+        
+        if date_str not in releases_by_date:
+            releases_by_date[date_str] = {'movies': [], 'tv_shows': [], 'episodes': []}
+        
+        # If multiple episodes, create a batch release entry
+        if episodes_count > 1:
+            releases_by_date[date_str]['episodes'].append({
+                'title': f"{show.title} ({episodes_count} episodes)",
+                'show_tmdb_id': show.tmdb_id,
+                'count': episodes_count
+            })
+        else:
+            # Single episode release
+            episode = group['episodes'][0]
+            episode_title = f"{show.title} - S{episode.season.season_number}E{episode.episode_number}"
+            releases_by_date[date_str]['episodes'].append({
+                'title': episode_title,
+                'show_tmdb_id': show.tmdb_id,
+                'count': 1
+            })
+    
+    import json
+    releases_json = json.dumps(releases_by_date)
+    
+    context = {
+        'year': year,
+        'month': month,
+        'month_name': cal_module.month_name[month],
+        'calendar_weeks': calendar_weeks,
+        'prev_month': prev_month,
+        'prev_year': prev_year,
+        'next_month': next_month,
+        'next_year': next_year,
+        'releases_by_date': releases_by_date,
+        'releases_json': releases_json,
+        'today': today,
+    }
+    
+    return render(request, 'release_calendar.html', context)
