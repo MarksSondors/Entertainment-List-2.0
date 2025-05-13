@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+import secrets
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -12,6 +13,7 @@ class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='profile_pictures/', blank=True, null=True)
+    api_key = models.CharField(max_length=64, blank=True, null=True, unique=True)
 
     def get_profile_picture(self):
         if self.profile_picture:
@@ -21,6 +23,12 @@ class CustomUser(AbstractUser):
     def __str__(self):
         return self.username
         
+    def generate_api_key(self):
+        """Generate a new unique API key for this user."""
+        self.api_key = secrets.token_urlsafe(32)
+        self.save(update_fields=['api_key'])
+        return self.api_key
+    
     def get_watchlist(self):
         """Get all watchlist items for the user with related content types."""
         return Watchlist.objects.filter(user=self).select_related('content_type')
