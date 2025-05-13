@@ -46,6 +46,32 @@
                     </div>
                 </div>
                 
+                <!-- API Key Section -->
+                <div class="field-row-stacked" style="margin-bottom: 15px;">
+                    <h4>API Access</h4>
+                    <div class="sunken-panel" style="padding: 10px;">
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <label for="api_key">Your API Key:</label>
+                            <input type="text" id="api_key" value="{{ request.user.api_key }}" readonly style="width: 100%; background-color: #f0f0f0;">
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: #666;">
+                            Use this key to access the API. Keep it secure and don't share it with others.
+                        </small>
+                        <div class="field-row" style="justify-content: flex-end;">
+                            <button type="button" id="copy-api-key" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px; margin-right: 10px;">
+                                Copy to Clipboard
+                            </button>
+                            <form method="post" style="display: inline;">
+                                {% csrf_token %}
+                                <input type="hidden" name="regenerate_api_key" value="true">
+                                <button type="submit" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">
+                                    Generate New Key
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="field-row" style="justify-content: flex-end;">
                     <button type="submit" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">
                         Save Settings
@@ -64,6 +90,14 @@
     // Add a confirmation message when settings are saved
     document.querySelector('form').addEventListener('submit', function() {
         // You could add form validation here if needed
+    });
+    
+    // Copy API key to clipboard functionality
+    document.getElementById('copy-api-key').addEventListener('click', function() {
+        const apiKeyInput = document.getElementById('api_key');
+        apiKeyInput.select();
+        document.execCommand('copy');
+        alert('API key copied to clipboard!');
     });
 </script>
 {% endblock %}

@@ -1676,15 +1676,28 @@ def movie_statistics(request):
     
     return render(request, 'statistics_movies.html', context)
 
+@login_required
 def settings_page(request):
     """View to display and update user settings"""
     try:
         user_settings = request.user.settings
     except:
         user_settings = UserSettings.objects.create(user=request.user)
+    
+    if request.user.api_key is None:
+        request.user.generate_api_key()  # Use the method on the user model
+        request.user.save()  # Make sure to save the user
         
     if request.method == 'POST':
-        # Process form data
+        # Check if user wants to regenerate API key
+        if 'regenerate_api_key' in request.POST:
+            request.user.generate_api_key()  # Generate a new key
+            request.user.save()  # Save the user with the new key
+            from django.contrib import messages
+            messages.success(request, "New API key generated successfully!")
+            return redirect('settings_page')
+        
+        # Process other settings form data
         user_settings.show_keywords = 'show_keywords' in request.POST
         user_settings.show_review_text = 'show_review_text' in request.POST
         user_settings.show_plot = 'show_plot' in request.POST
@@ -1695,6 +1708,6 @@ def settings_page(request):
         messages.success(request, "Settings updated successfully!")
         return redirect('settings_page')
         
-    return render(request, 'setttings_page.html', {
+    return render(request, 'settings_page.html', {
         'user_settings': user_settings
     })
