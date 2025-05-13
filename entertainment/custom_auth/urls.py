@@ -40,4 +40,7 @@ urlpatterns = [
 
     # statistics
     path('statistics/movies/', views.movie_statistics, name='movie_statistics'),
+
+    # release calendar
+    path('calendar/', views.release_calendar, name='release_calendar'),
 ]
