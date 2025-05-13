@@ -449,16 +449,31 @@ class MovieReviewView(APIView):
         
         if existing_review:
             return Response({"error": "You have already reviewed this movie"}, status=status.HTTP_400_BAD_REQUEST)
-            
+        
+        today_date = timezone.now().date()
+
+        date_added = timezone.datetime.strptime(date_added, '%Y-%m-%d').date() if date_added else today_date
+
+        if date_added == today_date:
+            date_added = timezone.now()
+        elif date_added < today_date:
+            date_added = date_added
+        else:
+            return Response({"error": "Date added cannot be in the future"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"Date added: {date_added}")
         # Create the review
         review = Review.objects.create(
             user=request.user,
             content_type=content_type,
             object_id=movie_id,
             rating=rating,
-            review_text=review_text,
-            date_added=date_added
+            review_text=review_text
         )
+
+        review.date_added = date_added
+        review.save()
+
 
         # if movie is movie of the week, then define movie of the week as watched
         movie_of_the_week = MovieOfWeekPick.objects.filter(status='active').first()
@@ -485,7 +500,6 @@ class MovieReviewView(APIView):
         rating = request.data.get('rating')
         review_text = request.data.get('review_text')
         date_added = request.data.get('date_added')
-        print(f"Date reviewed: {date_added}")
 
         
         if not review_id:
@@ -511,9 +525,21 @@ class MovieReviewView(APIView):
         if review_text is not None:
             review.review_text = review_text
         
-        print(f"Date reviewed: {date_added}")
-        if date_added is not None:
-            review.date_added = date_added
+        today_date = timezone.now().date()
+
+        date_added = timezone.datetime.strptime(date_added, '%Y-%m-%d').date() if date_added else today_date
+
+        if date_added == today_date:
+            if review.date_added == today_date:
+                date_added = review.date_added
+            else:
+                date_added = timezone.now()
+        elif date_added < today_date:
+            date_added = date_added
+        else:
+            return Response({"error": "Date added cannot be in the future"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        review.date_added = date_added
             
         review.save()
         return Response({"message": "Review updated successfully"}, status=status.HTTP_200_OK)
