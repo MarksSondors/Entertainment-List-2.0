@@ -194,6 +194,9 @@ body {
                     {% endif %}
                 </div>
             </div>
+            <div style="text-align: right; font-size: 11px; color: #666; margin-top: 10px; font-style: italic;">
+                Last updated: {{ movie.date_updated|date:"M d, Y" }}
+            </div>
         </div>
         <div style="margin-top: 10px;" class="button-container">
             <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openTrailerModal()">Watch Trailer</button>
