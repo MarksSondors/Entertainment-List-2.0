@@ -46,7 +46,8 @@ def movie_page(request, movie_id):
         movie_db = Movie.objects.prefetch_related(
             'genres', 
             'countries', 
-            'keywords'
+            'keywords',
+            'production_companies'
         ).get(tmdb_id=movie_id)
     except Movie.DoesNotExist:
         task_id = create_movie_async(

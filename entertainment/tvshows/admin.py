@@ -37,7 +37,7 @@ class TVShowAdmin(admin.ModelAdmin):
     list_display = ('title', 'first_air_date', 'rating', 'seasons_count', 'episodes_count', 'status', 'date_updated')
     list_filter = ('genres', 'countries', 'first_air_date', 'status')
     search_fields = ('title', 'original_title')
-    filter_horizontal = ('genres', 'countries', 'keywords')
+    filter_horizontal = ('genres', 'countries', 'keywords', 'production_companies')
     readonly_fields = ('display_creators', 'display_seasons', 'tmdb_link', 'update_button')
     inlines = [MediaPersonInline, SeasonInline]
     

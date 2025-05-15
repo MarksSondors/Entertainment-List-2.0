@@ -19,7 +19,7 @@ class MovieAdmin(admin.ModelAdmin):
     list_display = ('title', 'release_date', 'rating')
     search_fields = ('title', 'original_title')
     list_filter = ('genres', 'countries', 'release_date')
-    filter_horizontal = ('genres', 'countries', 'keywords')
+    filter_horizontal = ('genres', 'countries', 'keywords', 'production_companies')
     readonly_fields = ('display_directors', 'display_writers', 
                       'display_cast', 'display_composers', 'minutes_to_hours')
     inlines = [MediaPersonInline]

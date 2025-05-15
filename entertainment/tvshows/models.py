@@ -26,6 +26,7 @@ class TVShow(Media):
     genres = models.ManyToManyField(Genre)
     countries = models.ManyToManyField(Country)
     keywords = models.ManyToManyField(Keyword)
+    production_companies = models.ManyToManyField(ProductionCompany)
 
     # user related fields
     added_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='added_tv_shows', blank=True, null=True)

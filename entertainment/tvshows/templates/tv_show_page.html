@@ -199,6 +199,32 @@ body {
                 {% endfor %}
             </p>
 
+            <!-- Only show Production Companies section if companies exist -->
+            {% if tv_show.production_companies.all %}
+            <div style="margin-top: 10px;">
+                <p style="font-weight: bold; margin-bottom: 5px; cursor: pointer; display: flex; align-items: center;" 
+                   onclick="toggleProductionCompanies()">
+                   <span id="production-companies-arrow" style="display: inline-block; width: 12px; margin-right: 5px;">►</span>
+                   Production Companies:
+                </p>
+                <div id="production-companies-container" style="display: none; flex-wrap: wrap; gap: 10px; overflow-x: auto; background-color: #f9f9f9; padding: 5px; border: 1px inset #ddd;">
+                    {% for company in tv_show.production_companies.all %}
+                        <a href="{{ company.get_absolute_url }}" style="text-decoration: none; display: block; width: 120px; height: 60px; margin: 5px; text-align: center;">
+                            {% if company.logo_path %}
+                                <div style="height: 100%; display: flex; justify-content: center; align-items: center;">
+                                    <img src="{{ company.logo_path }}" alt="{{ company.name }}" title="{{ company.name }}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                                </div>
+                            {% else %}
+                                <div style="height: 100%; display: flex; justify-content: center; align-items: center; background-color: #C3C3C3; color: black; border: 1px outset #ddd; font-size: 12px; text-align: center;">
+                                    {{ company.name }}
+                                </div>
+                            {% endif %}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <div class="crew-scroll" style="display: flex; overflow-x: auto; gap: 8px; margin-bottom: 10px; padding-bottom: 5px; -webkit-overflow-scrolling: touch;">
                 {% for person, roles in tv_show.get_crew.items %}
                     <div style="flex: 0 0 auto; min-width: 120px; max-width: 180px; text-align: left; background-color: #C3C3C3; color: black; padding: 6px; border: 2px outset; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -743,6 +769,20 @@ body {
             {% endif %}
         {% endfor %}
     };
+
+    // Toggle production companies visibility
+    function toggleProductionCompanies() {
+        const container = document.getElementById('production-companies-container');
+        const arrow = document.getElementById('production-companies-arrow');
+        
+        if (container.style.display === 'none' || container.style.display === '') {
+            container.style.display = 'flex';
+            arrow.textContent = '▼'; // Change to down arrow
+        } else {
+            container.style.display = 'none';
+            arrow.textContent = '►'; // Change to right arrow
+        }
+    }
 </script>
 
 {% endblock %}

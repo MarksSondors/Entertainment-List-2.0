@@ -214,6 +214,29 @@ def update_single_movie(movie_id):
                 # Set new countries directly on the movie
                 movie.countries.set(country_instances)
                 logger.info(f"Updated countries for {movie.title}")
+            
+        if 'production_companies' in data and data['production_companies']:
+            # Get company names from current movie for comparison
+            current_company_names = set(movie.production_companies.values_list('name', flat=True))
+            # Get company names from API data
+            new_company_names = {c['name'] for c in data['production_companies']}
+            
+            if current_company_names != new_company_names:
+                # Get or create company instances
+                company_instances = []
+                for company in data['production_companies']:
+                    logo_path = company.get('logo_path')
+                    company_instance, _ = ProductionCompany.objects.get_or_create(
+                        tmdb_id=company.get('id'),
+                        country=Country.objects.get(iso_3166_1=company.get('origin_country')),
+                        logo_path= f"https://image.tmdb.org/t/p/original{logo_path}" if logo_path else None,
+                        defaults={'name': company.get('name')}
+                    )
+                    company_instances.append(company_instance)
+                
+                # Set new companies directly on the movie
+                movie.production_companies.set(company_instances)
+                logger.info(f"Updated production companies for {movie.title}")
         
         # Apply updates if there are any
         if updates:
@@ -327,31 +350,49 @@ def add_movie_from_collection(tmdb_id, collection_id):
 
 def setup_scheduled_tasks():
     """Set up scheduled tasks if they don't exist already."""
-    # Schedule the task to run every minute
+    from django.utils import timezone
+    from datetime import time, timedelta, datetime
+    
+    # Schedule the unreleased movies task to run hourly at 15 minutes past the hour
     Schedule.objects.get_or_create(
         name='Update unreleased movies',
         defaults={
             'func': 'movies.tasks.update_unreleased_movies',
             'schedule_type': Schedule.HOURLY,
             'repeats': -1,  # Repeat forever
+            'next_run': timezone.now().replace(minute=15, second=0, microsecond=0) + timedelta(hours=1),
         }
     )
-    # Schedule the random movie updates to run daily
+    
+    # Schedule the random movie updates to run daily at 03:30 AM
+    daily_time = time(hour=3, minute=30)  # 3:30 AM
     Schedule.objects.get_or_create(
         name='Update random movies',
         defaults={
             'func': 'movies.tasks.update_random_movies',
             'schedule_type': Schedule.DAILY,
             'repeats': -1,  # Repeat forever
+            'next_run': timezone.make_aware(
+                datetime.combine(timezone.now().date(), daily_time)
+            ),
         }
     )
-    # Schedule collection updates to run weekly
+    
+    # Schedule collection updates to run weekly on Monday at 02:00 AM
+    monday_time = time(hour=2, minute=0)  # 2:00 AM
+    next_monday = timezone.now()
+    while next_monday.weekday() != 0:  # 0 is Monday
+        next_monday += timedelta(days=1)
+    
     Schedule.objects.get_or_create(
         name='Update movie collections',
         defaults={
             'func': 'movies.tasks.update_movie_collections',
             'schedule_type': Schedule.WEEKLY,
             'repeats': -1,  # Repeat forever
+            'next_run': timezone.make_aware(
+                datetime.combine(next_monday.date(), monday_time)
+            ),
         }
     )
     return "Scheduled task setup complete"
