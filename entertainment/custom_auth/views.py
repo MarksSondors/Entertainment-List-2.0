@@ -325,7 +325,9 @@ def watchlist_page(request):
         from tvshows.models import Episode
         total_episodes = Episode.objects.filter(
             season__show_id__in=tv_show_ids,
-            season__season_number__gt=0
+            season__season_number__gt=0,
+            air_date__isnull=False,
+            air_date__lte=timezone.now()
         ).values('season__show_id').annotate(
             count=models.Count('id')
         )
@@ -393,8 +395,8 @@ def watchlist_page(request):
         tv_countries = TVShow.objects.filter(id__in=tv_ids).values('countries').distinct()
         country_ids.update(country.get('countries') for country in tv_countries if country.get('countries'))
     
-    genres = Genre.objects.filter(id__in=genre_ids).distinct()
-    countries = Country.objects.filter(id__in=country_ids).distinct()
+    genres = Genre.objects.filter(id__in=genre_ids).distinct().order_by('name')
+    countries = Country.objects.filter(id__in=country_ids).distinct().order_by('name')
     
     # Prepare flattened data for templates to avoid GenericForeignKey lookups
     movies_for_template = []
