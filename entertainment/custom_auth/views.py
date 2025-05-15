@@ -1343,6 +1343,7 @@ def browse_by_people(request):
     """
     View for displaying people categorized by their roles with improved role identification
     and optimized query performance. Only shows people involved in works that have reviews.
+    Includes additional data for enhanced display features.
     """
     # Cache key prefix for storing sorted people lists
     cache_key_prefix = "people_browser_reviewed_"
@@ -1367,6 +1368,7 @@ def browse_by_people(request):
         ).values('person_id').distinct()
         
         # Get people matching the role filter AND who have been in reviewed works
+        # Include birth_date for the enhanced hover information
         people = Person.objects.filter(
             role_filter,
             profile_picture__isnull=False,
@@ -1432,12 +1434,13 @@ def browse_by_people(request):
             
             if not person_media_list:
                 continue  # Skip people with no media
-                
-            # Calculate average rating across all media
+                      # Calculate average rating across all media
             total_rating = 0
             total_count = 0
+            num_works = 0
             
             for media_key in person_media_list:
+                num_works += 1
                 if media_key in media_ratings:
                     rating_data = media_ratings[media_key]
                     # Weighted average: Rating * Count
@@ -1447,6 +1450,9 @@ def browse_by_people(request):
             if total_count > 0:
                 person.avg_rating = round(total_rating / total_count, 1)
                 person.rating_count = total_count
+                person.num_works = num_works  # Add number of works for hover display
+                # Convert date_of_birth to birth_date for template consistency
+                person.birth_date = person.date_of_birth
                 people_with_ratings.append(person)
         
         # Sort by average rating (highest first) and then alphabetically by name
@@ -1494,6 +1500,18 @@ def browse_by_people(request):
         Q(is_novelist=True) | Q(is_original_story=True),
         f"{cache_key_prefix}other_creators"
     )
+      # Get category counts for the status bar
+    category_counts = {
+        'directors': len(directors),
+        'writers': len(writers),
+        'actors': len(actors),
+        'tv_creators': len(tv_creators),
+        'musicians': len(musicians),
+        'other_creators': len(other_creators),
+    }
+    
+    # Total person count
+    total_people = sum(category_counts.values())
     
     return render(request, 'browse_by_people.html', {
         'directors': directors,
@@ -1502,6 +1520,8 @@ def browse_by_people(request):
         'tv_creators': tv_creators,
         'musicians': musicians,
         'other_creators': other_creators,
+        'category_counts': category_counts,
+        'total_people': total_people,
     })
 
 # Add this view function
@@ -1836,3 +1856,122 @@ def release_calendar(request):
     }
     
     return render(request, 'release_calendar.html', context)
+
+@login_required
+def production_company_detail(request, company_id):
+    """
+    View for displaying details about a production company and its filmography
+    """
+    # Get the production company object or return 404
+    company = get_object_or_404(ProductionCompany, id=company_id)
+    
+    # Get content types for Movie and TVShow models
+    from django.contrib.contenttypes.models import ContentType
+    from movies.models import Movie
+    from tvshows.models import TVShow
+    
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    tv_show_content_type = ContentType.objects.get_for_model(TVShow)
+    
+    # Find all movies and TV shows from this production company
+    movies = Movie.objects.filter(production_companies=company)
+    tv_shows = TVShow.objects.filter(production_companies=company)
+    
+    # Build a combined list of productions for the template
+    productions = []
+    
+    # Add movies to the list
+    for movie in movies:
+        productions.append({
+            'title': movie.title,
+            'year': movie.release_date.year if movie.release_date else None,
+            'type': 'movie',
+            'type_display': 'Movie',
+            'tmdb_id': movie.tmdb_id,
+            'backdrop': movie.backdrop
+        })
+    
+    # Add TV shows to the list
+    for show in tv_shows:
+        productions.append({
+            'title': show.title,
+            'year': show.first_air_date.year if show.first_air_date else None,
+            'type': 'tvshow',
+            'type_display': 'TV Show',
+            'tmdb_id': show.tmdb_id,
+            'backdrop': show.backdrop
+        })
+    
+    # Sort productions by year (most recent first)
+    productions = sorted(productions, key=lambda x: x.get('year') or 0, reverse=True)
+    
+    # Calculate average rating for all productions
+    average_rating = None
+    user_average_rating = None
+    
+    # Collect all media identifiers
+    media_identifiers = []
+    for movie in movies:
+        media_identifiers.append((movie_content_type.id, movie.id))
+    for show in tv_shows:
+        media_identifiers.append((tv_show_content_type.id, show.id))
+    
+    if media_identifiers:
+        # Build query for reviews
+        from django.db.models import Q
+        q_objects = Q()
+        for ct_id, obj_id in media_identifiers:
+            q_objects |= Q(content_type_id=ct_id, object_id=obj_id)
+        
+        # Calculate average rating across all users
+        from custom_auth.models import Review
+        rating_data = Review.objects.filter(q_objects).aggregate(models.Avg('rating'))
+        if rating_data['rating__avg'] is not None:
+            average_rating = round(rating_data['rating__avg'], 1)
+        
+        # Calculate average rating for the current user
+        user_rating_data = Review.objects.filter(q_objects, user=request.user).aggregate(models.Avg('rating'))
+        if user_rating_data['rating__avg'] is not None:
+            user_average_rating = round(user_rating_data['rating__avg'], 1)
+    
+    # Add rating data to productions
+    for item in productions:
+        if item['type'] == 'movie':
+            movie = next((m for m in movies if m.tmdb_id == item['tmdb_id']), None)
+            if movie:
+                # Get the average rating for this movie
+                from custom_auth.models import Review
+                rating_data = Review.objects.filter(
+                    content_type=movie_content_type, 
+                    object_id=movie.id
+                ).aggregate(models.Avg('rating'))
+                if rating_data['rating__avg'] is not None:
+                    item['rating'] = round(rating_data['rating__avg'], 1)
+        elif item['type'] == 'tvshow':
+            show = next((s for s in tv_shows if s.tmdb_id == item['tmdb_id']), None)
+            if show:
+                # Get the average rating for this show
+                from custom_auth.models import Review
+                rating_data = Review.objects.filter(
+                    content_type=tv_show_content_type, 
+                    object_id=show.id
+                ).aggregate(models.Avg('rating'))
+                if rating_data['rating__avg'] is not None:
+                    item['rating'] = round(rating_data['rating__avg'], 1)
+    
+    # Choose a random backdrop for the page background
+    random_backdrop = None
+    backdrop_candidates = [p['backdrop'] for p in productions if p.get('backdrop')]
+    if backdrop_candidates:
+        import random
+        random_backdrop = random.choice(backdrop_candidates)
+    
+    context = {
+        'company': company,
+        'productions': productions,
+        'average_rating': average_rating,
+        'user_average_rating': user_average_rating,
+        'random_backdrop': random_backdrop,
+    }
+    
+    return render(request, 'production_company_page.html', context)

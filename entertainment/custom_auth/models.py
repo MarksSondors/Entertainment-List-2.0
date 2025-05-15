@@ -91,6 +91,19 @@ class Keyword(models.Model):
     def __str__(self):
         return self.name
 
+class ProductionCompany(models.Model):
+    name = models.CharField(max_length=100)
+    logo_path = models.URLField(blank=True, null=True)
+    tmdb_id = models.IntegerField(unique=True, blank=True, null=True)
+    country = models.ForeignKey(Country, on_delete=models.CASCADE, blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        """Get the absolute URL for the production company page."""
+        return f"/production_companies/{self.id}/"
+
 class Person(models.Model):
     name = models.CharField(max_length=100)
     bio = models.TextField(blank=True, null=True)

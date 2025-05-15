@@ -6,7 +6,7 @@ from django.conf import settings
 from django_q.models import Schedule
 
 from api.services.tvshows import TVShowsService
-from .models import TVShow, Season, Episode, EpisodeGroup, EpisodeSubGroup
+from .models import TVShow, Season, Episode, EpisodeGroup, EpisodeSubGroup, Keyword, Genre, Country, ProductionCompany
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +169,78 @@ def update_single_tvshow(tvshow_id):
                     logger.error(f"Invalid last air date format for TV show {tvshow.title}: {data['last_air_date']}")
                     updates['last_air_date'] = None
         
+        # Update keywords
+        if 'keywords' in data and data['keywords'].get('results', []):
+            current_keyword_names = set(tvshow.keywords.values_list('name', flat=True))
+            new_keyword_names = {k['name'] for k in data['keywords']['results']}
+
+            if current_keyword_names != new_keyword_names:
+                keyword_instances = []
+                for keyword in data['keywords']['results']:
+                    keyword_instance, _ = Keyword.objects.get_or_create(
+                        tmdb_id=keyword.get('id'),
+                        defaults={'name': keyword.get('name')}
+                    )
+                    keyword_instances.append(keyword_instance)
+
+                tvshow.keywords.set(keyword_instances)
+                logger.info(f"Updated keywords for {tvshow.title}")
+
+        # Update genres
+        if 'genres' in data and data['genres']:
+            current_genre_names = set(tvshow.genres.values_list('name', flat=True))
+            new_genre_names = {g['name'] for g in data['genres']}
+
+            if current_genre_names != new_genre_names:
+                genre_instances = []
+                for genre in data['genres']:
+                    genre_instance, _ = Genre.objects.get_or_create(
+                        tmdb_id=genre.get('id'),
+                        defaults={'name': genre.get('name')}
+                    )
+                    genre_instances.append(genre_instance)
+
+                tvshow.genres.set(genre_instances)
+                logger.info(f"Updated genres for {tvshow.title}")
+
+        # Update production countries
+        if 'production_countries' in data and data['production_countries']:
+            current_country_codes = set(tvshow.countries.values_list('iso_3166_1', flat=True))
+            new_country_codes = {c['iso_3166_1'] for c in data['production_countries']}
+
+            if current_country_codes != new_country_codes:
+                country_instances = []
+                for country in data['production_countries']:
+                    country_instance, _ = Country.objects.get_or_create(
+                        iso_3166_1=country.get('iso_3166_1'),
+                        defaults={'name': country.get('name')}
+                    )
+                    country_instances.append(country_instance)
+
+                tvshow.countries.set(country_instances)
+                logger.info(f"Updated countries for {tvshow.title}")
+
+        # Update production companies
+        if 'production_companies' in data and data['production_companies']:
+            current_company_names = set(tvshow.production_companies.values_list('name', flat=True))
+            new_company_names = {c['name'] for c in data['production_companies']}
+
+            if current_company_names != new_company_names:
+                company_instances = []
+                for company in data['production_companies']:
+                    logo_path = company.get('logo_path')
+                    company_instance, _ = ProductionCompany.objects.get_or_create(
+                        tmdb_id=company.get('id'),
+                        defaults={
+                            'name': company.get('name'),
+                            'logo_path': f"https://image.tmdb.org/t/p/original{logo_path}" if logo_path else None
+                        }
+                    )
+                    company_instances.append(company_instance)
+
+                tvshow.production_companies.set(company_instances)
+                logger.info(f"Updated production companies for {tvshow.title}")
+
         # Apply updates if there are any
         if updates:
             logger.info(f"Updating TV show {tvshow.title} (ID: {tvshow_id}) with: {updates}")
@@ -524,23 +596,34 @@ def update_episode_subgroups(group_id, tmdb_group_id):
 
 def setup_scheduled_tasks():
     """Set up scheduled tasks for TV shows if they don't exist already."""
-    # Schedule task to update ongoing shows daily
+    from django.utils import timezone
+    from datetime import time, timedelta, datetime
+    
+    # Schedule task to update ongoing shows daily at 04:30 AM
+    ongoing_time = time(hour=4, minute=30)  # 4:30 AM
     Schedule.objects.get_or_create(
         name='Update ongoing TV shows',
         defaults={
             'func': 'tvshows.tasks.update_ongoing_tvshows',
             'schedule_type': Schedule.DAILY,
             'repeats': -1,  # Repeat forever
+            'next_run': timezone.make_aware(
+                datetime.combine(timezone.now().date(), ongoing_time)
+            ),
         }
     )
     
-    # Schedule random TV show updates to run daily
+    # Schedule random TV show updates to run daily at 05:30 AM
+    random_time = time(hour=5, minute=30)  # 5:30 AM
     Schedule.objects.get_or_create(
         name='Update random TV shows',
         defaults={
             'func': 'tvshows.tasks.update_random_tvshows',
             'schedule_type': Schedule.DAILY,
             'repeats': -1,  # Repeat forever
+            'next_run': timezone.make_aware(
+                datetime.combine(timezone.now().date(), random_time)
+            ),
         }
     )
     

@@ -14,15 +14,33 @@
                 <button aria-label="Close"></button>
             </div>
         </div>
-        <div class="window-body">
+        <div class="window-body">            <!-- Breadcrumb navigation -->
+
             <!-- Address bar - now visible on all screens -->
-            <div class="field-row mb-3">
+            <div class="field-row mb-2">
                 <label>Address:</label>
                 <div class="field-row-stacked" style="width: 100%">
                     <input type="text" readonly value="C:\Entertainment\People\" style="width: 100%">
                 </div>
             </div>
             
+            <!-- Search and filter row -->
+            <div class="d-flex flex-wrap mb-3 align-items-center">
+                <div class="field-row me-3 mb-2 mb-sm-0 flex-grow-1">
+                    <label for="search-people">Search:</label>
+                    <input type="text" id="search-people" placeholder="Filter by name..." style="flex-grow: 1;">
+                </div>
+                <div class="field-row mb-2 mb-sm-0">
+                    <label for="sort-by">Sort by:</label>
+                    <select id="sort-by">
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                        <option value="rating-desc">Rating (High-Low)</option>
+                        <option value="rating-asc">Rating (Low-High)</option>
+                    </select>
+                </div>
+            </div>
+
             <!-- Mobile-friendly tabs as dropdown on small screens -->
             <div class="d-block d-md-none mb-3">
                 <select class="form-select" id="mobile-tab-selector">
@@ -45,29 +63,43 @@
                     <button role="tab">Musicians</button>
                     <button role="tab">Other Creators</button>
                 </menu>
-                
-                <!-- Directors Tab -->
+                  <!-- Directors Tab -->
                 <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" style="min-height: 300px;">
+                    <div class="tab-loading-overlay" style="display: none;">
+                        <div class="loading-spinner"></div>
+                    </div>
                     {% if directors %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
                             {% for person in directors %}
-                            <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
+                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
                                     <div class="text-center">
-                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}"  
-                                             class="person-img"
-                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             loading="lazy">
-                                        <div class="person-name">{{ person.name }}</div>
+                                        <div class="person-img-container">
+                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                                 alt="{{ person.name }}"  
+                                                 class="person-img"
+                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                                 loading="lazy">
+                                        </div>
+                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
-                                            <div style="font-size: 0.8em;">
+                                            <div class="person-rating">
                                                 <span class="badge bg-primary">{{ person.avg_rating }}</span>
                                                 <small class="text-muted">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
-                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                            <div class="person-no-rating">No ratings</div>
                                         {% endif %}
+                                    </div>
+                                    <div class="person-hover-info">
+                                        <strong>{{ person.name }}</strong>
+                                        {% if person.birth_date %}
+                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
+                                        {% endif %}
+                                        {% if person.num_works %}
+                                            <div>{{ person.num_works }} work(s)</div>
+                                        {% endif %}
+                                        <div class="mt-1 small">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
@@ -79,29 +111,43 @@
                         </div>
                     {% endif %}
                 </div>
-                
-                <!-- Writers Tab -->
+                  <!-- Writers Tab -->
                 <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    <div class="tab-loading-overlay" style="display: none;">
+                        <div class="loading-spinner"></div>
+                    </div>
                     {% if writers %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
                             {% for person in writers %}
-                            <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
+                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
                                     <div class="text-center">
-                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}"  
-                                             class="person-img"
-                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             loading="lazy">
-                                        <div class="person-name">{{ person.name }}</div>
+                                        <div class="person-img-container">
+                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                                 alt="{{ person.name }}"  
+                                                 class="person-img"
+                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                                 loading="lazy">
+                                        </div>
+                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
-                                            <div style="font-size: 0.8em;">
+                                            <div class="person-rating">
                                                 <span class="badge bg-primary">{{ person.avg_rating }}</span>
                                                 <small class="text-muted">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
-                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                            <div class="person-no-rating">No ratings</div>
                                         {% endif %}
+                                    </div>
+                                    <div class="person-hover-info">
+                                        <strong>{{ person.name }}</strong>
+                                        {% if person.birth_date %}
+                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
+                                        {% endif %}
+                                        {% if person.num_works %}
+                                            <div>{{ person.num_works }} work(s)</div>
+                                        {% endif %}
+                                        <div class="mt-1 small">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
@@ -113,29 +159,43 @@
                         </div>
                     {% endif %}
                 </div>
-                
-                <!-- Actors Tab -->
+                  <!-- Actors Tab -->
                 <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    <div class="tab-loading-overlay" style="display: none;">
+                        <div class="loading-spinner"></div>
+                    </div>
                     {% if actors %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
                             {% for person in actors %}
-                            <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
+                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
                                     <div class="text-center">
-                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}"  
-                                             class="person-img"
-                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             loading="lazy">
-                                        <div class="person-name">{{ person.name }}</div>
+                                        <div class="person-img-container">
+                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                                 alt="{{ person.name }}"  
+                                                 class="person-img"
+                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                                 loading="lazy">
+                                        </div>
+                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
-                                            <div style="font-size: 0.8em;">
+                                            <div class="person-rating">
                                                 <span class="badge bg-primary">{{ person.avg_rating }}</span>
                                                 <small class="text-muted">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
-                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                            <div class="person-no-rating">No ratings</div>
                                         {% endif %}
+                                    </div>
+                                    <div class="person-hover-info">
+                                        <strong>{{ person.name }}</strong>
+                                        {% if person.birth_date %}
+                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
+                                        {% endif %}
+                                        {% if person.num_works %}
+                                            <div>{{ person.num_works }} work(s)</div>
+                                        {% endif %}
+                                        <div class="mt-1 small">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
@@ -147,29 +207,43 @@
                         </div>
                     {% endif %}
                 </div>
-                
-                <!-- TV Creators Tab -->
+                  <!-- TV Creators Tab -->
                 <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    <div class="tab-loading-overlay" style="display: none;">
+                        <div class="loading-spinner"></div>
+                    </div>
                     {% if tv_creators %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
                             {% for person in tv_creators %}
-                            <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
+                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
                                     <div class="text-center">
-                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}"  
-                                             class="person-img"
-                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             loading="lazy">
-                                        <div class="person-name">{{ person.name }}</div>
+                                        <div class="person-img-container">
+                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                                 alt="{{ person.name }}"  
+                                                 class="person-img"
+                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                                 loading="lazy">
+                                        </div>
+                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
-                                            <div style="font-size: 0.8em;">
+                                            <div class="person-rating">
                                                 <span class="badge bg-primary">{{ person.avg_rating }}</span>
                                                 <small class="text-muted">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
-                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                            <div class="person-no-rating">No ratings</div>
                                         {% endif %}
+                                    </div>
+                                    <div class="person-hover-info">
+                                        <strong>{{ person.name }}</strong>
+                                        {% if person.birth_date %}
+                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
+                                        {% endif %}
+                                        {% if person.num_works %}
+                                            <div>{{ person.num_works }} work(s)</div>
+                                        {% endif %}
+                                        <div class="mt-1 small">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
@@ -181,29 +255,43 @@
                         </div>
                     {% endif %}
                 </div>
-                
-                <!-- Musicians Tab -->
+                  <!-- Musicians Tab -->
                 <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    <div class="tab-loading-overlay" style="display: none;">
+                        <div class="loading-spinner"></div>
+                    </div>
                     {% if musicians %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
                             {% for person in musicians %}
-                            <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
+                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
                                     <div class="text-center">
-                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}"  
-                                             class="person-img"
-                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             loading="lazy">
-                                        <div class="person-name">{{ person.name }}</div>
+                                        <div class="person-img-container">
+                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                                 alt="{{ person.name }}"  
+                                                 class="person-img"
+                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                                 loading="lazy">
+                                        </div>
+                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
-                                            <div style="font-size: 0.8em;">
+                                            <div class="person-rating">
                                                 <span class="badge bg-primary">{{ person.avg_rating }}</span>
                                                 <small class="text-muted">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
-                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                            <div class="person-no-rating">No ratings</div>
                                         {% endif %}
+                                    </div>
+                                    <div class="person-hover-info">
+                                        <strong>{{ person.name }}</strong>
+                                        {% if person.birth_date %}
+                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
+                                        {% endif %}
+                                        {% if person.num_works %}
+                                            <div>{{ person.num_works }} work(s)</div>
+                                        {% endif %}
+                                        <div class="mt-1 small">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
@@ -215,29 +303,43 @@
                         </div>
                     {% endif %}
                 </div>
-                
-                <!-- Other Creators Tab -->
+                  <!-- Other Creators Tab -->
                 <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                    <div class="tab-loading-overlay" style="display: none;">
+                        <div class="loading-spinner"></div>
+                    </div>
                     {% if other_creators %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4">
+                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
                             {% for person in other_creators %}
-                            <div class="col">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark">
+                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
                                     <div class="text-center">
-                                        <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                             alt="{{ person.name }}"  
-                                             class="person-img"
-                                             onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                             loading="lazy">
-                                        <div class="person-name">{{ person.name }}</div>
+                                        <div class="person-img-container">
+                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
+                                                 alt="{{ person.name }}"  
+                                                 class="person-img"
+                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
+                                                 loading="lazy">
+                                        </div>
+                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
-                                            <div style="font-size: 0.8em;">
+                                            <div class="person-rating">
                                                 <span class="badge bg-primary">{{ person.avg_rating }}</span>
                                                 <small class="text-muted">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
-                                            <div style="font-size: 0.8em; color: #999;">No ratings</div>
+                                            <div class="person-no-rating">No ratings</div>
                                         {% endif %}
+                                    </div>
+                                    <div class="person-hover-info">
+                                        <strong>{{ person.name }}</strong>
+                                        {% if person.birth_date %}
+                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
+                                        {% endif %}
+                                        {% if person.num_works %}
+                                            <div>{{ person.num_works }} work(s)</div>
+                                        {% endif %}
+                                        <div class="mt-1 small">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
@@ -250,14 +352,27 @@
                     {% endif %}
                 </div>
             </div>
+              <!-- Back to top button -->
+            <button id="back-to-top" class="default back-to-top" title="Back to top" aria-label="Back to top">
+                <span class="arrow-up">▲</span>
+            </button>
             
-            <!-- Changed to status-bar to match genre page -->
-            <div class="status-bar mt-3">
+            <!-- Improved status bar with more info -->            <div class="status-bar mt-3">
                 <div class="status-bar-field">
                     <span id="item-count">0 item(s)</span>
                 </div>
                 <div class="status-bar-field">
+                    <span id="filtered-count"></span>
+                </div>
+                <div class="status-bar-field">
+                    <span id="current-category">Category: Directors</span>
+                </div>
+                <div class="status-bar-field">
+                    <span id="total-people">Total: {{ total_people }} people</span>
+                </div>
+                <div class="status-bar-field">
                     <button class="default" onclick="window.history.back()">Back</button>
+                    <button class="default ms-1" onclick="window.location.href='{% url 'home_page' %}'">Home</button>
                 </div>
             </div>
         </div>
@@ -265,24 +380,78 @@
 </div>
 
 <style>
-    /* Explorer panel styling to match genre page */
+    /* Breadcrumb styling */
+    .breadcrumb {
+        font-size: 0.85rem;
+        padding: 4px 0;
+        margin-bottom: 10px;
+    }
+    
+    .breadcrumb-link {
+        color: #0000ee;
+        text-decoration: none;
+    }
+    
+    .breadcrumb-link:hover {
+        text-decoration: underline;
+    }
+    
+    .breadcrumb-current {
+        color: #000;
+        font-weight: bold;
+    }
+    
+    /* Explorer panel styling */
     .explorer-panel {
         background-color: white;
         overflow-y: auto;
+        position: relative;
     }
     
-    /* Person item styling similar to genre-item */
+    /* Loading overlay */
+    .tab-loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(255,255,255,0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+    }
+    
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Person item styling */
     .person-item {
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 6px;
+        padding: 8px;
         border: 1px solid transparent;
+        position: relative;
+        transition: all 0.2s ease;
+        height: 100%;
     }
     
     .person-item:hover {
         background-color: #d0d1d5;
         border: 1px dotted #000;
+        transform: translateY(-2px);
     }
     
     .person-item:active {
@@ -294,13 +463,32 @@
         filter: brightness(1.2);
     }
     
+    /* Person card */
+    .person-card {
+        margin-bottom: 10px;
+    }
+    
+    /* Person image container for consistent sizing */
+    .person-img-container {
+        width: 75px;
+        height: 75px;
+        margin-bottom: 8px;
+        overflow: hidden;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        position: relative;
+    }
+    
     /* Person images */
     .person-img {
-        width: 64px;
-        height: 64px;
-        border: 1px solid #ccc; 
-        object-fit: cover; 
-        border-radius: 5px;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.2s ease;
+    }
+    
+    .person-item:hover .person-img {
+        transform: scale(1.1);
     }
     
     .person-name {
@@ -308,21 +496,58 @@
         font-size: 0.85rem;
         max-width: 100px;
         margin: auto;
+        margin-bottom: 4px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
     
-    /* Status bar styling from genre page */
+    /* Rating styling */
+    .person-rating {
+        font-size: 0.8em;
+        margin-top: 2px;
+    }
+    
+    .person-no-rating {
+        font-size: 0.8em;
+        color: #999;
+        margin-top: 2px;
+    }
+    
+    /* Hover info popup */
+    .person-hover-info {
+        position: absolute;
+        display: none;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: white;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 8px;
+        width: 150px;
+        z-index: 100;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        text-align: center;
+        font-size: 0.85rem;
+    }
+    
+    .person-item:hover .person-hover-info {
+        display: block;
+    }
+    
+    /* Status bar styling */
     .status-bar {
         display: flex;
         justify-content: space-between;
+        flex-wrap: wrap;
         border: 2px inset white;
         padding: 2px 4px;
     }
     
     .status-bar-field {
         font-size: 0.85rem;
+        margin-right: 10px;
     }
     
     /* Alert styling */
@@ -334,16 +559,53 @@
         color: black;
     }
     
+    /* Back to top button */
+    .back-to-top {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 100;
+        display: none;
+        width: 40px;
+        height: 40px;
+        text-align: center;
+        padding: 0;
+        border-radius: 5px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    
+    .back-to-top .arrow-up {
+        font-size: 18px;
+        line-height: 30px;
+    }
+    
     /* Mobile adjustments */
     @media (max-width: 576px) {
-        .person-img {
-            width: 55px;
-            height: 55px;
+        .person-img-container {
+            width: 60px;
+            height: 60px;
         }
         
         .person-name {
             font-size: 0.8em;
+            max-width: 85px;
         }
+        
+        .status-bar {
+            flex-direction: column;
+            gap: 5px;
+        }
+    }
+    
+    /* Accessibility focus styles */
+    .person-item:focus {
+        outline: 2px solid #000080;
+        border: 1px solid #000080;
+    }
+    
+    /* Keyboard navigation focus style */
+    .person-item:focus-visible {
+        outline: 3px solid #000080;
     }
 </style>
 
@@ -352,21 +614,38 @@
         const tabs = document.querySelectorAll('menu[role="tablist"] button[role="tab"]');
         const panels = document.querySelectorAll('div[role="tabpanel"]');
         const mobileSelector = document.getElementById('mobile-tab-selector');
+        const searchInput = document.getElementById('search-people');
+        const sortSelect = document.getElementById('sort-by');
+        const backToTopBtn = document.getElementById('back-to-top');
+        const categoryNames = ['Directors', 'Writers', 'Actors', 'TV Creators', 'Musicians', 'Other Creators'];
+        let currentTabIndex = 0;
         
         // Handle desktop tab switching
         tabs.forEach((tab, index) => {
             tab.addEventListener('click', () => {
-                switchTab(index);
+                showLoading(index);
+                setTimeout(() => switchTab(index), 300);
             });
         });
         
         // Handle mobile dropdown switching
         mobileSelector.addEventListener('change', function() {
-            switchTab(parseInt(this.value));
+            const index = parseInt(this.value);
+            showLoading(index);
+            setTimeout(() => switchTab(index), 300);
         });
+        
+        // Show loading effect
+        function showLoading(index) {
+            const targetPanel = panels[index];
+            const loadingOverlay = targetPanel.querySelector('.tab-loading-overlay');
+            loadingOverlay.style.display = 'flex';
+        }
         
         // Switch tab function for both mobile and desktop
         function switchTab(index) {
+            currentTabIndex = index;
+            
             // Update desktop tab state
             tabs.forEach(t => t.setAttribute('aria-selected', 'false'));
             tabs[index].setAttribute('aria-selected', 'true');
@@ -378,26 +657,129 @@
             panels.forEach(panel => panel.hidden = true);
             panels[index].hidden = false;
             
-            // Update item count
-            const visibleItems = panels[index].querySelectorAll('.col').length;
-            document.getElementById('item-count').textContent = `${visibleItems} item(s)`;
+            // Update category name in status bar            document.getElementById('current-category').textContent = `Category: ${categoryNames[index]}`;
+            
+            // Update the category count information
+            const categoryCounts = {
+                'Directors': {{ category_counts.directors|default:0 }},
+                'Writers': {{ category_counts.writers|default:0 }},
+                'Actors': {{ category_counts.actors|default:0 }},
+                'TV Creators': {{ category_counts.tv_creators|default:0 }},
+                'Musicians': {{ category_counts.musicians|default:0 }},
+                'Other Creators': {{ category_counts.other_creators|default:0 }}
+            };
+            
+            // Hide loading overlay
+            const loadingOverlay = panels[index].querySelector('.tab-loading-overlay');
+            setTimeout(() => {
+                loadingOverlay.style.display = 'none';
+            }, 300);
+            
+            // Apply current filter and sort
+            filterAndSortPeople();
         }
         
-        // Set initial item count for first tab
-        const initialItems = panels[0].querySelectorAll('.col').length;
-        document.getElementById('item-count').textContent = `${initialItems} item(s)`;
+        // Filter people by name
+        searchInput.addEventListener('input', filterAndSortPeople);
+        
+        // Sort people
+        sortSelect.addEventListener('change', filterAndSortPeople);
+        
+        function filterAndSortPeople() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const sortType = sortSelect.value;
+            const currentPanel = panels[currentTabIndex];
+            const personCards = currentPanel.querySelectorAll('.person-card');
+            
+            // Filter by name
+            let visibleCount = 0;
+            personCards.forEach(card => {
+                const name = card.dataset.name;
+                const isVisible = name.includes(searchTerm);
+                card.style.display = isVisible ? '' : 'none';
+                if (isVisible) visibleCount++;
+            });
+            
+            // Update filtered count info
+            const totalCount = personCards.length;
+            document.getElementById('item-count').textContent = `${visibleCount} item(s)`;
+            if (searchTerm) {
+                document.getElementById('filtered-count').textContent = 
+                    `Showing ${visibleCount} of ${totalCount}`;
+            } else {
+                document.getElementById('filtered-count').textContent = '';
+            }
+            
+            // Sort cards
+            const personGrid = currentPanel.querySelector('.person-grid');
+            if (personGrid) {
+                const cardArray = Array.from(personCards);
+                
+                cardArray.sort((a, b) => {
+                    switch (sortType) {
+                        case 'name-asc':
+                            return a.dataset.name.localeCompare(b.dataset.name);
+                        case 'name-desc':
+                            return b.dataset.name.localeCompare(a.dataset.name);
+                        case 'rating-desc':
+                            return parseFloat(b.dataset.rating) - parseFloat(a.dataset.rating);
+                        case 'rating-asc':
+                            return parseFloat(a.dataset.rating) - parseFloat(b.dataset.rating);
+                        default:
+                            return 0;
+                    }
+                });
+                
+                // Reorder in the DOM
+                cardArray.forEach(card => {
+                    personGrid.appendChild(card);
+                });
+            }
+        }
+        
+        // Back to top functionality
+        window.addEventListener('scroll', function() {
+            if (window.pageYOffset > 300) {
+                backToTopBtn.style.display = 'block';
+            } else {
+                backToTopBtn.style.display = 'none';
+            }
+        });
+        
+        backToTopBtn.addEventListener('click', function() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+        
+        // Keyboard navigation for person items
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && document.activeElement.classList.contains('person-item')) {
+                e.preventDefault();
+                const href = document.activeElement.getAttribute('href');
+                setTimeout(() => {
+                    window.location.href = href;
+                }, 100);
+            }
+        });
         
         // Add Windows 95/98 click delay behavior
         const personLinks = document.querySelectorAll('.person-item');
         personLinks.forEach(link => {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
+                // Visual feedback
+                this.classList.add('active');
                 const href = this.getAttribute('href');
                 setTimeout(() => {
                     window.location.href = href;
                 }, 100);
             });
         });
+        
+        // Set initial item count for first tab
+        switchTab(0); // Initialize with first tab
     });
 </script>
 {% endblock %}

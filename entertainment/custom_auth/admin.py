@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 
 # Register your models here.
-from .models import CustomUser, Genre, Keyword, Country, Watchlist, Review, Person, MediaPerson
+from .models import CustomUser, Genre, Keyword, Country, Watchlist, Review, Person, MediaPerson, ProductionCompany
 from movies.models import Movie
 
 admin.site.register(CustomUser)
@@ -12,7 +12,7 @@ admin.site.register(Genre)
 admin.site.register(Keyword)
 admin.site.register(Country)
 admin.site.register(Watchlist)
-
+admin.site.register(ProductionCompany)
 
 class PersonAdmin(admin.ModelAdmin):
     search_fields = ['name', 'imdb_id']

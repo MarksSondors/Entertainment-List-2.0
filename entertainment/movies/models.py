@@ -43,6 +43,7 @@ class Movie(Media):
     genres = models.ManyToManyField(Genre)
     countries = models.ManyToManyField(Country)
     keywords = models.ManyToManyField(Keyword)
+    production_companies = models.ManyToManyField(ProductionCompany)
 
     collection = models.ForeignKey(Collection, on_delete=models.SET_NULL, blank=True, null=True, related_name='movies')
 

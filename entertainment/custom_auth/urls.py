@@ -43,4 +43,7 @@ urlpatterns = [
 
     # release calendar
     path('calendar/', views.release_calendar, name='release_calendar'),
+
+    path('production_companies/<int:company_id>/', views.production_company_detail, name='production_company_detail'),
+
 ]
