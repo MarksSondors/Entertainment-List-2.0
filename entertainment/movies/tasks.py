@@ -225,12 +225,21 @@ def update_single_movie(movie_id):
                 # Get or create company instances
                 company_instances = []
                 for company in data['production_companies']:
+                    origin_country = None
+                    if company.get('origin_country') and company.get('origin_country') != "":
+                        try:
+                            origin_country = Country.objects.get(iso_3166_1=company.get('origin_country'))
+                        except Country.DoesNotExist:
+                            logger.warning(f"Country with code {company.get('origin_country')} not found")
+                            
                     logo_path = company.get('logo_path')
                     company_instance, _ = ProductionCompany.objects.get_or_create(
                         tmdb_id=company.get('id'),
-                        country=Country.objects.get(iso_3166_1=company.get('origin_country')),
-                        logo_path= f"https://image.tmdb.org/t/p/original{logo_path}" if logo_path else None,
-                        defaults={'name': company.get('name')}
+                        defaults={
+                            'name': company.get('name'),
+                            'country': origin_country,
+                            'logo_path': f"https://image.tmdb.org/t/p/original{logo_path}" if logo_path else None
+                        }
                     )
                     company_instances.append(company_instance)
                 
@@ -244,7 +253,14 @@ def update_single_movie(movie_id):
             for field, value in updates.items():
                 setattr(movie, field, value)
             movie.save()
-            async_task(update_single_collection, collection.id)
+            
+            # Only update collection if we're working with one
+            if 'collection' in updates and updates['collection'] is not None:
+                if isinstance(updates['collection'], Collection):
+                    async_task(update_single_collection, updates['collection'].id)
+                elif isinstance(updates['collection'], int):
+                    async_task(update_single_collection, updates['collection'])
+                    
             return f"Updated movie {movie.title} with {len(updates)} changes: {', '.join([f'{k}={v}' for k, v in updates.items()])}"
         else:
             # Even when no content changes, update the date_updated field
