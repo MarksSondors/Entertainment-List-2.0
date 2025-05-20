@@ -1055,6 +1055,12 @@ def movie_week_discussion(request, pick_id):
         content_type=movie_type,
         object_id=movie.id
     ).select_related('user').order_by('-date_added')
+
+    avg_rating = reviews.aggregate(avg=models.Avg('rating'))['avg']
+    if avg_rating:
+        avg_rating = round(avg_rating, 1)
+    else:
+        avg_rating = 0
     
     # Check if user has already reviewed
     user_has_reviewed = False
@@ -1116,6 +1122,8 @@ def movie_week_discussion(request, pick_id):
         'reviews': reviews,
         'user_has_reviewed': user_has_reviewed,
         'user_review': user_review,
+        'avg_rating': avg_rating
+
     }
     
     return render(request, 'movie_week_discussion.html', context)
