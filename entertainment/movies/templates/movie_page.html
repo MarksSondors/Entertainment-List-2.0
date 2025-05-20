@@ -440,7 +440,7 @@ body {
                         const isAuthor = review.user === currentUsername;
                         const actionButtons = isAuthor ? `
                             <div class="review-action-buttons">
-                                <button onclick="editReview(${review.id}, ${review.rating}, '${review.review_text ? review.review_text.replace(/'/g, "\\'") : ''}', '${review.date_added}')" 
+                                <button onclick="editReview(${review.id}, ${review.rating}, '${review.review_text ? review.review_text.replace(/'/g, "\\'").replace(/\n/g, "\\n") : ''}', '${review.date_added}')" 
                                         style="font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px; margin-right: 5px;">
                                     Edit
                                 </button>
@@ -460,7 +460,7 @@ body {
                             <td style="padding: 4px; border-bottom: 1px solid #ddd;">${review.user}</td>
                             <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">${review.rating}/10</td>
                             <td style="padding: 4px; border-bottom: 1px solid #ddd; cursor: pointer;" 
-                                onclick="openReviewDetailModal({id: ${review.id}, user: '${review.user}', rating: ${review.rating}, review_text: '${review.review_text ? review.review_text.replace(/'/g, "\\'") : ''}', date_added: '${review.date_added}'}, ${isAuthor}, '${contentType}')">
+                                onclick="openReviewDetailModal({id: ${review.id}, user: '${review.user}', rating: ${review.rating}, review_text: '${review.review_text ? review.review_text.replace(/'/g, "\\'").replace(/\n/g, "\\n") : ''}', date_added: '${review.date_added}'}, ${isAuthor}, '${contentType}')">
                                 ${displayText ? displayText.substring(0, 100) + (displayText.length > 100 ? '...' : '') : '<em>No text review</em>'}
                             </td>
                             <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">
