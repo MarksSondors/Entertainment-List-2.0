@@ -1,6 +1,9 @@
 {% extends "components/base.html" %}
 
 {% block content %}
+<!-- Add this near the top of your content block, before any scripts -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+
 <style>
 body {
     font-family: 'MS Sans Serif', Arial, sans-serif;
@@ -376,6 +379,12 @@ body {
 
 
 <script>
+    // Add this helper function at the beginning of your script section
+    function sanitizeContent(content) {
+        if (!content) return '';
+        return DOMPurify.sanitize(content);
+    }
+    
     document.querySelectorAll('table.interactive').forEach(element => {
         element.addEventListener('click', (event) => {
             const highlightedClass = 'highlighted';
@@ -438,9 +447,14 @@ body {
                         
                         // Check if current user is author
                         const isAuthor = review.user === currentUsername;
+                        
+                        // Sanitize the review text for JS string literals
+                        const sanitizedReviewText = review.review_text ? 
+                            review.review_text.replace(/'/g, "\\'").replace(/\n/g, "\\n") : '';
+                        
                         const actionButtons = isAuthor ? `
                             <div class="review-action-buttons">
-                                <button onclick="editReview(${review.id}, ${review.rating}, '${review.review_text ? review.review_text.replace(/'/g, "\\'").replace(/\n/g, "\\n") : ''}', '${review.date_added}')" 
+                                <button onclick="editReview(${review.id}, ${review.rating}, '${sanitizedReviewText}', '${review.date_added}')" 
                                         style="font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px; margin-right: 5px;">
                                     Edit
                                 </button>
@@ -451,23 +465,57 @@ body {
                             </div>
                         ` : '';
                         
-                        // Truncate review text for display and add click to expand
+                        // Create safe display text using DOMPurify
                         let displayText = review.review_text || '';
-                        const fullText = displayText;
+                        const sanitizedDisplayText = sanitizeContent(displayText);
                         
-                        // Add row with click to show detail modal
-                        row.innerHTML = `
-                            <td style="padding: 4px; border-bottom: 1px solid #ddd;">${review.user}</td>
-                            <td style="padding: 4px; text-align: center; border-bottom: 1px solid #ddd;">${review.rating}/10</td>
-                            <td style="padding: 4px; border-bottom: 1px solid #ddd; cursor: pointer;" 
-                                onclick="openReviewDetailModal({id: ${review.id}, user: '${review.user}', rating: ${review.rating}, review_text: '${review.review_text ? review.review_text.replace(/'/g, "\\'").replace(/\n/g, "\\n") : ''}', date_added: '${review.date_added}'}, ${isAuthor}, '${contentType}')">
-                                ${displayText ? displayText.substring(0, 100) + (displayText.length > 100 ? '...' : '') : '<em>No text review</em>'}
-                            </td>
-                            <td style="padding: 4px; text-align: right; border-bottom: 1px solid #ddd;">
-                                ${formattedDate}
-                                ${actionButtons}
-                            </td>
-                        `;
+                        // Create the row element safely
+                        const tdUser = document.createElement('td');
+                        tdUser.style.cssText = "padding: 4px; border-bottom: 1px solid #ddd;";
+                        tdUser.textContent = review.user;
+                        
+                        const tdRating = document.createElement('td');
+                        tdRating.style.cssText = "padding: 4px; text-align: center; border-bottom: 1px solid #ddd;";
+                        tdRating.textContent = `${review.rating}/10`;
+                        
+                        const tdContent = document.createElement('td');
+                        tdContent.style.cssText = "padding: 4px; border-bottom: 1px solid #ddd; cursor: pointer;";
+                        if (displayText) {
+                            tdContent.innerHTML = sanitizedDisplayText.substring(0, 100) + 
+                                (sanitizedDisplayText.length > 100 ? '...' : '');
+                        } else {
+                            const emElem = document.createElement('em');
+                            emElem.textContent = 'No text review';
+                            tdContent.appendChild(emElem);
+                        }
+                        
+                        // Add click handler
+                        tdContent.onclick = function() {
+                            openReviewDetailModal({
+                                id: review.id, 
+                                user: review.user, 
+                                rating: review.rating, 
+                                review_text: sanitizedReviewText, 
+                                date_added: review.date_added
+                            }, isAuthor, contentType);
+                        };
+                        
+                        const tdDate = document.createElement('td');
+                        tdDate.style.cssText = "padding: 4px; text-align: right; border-bottom: 1px solid #ddd;";
+                        tdDate.textContent = formattedDate;
+                        
+                        // Add action buttons if user is author
+                        if (isAuthor) {
+                            const actionsDiv = document.createElement('div');
+                            actionsDiv.className = 'review-action-buttons';
+                            actionsDiv.innerHTML = actionButtons;
+                            tdDate.appendChild(actionsDiv);
+                        }
+                        
+                        row.appendChild(tdUser);
+                        row.appendChild(tdRating);
+                        row.appendChild(tdContent);
+                        row.appendChild(tdDate);
                         
                         reviewsTable.appendChild(row);
                     });
@@ -483,7 +531,7 @@ body {
                     const emptyCard = document.createElement('div');
                     emptyCard.className = 'review-card';
                     emptyCard.style.cssText = 'padding: 10px; text-align: center; background-color: white; border: 1px solid #ddd;';
-                    emptyCard.innerHTML = `<p>No reviews yet. Be the first to review!</p>`;
+                    emptyCard.textContent = 'No reviews yet. Be the first to review!';
                     reviewCards.appendChild(emptyCard);
                 } else {
                     const currentUsername = document.querySelector('meta[name="username"]')?.content || '';
@@ -497,58 +545,115 @@ body {
                         
                         // Check if current user is author
                         const isAuthor = review.user === currentUsername;
-                        const actionButtons = isAuthor ? `
-                            <div class="review-action-buttons" style="display: flex; gap: 5px; margin-top: 8px; justify-content: flex-end;">
-                                <button onclick="editReview(${review.id}, ${review.rating}, '${review.review_text ? review.review_text.replace(/'/g, "\\'") : ''}', '${review.date_added}')" 
-                                        style="font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px 5px;">
-                                    Edit
-                                </button>
-                                <button onclick="deleteReview(${review.id}, '${contentType}')" 
-                                        style="font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px 5px;">
-                                    Delete
-                                </button>
-                            </div>
-                        ` : '';
                         
-                        // Truncate review text for display and add expandable functionality
+                        // Sanitize review text
                         let displayText = review.review_text || '';
-                        const hasLongText = displayText.length > 150;
-                        const truncatedText = hasLongText ? displayText.substring(0, 150) + '...' : displayText;
+                        const sanitizedText = sanitizeContent(displayText);
+                        const hasLongText = sanitizedText.length > 150;
+                        const truncatedText = hasLongText ? sanitizedText.substring(0, 150) + '...' : sanitizedText;
                         
                         const reviewCard = document.createElement('div');
                         reviewCard.className = 'review-card';
                         reviewCard.style.cssText = 'background-color: white; border: 1px solid #ddd; padding: 12px; margin-bottom: 8px; border-radius: 3px;';
                         
-                        reviewCard.innerHTML = `
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                <strong>${review.user}</strong>
-                                <span>${formattedDate}</span>
-                            </div>
-                            <div style="font-size: 14px; margin-bottom: 8px;">Rating: <strong>${review.rating}/10</strong></div>
-                            <div class="review-text" style="margin-bottom: 10px;">
-                                <div class="truncated-text" style="word-break: break-word; ${hasLongText ? '' : 'display: none;'}">${truncatedText}</div>
-                                <div class="full-text" style="word-break: break-word; white-space: pre-wrap; ${hasLongText ? 'display: none;' : ''}">${displayText || '<em>No text review</em>'}</div>
-                                ${hasLongText ? 
-                                    `<button class="toggle-text" style="background: none; border: none; color: blue; padding: 0; text-decoration: underline; cursor: pointer; font-size: 12px;">Read more</button>` : ''}
-                            </div>
-                            ${actionButtons}
-                        `;
+                        // Create card header with user and date
+                        const headerDiv = document.createElement('div');
+                        headerDiv.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 5px;';
                         
-                        reviewCards.appendChild(reviewCard);
+                        const userStrong = document.createElement('strong');
+                        userStrong.textContent = review.user;
                         
-                        // Add toggle functionality for long reviews
+                        const dateSpan = document.createElement('span');
+                        dateSpan.textContent = formattedDate;
+                        
+                        headerDiv.appendChild(userStrong);
+                        headerDiv.appendChild(dateSpan);
+                        
+                        // Create rating div
+                        const ratingDiv = document.createElement('div');
+                        ratingDiv.style.cssText = 'font-size: 14px; margin-bottom: 8px;';
+                        ratingDiv.innerHTML = `Rating: <strong>${review.rating}/10</strong>`;
+                        
+                        // Create review text container
+                        const textDiv = document.createElement('div');
+                        textDiv.className = 'review-text';
+                        textDiv.style.cssText = 'margin-bottom: 10px;';
+                        
+                        // Add truncated and full text divs
+                        const truncatedDiv = document.createElement('div');
+                        truncatedDiv.className = 'truncated-text';
+                        truncatedDiv.style.cssText = `word-break: break-word; ${hasLongText ? '' : 'display: none;'}`;
+                        truncatedDiv.innerHTML = sanitizeContent(truncatedText);
+                        
+                        const fullTextDiv = document.createElement('div');
+                        fullTextDiv.className = 'full-text';
+                        fullTextDiv.style.cssText = `word-break: break-word; white-space: pre-wrap; ${hasLongText ? 'display: none;' : ''}`;
+                        
+                        if (displayText) {
+                            fullTextDiv.innerHTML = sanitizeContent(displayText);
+                        } else {
+                            const emElem = document.createElement('em');
+                            emElem.textContent = 'No text review';
+                            fullTextDiv.appendChild(emElem);
+                        }
+                        
+                        textDiv.appendChild(truncatedDiv);
+                        textDiv.appendChild(fullTextDiv);
+                        
+                        // Add toggle button for long reviews
                         if (hasLongText) {
-                            const toggleButton = reviewCard.querySelector('.toggle-text');
-                            const truncatedDiv = reviewCard.querySelector('.truncated-text');
-                            const fullTextDiv = reviewCard.querySelector('.full-text');
+                            const toggleBtn = document.createElement('button');
+                            toggleBtn.className = 'toggle-text';
+                            toggleBtn.style.cssText = 'background: none; border: none; color: blue; padding: 0; text-decoration: underline; cursor: pointer; font-size: 12px;';
+                            toggleBtn.textContent = 'Read more';
                             
-                            toggleButton.addEventListener('click', function() {
+                            toggleBtn.addEventListener('click', function() {
                                 const isExpanded = truncatedDiv.style.display === 'none';
                                 truncatedDiv.style.display = isExpanded ? 'block' : 'none';
                                 fullTextDiv.style.display = isExpanded ? 'none' : 'block';
-                                toggleButton.textContent = isExpanded ? 'Read more' : 'Read less';
+                                toggleBtn.textContent = isExpanded ? 'Read more' : 'Read less';
                             });
+                            
+                            textDiv.appendChild(toggleBtn);
                         }
+                        
+                        // Add action buttons if user is author
+                        if (isAuthor) {
+                            const actionsDiv = document.createElement('div');
+                            actionsDiv.className = 'review-action-buttons';
+                            actionsDiv.style.cssText = 'display: flex; gap: 5px; margin-top: 8px; justify-content: flex-end;';
+                            
+                            // Create edit button
+                            const editBtn = document.createElement('button');
+                            editBtn.style.cssText = 'font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px 5px;';
+                            editBtn.textContent = 'Edit';
+                            editBtn.onclick = function() {
+                                editReview(review.id, review.rating, review.review_text ? review.review_text.replace(/'/g, "\\'") : '', review.date_added);
+                            };
+                            
+                            // Create delete button
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.style.cssText = 'font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px 5px;';
+                            deleteBtn.textContent = 'Delete';
+                            deleteBtn.onclick = function() {
+                                deleteReview(review.id, contentType);
+                            };
+                            
+                            actionsDiv.appendChild(editBtn);
+                            actionsDiv.appendChild(deleteBtn);
+                            
+                            // Add actions to card
+                            reviewCard.appendChild(headerDiv);
+                            reviewCard.appendChild(ratingDiv);
+                            reviewCard.appendChild(textDiv);
+                            reviewCard.appendChild(actionsDiv);
+                        } else {
+                            reviewCard.appendChild(headerDiv);
+                            reviewCard.appendChild(ratingDiv);
+                            reviewCard.appendChild(textDiv);
+                        }
+                        
+                        reviewCards.appendChild(reviewCard);
                     });
                 }
             }
@@ -593,6 +698,54 @@ body {
         });
     };
     
+    // Also update openReviewDetailModal function to use DOMPurify
+    function openReviewDetailModal(review, isAuthor, contentType) {
+        document.getElementById('reviewModalUsername').textContent = review.user;
+        document.getElementById('reviewModalRating').textContent = review.rating;
+        
+        const reviewDate = new Date(review.date_added);
+        document.getElementById('reviewModalDate').textContent = reviewDate.toLocaleDateString('en-US', {
+            year: 'numeric', month: 'short', day: 'numeric'
+        });
+        
+        // Safely display the text content using textContent instead of innerHTML
+        const modalText = document.getElementById('reviewModalText');
+        modalText.textContent = review.review_text || 'No text review';
+        
+        // Update action buttons if user is the author
+        const actionsContainer = document.getElementById('reviewModalActions');
+        actionsContainer.innerHTML = '';
+        
+        if (isAuthor) {
+            const editButton = document.createElement('button');
+            editButton.style.cssText = 'font-family: "MS Sans Serif"; background-color: #C3C3C3; border: 2px outset; padding: 5px;';
+            editButton.textContent = 'Edit';
+            editButton.onclick = function() {
+                closeReviewDetailModal();
+                editReview(review.id, review.rating, review.review_text || '', review.date_added);
+            };
+            
+            const deleteButton = document.createElement('button');
+            deleteButton.style.cssText = 'font-family: "MS Sans Serif"; background-color: #C3C3C3; border: 2px outset; padding: 5px;';
+            deleteButton.textContent = 'Delete';
+            deleteButton.onclick = function() {
+                if (confirm('Are you sure you want to delete this review?')) {
+                    deleteReview(review.id, contentType);
+                    closeReviewDetailModal();
+                }
+            };
+            
+            actionsContainer.appendChild(editButton);
+            actionsContainer.appendChild(deleteButton);
+        }
+        
+        document.getElementById('reviewDetailModal').style.display = 'block';
+    }
+    
+    function closeReviewDetailModal() {
+        document.getElementById('reviewDetailModal').style.display = 'none';
+    }
+    
     // Check viewport on load and resize
     document.addEventListener('DOMContentLoaded', function() {
         // Check viewport initially
@@ -611,43 +764,5 @@ body {
     window.addEventListener('resize', checkViewport);
 </script>
 
-<style>
-    .interactive tr.highlighted {
-        background-color: #000080;
-        color: white;
-    }
-    
-    /* Mobile review cards styling */
-    @media (max-width: 768px) {
-        .review-table {
-            display: none !important;
-        }
-        
-        .mobile-view.review-cards {
-            display: flex !important;
-        }
-        
-        .modal-content {
-            width: 95% !important;
-            max-width: 95% !important;
-        }
-        
-        .modal iframe {
-            width: 100% !important;
-            height: auto !important;
-            aspect-ratio: 16/9;
-        }
-        
-        .review-card {
-            width: 100%;
-            box-sizing: border-box;
-        }
-        
-        /* Better handling of long text in reviews */
-        .review-text {
-            max-height: none;
-            overflow: visible;
-        }
-    }
-</style>
+<!-- ... rest of your HTML ... -->
 {% endblock %}
