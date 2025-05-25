@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>{% block title %}Entertainment List{% endblock %}</title>
     {% load django_bootstrap5 %}
     {% load static %}
@@ -25,13 +25,17 @@
         body {
             background-color: var(--bg-color) !important;
             background-image: none !important;
+            min-height: 100vh !important;
+            position: relative !important;
         }
 
-        /* Mobile optimizations */
+        /* Enhanced mobile optimizations */
         @media (max-width: 768px) {
             body {
                 background-size: cover;
                 background-attachment: fixed;
+                padding-bottom: 70px !important;
+                min-height: calc(100vh - 70px) !important;
             }
             
             .window {
@@ -57,6 +61,18 @@
                 width: 95% !important;
                 max-width: none !important;
             }
+            
+            /* Ensure container doesn't interfere with navbar */
+            .container-fluid {
+                padding-bottom: 0 !important;
+            }
+        }
+        
+        /* Prevent horizontal scroll */
+        html, body {
+            overflow-x: hidden !important;
+            width: 100% !important;
+            max-width: 100% !important;
         }
     </style>
     <!-- Basic favicon -->
@@ -67,11 +83,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'favicon/favicon-16x16.png' %}">
     <meta name="username" content="{{ request.user.username }}">
 </head>
-<body data-username="{{ request.user.username }}">
-    <!-- Header -->
-    {% include 'components/header.html' %}
-
-    <!-- Main Content -->
+<body data-username="{{ request.user.username }}">    <!-- Main Content -->
     <div class="container-fluid px-0">
         <div class="row g-0">
             <div id="main-container" class="col-12">
@@ -80,7 +92,8 @@
         </div>
     </div>
 
-    <!-- Footer -->
+    <!-- Bottom Navigation -->
+    {% include 'components/bottom_navbar.html' %}
 
 </body>
 </html>

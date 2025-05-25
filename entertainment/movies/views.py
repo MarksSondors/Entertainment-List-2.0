@@ -1243,6 +1243,34 @@ def movie_search(request):
     
     return JsonResponse({'results': results})
 
+def get_current_community_pick_data():
+    """Helper function to get current community pick data for server-side rendering"""
+    current_pick = MovieOfWeekPick.objects.filter(status='active').first()
+
+    if current_pick:
+        check_and_update_movie_status(current_pick)
+
+    current_pick = MovieOfWeekPick.objects.filter(status='active').first()
+    
+    if not current_pick:
+        return None
+
+    data = {
+        'id': current_pick.id,
+        'movie': {
+            'id': current_pick.movie.id,
+            'tmdb_id': current_pick.movie.tmdb_id,
+            'title': current_pick.movie.title,
+            'poster': current_pick.movie.poster,
+        },
+        'suggested_by': current_pick.suggested_by.username,
+        'watched_count': current_pick.watched_count,
+        'total_users': CustomUser.objects.all().count(),
+        'end_date': current_pick.end_date.strftime('%b %d, %Y'),
+    }
+    
+    return data
+
 @api_view(['GET'])
 def current_community_pick(request):
     """Return the current movie of the week for the home page"""

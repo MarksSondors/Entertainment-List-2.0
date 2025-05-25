@@ -1,0 +1,650 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}My Watchlist | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="window">
+    <div class="title-bar">
+      <div class="title-bar-text">My Watchlist</div>
+      <div class="title-bar-controls">
+        <button aria-label="Minimize"></button>
+        <button aria-label="Maximize"></button>
+        <button aria-label="Close"></button>
+      </div>
+    </div>
+    <div class="window-body">
+      <!-- Search Panel -->
+      <div class="field-row mb-4">
+        <input type="text" id="searchInput" placeholder="Search titles..." class="me-2 flex-grow-1">
+        
+        <label for="genreFilter" class="ms-3">Genre:</label>
+        <select id="genreFilter" class="form-control">
+          <option value="">All Genres</option>
+          {% for genre in genres %}
+          <option value="{{ genre.id }}">{{ genre.name }}</option>
+          {% endfor %}
+        </select>
+
+        <label for="countryFilter" class="ms-3">Country:</label>
+        <select id="countryFilter" class="form-control">
+            <option value="">All Countries</option>
+            {% for country in countries %}
+            <option value="{{ country.id }}">{{ country.name }}</option>
+            {% endfor %}
+        </select>
+        
+        <label for="sortBy" class="ms-3">Sort:</label>
+        <select id="sortBy" class="form-control">
+          <option value="date_added">Date Added</option>
+          <option value="title">Title (A-Z)</option>
+          <option value="-title">Title (Z-A)</option>
+          <option value="release_date">Oldest First</option>
+          <option value="-release_date">Newest First</option>
+        </select>
+      </div>
+
+      <div id="accordion">
+        <!-- Continue Watching Section -->
+        <div class="accordion-section mb-3">
+          <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#continueWatching">
+            <h4 class="mb-0">
+              <span class="chevron">▼</span> Continue Watching
+              <span class="badge" id="continueWatchingCount">{{ continue_watching|length }}</span>
+            </h4>
+          </div>
+          <div id="continueWatching" class="collapse show">
+            <div class="section-content pt-2">
+              <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3" id="continueWatchingContent">
+                {% for item in continue_watching %}
+<div class="col" data-media-id="{{ item.media_id }}">
+  <div class="card h-100 position-relative">
+    <a href="{% if item.content_type_model == 'movie' %}{% url 'movie_page' item.media_tmdb_id %}{% else %}{% url 'tv_show_page' item.media_tmdb_id %}{% endif %}">
+      {% if item.media_poster %}
+      <img src="{{ item.media_poster }}" class="card-img-top" alt="{{ item.media_title }}">
+      {% else %}
+      <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>
+      {% endif %}
+    </a>
+    
+    {% if item.avg_rating %}
+    <div class="avg-rating-badge">{{ item.avg_rating }} ({{ item.rating_count }})</div>
+    {% endif %}
+    
+    <div class="progress-badge">{{ item.progress|floatformat:0 }}%</div>
+    
+    <div class="card-body p-2">
+      <h6 class="card-title mb-1">{{ item.media_title }}</h6>
+      <small class="text-muted">
+        {% if item.content_type_model == 'movie' %}
+        {{ item.media_release_date|date:"Y" }}
+        {% else %}
+        {{ item.media_first_air_date|date:"Y" }}
+        {% endif %}
+      </small>
+      <div class="progress mt-2" style="height:6px">
+        <div class="progress-bar" role="progressbar" style="width: {{ item.progress }}%" aria-valuenow="{{ item.progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+      </div>
+    </div>
+    
+    <div class="card-footer p-2 d-flex justify-content-between">
+      <small class="text-muted">Added {{ item.date_added|timesince }} ago</small>
+      <button class="btn-sm remove-item" data-id="{{ item.id }}">✕</button>
+    </div>
+  </div>
+</div>
+{% empty %}
+<div class="col-12 text-center py-4">
+  <p class="text-muted">No shows in progress</p>
+</div>
+{% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Haven't Started Section -->
+        <div class="accordion-section mb-3">
+          <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#haventStarted">
+            <h4 class="mb-0">
+              <span class="chevron">▶</span> Haven't Started
+              <span class="badge" id="haventStartedCount">{{ havent_started|length }}</span>
+            </h4>
+          </div>
+          <div id="haventStarted" class="collapse">
+            <div class="section-content pt-2">
+              <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3" id="haventStartedContent">
+                {% for item in havent_started %}
+<div class="col" data-media-id="{{ item.media_id }}">
+  <div class="card h-100 position-relative">
+    <a href="{% if item.content_type_model == 'movie' %}{% url 'movie_page' item.media_tmdb_id %}{% else %}{% url 'tv_show_page' item.media_tmdb_id %}{% endif %}">
+      {% if item.media_poster %}
+      <img src="{{ item.media_poster }}" class="card-img-top" alt="{{ item.media_title }}">
+      {% else %}
+      <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>
+      {% endif %}
+    </a>
+    
+    {% if item.avg_rating %}
+    <div class="avg-rating-badge">{{ item.avg_rating }} ({{ item.rating_count }})</div>
+    {% endif %}
+    
+    <div class="card-body p-2">
+      <h6 class="card-title mb-1">{{ item.media_title }}</h6>
+      <small class="text-muted">
+        {% if item.content_type_model == 'movie' %}
+        {{ item.media_release_date|date:"Y" }}
+        {% else %}
+        {{ item.media_first_air_date|date:"Y" }}
+        {% endif %}
+      </small>
+    </div>
+    
+    <div class="card-footer p-2 d-flex justify-content-between">
+      <small class="text-muted">Added {{ item.date_added|timesince }} ago</small>
+      <button class="btn-sm remove-item" data-id="{{ item.id }}">✕</button>
+    </div>
+  </div>
+</div>
+{% empty %}
+<div class="col-12 text-center py-4">
+  <p class="text-muted">No unwatched TV shows in your list</p>
+</div>
+{% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Finished Shows Section -->
+        <div class="accordion-section mb-3">
+          <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#finishedShows">
+            <h4 class="mb-0">
+              <span class="chevron">▶</span> Finished Shows
+              <span class="badge" id="finishedShowsCount">{{ finished_shows|length }}</span>
+            </h4>
+          </div>
+          <div id="finishedShows" class="collapse">
+            <div class="section-content pt-2">
+              <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3" id="finishedShowsContent">
+                {% for item in finished_shows %}
+<div class="col" data-media-id="{{ item.media_id }}">
+  <div class="card h-100 position-relative">
+    <a href="{% url 'tv_show_page' item.media_tmdb_id %}">
+      {% if item.media_poster %}
+      <img src="{{ item.media_poster }}" class="card-img-top" alt="{{ item.media_title }}">
+      {% else %}
+      <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>
+      {% endif %}
+    </a>
+    
+    <div class="completed-badge">Completed</div>
+    
+    {% if item.avg_rating %}
+    <div class="avg-rating-badge">{{ item.avg_rating }} ({{ item.rating_count }})</div>
+    {% endif %}
+    
+    <div class="card-body p-2">
+      <h6 class="card-title mb-1">{{ item.media_title }}</h6>
+      <small class="text-muted">{{ item.media_first_air_date|date:"Y" }}</small>
+    </div>
+    
+    <div class="card-footer p-2 d-flex justify-content-between">
+      <small class="text-muted">Added {{ item.date_added|timesince }} ago</small>
+      <button class="btn-sm remove-item" data-id="{{ item.id }}">✕</button>
+    </div>
+  </div>
+</div>
+{% empty %}
+<div class="col-12 text-center py-4">
+  <p class="text-muted">No completed shows in your list</p>
+</div>
+{% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Movies Section -->
+        <div class="accordion-section mb-3">
+          <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#movies">
+            <h4 class="mb-0">
+              <span class="chevron">▶</span> Movies
+              <span class="badge" id="moviesCount">{{ movies|length }}</span>
+            </h4>
+          </div>
+          <div id="movies" class="collapse">
+            <div class="section-content pt-2">
+              <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3" id="moviesContent">
+                {% for item in movies %}
+<div class="col" data-media-id="{{ item.media_id }}">
+  <div class="card h-100 position-relative">
+    <a href="{% url 'movie_page' item.media_tmdb_id %}">
+      {% if item.media_poster %}
+      <img src="{{ item.media_poster }}" class="card-img-top" alt="{{ item.media_title }}">
+      {% else %}
+      <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>
+      {% endif %}
+    </a>
+    
+    {% if item.avg_rating %}
+    <div class="avg-rating-badge">{{ item.avg_rating }} ({{ item.rating_count }})</div>
+    {% endif %}
+    
+    <div class="card-body p-2">
+      <h6 class="card-title mb-1">{{ item.media_title }}</h6>
+      <small class="text-muted">{{ item.media_release_date|date:"Y" }}</small>
+    </div>
+    
+    <div class="card-footer p-2 d-flex justify-content-between">
+      <small class="text-muted">Added {{ item.date_added|timesince }} ago</small>
+      <button class="btn-sm remove-item" data-id="{{ item.id }}">✕</button>
+    </div>
+  </div>
+</div>
+{% empty %}
+<div class="col-12 text-center py-4">
+  <p class="text-muted">No movies in your watchlist</p>
+</div>
+{% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Card styling */
+  .avg-rating-badge {
+    position: absolute;
+    top: 40px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    border-radius: 3px;
+  }
+  
+  /* Filter elements adjustment */
+  #searchInput, 
+  #genreFilter,
+  #countryFilter,
+  #sortBy {
+    height: 21px;
+    padding: 1px 5px;
+    box-sizing: border-box;
+    font-size: 0.9rem;
+  }
+  
+  .field-row {
+    display: flex;
+    align-items: center;
+  }
+  
+  .field-row label {
+    margin-bottom: 0;
+    margin-right: 4px;
+  }
+  
+  /* Progress badge */
+  .progress-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    border-radius: 3px;
+  }
+  
+  /* Accordion styles */
+  .section-header {
+    cursor: pointer;
+    background-color: rgb(225, 225, 225);
+    border: 2px outset white;
+    padding: 6px 12px;
+    margin-bottom: 0;
+  }
+  
+  .section-header h4 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+  }
+  
+  .section-content {
+    border: 2px inset white;
+    border-top: none;
+    padding: 8px;
+    background-color: white;
+  }
+  
+  .badge {
+    margin-left: 8px;
+    background-color: navy;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+  }
+    
+  .chevron {
+    font-size: 0.75rem;
+    margin-right: 8px;
+    transition: transform 0.2s;
+  }
+  
+    .completed-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 128, 0, 0.7);
+    color: white;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    border-radius: 3px;
+  }
+  
+  .section-header[aria-expanded="false"] .chevron {
+    transform: rotate(-90deg);
+  }
+  
+  .card {
+    border: 2px outset white;
+  }
+  
+  .card-body {
+    padding: 0.5rem !important;
+  }
+  
+  .card-footer {
+    background-color: rgb(225, 225, 225);
+    border-top: 2px inset white;
+  }
+  
+  .btn-sm {
+    padding: 0px 5px;
+    background: rgb(225, 225, 225);
+    border: 2px outset white;
+    font-weight: bold;
+  }
+  
+  .btn-sm:active {
+    border-style: inset;
+  }
+
+  /* Mobile optimization */
+  @media (max-width: 576px) {
+    .field-row {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    
+    .field-row label {
+      margin-top: 8px;
+    }
+    
+    .card-title {
+      font-size: 0.85rem;
+    }
+    
+    .card-body {
+      padding: 0.35rem !important;
+    }
+    
+    .avg-rating-badge, .progress-badge {
+      font-size: 0.7rem;
+    }
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Accordion functionality
+    const headers = document.querySelectorAll('.section-header');
+    headers.forEach(header => {
+      header.addEventListener('click', function() {
+        const target = document.querySelector(this.dataset.target);
+        if (target.classList.contains('show')) {
+          target.classList.remove('show');
+          this.querySelector('.chevron').textContent = '▶';
+        } else {
+          target.classList.add('show');
+          this.querySelector('.chevron').textContent = '▼';
+        }
+      });
+    });
+    
+    // AJAX search and filtering
+    let searchTimer;
+    const searchInput = document.getElementById('searchInput');
+    const genreFilter = document.getElementById('genreFilter');
+    const countryFilter = document.getElementById('countryFilter');
+    const sortBy = document.getElementById('sortBy');
+
+    function updateWatchlist() {
+      const searchQuery = searchInput.value;
+      const genre = genreFilter.value;
+      const country = countryFilter.value;
+      const sort = sortBy.value;
+      
+      fetch(`/api/watchlist/?search=${searchQuery}&genre=${genre}&country=${country}&sort_by=${sort}`)
+        .then(response => response.json())
+        .then(data => {
+          // Update continue watching section
+          updateSection('continueWatching', data.continue_watching);
+          document.getElementById('continueWatchingCount').textContent = data.continue_watching.length;
+          
+          // Update haven't started section
+          updateSection('haventStarted', data.havent_started);
+          document.getElementById('haventStartedCount').textContent = data.havent_started.length;
+
+          updateSection('finishedShows', data.finished_shows);
+          document.getElementById('finishedShowsCount').textContent = data.finished_shows.length;
+          // Update movies section
+          updateSection('movies', data.movies);
+          document.getElementById('moviesCount').textContent = data.movies.length;
+        })
+        .catch(error => console.error('Error updating watchlist:', error));
+    }
+    
+    function updateSection(sectionId, items) {
+      const contentDiv = document.getElementById(sectionId + 'Content');
+      
+      if (items.length === 0) {
+        contentDiv.innerHTML = `
+          <div class="col-12 text-center py-4">
+            <p class="text-muted">No items found</p>
+          </div>
+        `;
+        return;
+      }
+      
+      let html = '';
+      items.forEach(item => {
+        let itemHtml = '';
+        if (item.item && 'progress' in item) {
+          // Continue watching item
+          itemHtml = createItemHtml(item.item, item.progress);
+        } else {
+          // Regular item (movies, havent_started, finished_shows)
+          itemHtml = createItemHtml(item);
+        }
+        html += itemHtml;
+      });
+      
+      contentDiv.innerHTML = html;
+      
+      // Re-attach event listeners to remove buttons
+      document.querySelectorAll('.remove-item').forEach(btn => {
+        btn.addEventListener('click', removeFromWatchlist);
+      });
+    }
+    
+    function createItemHtml(item, progress = null) {
+      const isMovie = item.content_type_model === 'movie';
+      const detailUrl = isMovie ? 
+        `/movies/${item.media_tmdb_id}/` : 
+        `/tvshows/${item.media_tmdb_id}/`;
+      
+      const dateDisplay = isMovie ? 
+        formatDate(item.media_release_date) : 
+        formatDate(item.media_first_air_date);
+      
+      // Progress badge for the top-right corner
+      const progressBadge = progress !== null ? `
+        <div class="progress-badge">${Math.round(progress)}%</div>
+      ` : '';
+      
+      // Progress bar for under the title
+      const progressBar = progress !== null ? `
+        <div class="progress mt-2" style="height:6px">
+          <div class="progress-bar" role="progressbar" style="width: ${progress}%" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+      ` : '';
+      
+      // Rating badge - should always be shown if available
+      const ratingHtml = item.avg_rating ? `
+        <div class="avg-rating-badge">${item.avg_rating} (${item.rating_count})</div>
+      ` : '';
+      
+      // Completed badge for finished shows
+      const completedBadge = item.content_type_model === 'tvshow' && progress >= 100 ? `
+        <div class="completed-badge">Completed</div>
+      ` : '';
+      
+      return `
+        <div class="col" data-media-id="${item.media_id}">
+          <div class="card h-100 position-relative">
+            <a href="${detailUrl}">
+              ${item.media_poster ? 
+                `<img src="${item.media_poster}" class="card-img-top" alt="${item.media_title}">` : 
+                `<div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>`
+              }
+            </a>
+            
+            ${progressBadge}
+            ${completedBadge}
+            ${ratingHtml}
+            
+            <div class="card-body p-2">
+              <h6 class="card-title mb-1">${item.media_title}</h6>
+              <small class="text-muted">${dateDisplay}</small>
+              ${progressBar}
+            </div>
+            
+            <div class="card-footer p-2 d-flex justify-content-between">
+              <small class="text-muted">Added ${formatTimeSince(item.date_added)} ago</small>
+              <button class="btn-sm remove-item" data-id="${item.id}">✕</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    function formatDate(dateString) {
+      if (!dateString) return '';
+      return new Date(dateString).getFullYear();
+    }
+    
+    function formatTimeSince(dateString) {
+      // Simple function to approximate time since
+      const date = new Date(dateString);
+      const now = new Date();
+      const seconds = Math.floor((now - date) / 1000);
+      
+      let interval = Math.floor(seconds / 31536000);
+      if (interval >= 1) return interval + " year" + (interval === 1 ? "" : "s");
+      
+      interval = Math.floor(seconds / 2592000);
+      if (interval >= 1) return interval + " month" + (interval === 1 ? "" : "s");
+      
+      interval = Math.floor(seconds / 86400);
+      if (interval >= 1) return interval + " day" + (interval === 1 ? "" : "s");
+      
+      interval = Math.floor(seconds / 3600);
+      if (interval >= 1) return interval + " hour" + (interval === 1 ? "" : "s");
+      
+      interval = Math.floor(seconds / 60);
+      if (interval >= 1) return interval + " minute" + (interval === 1 ? "" : "s");
+      
+      return Math.floor(seconds) + " second" + (seconds === 1 ? "" : "s");
+    }
+    
+    function removeFromWatchlist(event) {
+      event.preventDefault();
+      const itemId = event.target.dataset.id;
+      const itemElement = event.target.closest('.col');
+      const mediaTitle = itemElement.querySelector('.card-title').textContent.trim();
+      
+      // Show confirmation dialog
+      if (!confirm(`Are you sure you want to remove "${mediaTitle}" from your watchlist?`)) {
+        return; // User canceled the action
+      }
+      
+      fetch('/api/watchlist/remove/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+          item_id: itemId
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Remove the item from the DOM with a fade-out effect
+          itemElement.style.transition = 'opacity 0.3s ease';
+          itemElement.style.opacity = '0';
+          setTimeout(() => {
+            itemElement.remove();
+            // Update counts
+            updateWatchlist();
+          }, 300);
+        } else {
+          alert("Error removing item: " + data.error);
+        }
+      })
+      .catch(error => console.error('Error removing watchlist item:', error));
+    }
+    
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+    
+    // Set up event listeners for filters
+    searchInput.addEventListener('input', function() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(updateWatchlist, 500);
+    });
+    
+    genreFilter.addEventListener('change', updateWatchlist);
+    countryFilter.addEventListener('change', updateWatchlist);
+    sortBy.addEventListener('change', updateWatchlist);
+    
+    // Attach event listeners to remove buttons
+    document.querySelectorAll('.remove-item').forEach(btn => {
+      btn.addEventListener('click', removeFromWatchlist);
+    });
+  });
+</script>
+{% endblock %}

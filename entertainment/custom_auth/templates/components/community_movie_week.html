@@ -1,0 +1,63 @@
+{% load static %}
+
+<!-- Community Movie of the Week Component -->
+<div class="window" style="width: 100%; max-width: 600px;">
+    <div class="title-bar">
+        <div class="title-bar-text">Community Movie of the Week</div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize"></button>
+            <button aria-label="Maximize"></button>
+            <button aria-label="Close"></button>
+        </div>
+    </div>
+    <div class="window-body">
+        {% if community_pick %}
+            <div class="d-flex align-items-start">
+                <div class="me-3" style="flex-shrink: 0;">
+                    <a href="/movies/{{ community_pick.movie.tmdb_id }}" style="text-decoration:none;">
+                        <img src="{% if community_pick.movie.poster %}{{ community_pick.movie.poster }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" 
+                             alt="{{ community_pick.movie.title }}" 
+                             style="width: 80px;">
+                    </a>
+                </div>
+                <div style="flex-grow: 1;">
+                    <h5 class="mb-1" style="font-size: 16px; margin-top: 0;">{{ community_pick.movie.title }}</h5>
+                    <p class="text-muted mb-2" style="font-size: 12px;">
+                        Suggested by {{ community_pick.suggested_by }}
+                    </p>
+                    <div class="mb-2" style="font-size: 12px;">
+                        <div class="progress" style="height: 18px;">
+                            {% widthratio community_pick.watched_count community_pick.total_users 100 as progress_width %}
+                            <div class="progress-bar" role="progressbar" 
+                                 style="width: {% if progress_width %}{{ progress_width }}{% else %}0{% endif %}%; display: flex; align-items: center; justify-content: center;"
+                                 aria-valuenow="{{ community_pick.watched_count }}" aria-valuemin="0" aria-valuemax="{{ community_pick.total_users }}">
+                                {{ community_pick.watched_count }} watchers
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2" style="align-items: center;">
+                            <span style="font-size: 11px;">Ends: {{ community_pick.end_date }}</span>
+                            <a href="{% url 'community_page' %}" style="text-decoration: none;">
+                                <button class="retro-btn" style="font-size: 12px; padding: 4px 8px;">Join Discussion</button>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="text-center py-3">
+                <p style="margin-bottom: 15px;">No active movie currently selected.</p>
+                <a href="{% url 'community_page' %}" class="retro-btn">
+                    Suggest a Movie
+                </a>
+            </div>
+        {% endif %}
+    </div>
+    <div class="status-bar">
+        <div class="status-bar-field">Watch together with the community</div>
+        <div class="status-bar-field">
+            <a href="{% url 'community_page' %}" style="text-decoration: none; color: inherit;">
+                <button class="retro-btn" style="font-size: 12px; padding: 2px 8px;">Join Movie Club</button>
+            </a>
+        </div>
+    </div>
+</div>

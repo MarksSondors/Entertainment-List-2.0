@@ -41,7 +41,16 @@ def discover_page(request):
     popular_movies
     popular_tv_shows
     """
-    return render(request, 'discover_page.html')
+    from movies.views import get_current_community_pick_data
+    
+    # Get the current community movie pick data
+    community_pick_data = get_current_community_pick_data()
+    
+    context = {
+        'community_pick': community_pick_data
+    }
+    
+    return render(request, 'discover_page.html', context)
 
 @login_required
 def search_bar_discover(request):
@@ -772,7 +781,7 @@ def watchlist_page(request):
         'countries': countries,
     }
     
-    return render(request, 'watchlist_page', context)
+    return render(request, 'watchlist_page_old.html', context)
 
 def add_review_data_to_items(items, current_user):
     """Helper function to add review data to watchlist items."""

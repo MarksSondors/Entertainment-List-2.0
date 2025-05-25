@@ -1,0 +1,94 @@
+<!-- Scrollable Content Styles Component -->
+<style>
+    /* Scrollable row styles for popular content */
+    .scrollable-row {
+        display: flex;
+        overflow-x: auto;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        gap: 8px;
+        padding: 4px;
+        scrollbar-width: thin;
+    }
+    
+    .scrollable-row::-webkit-scrollbar {
+        height: 8px;
+    }
+    
+    .scrollable-row::-webkit-scrollbar-thumb {
+        background: var(--border-dark);
+        border-radius: 4px;
+    }
+    
+    .scrollable-row::-webkit-scrollbar-track {
+        background: var(--bg-color);
+    }
+    
+    .scrollable-row .poster-item {
+        flex: 0 0 auto;
+        width: 200px;
+        margin-bottom: 8px;
+    }
+    
+    .poster-card {
+        border: 1px solid var(--poster-border);
+        background-color: var(--window-bg);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        margin-bottom: 6px;
+        overflow: hidden;
+        border-radius: 0;
+        font-family: 'MS Sans Serif', sans-serif;
+    }
+    
+    .poster-card img {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 2/3;
+        object-fit: contain;
+        object-position: center top;
+    }
+    
+    .poster-card .info-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: rgba(0,0,0,0.8);
+        color: white;
+        padding: 5px;
+        font-size: 11px;
+        text-align: center;
+    }
+    
+    .poster-card .title {
+        font-weight: bold;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 2px;
+    }
+    
+    .poster-card .rating {
+        display: inline-block;
+        background-color: #ffc107;
+        color: #000;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-weight: bold;
+        font-size: 10px;
+    }
+
+    @media (max-width: 768px) {
+        .poster-card img {
+            width: 100%;
+            height: auto;
+        }
+        
+        .scrollable-row .poster-item {
+            width: 160px;
+        }
+    }
+</style>
