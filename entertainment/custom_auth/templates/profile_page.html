@@ -6,40 +6,6 @@
 {% block content %}
 <div class="container py-4">
     <div class="profile-layout">
-        <!-- User Selection Sidebar -->
-        <div class="sidebar">
-            <div class="window">
-                <div class="title-bar">
-                    <div class="title-bar-text">User Directory</div>
-                    <div class="title-bar-controls">
-                        <button aria-label="Minimize"></button>
-                        <button aria-label="Maximize"></button>
-                        <button aria-label="Close"></button>
-                    </div>
-                </div>
-                <div class="window-body">
-                    <div class="field-row" style="margin-bottom: 10px;">
-                        <input type="text" id="userSearch" placeholder="Search users..." style="width: 100%;">
-                    </div>
-                    <div class="sunken-panel" style="height: 300px; overflow-y: auto;">
-                        <ul class="user-list">
-                            {% for list_user in all_users %}
-                            <li class="user-list-item {% if list_user.username == current_user.username %}current-user{% endif %} {% if list_user.username == user.username %}selected-user{% endif %}">
-                                <a href="{% url 'profile_with_username' username=list_user.username %}">
-                                    <img src="{% static 'images/default-avatar.png' %}" alt="User Avatar" class="user-avatar">
-                                    <span>{{ list_user.username }}</span>
-                                    {% if list_user.username == current_user.username %}
-                                    <span class="user-status">(You)</span>
-                                    {% endif %}
-                                </a>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
         <!-- Main Profile Content -->
         <div class="main-content">
             <div class="window">
@@ -51,24 +17,29 @@
                         <button aria-label="Close"></button>
                     </div>
                 </div>
-                <div class="window-body">
-                    <!-- User Profile Section -->
-                    <div class="field-row" style="align-items: center; margin-bottom: 15px; padding: 10px; background: #f0f0f0; border: 1px inset;">
-                        <div style="margin-right: 15px;">
+                <div class="window-body">                    <!-- User Profile Section -->
+                    <div class="field-row user-profile-section">
+                        <div class="profile-picture-container">
                             {% if user.profile.profile_picture %}
-                                <img src="{{ user.profile.profile_picture }}" alt="Profile Picture" style="width: 80px; height: 80px; border: 2px inset #c0c0c0;">
+                                <img src="{{ user.profile.profile_picture.url }}" alt="Profile Picture" class="profile-picture">
                             {% else %}
-                                <img src="{% static 'images/default-avatar.png' %}" alt="Default Avatar" style="width: 80px; height: 80px; border: 2px inset #c0c0c0;">
+                                <div class="profile-initial">{{ user.username|first|upper }}</div>
                             {% endif %}
                         </div>
-                        <div>
-                            <div style="font-weight: bold; color: #0000AA; font-size: 18px;">{{ user.username }}</div>
-                            <div style="color: #008800; font-style: italic;">Online</div>
-                            <div style="color: #555; margin-top: 5px;">
+                        <div class="profile-info">
+                            <div class="username">{{ user.username }}</div>
+                            <div class="online-status">Online</div>
+                            <div class="status-message">
                                 "{{ user.profile.status_message|default:"Hey there! I'm using Entertainment List" }}"
                             </div>
-                        </div>
+                        </div>                    </div>
+
+                    <!-- Settings Button (for profile owner) -->
+                    {% if user.username == current_user.username %}
+                    <div class="field-row" style="justify-content: flex-end; margin-bottom: 15px;">
+                        <button class="btn" onclick="window.location.href='{% url 'settings_page' %}'">Settings</button>
                     </div>
+                    {% endif %}
 
                     <!-- Section Navigation - No Longer Tabs -->
                     <div class="field-row" style="margin-bottom: 10px;">
@@ -180,40 +151,266 @@
                                     {% endif %}
                                 </div>
                             </div>
-                        </div>
-                    </div>
+                        </div>                    </div>
 
-                    <!-- Bottom Controls -->
+                    <!-- User Directory Section -->
+                    <div id="user-directory" class="content-section">
+                        <div class="window" style="width: 100%; margin-top: 20px;">
+                            <div class="title-bar">
+                                <div class="title-bar-text">User Directory</div>
+                            </div>
+                            <div class="window-body">
+                                <div class="field-row" style="margin-bottom: 10px;">
+                                    <input type="text" id="userSearch" placeholder="Search users..." style="width: 100%;">
+                                </div>
+                                <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
+                                    <div class="user-row">
+                                        {% for list_user in all_users %}
+                                            <a href="{% url 'profile_with_username' username=list_user.username %}" class="user-card {% if list_user.username == current_user.username %}current-user{% endif %} {% if list_user.username == user.username %}selected-user{% endif %}">
+                                                {% if list_user.profile.profile_picture %}
+                                                    <img src="{{ list_user.profile.profile_picture.url }}" alt="User Avatar" class="user-card-avatar">
+                                                {% else %}
+                                                    <div class="user-card-avatar-initial">{{ list_user.username|first|upper }}</div>
+                                                {% endif %}
+                                                <span class="user-card-name" title="{{ list_user.username }}">{{ list_user.username|truncatechars:12 }}</span>
+                                                {% if list_user.username == current_user.username %}
+                                                <span class="user-card-status">(You)</span>
+                                                {% endif %}
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>                    <!-- Bottom Controls -->
                     <div class="field-row mt-3" style="justify-content: space-between;">
                         <div>
                             <span>{{ user.username }}'s profile</span>
-                        </div>
-                        <div>
+                        </div>                        <div>
                             <button class="btn" onclick="window.history.back()">Back</button>
                         </div>
-                    </div>
-                </div>
+                    </div></div>
             </div>
         </div>
     </div>
 </div>
 
 <style>
-    /* Layout styles */
+    /* Theme-adaptive CSS variables */
+    :root {
+        --bg-color: #c0c0c0;
+        --text-color: #000;
+        --text-muted: #666;
+        --border-dark: #808080;
+        --border-light: #dfdfdf;
+        --window-bg: #c0c0c0;
+        --button-bg: #c0c0c0;
+        --button-text: #000;
+        --button-hover: #e0e0e0;
+        --progress-bg: #fff;
+        --progress-bar: #008080;
+        --shadow-color: rgba(0,0,0,0.25);
+        --poster-border: #a0a0a0;
+        --profile-bg: #f0f0f0;
+        --username-color: #0000AA;
+        --online-color: #008800;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-color: #383838;
+            --text-color: #ffffff;
+            --text-muted: #b0b0b0;
+            --border-dark: #2a2a2a;
+            --border-light: #505050;
+            --window-bg: #404040;
+            --button-bg: #505050;
+            --button-text: #ffffff;
+            --button-hover: #606060;
+            --progress-bg: #2a2a2a;
+            --progress-bar: #00a0a0;
+            --shadow-color: rgba(0,0,0,0.5);
+            --poster-border: #606060;
+            --profile-bg: #2a2a2a;
+            --username-color: #4da6ff;
+            --online-color: #00ff00;
+        }
+    }    /* Layout styles */
     .profile-layout {
         display: flex;
-        gap: 20px;
-    }
-    
-    .sidebar {
-        flex: 0 0 250px;
+        justify-content: center;
     }
     
     .main-content {
         flex: 1;
+        max-width: 1000px;
     }
-    
-    /* User list styles */
+
+    /* User Profile Section */
+    .user-profile-section {
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 15px;
+        background: var(--profile-bg);
+        border: 1px inset var(--border-light);
+        border-radius: 4px;
+    }
+
+    .profile-picture-container {
+        margin-right: 15px;
+    }
+
+    .profile-picture {
+        width: 80px;
+        height: 80px;
+        border: 2px inset var(--border-light);
+        border-radius: 4px;
+        object-fit: cover;
+    }
+
+    .profile-initial {
+        width: 80px;
+        height: 80px;
+        border: 2px inset var(--border-light);
+        border-radius: 4px;
+        background: linear-gradient(45deg, #4a90e2, #357abd);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        font-weight: bold;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+
+    .profile-info .username {
+        font-weight: bold;
+        color: var(--username-color);
+        font-size: 18px;
+        margin-bottom: 4px;
+    }
+
+    .profile-info .online-status {
+        color: var(--online-color);
+        font-style: italic;
+        margin-bottom: 8px;
+    }
+
+    .profile-info .status-message {
+        color: var(--text-muted);
+        font-size: 14px;
+    }    
+    /* User list styles - Horizontal scrollable */
+    .user-row {
+        display: flex;
+        gap: 15px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 10px 0;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-dark) var(--bg-color);
+    }
+
+    /* Custom scrollbar styling for user row */
+    .user-row::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .user-row::-webkit-scrollbar-track {
+        background: var(--bg-color);
+        border-radius: 4px;
+    }
+
+    .user-row::-webkit-scrollbar-thumb {
+        background: var(--border-dark);
+        border-radius: 4px;
+        border: 1px solid var(--bg-color);
+    }
+
+    .user-row::-webkit-scrollbar-thumb:hover {
+        background: var(--progress-bar);
+    }
+
+    .user-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-decoration: none;
+        color: var(--text-color);
+        transition: transform 0.2s;
+        flex: 0 0 auto; /* Prevent shrinking */
+        min-width: 80px;
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+        background: var(--window-bg);
+    }
+
+    .user-card:hover {
+        transform: scale(1.05);
+        background-color: var(--button-hover);
+        border-color: var(--border-dark);
+    }
+
+    .user-card-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 4px;
+        object-fit: cover;
+        border: 2px inset var(--border-light);
+        margin-bottom: 8px;
+    }
+
+    .user-card-avatar-initial {
+        width: 50px;
+        height: 50px;
+        border-radius: 4px;
+        background: linear-gradient(45deg, #6c757d, #495057);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: bold;
+        border: 2px inset var(--border-light);
+        margin-bottom: 8px;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+
+    .user-card-name {
+        font-size: 12px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 80px;
+        margin-bottom: 4px;
+    }
+
+    .user-card-status {
+        font-size: 10px;
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    .user-card.selected-user {
+        background-color: var(--progress-bar);
+        color: white;
+        border-color: var(--progress-bar);
+    }
+
+    .user-card.selected-user .user-card-name,
+    .user-card.selected-user .user-card-status {
+        color: white;
+    }
+
+    .user-card.current-user .user-card-name {
+        font-weight: bold;
+    }
+
+    /* Legacy user list styles (kept for compatibility) */
     .user-list {
         list-style-type: none;
         padding: 0;
@@ -221,98 +418,180 @@
     }
     
     .user-list-item {
-        padding: 5px;
-        border-bottom: 1px solid #ddd;
+        padding: 8px;
+        border-bottom: 1px solid var(--border-dark);
+        transition: background-color 0.2s;
     }
     
     .user-list-item a {
         display: flex;
         align-items: center;
         text-decoration: none;
-        color: inherit;
+        color: var(--text-color);
     }
     
     .user-list-item:hover {
-        background-color: #ddf;
+        background-color: var(--button-hover);
     }
     
     .user-avatar {
-        width: 24px;
-        height: 24px;
-        margin-right: 8px;
+        width: 32px;
+        height: 32px;
+        margin-right: 10px;
+        border-radius: 4px;
+        object-fit: cover;
+        border: 1px solid var(--border-dark);
+    }
+
+    .user-avatar-initial {
+        width: 32px;
+        height: 32px;
+        margin-right: 10px;
+        border-radius: 4px;
+        background: linear-gradient(45deg, #6c757d, #495057);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: bold;
+        border: 1px solid var(--border-dark);
     }
     
     .user-status {
         font-size: 12px;
-        color: #666;
-        margin-left: 5px;
+        color: var(--text-muted);
+        margin-left: 8px;
     }
     
     .selected-user {
-        background-color: #cdf;
+        background-color: var(--progress-bar);
+        color: white;
+    }
+
+    .selected-user a {
+        color: white;
     }
     
     .current-user {
         font-weight: bold;
     }
-    
-    /* Keep your existing styles */
-    .active-tab {
-        background-color: #c0c0c0;
-        border-bottom: 1px solid #c0c0c0;
-        font-weight: bold;
-    }
-    .tab-content {
-        margin-top: 10px;
-    }
+      /* Content styling - Horizontal scrollable */
     .poster-row {
         display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
+        gap: 15px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 10px 0;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-dark) var(--bg-color);
     }
+
+    /* Custom scrollbar styling */
+    .poster-row::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .poster-row::-webkit-scrollbar-track {
+        background: var(--bg-color);
+        border-radius: 4px;
+    }
+
+    .poster-row::-webkit-scrollbar-thumb {
+        background: var(--border-dark);
+        border-radius: 4px;
+        border: 1px solid var(--bg-color);
+    }
+
+    .poster-row::-webkit-scrollbar-thumb:hover {
+        background: var(--progress-bar);
+    }
+    
     .poster-link {
         text-align: center;
         text-decoration: none;
-        color: inherit;
+        color: var(--text-color);
         position: relative;
+        transition: transform 0.2s;
+        flex: 0 0 auto; /* Prevent shrinking */
+        min-width: 100px;
     }
+
+    .poster-link:hover {
+        transform: scale(1.05);
+    }
+    
     .poster-image {
         width: 100px;
         height: 150px;
         object-fit: cover;
-        border: 2px inset #c0c0c0;
+        border: 2px inset var(--border-light);
+        border-radius: 4px;
     }
+    
     .poster-title {
         display: block;
-        margin-top: 5px;
+        margin-top: 8px;
         font-size: 14px;
+        color: var(--text-color);
+        max-width: 100px;
+        word-wrap: break-word;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
+    
     .rating-badge {
         position: absolute;
         top: 5px;
         right: 5px;
         background-color: #E0B020;
         color: black;
-        padding: 3px 6px;
-        border-radius: 3px;
+        padding: 4px 8px;
+        border-radius: 4px;
         font-weight: bold;
-        box-shadow: 0 0 3px rgba(0,0,0,0.5);
+        font-size: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
+    
     .avg-rating-badge {
         background-color: #1E90FF;
         color: white;
     }
-    
-    /* Enhanced Mobile Responsive Styles */
+
+    /* Window styling with theme support */
+    .window {
+        background-color: var(--window-bg);
+        border: 2px outset var(--border-light);
+        box-shadow: 2px 2px 4px var(--shadow-color);
+    }
+
+    .title-bar {
+        background: linear-gradient(90deg, var(--progress-bar), #006666);
+        color: white;
+        padding: 4px 8px;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .window-body {
+        background-color: var(--window-bg);
+        color: var(--text-color);
+        padding: 12px;
+    }
+
+    .sunken-panel {
+        border: 1px inset var(--border-light);
+        background-color: var(--bg-color);
+    }
+      /* Enhanced Mobile Responsive Styles */
     @media (max-width: 768px) {
         .profile-layout {
             flex-direction: column;
-            gap: 10px;
-        }
-        
-        .sidebar {
-            flex: none;
-            width: 100%;
         }
         
         .main-content {
@@ -321,25 +600,42 @@
         }
         
         /* Improve user profile section on mobile */
-        .field-row[style*="align-items: center"] {
+        .user-profile-section {
             flex-direction: column;
             align-items: center !important;
             text-align: center;
+            padding: 20px;
         }
         
-        .field-row[style*="align-items: center"] > div:first-child {
+        .profile-picture-container {
             margin-right: 0;
             margin-bottom: 15px;
+        }
+
+        .profile-picture,
+        .profile-initial {
+            width: 100px;
+            height: 100px;
+        }
+
+        .profile-initial {
+            font-size: 40px;
         }
         
         /* Adjust content padding for mobile */
         .window-body {
-            padding: 6px;
+            padding: 8px;
         }
         
         /* Adjust poster sizes for better mobile viewing */
         .poster-link {
-            width: calc(50% - 10px);  /* Two posters per row on phones */
+            width: calc(50% - 10px);
+        }
+
+        .poster-image {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 2/3;
         }
         
         /* Prevent text overflow in movie/show titles */
@@ -360,81 +656,67 @@
         
         /* Make mobile title bars more obvious for interaction */
         .title-bar {
-            padding: 8px;
+            padding: 12px 8px;
+            font-size: 14px;
+        }        /* Responsive user list */
+        .user-card {
+            min-width: 70px;
+            padding: 6px;
+        }
+
+        .user-card-avatar,
+        .user-card-avatar-initial {
+            width: 40px;
+            height: 40px;
+        }
+
+        .user-card-avatar-initial {
+            font-size: 16px;
+        }
+
+        .user-card-name {
+            font-size: 11px;
+            max-width: 70px;
+        }
+
+        .user-card-status {
+            font-size: 9px;
         }
     }
     
     /* Small phones optimization */
     @media (max-width: 480px) {
         .poster-link {
-            width: calc(33.33% - 10px);  /* Three smaller posters per row */
+            width: calc(33.33% - 10px);
         }
         
         .poster-image {
             height: auto;
             aspect-ratio: 2/3;
         }
-    }
+
+        .profile-picture,
+        .profile-initial {
+            width: 80px;
+            height: 80px;
+        }
+
+        .profile-initial {
+            font-size: 32px;
+        }    }
 </style>
 
-<script>
-    // Add search functionality for users
+<script>    // Add search functionality for users
     document.getElementById('userSearch').addEventListener('input', function() {
         const searchTerm = this.value.toLowerCase();
-        document.querySelectorAll('.user-list-item').forEach(item => {
-            const username = item.querySelector('span').textContent.toLowerCase();
+        document.querySelectorAll('.user-card').forEach(item => {
+            const username = item.querySelector('.user-card-name').textContent.toLowerCase();
             if (username.includes(searchTerm)) {
                 item.style.display = '';
             } else {
                 item.style.display = 'none';
             }
-        });
-    });
-    
-    // Enhanced mobile sidebar toggle
-    document.addEventListener('DOMContentLoaded', function() {
-        const sidebarTitleBar = document.querySelector('.sidebar .title-bar');
-        const sidebar = document.querySelector('.sidebar');
-        
-        // Check if we're on mobile and collapse sidebar by default
-        function checkMobile() {
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('expanded');
-                
-                // Add visual indicator for expandable sidebar
-                if (!sidebarTitleBar.querySelector('.expand-indicator')) {
-                    const indicator = document.createElement('span');
-                    indicator.className = 'expand-indicator';
-                    indicator.innerHTML = '▼';
-                    indicator.style.marginLeft = '10px';
-                    indicator.style.fontSize = '10px';
-                    sidebarTitleBar.querySelector('.title-bar-text').appendChild(indicator);
-                }
-            } else {
-                sidebar.classList.add('expanded');
-                // Remove indicator if exists
-                const indicator = sidebarTitleBar.querySelector('.expand-indicator');
-                if (indicator) indicator.remove();
-            }
-        }
-        
-        // Toggle sidebar on title bar click (mobile only)
-        sidebarTitleBar.addEventListener('click', function() {
-            if (window.innerWidth <= 768) {
-                sidebar.classList.toggle('expanded');
-                
-                // Update indicator
-                const indicator = sidebarTitleBar.querySelector('.expand-indicator');
-                if (indicator) {
-                    indicator.innerHTML = sidebar.classList.contains('expanded') ? '▲' : '▼';
-                }
-            }
-        });
-        
-        // Initial check and on resize
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-    });
+        });    });
     
     // Add "double tap to zoom" hint for mobile users
     if ('ontouchstart' in window) {
@@ -443,5 +725,25 @@
             poster.setAttribute('title', 'Double tap to zoom');
         });
     }
+
+    // Smooth scrolling for mobile navigation
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add smooth scroll behavior for better mobile UX
+        if (window.innerWidth <= 768) {
+            const links = document.querySelectorAll('a[href^="#"]');
+            links.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                });
+            });
+        }
+    });
 </script>
 {% endblock %}
