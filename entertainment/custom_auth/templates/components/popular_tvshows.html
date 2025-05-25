@@ -1,0 +1,59 @@
+{% load static %}
+
+<!-- Popular TV Shows Component -->
+<div class="window" style="width: 100%; max-width: 1000px;">
+    <div class="title-bar">
+        <div class="title-bar-text">Popular TV Shows</div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize"></button>
+            <button aria-label="Maximize"></button>
+            <button aria-label="Close"></button>
+        </div>
+    </div>
+    <div class="window-body" style="padding: 8px; background-color: var(--window-bg);">
+        <div class="scrollable-row" id="popular_tvshows_block">
+            <div class="poster-item">
+                <div class="poster-card">Loading...</div>
+            </div>
+        </div>
+    </div>
+    <div class="status-bar">
+        <div class="status-bar-field">Updated hourly from TMDb</div>
+    </div>
+</div>
+
+<script>
+    // Fetch popular TV shows
+    fetch('/tvshows/popular/')
+        .then(response => response.json())
+        .then(data => {
+            const tvList = document.getElementById('popular_tvshows_block');
+            tvList.innerHTML = '';
+            if (data.length === 0) {
+                tvList.innerHTML = '<div class="poster-item"><div class="poster-card">No TV shows found</div></div>';
+                return;
+            }
+            data.slice(0, 15).forEach(show => {
+                const showItem = document.createElement('div');
+                showItem.className = 'poster-item';
+                showItem.innerHTML = `
+                    <div class="poster-card">
+                        <a href="/tvshows/${show.id}" style="text-decoration:none; color:inherit; display:block; height:100%;">
+                            <img src="${show.poster_path || '{% static "images/no-poster.png" %}'}" 
+                                 alt="${show.name}">
+                            <div class="info-overlay">
+                                <div class="title">${show.name}</div>
+                                <div class="rating">${show.vote_average}/10</div>
+                            </div>
+                        </a>
+                    </div>
+                `;
+                tvList.appendChild(showItem);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching popular TV shows:', error);
+            document.getElementById('popular_tvshows_block').innerHTML = 
+                '<div class="poster-item"><div class="poster-card">Failed to load TV shows</div></div>';
+        });
+</script>

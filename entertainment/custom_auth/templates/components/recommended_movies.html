@@ -1,0 +1,59 @@
+{% load static %}
+
+<!-- Recommended Movies Component -->
+<div class="window" style="width: 100%; max-width: 1000px;">
+    <div class="title-bar">
+        <div class="title-bar-text">Recommended For You</div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize"></button>
+            <button aria-label="Maximize"></button>
+            <button aria-label="Close"></button>
+        </div>
+    </div>
+    <div class="window-body" style="padding: 8px; background-color: var(--window-bg);">
+        <div class="scrollable-row" id="recommended_movies_block">
+            <div class="poster-item">
+                <div class="poster-card">Loading recommendations...</div>
+            </div>
+        </div>
+    </div>
+    <div class="status-bar">
+        <div class="status-bar-field">Based on your ratings and preferences</div>
+    </div>
+</div>
+
+<script>
+    // Fetch movie recommendations
+    fetch('/movies/recommendations/')
+        .then(response => response.json())
+        .then(data => {
+            const movieList = document.getElementById('recommended_movies_block');
+            movieList.innerHTML = '';
+            if (data.length === 0) {
+                movieList.innerHTML = '<div class="poster-item"><div class="poster-card" style="padding: 20px; text-align: center; height: 120px; display: flex; align-items: center; justify-content: center;">No recommendations yet. Rate more movies to get personalized suggestions!</div></div>';
+                return;
+            }
+            data.slice(0, 15).forEach(movie => {
+                const movieItem = document.createElement('div');
+                movieItem.className = 'poster-item';
+                movieItem.innerHTML = `
+                    <div class="poster-card">
+                        <a href="/movies/${movie.tmdb_id}" style="text-decoration:none; color:inherit; display:block; height:100%;">
+                            <img src="${movie.poster || '{% static "images/no-poster.png" %}'}" 
+                                 alt="${movie.title}">
+                            <div class="info-overlay">
+                                <div class="title">${movie.title}</div>
+                                <div class="rating">${movie.rating}/10</div>
+                            </div>
+                        </a>
+                    </div>
+                `;
+                movieList.appendChild(movieItem);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching movie recommendations:', error);
+            document.getElementById('recommended_movies_block').innerHTML = 
+                '<div class="poster-item"><div class="poster-card" style="padding: 20px; text-align: center; height: 120px; display: flex; align-items: center; justify-content: center;">Failed to load recommendations. Please try again later.</div></div>';
+        });
+</script>
