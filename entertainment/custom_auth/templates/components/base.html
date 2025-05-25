@@ -11,6 +11,22 @@
     {% bootstrap_javascript %}
     <link rel="stylesheet" href="https://unpkg.com/98.css" />
     <style>
+        /* Theme-adaptive background colors */
+        :root {
+            --bg-color: #c0c0c0; /* Windows 98 default gray for light theme */
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #2d2d30; /* Dark gray for dark theme */
+            }
+        }
+
+        body {
+            background-color: var(--bg-color) !important;
+            background-image: none !important;
+        }
+
         /* Mobile optimizations */
         @media (max-width: 768px) {
             body {
@@ -51,7 +67,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'favicon/favicon-16x16.png' %}">
     <meta name="username" content="{{ request.user.username }}">
 </head>
-<body background="https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Bucephala-albeola-010.jpg/220px-Bucephala-albeola-010.jpg" data-username="{{ request.user.username }}">
+<body data-username="{{ request.user.username }}">
     <!-- Header -->
     {% include 'components/header.html' %}
 

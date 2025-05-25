@@ -137,9 +137,13 @@ class Person(models.Model):
 
     # music roles
     is_musician = models.BooleanField(default=False)
+
+    is_book_author = models.BooleanField(default=False)
     
-    # external IDs for music services
+    # external IDs for music and books
     musicbrainz_id = models.CharField(max_length=36, blank=True, null=True)
+    hardcover_id = models.UUIDField(unique=True, blank=True, null=True)
+
 
     imdb_id = models.CharField(max_length=20, blank=True, null=True)
     tmdb_id = models.IntegerField(unique=True, blank=True, null=True)
