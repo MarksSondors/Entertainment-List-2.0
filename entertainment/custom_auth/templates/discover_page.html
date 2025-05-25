@@ -32,10 +32,19 @@
             <!-- Popular Movies -->
             {% include "components/popular_movies.html" %}
         </div>
-        
-        <div class="discover-section">
+          <div class="discover-section">
             <!-- Popular TV Shows -->
             {% include "components/popular_tvshows.html" %}
+        </div>        <!-- Quick Action Buttons -->
+        <div class="discover-section">
+            <div class="quick-actions-container">
+                <button type="button" onclick="window.location.href='{% url 'shortest_watchlist_movie' %}'">
+                    Quickest Watch
+                </button>
+                <button type="button" onclick="window.location.href='{% url 'random_unwatched_movie' %}'">
+                    Random Movie
+                </button>
+            </div>
         </div>
     </div><style>
         /* Theme-adaptive CSS variables for discover page */
@@ -258,6 +267,47 @@
             
             .retro-btn:hover {
                 box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+            }
+        }        /* Quick Actions styling - minimal custom styles, let 98.css handle buttons */
+        .quick-actions-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            align-items: center;
+            padding: 20px 0;
+        }
+
+        .quick-actions-container button {
+            min-width: 120px;
+        }
+
+        /* Dark mode styling for action buttons */
+        @media (prefers-color-scheme: dark) {
+            .quick-actions-container button {
+                background: var(--button-bg) !important;
+                color: var(--button-text) !important;
+                border-color: var(--border-light) var(--border-dark) var(--border-dark) var(--border-light) !important;
+                box-shadow: inset -1px -1px var(--border-dark), inset 1px 1px var(--border-light), inset -2px -2px var(--border-dark), inset 2px 2px var(--border-light) !important;
+            }
+
+            .quick-actions-container button:hover {
+                background: var(--button-hover) !important;
+            }
+
+            .quick-actions-container button:active {
+                box-shadow: inset -1px -1px var(--border-light), inset 1px 1px var(--border-dark), inset -2px -2px var(--border-light), inset 2px 2px var(--border-dark) !important;
+            }
+        }
+
+        /* Mobile responsive for action buttons */
+        @media (max-width: 768px) {
+            .quick-actions-container {
+                gap: 15px;
+            }
+            
+            .quick-actions-container button {
+                width: 100%;
+                max-width: 200px;
             }
         }
     </style>
