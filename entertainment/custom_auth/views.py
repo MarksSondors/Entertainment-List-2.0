@@ -27,7 +27,290 @@ from datetime import timedelta, datetime
 from django.contrib.contenttypes.models import ContentType
 from movies.models import Movie, Genre
 from tvshows.models import TVShow
-from custom_auth.models import Review
+from custom_auth.models import Review, Person
+
+from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank, TrigramSimilarity
+
+
+# new and polished code
+@login_required
+def discover_page(request):
+    """
+    search_bar
+    movie_of_the_week
+    popular_movies
+    popular_tv_shows
+    """
+    return render(request, 'discover_page.html')
+
+@login_required
+def search_bar_discover(request):
+    #  i wil get type of search - currently only movies, tvshows, people or users
+    search_query = request.GET.get('search', '').strip()
+    search_type = request.GET.get('type', 'movies')  # Default to movies if not specified
+    if not search_query:
+        return JsonResponse({'error': 'Search query cannot be empty'}, status=400)
+    
+    if search_type == 'movies':
+        search_query_obj = SearchQuery(search_query, config='english')
+        
+        # Primary search using full-text search
+        movies = Movie.objects.annotate(
+            search=SearchVector('title', 'original_title', config='english'),
+            rank=SearchRank(SearchVector('title', 'original_title', config='english'), search_query_obj)
+        ).filter(search=search_query_obj).order_by('-rank')[:10]
+        
+        # If no results, try fuzzy matching with trigrams
+        if not movies:
+            movies = Movie.objects.annotate(
+                similarity=TrigramSimilarity('title', search_query) + TrigramSimilarity('original_title', search_query)
+            ).filter(similarity__gt=0.3).order_by('-similarity')[:10]
+        
+        # If still no results, try partial case-insensitive matching
+        if not movies:
+            movies = Movie.objects.filter(
+                Q(title__icontains=search_query) | Q(original_title__icontains=search_query)
+            )[:10]
+        
+        # Get content type for movies
+        movie_content_type = ContentType.objects.get_for_model(Movie)
+        movie_ids = [movie.id for movie in movies]
+        
+        # Get user's watchlist items
+        user_watchlist = set(
+            Watchlist.objects.filter(
+                user=request.user,
+                content_type=movie_content_type,
+                object_id__in=movie_ids
+            ).values_list('object_id', flat=True)
+        )
+        
+        # Get user's reviews
+        user_reviews = {
+            review.object_id: review.rating
+            for review in Review.objects.filter(
+                user=request.user,
+                content_type=movie_content_type,
+                object_id__in=movie_ids
+            )
+        }
+        
+        # Get average ratings
+        avg_ratings = {}
+        rating_counts = {}
+        for item in Review.objects.filter(
+            content_type=movie_content_type,
+            object_id__in=movie_ids
+        ).values('object_id').annotate(
+            avg_rating=Avg('rating'),
+            count=Count('id')
+        ):
+            avg_ratings[item['object_id']] = round(item['avg_rating'], 1)
+            rating_counts[item['object_id']] = item['count']
+        
+        # Get watchlist usernames
+        watchlist_users = {}
+        for item in Watchlist.objects.filter(
+            content_type=movie_content_type,
+            object_id__in=movie_ids
+        ).select_related('user').values('object_id', 'user__username'):
+            if item['object_id'] not in watchlist_users:
+                watchlist_users[item['object_id']] = []
+            watchlist_users[item['object_id']].append(item['user__username'])
+        
+        results = []
+        for movie in movies:
+            result = {
+                'id': movie.id,
+                'title': movie.title,
+                'poster': movie.poster,
+                'tmdb_id': movie.tmdb_id,
+                'year': movie.release_date.year if movie.release_date else None,
+                'url': f'/movies/{movie.tmdb_id}/',
+                'in_watchlist': movie.id in user_watchlist,
+                'user_rating': user_reviews.get(movie.id),
+                'avg_rating': avg_ratings.get(movie.id),
+                'rating_count': rating_counts.get(movie.id, 0),
+                'watchlist_users': watchlist_users.get(movie.id, [])
+            }
+            results.append(result)
+            
+    elif search_type == 'tvshows':
+        search_query_obj = SearchQuery(search_query, config='english')
+        
+        # Primary search using full-text search
+        tv_shows = TVShow.objects.annotate(
+            search=SearchVector('title', 'original_title', config='english'),
+            rank=SearchRank(SearchVector('title', 'original_title', config='english'), search_query_obj)
+        ).filter(search=search_query_obj).order_by('-rank')[:10]
+        
+        # If no results, try fuzzy matching with trigrams
+        if not tv_shows:
+            tv_shows = TVShow.objects.annotate(
+                similarity=TrigramSimilarity('title', search_query) + TrigramSimilarity('original_title', search_query)
+            ).filter(similarity__gt=0.3).order_by('-similarity')[:10]
+        
+        # If still no results, try partial case-insensitive matching
+        if not tv_shows:
+            tv_shows = TVShow.objects.filter(
+                Q(title__icontains=search_query) | Q(original_title__icontains=search_query)
+            )[:10]
+        
+        # Get content type for TV shows
+        tv_content_type = ContentType.objects.get_for_model(TVShow)
+        tv_ids = [tv.id for tv in tv_shows]
+        
+        # Get user's watchlist items
+        user_watchlist = set(
+            Watchlist.objects.filter(
+                user=request.user,
+                content_type=tv_content_type,
+                object_id__in=tv_ids
+            ).values_list('object_id', flat=True)
+        )
+        
+        # Get user's reviews
+        user_reviews = {
+            review.object_id: review.rating
+            for review in Review.objects.filter(
+                user=request.user,
+                content_type=tv_content_type,
+                object_id__in=tv_ids
+            )
+        }
+        
+        # Get average ratings
+        avg_ratings = {}
+        rating_counts = {}
+        for item in Review.objects.filter(
+            content_type=tv_content_type,
+            object_id__in=tv_ids
+        ).values('object_id').annotate(
+            avg_rating=Avg('rating'),
+            count=Count('id')
+        ):
+            avg_ratings[item['object_id']] = round(item['avg_rating'], 1)
+            rating_counts[item['object_id']] = item['count']
+        
+        # Get watchlist usernames
+        watchlist_users = {}
+        for item in Watchlist.objects.filter(
+            content_type=tv_content_type,
+            object_id__in=tv_ids
+        ).select_related('user').values('object_id', 'user__username'):
+            if item['object_id'] not in watchlist_users:
+                watchlist_users[item['object_id']] = []
+            watchlist_users[item['object_id']].append(item['user__username'])
+        
+        results = []
+        for tv in tv_shows:
+            result = {
+                'id': tv.id, 
+                'title': tv.title, 
+                'poster': tv.poster, 
+                'tmdb_id': tv.tmdb_id, 
+                'year': tv.first_air_date.year if tv.first_air_date else None,
+                'url': f'/tvshows/{tv.tmdb_id}/',
+                'in_watchlist': tv.id in user_watchlist,
+                'user_rating': user_reviews.get(tv.id),
+                'avg_rating': avg_ratings.get(tv.id),
+                'rating_count': rating_counts.get(tv.id, 0),
+                'watchlist_users': watchlist_users.get(tv.id, [])
+            }
+            # Add end year if the show has ended
+            if tv.last_air_date and tv.status in ['Ended', 'Canceled']:
+                result['end_year'] = tv.last_air_date.year
+            results.append(result)
+            
+    elif search_type == 'people':
+        search_query_obj = SearchQuery(search_query, config='english')
+        
+        # Primary search using full-text search
+        people = Person.objects.annotate(
+            search=SearchVector('name', config='english'),
+            rank=SearchRank(SearchVector('name', config='english'), search_query_obj)
+        ).filter(search=search_query_obj).order_by('-rank')[:10]
+        
+        # If no results, try fuzzy matching with trigrams
+        if not people:
+            people = Person.objects.annotate(
+                similarity=TrigramSimilarity('name', search_query)
+            ).filter(similarity__gt=0.3).order_by('-similarity')[:10]
+        
+        # If still no results, try partial case-insensitive matching
+        if not people:
+            people = Person.objects.filter(name__icontains=search_query)[:10]
+        
+        # Get ratings for people's work
+        results = []
+        for person in people:
+            # Get all media this person has worked on
+            person_credits = MediaPerson.objects.filter(person=person)
+            
+            # Collect all media identifiers
+            media_identifiers = set()
+            for credit in person_credits:
+                media_identifiers.add((credit.content_type_id, credit.object_id))
+            
+            # Calculate average rating for this person's work
+            avg_rating = None
+            rating_count = 0
+            if media_identifiers:
+                q_objects = Q()
+                for ct_id, obj_id in media_identifiers:
+                    q_objects |= Q(content_type_id=ct_id, object_id=obj_id)
+                
+                # Get all reviews for this person's work
+                reviews = Review.objects.filter(q_objects)
+                if reviews.exists():
+                    rating_data = reviews.aggregate(
+                        avg_rating=Avg('rating'),
+                        count=Count('id')
+                    )
+                    if rating_data['avg_rating'] is not None:
+                        avg_rating = round(rating_data['avg_rating'], 1)
+                        rating_count = rating_data['count']
+            
+            results.append({
+                'id': person.id,
+                'name': person.name,
+                'profile_picture': person.profile_picture,
+                'url': f'/people/{person.id}/',
+                'avg_rating': avg_rating,
+                'rating_count': rating_count
+            })
+    elif search_type == 'users':
+        search_query_obj = SearchQuery(search_query, config='english')
+        
+        # Primary search using full-text search
+        users = CustomUser.objects.annotate(
+            search=SearchVector('username', config='english'),
+            rank=SearchRank(SearchVector('username', config='english'), search_query_obj)
+        ).filter(search=search_query_obj).order_by('-rank')[:10]
+        
+        # If no results, try fuzzy matching with trigrams
+        if not users:
+            users = CustomUser.objects.annotate(
+                similarity=TrigramSimilarity('username', search_query)
+            ).filter(similarity__gt=0.3).order_by('-similarity')[:10]
+        
+        # If still no results, try partial case-insensitive matching
+        if not users:
+            users = CustomUser.objects.filter(username__icontains=search_query)[:10]
+        
+        results = [{'id': user.id, 'username': user.username, 'url': f'/profile/{user.username}/'} for user in users]
+    else:
+        return JsonResponse({'error': 'Invalid search type'}, status=400)
+    
+    return JsonResponse({
+        'success': True,
+        'results': results,
+        'search_type': search_type,
+        'query': search_query,
+        'count': len(results)
+    })
+
+# old and vibe coded code
 
 def login_page(request):
     if request.user.is_authenticated:
@@ -489,7 +772,7 @@ def watchlist_page(request):
         'countries': countries,
     }
     
-    return render(request, 'watchlist_page.html', context)
+    return render(request, 'watchlist_page', context)
 
 def add_review_data_to_items(items, current_user):
     """Helper function to add review data to watchlist items."""
@@ -1844,6 +2127,7 @@ def release_calendar(request):
     context = {
         'year': year,
         'month': month,
+       
         'month_name': cal_module.month_name[month],
         'calendar_weeks': calendar_weeks,
         'prev_month': prev_month,
@@ -1933,7 +2217,7 @@ def production_company_detail(request, company_id):
         user_rating_data = Review.objects.filter(q_objects, user=request.user).aggregate(models.Avg('rating'))
         if user_rating_data['rating__avg'] is not None:
             user_average_rating = round(user_rating_data['rating__avg'], 1)
-    
+
     # Add rating data to productions
     for item in productions:
         if item['type'] == 'movie':
