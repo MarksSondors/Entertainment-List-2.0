@@ -72,11 +72,8 @@
             --secondary-text: #cccccc;
             --poster-bg: #555555;
         }
-    }
-
-    .search-container {
-        position: sticky;
-        top: 0;
+    }    .search-container {
+        position: relative; /* Changed from sticky to relative since parent wrapper is fixed */
         background: var(--bg-color);
         padding: 8px;
         margin-bottom: 20px;

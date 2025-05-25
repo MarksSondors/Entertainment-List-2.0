@@ -10,21 +10,26 @@
     {% bootstrap_css %}
     {% bootstrap_javascript %}
     <link rel="stylesheet" href="https://unpkg.com/98.css" />
-    <style>
-        /* Theme-adaptive background colors */
+    <style>        /* Theme-adaptive background images */
         :root {
-            --bg-color: #c0c0c0; /* Windows 98 default gray for light theme */
+            --bg-color: #c0c0c0; /* Fallback color for light theme */
+            --bg-image: url("{% static 'images/background-light.webp' %}");
         }
 
         @media (prefers-color-scheme: dark) {
             :root {
-                --bg-color: #2d2d30; /* Dark gray for dark theme */
+                --bg-color: #2d2d30; /* Fallback color for dark theme */
+                --bg-image: url("{% static 'images/background-dark.jpg' %}");
             }
         }
 
         body {
             background-color: var(--bg-color) !important;
-            background-image: none !important;
+            background-image: var(--bg-image) !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+            background-attachment: fixed !important;
             min-height: 100vh !important;
             position: relative !important;
         }

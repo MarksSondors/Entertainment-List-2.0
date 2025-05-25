@@ -1,16 +1,25 @@
 {% extends "components/base.html" %}
 {% load static %}
 
-{% block content %}
-    <!-- Include Search Component -->
-    {% include "components/search_component.html" %}
+{% block content %}    <!-- Pinned Search Component -->
+    <div class="pinned-search-wrapper">
+        {% include "components/search_component.html" %}
+    </div>
     
     <!-- Include Modal Components -->
     {% include "components/movie_search_component.html" %}
     {% include "components/tv_show_search_component.html" %}
     
     <!-- Include Scrollable Content Styles -->
-    {% include "components/scrollable_content_styles.html" %}    <!-- Default Content (when not searching) -->    <div class="default-content" id="defaultContent">        
+    {% include "components/scrollable_content_styles.html" %}    
+    
+    <!-- Search Results Container (positioned below fixed search bar) -->
+    <div class="search-results-wrapper" id="searchResultsWrapper" style="display: none;">
+        <!-- This will be populated by the search component JavaScript -->
+    </div>
+    
+    <!-- Default Content (when not searching) -->    
+    <div class="default-content" id="defaultContent">
         <div class="discover-section">
             <!-- Community Movie of the Week -->
             {% include "components/community_movie_week.html" %}
@@ -62,13 +71,39 @@
                 --shadow-color: rgba(0,0,0,0.5);
                 --poster-border: #606060;
             }
+        }        /* Default content styles */
+        .pinned-search-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: var(--bg-color);
+            border-bottom: 2px solid var(--border-dark);
+            box-shadow: 0 2px 4px var(--shadow-color);
         }
 
-        /* Default content styles */
+        .search-results-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 80px 20px 20px 20px; /* Top padding to account for fixed search bar */
+        }
+
         .default-content {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 0 20px;
+            padding: 80px 20px 0 20px; /* Add top padding to account for fixed search bar */
+        }
+
+        /* Adjust padding for mobile */
+        @media (max-width: 768px) {
+            .search-results-wrapper {
+                padding-top: 90px; /* Slightly more padding on mobile */
+            }
+            
+            .default-content {
+                padding-top: 90px; /* Slightly more padding on mobile */
+            }
         }
 
         .discover-section {
