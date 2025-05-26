@@ -1,3 +1,4 @@
+{% load static %}
 {% comment %} tv_show_search_component.html - Standalone TV show search modal component {% endcomment %}
 
 <div id="tv-show-search-modal" class="modal" style="display: none;">
@@ -67,22 +68,27 @@
                             </div>
                             <input type="hidden" id="tv-show-default-backdrop-path" name="default_backdrop_path">
                         </div>
+                    </div>                      <!-- TV Show Details -->
+                    <div class="field-row" style="margin-bottom: 15px;">
+                        <label style="min-width: 80px;">Title:</label>
+                        <span id="tv-show-title" style="color: var(--text-color, #000); background-color: var(--input-bg, #fff); padding: 4px 8px; border: 1px inset; margin-left: 10px; flex: 1; display: inline-block;"></span>
+                        <input type="hidden" id="tv-show-title-hidden" name="title">
                     </div>
                     
-                    <!-- TV Show Details -->
-                    <div class="field-row-stacked" style="margin-bottom: 15px;">
-                        <label for="title">Title:</label>
-                        <input type="text" id="tv-show-title" name="title" required readonly style="width: 100%;">
+                    <div class="field-row" style="margin-bottom: 15px;">
+                        <label style="min-width: 80px;">First Air Date:</label>
+                        <span id="tv-show-first_air_date" style="color: var(--text-color, #000); background-color: var(--input-bg, #fff); padding: 4px 8px; border: 1px inset; margin-left: 10px; flex: 1; display: inline-block;"></span>
+                        <input type="hidden" id="tv-show-first_air_date-hidden" name="first_air_date">
                     </div>
                     
                     <div class="field-row-stacked" style="margin-bottom: 15px;">
-                        <label for="first_air_date">First Air Date:</label>
-                        <input type="text" id="tv-show-first_air_date" name="first_air_date" required readonly style="width: 100%;">
-                    </div>
-                    
-                    <div class="field-row-stacked" style="margin-bottom: 15px;">
-                        <label for="description">Description:</label>
-                        <input type="text" id="tv-show-description" name="description" required readonly style="width: 100%;">
+                        <label>Description:</label>
+                        <div style="color: var(--text-color, #000); background-color: var(--input-bg, #fff); padding: 8px; border: 1px inset; margin-top: 5px; line-height: 1.4;">
+                            <div id="tv-show-description-short" style="display: block;"></div>
+                            <div id="tv-show-description-full" style="display: none;"></div>
+                            <button type="button" id="tv-show-read-more-btn" onclick="toggleTVShowDescription()" style="background: none; border: none; color: #0066cc; text-decoration: underline; cursor: pointer; padding: 0; margin-top: 5px; font-size: inherit; display: none;">Read more</button>
+                        </div>
+                        <input type="hidden" id="tv-show-description-hidden" name="description">
                     </div>
                     
                     <!-- Additional Options -->
@@ -118,9 +124,11 @@
             <p id="tv-show-loading-message">Adding TV show to your list...</p>
             <div class="progress-indicator">
                 <span class="progress-indicator-bar"></span>
-            </div>
-            <div id="tv-show-task-info" style="margin-top: 15px; font-size: 12px; display: none;">
-                <p>This may take some time. You can close this dialog and the process will continue in the background.</p>
+            </div>            <div id="tv-show-task-info" style="margin-top: 15px; font-size: 12px; display: none;">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 10px;">
+                    <img src="{% static 'images/handshake.gif' %}" alt="Handshake" style="width: 100px; height: 100px; margin-bottom: 10px;">
+                    <p style="margin: 0; text-align: center;">This may take some time. You can close this dialog and the process will continue in the background.</p>
+                </div>
                 <p>Your TV show will be available in your library once the process completes.</p>
                 <button id="tv-show-close-loading-btn">Close</button>
             </div>
@@ -241,13 +249,27 @@
     }
     
     function goToTVShowStage2() {
-        if (!selectedTVShow) return;
-        
-        // Fill form with selected TV show data
+        if (!selectedTVShow) return;          // Fill form with selected TV show data
         $("#tv-show-tmdb_id").val(selectedTVShow.id);
-        $("#tv-show-title").val(selectedTVShow.name);
-        $("#tv-show-first_air_date").val(selectedTVShow.first_air_date || '');
-        $("#tv-show-description").val(selectedTVShow.overview || '');
+        $("#tv-show-title").text(selectedTVShow.name);
+        $("#tv-show-title-hidden").val(selectedTVShow.name);
+        $("#tv-show-first_air_date").text(selectedTVShow.first_air_date || 'N/A');
+        $("#tv-show-first_air_date-hidden").val(selectedTVShow.first_air_date || '');
+        
+        // Handle description with truncation
+        const description = selectedTVShow.overview || 'No description available';
+        $("#tv-show-description-hidden").val(selectedTVShow.overview || '');
+        
+        if (description.length > 150) {
+            const shortText = description.substring(0, 150) + '...';
+            $("#tv-show-description-short").text(shortText);
+            $("#tv-show-description-full").text(description);
+            $("#tv-show-read-more-btn").show();
+        } else {
+            $("#tv-show-description-short").text(description);
+            $("#tv-show-description-full").text('');
+            $("#tv-show-read-more-btn").hide();
+        }
         
         // Set preview images
         if (selectedTVShow.poster_path) {
@@ -293,9 +315,27 @@
         $("#tv-show-backdrop-selection-modal").show();
         fetchTVShowImages(selectedTVShow.id);
     }
-    
-    function closeTVShowBackdropSelectionModal() {
+      function closeTVShowBackdropSelectionModal() {
         $("#tv-show-backdrop-selection-modal").hide();
+    }
+    
+    // Toggle TV show description function
+    function toggleTVShowDescription() {
+        const shortDiv = $("#tv-show-description-short");
+        const fullDiv = $("#tv-show-description-full");
+        const button = $("#tv-show-read-more-btn");
+        
+        if (fullDiv.is(":visible")) {
+            // Currently showing full, switch to short
+            fullDiv.hide();
+            shortDiv.show();
+            button.text("Read more");
+        } else {
+            // Currently showing short, switch to full
+            shortDiv.hide();
+            fullDiv.show();
+            button.text("Read less");
+        }
     }
     
     // Fetch TV show images from TMDB
@@ -305,48 +345,78 @@
             method: "GET",
             data: { show_id: tvShowId },
             success: function(response) {
-                const data = JSON.parse(response);
-                // Load posters
+                const data = JSON.parse(response);                // Load posters
                 $("#tv-show-poster-loading").hide();
                 if (data.posters && data.posters.length > 0) {
                     data.posters.forEach(poster => {
+                        // Create container for image and overlay
+                        const containerElement = $('<div>', {
+                            style: 'position: relative; width: 100%; cursor: pointer; border: 2px solid transparent;',
+                            'data-path': poster.file_path
+                        });
+                        
                         const imgElement = $('<img>', {
                             src: `https://image.tmdb.org/t/p/w200${poster.file_path}`,
                             alt: 'TV show poster',
-                            style: 'width: 100%; cursor: pointer; border: 2px solid transparent;',
-                            'data-path': poster.file_path
-                        }).click(function() {
+                            style: 'width: 100%; display: block;'
+                        });
+                        
+                        // Create resolution overlay
+                        const resolutionOverlay = $('<div>', {
+                            text: `${poster.width}×${poster.height}`,
+                            style: 'position: absolute; bottom: 4px; right: 4px; background: rgba(0, 0, 0, 0.7); color: white; padding: 2px 4px; font-size: 10px; font-family: monospace; border-radius: 2px;'
+                        });
+                        
+                        containerElement.append(imgElement);
+                        containerElement.append(resolutionOverlay);
+                        
+                        containerElement.click(function() {
                             // Select this poster
-                            $("#tv-show-poster-grid img").css('border', '2px solid transparent');
+                            $("#tv-show-poster-grid div").css('border', '2px solid transparent');
                             $(this).css('border', '2px solid #000080');
                             $("#tv-show-poster-preview").attr("src", `https://image.tmdb.org/t/p/w500${poster.file_path}`);
                             $("#tv-show-default-poster-path").val(poster.file_path);
                             closeTVShowPosterSelectionModal();
                         });
-                        $("#tv-show-poster-grid").append(imgElement);
+                        $("#tv-show-poster-grid").append(containerElement);
                     });
                 } else {
                     $("#tv-show-poster-grid").html("<p>No posters available.</p>");
                 }
-                
-                // Load backdrops
+                  // Load backdrops
                 $("#tv-show-backdrop-loading").hide();
                 if (data.backdrops && data.backdrops.length > 0) {
                     data.backdrops.forEach(backdrop => {
+                        // Create container for image and overlay
+                        const containerElement = $('<div>', {
+                            style: 'position: relative; width: 100%; cursor: pointer; border: 2px solid transparent;',
+                            'data-path': backdrop.file_path
+                        });
+                        
                         const imgElement = $('<img>', {
                             src: `https://image.tmdb.org/t/p/w300${backdrop.file_path}`,
                             alt: 'TV show backdrop',
-                            style: 'width: 100%; cursor: pointer; border: 2px solid transparent;',
-                            'data-path': backdrop.file_path
-                        }).click(function() {
+                            style: 'width: 100%; display: block;'
+                        });
+                        
+                        // Create resolution overlay
+                        const resolutionOverlay = $('<div>', {
+                            text: `${backdrop.width}×${backdrop.height}`,
+                            style: 'position: absolute; bottom: 4px; right: 4px; background: rgba(0, 0, 0, 0.7); color: white; padding: 2px 4px; font-size: 10px; font-family: monospace; border-radius: 2px;'
+                        });
+                        
+                        containerElement.append(imgElement);
+                        containerElement.append(resolutionOverlay);
+                        
+                        containerElement.click(function() {
                             // Select this backdrop
-                            $("#tv-show-backdrop-grid img").css('border', '2px solid transparent');
+                            $("#tv-show-backdrop-grid div").css('border', '2px solid transparent');
                             $(this).css('border', '2px solid #000080');
                             $("#tv-show-backdrop-preview").attr("src", `https://image.tmdb.org/t/p/w500${backdrop.file_path}`);
                             $("#tv-show-default-backdrop-path").val(backdrop.file_path);
                             closeTVShowBackdropSelectionModal();
                         });
-                        $("#tv-show-backdrop-grid").append(imgElement);
+                        $("#tv-show-backdrop-grid").append(containerElement);
                     });
                 } else {
                     $("#tv-show-backdrop-grid").html("<p>No backdrops available.</p>");
@@ -836,5 +906,42 @@
 
 .status-link:hover {
     text-decoration: underline;
+}
+
+/* Override base template's mobile field-row behavior for inline title/date fields */
+@media (max-width: 768px) {
+    /* Keep title and release date inline on mobile */
+    .modal .field-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+    }
+    
+    .modal .field-row label {
+        min-width: 70px !important;
+        margin-right: 8px !important;
+        margin-bottom: 0 !important;
+        flex-shrink: 0 !important;
+    }
+    
+    .modal .field-row span,
+    .modal .field-row input:not([type="checkbox"]) {
+        flex: 1 !important;
+        min-width: 120px !important;
+        margin-left: 0 !important;
+    }
+    
+    /* Ensure description remains stacked */
+    .modal .field-row-stacked {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    
+    .modal .field-row-stacked label {
+        min-width: unset !important;
+        margin-right: 0 !important;
+        margin-bottom: 5px !important;
+    }
 }
 </style>

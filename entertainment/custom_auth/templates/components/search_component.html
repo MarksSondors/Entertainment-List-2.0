@@ -1,14 +1,17 @@
 {% load static %}
 
 <div class="search-container">
-    <form class="search-form" method="GET" id="searchForm">
-        <div class="search-input-wrapper">
+    <form class="search-form" method="GET" id="searchForm">        <div class="search-input-wrapper">
             <input type="text" 
                    name="search" 
                    placeholder="Search" 
                    value="{{ request.GET.search }}"
                    class="search-input"
-                   id="searchInput">
+                   id="searchInput"
+                   autocomplete="off"
+                   autocorrect="off"
+                   autocapitalize="off"
+                   spellcheck="false">
         </div>
         <button type="button" class="cancel-button" id="cancelButton" style="display: none;" onclick="clearSearch()">
             Cancel
