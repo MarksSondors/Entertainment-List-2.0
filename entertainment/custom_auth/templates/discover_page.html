@@ -35,11 +35,17 @@
         </div><div class="discover-section">
             <!-- Popular Movies -->
             {% include "components/popular_movies.html" %}
-        </div>
-          <div class="discover-section">
+        </div>          
+        <div class="discover-section">
             <!-- Popular TV Shows -->
             {% include "components/popular_tvshows.html" %}
-        </div>        <!-- Quick Action Buttons -->
+        </div>
+          <div class="discover-section">
+            <!-- Browse by Genre -->
+            {% include "components/horizontal_genres.html" %}
+        </div>
+        
+        <!-- Quick Action Buttons -->
         <div class="discover-section">
             <div class="quick-actions-container">
                 <button type="button" onclick="window.location.href='{% url 'shortest_watchlist_movie' %}'">
@@ -47,6 +53,18 @@
                 </button>
                 <button type="button" onclick="window.location.href='{% url 'random_unwatched_movie' %}'">
                     Random Movie
+                </button>
+            </div>
+        </div>
+        
+        <!-- Browse Actions -->
+        <div class="discover-section">
+            <div class="quick-actions-container">
+                <button type="button" onclick="window.location.href='{% url 'browse_by_country' %}'">
+                    Browse by Country
+                </button>
+                <button type="button" onclick="window.location.href='{% url 'browse_by_people' %}'">
+                    Browse by People
                 </button>
             </div>
         </div>
@@ -117,10 +135,13 @@
             .default-content {
                 padding-top: 90px; /* Slightly more padding on mobile */
             }
-        }
-
-        .discover-section {
+        }        .discover-section {
             margin-bottom: 40px;
+        }
+        
+        /* Reduce margin for action button sections */
+        .discover-section:has(.quick-actions-container) {
+            margin-bottom: 10px;
         }
 
         .discover-section h2 {

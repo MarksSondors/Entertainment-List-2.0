@@ -319,6 +319,28 @@ def search_bar_discover(request):
         'count': len(results)
     })
 
+@login_required
+def discover_genres(request):
+    """
+    API endpoint for discover page genres - returns 10 random genres
+    in randomized order for horizontal scrolling component
+    """
+    # Get all genres and randomly select 10
+    all_genres = list(Genre.objects.all())
+    random.shuffle(all_genres)  # Randomize the order
+    genres = all_genres[:10]  # Take first 10 after shuffle
+    
+    genres_data = []
+    for genre in genres:
+        genre_data = {
+            'id': genre.id,
+            'name': genre.name,
+            'background_image': genre.background_image.url if genre.background_image else None,
+        }
+        genres_data.append(genre_data)
+    
+    return JsonResponse({'genres': genres_data})
+
 # old and vibe coded code
 
 def login_page(request):
@@ -361,6 +383,7 @@ def browse_by_genre(request):
         'genres': genres,
         'anime_only': anime_only,
     })
+
 
 @login_required
 def genre_detail(request, genre_id):

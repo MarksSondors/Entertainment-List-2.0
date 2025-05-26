@@ -1,11 +1,11 @@
 from django.urls import path
 from . import views
 
-urlpatterns = [
-    # discover page
+urlpatterns = [    # discover page
     path('discover/', views.discover_page, name='discover_page'),
     # api endpoint for discover page
     path('discover/search/', views.search_bar_discover, name='discover_search'),
+    path('discover/genres/', views.discover_genres, name='discover_genres'),
 
     # login page
     path('', views.login_page, name='login_page'),
