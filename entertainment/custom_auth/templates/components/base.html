@@ -51,10 +51,15 @@
             .field-row, .field-row-stacked {
                 flex-direction: column;
             }
-            
-            .field-row > *, .field-row-stacked > * {
+              .field-row > *, .field-row-stacked > * {
                 margin-bottom: 8px;
                 width: 100%;
+            }
+            
+            /* Exception for user profile section to maintain horizontal layout */
+            .field-row.user-profile-section > * {
+                width: auto;
+                margin-bottom: 0;
             }
             
             button, input, select {

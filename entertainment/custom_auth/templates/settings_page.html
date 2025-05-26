@@ -4,16 +4,17 @@
 
 {% block content %}
 <div class="container py-4">
-    <div class="window">
-        <div class="title-bar">
-            <div class="title-bar-text">User Settings</div>
-            <div class="title-bar-controls">
-                <button aria-label="Minimize"></button>
-                <button aria-label="Maximize"></button>
-                <button aria-label="Close"></button>
-            </div>
-        </div>
-        <div class="window-body">
+    <div class="profile-layout">
+        <div class="main-content">
+            <div class="window">
+                <div class="title-bar">
+                    <div class="title-bar-text">MSN Messenger - {{ request.user.username }} Settings</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>                </div>
+                <div class="window-body">
             <form method="post">
                 {% csrf_token %}
                 
@@ -22,9 +23,8 @@
                     <div class="sunken-panel" style="padding: 10px;">
                         <div class="field-row" style="margin-bottom: 10px;">
                             <input type="checkbox" id="show_keywords" name="show_keywords" {% if user_settings.show_keywords %}checked{% endif %}>
-                            <label for="show_keywords">Show keywords</label>
-                        </div>
-                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: #666;">
+                            <label for="show_keywords">Show keywords</label>                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
                             Display keywords in media details
                         </small>
                         
@@ -32,7 +32,7 @@
                             <input type="checkbox" id="show_review_text" name="show_review_text" {% if user_settings.show_review_text %}checked{% endif %}>
                             <label for="show_review_text">Show review text</label>
                         </div>
-                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: #666;">
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
                             Display full review text on media pages
                         </small>
                         
@@ -40,7 +40,7 @@
                             <input type="checkbox" id="show_plot" name="show_plot" {% if user_settings.show_plot %}checked{% endif %}>
                             <label for="show_plot">Show plot descriptions</label>
                         </div>
-                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: #666;">
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
                             Display plot details on media pages
                         </small>
                     </div>
@@ -48,23 +48,21 @@
                 
                 <!-- API Key Section -->
                 <div class="field-row-stacked" style="margin-bottom: 15px;">
-                    <h4>API Access</h4>
-                    <div class="sunken-panel" style="padding: 10px;">
+                    <h4>API Access</h4>                    <div class="sunken-panel" style="padding: 10px;">
                         <div class="field-row" style="margin-bottom: 10px;">
                             <label for="api_key">Your API Key:</label>
-                            <input type="text" id="api_key" value="{{ request.user.api_key }}" readonly style="width: 100%; background-color: #f0f0f0;">
+                            <input type="text" id="api_key" value="{{ request.user.api_key }}" readonly style="width: 100%;">
                         </div>
-                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: #666;">
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
                             Use this key to access the API. Keep it secure and don't share it with others.
-                        </small>
-                        <div class="field-row" style="justify-content: flex-end;">
-                            <button type="button" id="copy-api-key" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px; margin-right: 10px;">
+                        </small>                        <div class="field-row button-row">
+                            <button type="button" id="copy-api-key" class="btn">
                                 Copy to Clipboard
                             </button>
                             <form method="post" style="display: inline;">
                                 {% csrf_token %}
                                 <input type="hidden" name="regenerate_api_key" value="true">
-                                <button type="submit" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">
+                                <button type="submit" class="btn">
                                     Generate New Key
                                 </button>
                             </form>
@@ -73,9 +71,7 @@
                 </div>
                 
                 <div class="field-row" style="justify-content: flex-end;">
-                    <button type="submit" style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;">
-                        Save Settings
-                    </button>
+                    <button type="submit" class="btn">Save Settings</button>
                 </div>
             </form>
         </div>
@@ -84,7 +80,254 @@
             <div class="status-bar-field">Last updated: {% now "F j, Y" %}</div>
         </div>
     </div>
+        </div>
+    </div>
 </div>
+
+<style>
+    /* Theme-adaptive CSS variables */
+    :root {
+        --bg-color: #c0c0c0;
+        --text-color: #000;
+        --text-muted: #666;
+        --border-dark: #808080;
+        --border-light: #dfdfdf;
+        --window-bg: #c0c0c0;
+        --button-bg: #c0c0c0;
+        --button-text: #000;
+        --button-hover: #e0e0e0;
+        --progress-bg: #fff;
+        --progress-bar: #008080;
+        --shadow-color: rgba(0,0,0,0.25);
+        --profile-bg: #f0f0f0;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-color: #383838;
+            --text-color: #ffffff;
+            --text-muted: #b0b0b0;
+            --border-dark: #2a2a2a;
+            --border-light: #505050;
+            --window-bg: #404040;
+            --button-bg: #505050;
+            --button-text: #ffffff;
+            --button-hover: #606060;
+            --progress-bg: #2a2a2a;
+            --progress-bar: #00a0a0;
+            --shadow-color: rgba(0,0,0,0.5);
+            --profile-bg: #2a2a2a;
+        }
+    }
+
+    /* Layout styles */
+    .profile-layout {
+        display: flex;
+        justify-content: center;
+    }
+    
+    .main-content {
+        flex: 1;
+        max-width: 1000px;
+    }
+
+    /* Window styling with theme support */
+    .window {
+        background-color: var(--window-bg);
+        border: 2px outset var(--border-light);
+        box-shadow: 2px 2px 4px var(--shadow-color);
+    }    .title-bar {
+        background: linear-gradient(90deg, var(--progress-bar), #006666);
+        color: white;
+        padding: 4px 8px;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+    }
+
+    .title-bar-controls {
+        display: flex;
+        gap: 2px;
+    }
+
+    .title-bar-controls button {
+        width: 16px;
+        height: 14px;
+        border: 1px outset var(--border-light);
+        background-color: var(--button-bg);
+        font-size: 6px;
+        line-height: 1;
+        padding: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .title-bar-controls button:hover {
+        background-color: var(--button-hover);
+    }
+
+    .title-bar-controls button:active {
+        border: 1px inset var(--border-light);
+        background-color: var(--bg-color);
+    }
+
+    .title-bar-controls button:nth-child(1)::before { content: "_"; }
+    .title-bar-controls button:nth-child(2)::before { content: "□"; }
+    .title-bar-controls button:nth-child(3)::before { content: "✕"; }    .window-body {
+        background-color: var(--window-bg);
+        color: var(--text-color);
+        padding: 8px;
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+    }
+
+    .sunken-panel {
+        border: 1px inset var(--border-light);
+        background-color: var(--bg-color);
+        padding: 8px;
+        margin: 4px 0;
+    }    .status-bar {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        border: 2px inset var(--border-light);
+        padding: 2px 4px;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+    }
+    
+    .status-bar-field {
+        font-size: 11px;
+        margin-right: 10px;
+    }.btn {
+        background-color: var(--button-bg);
+        border: 2px outset var(--border-light);
+        color: var(--button-text);
+        padding: 4px 12px;
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+        font-weight: normal;
+        cursor: pointer;
+        min-width: 75px;
+        text-align: center;
+        box-sizing: border-box;
+        white-space: nowrap;
+    }
+
+    .btn:hover {
+        background-color: var(--button-hover);
+    }
+
+    .btn:active {
+        border: 2px inset var(--border-light);
+        background-color: var(--bg-color);
+    }
+
+    .btn:focus {
+        outline: 1px dotted var(--text-color);
+        outline-offset: -3px;
+    }    /* Form styling */
+    input[type="text"], input[type="checkbox"] {
+        background-color: var(--window-bg);
+        color: var(--text-color);
+        border: 1px inset var(--border-light);
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+    }
+
+    input[type="text"] {
+        padding: 2px 4px;
+        box-sizing: border-box;
+    }
+
+    input[type="text"]:read-only {
+        background-color: var(--bg-color);
+        color: var(--text-muted);
+    }
+
+    input[type="checkbox"] {
+        width: 13px;
+        height: 13px;
+        margin-right: 6px;
+        vertical-align: middle;
+    }
+
+    label {
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+        vertical-align: middle;
+    }
+
+    h4 {
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+        font-weight: bold;
+        margin: 0 0 8px 0;
+    }    .field-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .field-row form {
+        margin: 0;
+        display: inline-block;
+    }
+
+    .field-row.button-row {
+        gap: 8px;
+    }.field-row-stacked {
+        display: block;
+    }
+
+    small {
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 10px;
+        color: var(--text-muted);
+    }/* Mobile responsive */
+    @media (max-width: 768px) {
+        .profile-layout {
+            flex-direction: column;
+        }
+        
+        .main-content {
+            flex: 1;
+            width: 100%;
+        }
+        
+        .container.py-4 {
+            padding: 10px !important;
+        }
+        
+        .title-bar {
+            padding: 12px 8px;
+            font-size: 14px;
+        }
+        
+        /* Prevent buttons from stretching full width on mobile */
+        .btn {
+            width: auto;
+            min-width: auto;
+            flex-shrink: 0;
+        }
+        
+        .field-row {
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .field-row[style*="justify-content: flex-end"] {
+            justify-content: flex-start !important;
+        }
+    }
+</style>
 
 <script>
     // Add a confirmation message when settings are saved
