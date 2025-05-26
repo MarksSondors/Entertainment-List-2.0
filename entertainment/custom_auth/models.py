@@ -65,6 +65,7 @@ class Genre(models.Model):
     tmdb_id = models.IntegerField(blank=True, null=True)
 
     icon = models.ImageField(upload_to='genre_icons/', blank=True, null=True)
+    background_image = models.ImageField(upload_to='genre_backgrounds/', blank=True, null=True)
 
     def __str__(self):
         return self.name
