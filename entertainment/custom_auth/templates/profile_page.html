@@ -26,20 +26,19 @@
                                 <div class="profile-initial">{{ user.username|first|upper }}</div>
                             {% endif %}
                         </div>
-                        <div class="profile-info">
-                            <div class="username">{{ user.username }}</div>
-                            <div class="online-status">Online</div>
-                            <div class="status-message">
-                                "{{ user.profile.status_message|default:"Hey there! I'm using Entertainment List" }}"
-                            </div>
-                        </div>                    </div>
-
-                    <!-- Settings Button (for profile owner) -->
-                    {% if user.username == current_user.username %}
-                    <div class="field-row" style="justify-content: flex-end; margin-bottom: 15px;">
-                        <button class="btn" onclick="window.location.href='{% url 'settings_page' %}'">Settings</button>
+                        <div class="username">{{ user.username }}</div>
+                        {% if user.username == current_user.username %}
+                        <button class="btn settings-btn" onclick="window.location.href='{% url 'settings_page' %}'">Settings</button>
+                        {% endif %}
                     </div>
-                    {% endif %}
+                    
+                    <!-- Profile Details Below -->
+                    <div class="profile-details">
+                        <div class="online-status">Online</div>
+                        <div class="status-message">
+                            "{{ user.profile.status_message|default:"Hey there! I'm using Entertainment List" }}"
+                        </div>
+                    </div>
 
                     <!-- Section Navigation - No Longer Tabs -->
                     <div class="field-row" style="margin-bottom: 10px;">
@@ -244,20 +243,23 @@
     .main-content {
         flex: 1;
         max-width: 1000px;
-    }
-
-    /* User Profile Section */
+    }    /* User Profile Section */
     .user-profile-section {
+        display: flex;
         align-items: center;
+        gap: 15px;
         margin-bottom: 15px;
         padding: 15px;
         background: var(--profile-bg);
         border: 1px inset var(--border-light);
         border-radius: 4px;
+        min-height: 110px; /* Ensure consistent height */
     }
 
     .profile-picture-container {
-        margin-right: 15px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
     }
 
     .profile-picture {
@@ -281,25 +283,46 @@
         font-size: 32px;
         font-weight: bold;
         text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-    }
-
-    .profile-info .username {
+    }    .username {
         font-weight: bold;
         color: var(--username-color);
-        font-size: 18px;
-        margin-bottom: 4px;
+        font-size: 24px;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        line-height: 1.2;
     }
 
-    .profile-info .online-status {
+    .settings-btn {
+        font-size: 14px;
+        padding: 10px 16px;
+        min-height: auto;
+        flex-shrink: 0;
+        align-self: center;
+        min-width: 80px;
+    }
+
+    /* Profile Details Section */
+    .profile-details {
+        margin-bottom: 20px;
+        padding: 10px 15px;
+        background: var(--profile-bg);
+        border: 1px inset var(--border-light);
+        border-radius: 4px;
+    }
+
+    .online-status {
         color: var(--online-color);
         font-style: italic;
         margin-bottom: 8px;
+        font-size: 14px;
     }
 
-    .profile-info .status-message {
+    .status-message {
         color: var(--text-muted);
         font-size: 14px;
-    }    
+        font-style: italic;
+    }
     /* User list styles - Horizontal scrollable */
     .user-row {
         display: flex;
@@ -582,11 +605,29 @@
         background-color: var(--window-bg);
         color: var(--text-color);
         padding: 12px;
-    }
-
-    .sunken-panel {
+    }    .sunken-panel {
         border: 1px inset var(--border-light);
         background-color: var(--bg-color);
+    }    .btn {
+        background-color: var(--button-bg);
+        border: 2px outset var(--border-light);
+        color: var(--button-text);
+        padding: 5px 10px;
+        font-family: 'MS Sans Serif', sans-serif;
+        cursor: pointer;
+        font-size: 11px;
+        min-width: 60px;
+        text-align: center;
+        box-shadow: 1px 1px 0px var(--border-dark);
+    }
+
+    .btn:hover {
+        background-color: var(--button-hover);
+    }
+
+    .btn:active {
+        border: 2px inset var(--border-light);
+        box-shadow: inset 1px 1px 2px var(--border-dark);
     }
       /* Enhanced Mobile Responsive Styles */
     @media (max-width: 768px) {
@@ -597,29 +638,57 @@
         .main-content {
             flex: 1;
             width: 100%;
-        }
-        
-        /* Improve user profile section on mobile */
+        }        /* Improve user profile section on mobile */
         .user-profile-section {
-            flex-direction: column;
-            align-items: center !important;
-            text-align: center;
-            padding: 20px;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+            align-items: center;
+            text-align: left;
+            padding: 12px;
+            gap: 8px;
+            min-height: 90px;
+            overflow: hidden;
         }
         
         .profile-picture-container {
-            margin-right: 0;
-            margin-bottom: 15px;
+            order: 1;
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+        }        .username {
+            order: 2;
+            flex: 1;
+            min-width: 0; /* Allow shrinking */
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .profile-picture,
+        .settings-btn {
+            order: 3;
+            font-size: 13px;
+            padding: 6px 12px;
+            align-self: center;
+            flex-shrink: 0;
+            min-width: 70px;
+        }.profile-picture,
         .profile-initial {
-            width: 100px;
-            height: 100px;
+            width: 60px;
+            height: 60px;
         }
 
         .profile-initial {
-            font-size: 40px;
+            font-size: 24px;
+        }
+
+        /* Profile details styling for mobile */
+        .profile-details {
+            text-align: center;
+            padding: 12px;
         }
         
         /* Adjust content padding for mobile */
@@ -677,14 +746,26 @@
         .user-card-name {
             font-size: 11px;
             max-width: 70px;
-        }
-
-        .user-card-status {
+        }        .user-card-status {
             font-size: 9px;
         }
-    }
-    
-    /* Small phones optimization */
+        
+        /* Prevent buttons from stretching full width on mobile */
+        .btn {
+            width: auto;
+            min-width: auto;
+            flex-shrink: 0;
+        }
+        
+        .field-row {
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .field-row[style*="justify-content: flex-end"] {
+            justify-content: flex-start !important;
+        }
+    }    /* Small phones optimization */
     @media (max-width: 480px) {
         .poster-link {
             width: calc(33.33% - 10px);
@@ -693,17 +774,58 @@
         .poster-image {
             height: auto;
             aspect-ratio: 2/3;
+        }        .user-profile-section {
+            padding: 8px;
+            gap: 6px;
+            min-height: 70px;
+            flex-wrap: nowrap;
+            overflow: hidden;
+        }
+
+        .profile-picture-container {
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
         }
 
         .profile-picture,
         .profile-initial {
-            width: 80px;
-            height: 80px;
+            width: 50px;
+            height: 50px;
         }
 
         .profile-initial {
-            font-size: 32px;
-        }    }
+            font-size: 20px;
+        }
+
+        .username {
+            font-size: 20px;
+            min-width: 0; /* Allow shrinking */
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .settings-btn {
+            font-size: 18px;
+            padding: 3px 6px;
+            align-self: center;
+            flex-shrink: 0;
+            min-width: 50px;
+        }
+
+        .profile-details {
+            padding: 10px;
+            text-align: left;
+        }
+
+        .online-status,
+        .status-message {
+            font-size: 13px;
+        }
+    }
 </style>
 
 <script>    // Add search functionality for users
