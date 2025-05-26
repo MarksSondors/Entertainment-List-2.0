@@ -1,21 +1,67 @@
 {
   "name": "Entertainment List",
-  "short_name": "Entertain",
+  "short_name": "EntList",
+  "description": "Your personal entertainment tracking app",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "theme_color": "#008080",
+  "background_color": "#ffffff",
+  "lang": "en-US",
+  "categories": ["entertainment", "lifestyle", "productivity"],
   "icons": [
     {
-      "src": "/web-app-manifest-192x192.png",
+      "src": "/static/favicon/web-app-manifest-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/web-app-manifest-512x512.png",
+      "src": "/static/favicon/web-app-manifest-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/static/favicon/favicon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicon/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
-  "theme_color": "#000000",
-  "background_color": "#000000",
-  "display": "standalone"
+  "screenshots": [
+    {
+      "src": "/static/images/screenshot_desktop.jpeg",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Entertainment List - Desktop View"
+    },
+    {
+      "src": "/static/images/screenshot_mobile.jpeg",
+      "sizes": "375x667",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Entertainment List - Mobile View"
+    }
+  ]
 }

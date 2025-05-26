@@ -345,7 +345,7 @@ def discover_genres(request):
 
 def login_page(request):
     if request.user.is_authenticated:
-        return redirect('home_page')
+        return redirect('discover_page')
     return render(request, 'login_page.html')
 
 def login_request(request):
@@ -355,7 +355,7 @@ def login_request(request):
         user = authenticate(request, username=username, password=password)
         if user is not None:
             login(request, user)
-            return redirect('home_page')
+            return redirect('discover_page')
         else:
             return redirect('login_page')
     return render(request, 'login_page.html')

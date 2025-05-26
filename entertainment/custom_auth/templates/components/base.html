@@ -1,12 +1,23 @@
 <!-- filepath: entertainment/custom_auth/templates/components/base.html -->
+{% load django_bootstrap5 %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>{% block title %}Entertainment List{% endblock %}</title>
-    {% load django_bootstrap5 %}
-    {% load static %}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">    <title>{% block title %}Entertainment List{% endblock %}</title>    <!-- Web App Manifest -->
+    <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}">
+    <meta name="theme-color" content="#008080">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="EntList">
+    <meta name="msapplication-TileImage" content="{% static 'favicon/web-app-manifest-192x192.png' %}">
+    <meta name="msapplication-TileColor" content="#008080">
+    <meta name="application-name" content="Entertainment List">
+    
     {% bootstrap_css %}
     {% bootstrap_javascript %}
     <link rel="stylesheet" href="https://unpkg.com/98.css" />
@@ -100,10 +111,51 @@
                 {% block content %}{% endblock %}
             </div>
         </div>
-    </div>
+    </div>    <!-- Bottom Navigation -->
+    {% include 'components/bottom_navbar.html' %}    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('{% static "sw.js" %}')
+                    .then(function(registration) {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(function(err) {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
 
-    <!-- Bottom Navigation -->
-    {% include 'components/bottom_navbar.html' %}
+        // PWA Install Prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('PWA install prompt available');
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Optional: Show your own install button/banner
+            // You can create a custom install prompt here
+            const isFirstTime = !localStorage.getItem('pwa-prompt-shown');
+            if (isFirstTime) {
+                setTimeout(() => {
+                    if (confirm('Add Entertainment List to your home screen for a better experience?')) {
+                        deferredPrompt.prompt();
+                        deferredPrompt.userChoice.then((choiceResult) => {
+                            if (choiceResult.outcome === 'accepted') {
+                                console.log('User accepted the install prompt');
+                            }
+                            deferredPrompt = null;
+                        });
+                    }
+                    localStorage.setItem('pwa-prompt-shown', 'true');
+                }, 3000); // Show after 3 seconds
+            }
+        });
+
+        window.addEventListener('appinstalled', (evt) => {
+            console.log('PWA was installed');
+        });
+    </script>
 
 </body>
 </html>
