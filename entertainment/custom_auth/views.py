@@ -1380,14 +1380,18 @@ def people_detail(request, person_id):
 def country_detail(request, country_id):
     """
     View for displaying all movies and TV shows from a specific country
-    with filtering options
+    with filtering, sorting, and watched status options
     """
     country = get_object_or_404(Country, pk=country_id)
     anime_filter = request.GET.get('anime_filter', 'all')
     view_type = request.GET.get('view_type', 'grid')
+    sort_by = request.GET.get('sort_by', 'title')
+    sort_order = request.GET.get('sort_order', 'asc')
+    watched_status = request.GET.get('watched_status', 'all')
     
     # Get content types for Movie and TVShow models
     movie_content_type = ContentType.objects.get_for_model(Movie)
+    tv_show_content_type = ContentType.objects.get_for_model(TVShow)
     
     # Filter movies and TV shows based on anime_filter
     if (anime_filter == 'anime_only'):
@@ -1400,38 +1404,258 @@ def country_detail(request, country_id):
         movies = Movie.objects.filter(countries=country)
         tv_shows = TVShow.objects.filter(countries=country)
     
-    # Get user's reviews for movies in this country
-    user_movie_reviews = {
-        review.object_id: review.rating 
-        for review in Review.objects.filter(
-            user=request.user,
-            content_type=movie_content_type,
-            object_id__in=movies.values_list('id', flat=True)
-        )
-    }
+    # Apply sorting to movies and TV shows
+    # Define sort fields based on sort_by parameter
+    if sort_by == 'release_date':
+        movie_sort_field = 'release_date'
+        tv_sort_field = 'first_air_date'
+    elif sort_by == 'rating':
+        # For rating, we'll sort by the tmdb rating first, then handle user rating later
+        movie_sort_field = 'rating'
+        tv_sort_field = 'rating'
+    elif sort_by == 'user_rating':
+        # We'll handle user rating sorting after getting the reviews
+        movie_sort_field = 'title'  # Default fallback for initial query
+        tv_sort_field = 'title'
+    else:  # 'title' is the default
+        movie_sort_field = 'title'
+        tv_sort_field = 'title'
     
+    # Apply sort direction
+    if sort_order == 'desc':
+        movie_sort_field = f'-{movie_sort_field}'
+        tv_sort_field = f'-{tv_sort_field}'
+    
+    # Sort the querysets (except for user_rating which we'll handle later)
+    if sort_by != 'user_rating':
+        movies = movies.order_by(movie_sort_field)
+        tv_shows = tv_shows.order_by(tv_sort_field)
+    else:
+        # For user rating, we'll sort after getting the reviews
+        movies = movies.order_by('title')  # Default order first
+        tv_shows = tv_shows.order_by('title')
+      # Handle user rating sorting if selected (before filtering to preserve QuerySet)
+    if sort_by == 'user_rating':
+        # Get user's reviews first
+        user_movie_reviews = {
+            review.object_id: review.rating 
+            for review in Review.objects.filter(
+                user=request.user,
+                content_type=movie_content_type,
+                object_id__in=movies.values_list('id', flat=True)
+            )
+        }
+        
+        user_tv_reviews = {
+            review.object_id: review.rating 
+            for review in Review.objects.filter(
+                user=request.user,
+                content_type=tv_show_content_type,
+                object_id__in=tv_shows.values_list('id', flat=True)
+            )
+        }
+        
+        # Convert querysets to lists for custom sorting
+        movies_list = list(movies)
+        tv_shows_list = list(tv_shows)
+        
+        # Annotate with user ratings first
+        for movie in movies_list:
+            movie.user_rating = user_movie_reviews.get(movie.id)
+        for tv_show in tv_shows_list:
+            tv_show.user_rating = user_tv_reviews.get(tv_show.id)
+        
+        # Sort by user rating (None values go to the end)
+        movies_list.sort(
+            key=lambda x: (x.user_rating is None, x.user_rating or 0),
+            reverse=(sort_order == 'desc')
+        )
+        tv_shows_list.sort(
+            key=lambda x: (x.user_rating is None, x.user_rating or 0),
+            reverse=(sort_order == 'desc')
+        )
+        
+        # Replace the querysets with sorted lists
+        movies = movies_list
+        tv_shows = tv_shows_list
+      # Handle user rating sorting if selected (before filtering to preserve QuerySet)
+    if sort_by == 'user_rating':
+        # Get user's reviews first
+        user_movie_reviews = {
+            review.object_id: review.rating 
+            for review in Review.objects.filter(
+                user=request.user,
+                content_type=movie_content_type,
+                object_id__in=movies.values_list('id', flat=True)
+            )
+        }
+        
+        user_tv_reviews = {
+            review.object_id: review.rating 
+            for review in Review.objects.filter(
+                user=request.user,
+                content_type=tv_show_content_type,
+                object_id__in=tv_shows.values_list('id', flat=True)
+            )
+        }
+        
+        # Convert querysets to lists for custom sorting
+        movies_list = list(movies)
+        tv_shows_list = list(tv_shows)
+        
+        # Annotate with user ratings first
+        for movie in movies_list:
+            movie.user_rating = user_movie_reviews.get(movie.id)
+        for tv_show in tv_shows_list:
+            tv_show.user_rating = user_tv_reviews.get(tv_show.id)
+        
+        # Sort by user rating (None values go to the end)
+        movies_list.sort(
+            key=lambda x: (x.user_rating is None, x.user_rating or 0),
+            reverse=(sort_order == 'desc')
+        )
+        tv_shows_list.sort(
+            key=lambda x: (x.user_rating is None, x.user_rating or 0),
+            reverse=(sort_order == 'desc')
+        )
+        
+        # Replace the querysets with sorted lists
+        movies = movies_list
+        tv_shows = tv_shows_list
+    
+    # Apply watched status filter
+    if watched_status != 'all':
+        if watched_status == 'watched':
+            # For movies: filter to only movies the user has reviewed
+            user_reviewed_movies = set(Review.objects.filter(
+                user=request.user,
+                content_type=movie_content_type,
+                object_id__in=movies.values_list('id', flat=True) if hasattr(movies, 'values_list') else [m.id for m in movies]
+            ).values_list('object_id', flat=True))
+            
+            if hasattr(movies, 'filter'):  # QuerySet
+                movies = movies.filter(id__in=user_reviewed_movies)
+            else:  # List (from user_rating sorting)
+                movies = [m for m in movies if m.id in user_reviewed_movies]
+            
+            # For TV shows: filter to only shows where user has watched at least one episode
+            from tvshows.models import WatchedEpisode
+            user_watched_shows = set(WatchedEpisode.objects.filter(
+                user=request.user,
+                episode__season__show_id__in=tv_shows.values_list('id', flat=True) if hasattr(tv_shows, 'values_list') else [s.id for s in tv_shows]
+            ).values_list('episode__season__show_id', flat=True))
+            
+            if hasattr(tv_shows, 'filter'):  # QuerySet
+                tv_shows = tv_shows.filter(id__in=user_watched_shows)
+            else:  # List (from user_rating sorting)
+                tv_shows = [s for s in tv_shows if s.id in user_watched_shows]
+                
+        elif watched_status == 'not_watched':
+            # For movies: filter to only movies the user has NOT reviewed
+            user_reviewed_movies = set(Review.objects.filter(
+                user=request.user,
+                content_type=movie_content_type,
+                object_id__in=movies.values_list('id', flat=True) if hasattr(movies, 'values_list') else [m.id for m in movies]
+            ).values_list('object_id', flat=True))
+            
+            if hasattr(movies, 'exclude'):  # QuerySet
+                movies = movies.exclude(id__in=user_reviewed_movies)
+            else:  # List (from user_rating sorting)
+                movies = [m for m in movies if m.id not in user_reviewed_movies]
+            
+            # For TV shows: filter to only shows where user has NOT watched any episodes
+            from tvshows.models import WatchedEpisode
+            user_watched_shows = set(WatchedEpisode.objects.filter(
+                user=request.user,
+                episode__season__show_id__in=tv_shows.values_list('id', flat=True) if hasattr(tv_shows, 'values_list') else [s.id for s in tv_shows]
+            ).values_list('episode__season__show_id', flat=True))
+            
+            if hasattr(tv_shows, 'exclude'):  # QuerySet
+                tv_shows = tv_shows.exclude(id__in=user_watched_shows)
+            else:  # List (from user_rating sorting)
+                tv_shows = [s for s in tv_shows if s.id not in user_watched_shows]
+    
+    # Get user's reviews and average ratings AFTER filtering (to handle both QuerySets and lists)
+    # Extract IDs from either QuerySet or list
+    if hasattr(movies, 'values_list'):  # QuerySet
+        movie_ids = list(movies.values_list('id', flat=True))
+    else:  # List
+        movie_ids = [m.id for m in movies]
+        
+    if hasattr(tv_shows, 'values_list'):  # QuerySet
+        tv_show_ids = list(tv_shows.values_list('id', flat=True))
+    else:  # List
+        tv_show_ids = [s.id for s in tv_shows]
+    
+    # Get user's reviews for movies in this country
+    user_movie_reviews = {}
+    if movie_ids:
+        user_movie_reviews = {
+            review.object_id: review.rating 
+            for review in Review.objects.filter(
+                user=request.user,
+                content_type=movie_content_type,
+                object_id__in=movie_ids
+            )
+        }
     
     # Get average movie ratings across the platform
     avg_movie_ratings = {}
     movie_rating_counts = {}
-    for item in Review.objects.filter(
-        content_type=movie_content_type,
-        object_id__in=movies.values_list('id', flat=True)
-    ).values('object_id').annotate(
-        avg_rating=models.Avg('rating'),
-        count=models.Count('id')
-    ):
-        avg_movie_ratings[item['object_id']] = round(item['avg_rating'], 1)
-        movie_rating_counts[item['object_id']] = item['count']
+    if movie_ids:
+        for item in Review.objects.filter(
+            content_type=movie_content_type,
+            object_id__in=movie_ids
+        ).values('object_id').annotate(
+            avg_rating=models.Avg('rating'),
+            count=models.Count('id')
+        ):
+            avg_movie_ratings[item['object_id']] = round(item['avg_rating'], 1)
+            movie_rating_counts[item['object_id']] = item['count']
     
+    # Get user's reviews for TV shows in this country
+    user_tv_reviews = {}
+    if tv_show_ids:
+        user_tv_reviews = {
+            review.object_id: review.rating 
+            for review in Review.objects.filter(
+                user=request.user,
+                content_type=tv_show_content_type,
+                object_id__in=tv_show_ids
+            )
+        }
+    
+    # Get average TV show ratings across the platform
+    avg_tv_ratings = {}
+    tv_rating_counts = {}
+    if tv_show_ids:
+        for item in Review.objects.filter(
+            content_type=tv_show_content_type,
+            object_id__in=tv_show_ids
+        ).values('object_id').annotate(
+            avg_rating=models.Avg('rating'),
+            count=models.Count('id')
+        ):
+            avg_tv_ratings[item['object_id']] = round(item['avg_rating'], 1)
+            tv_rating_counts[item['object_id']] = item['count']
     
     # Annotate movies with user ratings and average ratings
     for movie in movies:
-        movie.user_rating = user_movie_reviews.get(movie.id)
+        # Don't override if already set from user_rating sorting
+        if not hasattr(movie, 'user_rating'):
+            movie.user_rating = user_movie_reviews.get(movie.id)
         if movie.id in avg_movie_ratings:
             movie.avg_rating = avg_movie_ratings[movie.id]
             movie.rating_count = movie_rating_counts[movie.id]
     
+    # Annotate TV shows with user ratings and average ratings
+    for tv_show in tv_shows:
+        # Don't override if already set from user_rating sorting
+        if not hasattr(tv_show, 'user_rating'):
+            tv_show.user_rating = user_tv_reviews.get(tv_show.id)
+        if tv_show.id in avg_tv_ratings:
+            tv_show.avg_rating = avg_tv_ratings[tv_show.id]
+            tv_show.rating_count = tv_rating_counts[tv_show.id]
     
     return render(request, 'country_detail.html', {
         'country': country,
@@ -1439,6 +1663,9 @@ def country_detail(request, country_id):
         'tv_shows': tv_shows,
         'anime_filter': anime_filter,
         'view_type': view_type,
+        'sort_by': sort_by,
+        'sort_order': sort_order,
+        'watched_status': watched_status,
     })
 
 def recent_reviews(request):
