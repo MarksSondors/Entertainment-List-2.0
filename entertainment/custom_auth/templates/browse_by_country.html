@@ -4,7 +4,7 @@
 {% block title %}Browse by Country | Entertainment List{% endblock %}
 
 {% block content %}
-<div class="container py-4">
+<div class="country-page-container">
     <div class="window">
         <div class="title-bar">
             <div class="title-bar-text">Country Explorer</div>
@@ -16,20 +16,22 @@
         </div>
         <div class="window-body">
             <!-- Address bar -->
-            <div class="field-row mb-3">
+            <div class="field-row">
                 <label>Address:</label>
-                <div class="field-row-stacked" style="width: 100%">
-                    <input type="text" readonly value="C:\Entertainment\Countries\" style="width: 100%">
+                <div class="field-row-stacked">
+                    <input type="text" readonly value="C:\Entertainment\Countries\" class="address-input">
                 </div>
             </div>
             
             <!-- Main content area - Explorer style -->
             <div class="sunken-panel explorer-panel">
                 {% if countries %}
-                    <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-3">
+                    <div class="countries-grid">
                         {% for country in countries %}
-                        <div class="col">
-                            <a href="{% url 'browse_by_country_detail' country.id %}" class="country-item">
+                        <div class="country-item-wrapper">
+                            <a href="{% url 'browse_by_country_detail' country.id %}" class="country-item" 
+                               role="button" tabindex="0" 
+                               aria-label="Open {{ country.name }} country folder">
                                 <div class="country-icon">
                                     <img src="https://www.crwflags.com/fotw/images/{{ country.iso_3166_1|lower|slice:':1' }}/{{ country.iso_3166_1|lower }}.gif" 
                                          alt="{{ country.name }} flag" 
@@ -41,122 +43,558 @@
                         {% endfor %}
                     </div>
                 {% else %}
-                    <div class="alert alert-info">
-                        No countries available.
+                    <div class="no-countries-message">
+                        <div class="message-content">
+                            <div class="message-icon">🌍</div>
+                            <div class="message-text">No countries available.</div>
+                            <div class="message-subtext">Countries will appear here once they are added to the system.</div>
+                        </div>
                     </div>
                 {% endif %}
             </div>
-            
-            <!-- Status bar -->
-            <div class="status-bar mt-3">
+              <!-- Status bar -->
+            <div class="status-bar">
                 <div class="status-bar-field">{{ countries.count }} item(s)</div>
-                <div class="status-bar-field">
-                    <button class="default" onclick="window.history.back()">Back</button>
-                </div>
             </div>
         </div>
     </div>
 </div>
 
 <style>
-    /* Explorer toolbar */
-    .toolbar {
+    /* Theme-adaptive CSS variables matching discover page */
+    :root {
+        --bg-color: #c0c0c0;
+        --text-color: #000;
+        --text-muted: #666;
+        --border-dark: #808080;
+        --border-light: #dfdfdf;
+        --window-bg: #c0c0c0;
+        --button-bg: #c0c0c0;
+        --button-text: #000;
+        --button-hover: #e0e0e0;
+        --progress-bg: #fff;
+        --progress-bar: #008080;
+        --shadow-color: rgba(0,0,0,0.25);
+        --poster-border: #a0a0a0;
+        --explorer-bg: #ffffff;
+        --folder-hover: #d0d1d5;
+        --folder-active: #000080;
+        --folder-active-text: #ffffff;
+        --input-bg: #ffffff;
+        --alert-bg: #e1e1e1;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-color: #383838;
+            --text-color: #ffffff;
+            --text-muted: #b0b0b0;
+            --border-dark: #2a2a2a;
+            --border-light: #505050;
+            --window-bg: #404040;
+            --button-bg: #505050;
+            --button-text: #ffffff;
+            --button-hover: #606060;
+            --progress-bg: #2a2a2a;
+            --progress-bar: #00a0a0;
+            --shadow-color: rgba(0,0,0,0.5);
+            --poster-border: #606060;
+            --explorer-bg: #2a2a2a;
+            --folder-hover: #404040;
+            --folder-active: #0060ff;
+            --folder-active-text: #ffffff;
+            --input-bg: #2a2a2a;
+            --alert-bg: #404040;
+        }
+    }
+
+    /* Page container - mobile-first approach */
+    .country-page-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 10px;
+    }
+
+    @media (min-width: 768px) {
+        .country-page-container {
+            padding: 20px;
+        }
+    }
+
+    /* Window styling matching discover page */
+    .window {
+        border: 2px outset var(--bg-color);
+        background-color: var(--bg-color);
+        font-family: 'MS Sans Serif', sans-serif;
+        box-shadow: 2px 2px 4px var(--shadow-color);
+    }
+
+    .title-bar {
+        background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+        color: white;
+        padding: 2px;
+        font-size: 11px;
+        font-weight: bold;
         display: flex;
-        flex-wrap: wrap;
-        gap: 2px;
-        border-bottom: 1px solid #888;
-        padding-bottom: 4px;
+        justify-content: space-between;
+        align-items: center;
     }
-    
-    /* Explorer panel */
-    .explorer-panel {
-        min-height: 300px;
+
+    @media (prefers-color-scheme: dark) {
+        .title-bar {
+            background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+        }
+    }
+
+    .title-bar-controls button {
+        width: 16px;
+        height: 14px;
+        border: 1px outset var(--button-bg);
+        background: var(--button-bg);
+        margin-left: 2px;
+        font-size: 8px;
+        cursor: pointer;
+    }
+
+    .title-bar-controls button:active {
+        border: 1px inset var(--button-bg);
+    }
+
+    .window-body {
+        background-color: var(--window-bg);
+        color: var(--text-color);
         padding: 8px;
-        overflow-y: auto;
-        background-color: white;
     }
-    
-    /* Country item styling */
+
+    @media (min-width: 768px) {
+        .window-body {
+            padding: 12px;
+        }
+    }
+
+    /* Address bar styling */
+    .field-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+        gap: 8px;
+    }
+
+    @media (max-width: 767px) {
+        .field-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 4px;
+        }
+    }
+
+    .field-row label {
+        color: var(--text-color);
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .field-row-stacked {
+        flex: 1;
+    }
+
+    .address-input {
+        background-color: var(--input-bg);
+        border: 1px inset var(--bg-color);
+        color: var(--text-color);
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        padding: 2px 4px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Explorer panel */
+    .sunken-panel {
+        border: 2px inset var(--bg-color);
+        background-color: var(--explorer-bg);
+        color: var(--text-color);
+    }    .explorer-panel {
+        min-height: 200px;
+        padding: 4px;
+        overflow-y: auto;
+        background-color: var(--explorer-bg);
+        box-sizing: border-box;
+    }
+
+    @media (min-width: 480px) {
+        .explorer-panel {
+            min-height: 250px;
+            padding: 6px;
+        }
+    }
+
+    @media (min-width: 768px) {
+        .explorer-panel {
+            min-height: 300px;
+            padding: 8px;
+        }
+    }/* Responsive grid system - mobile-first */
+    .countries-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 4px;
+        padding: 2px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    @media (min-width: 400px) {
+        .countries-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            padding: 4px;
+        }
+    }
+
+    @media (min-width: 480px) {
+        .countries-grid {
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 6px;
+        }
+    }
+
+    @media (min-width: 640px) {
+        .countries-grid {
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 8px;
+        }
+    }
+
+    @media (min-width: 768px) {
+        .countries-grid {
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 12px;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .countries-grid {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 16px;
+        }
+    }    /* Country item styling */
+    .country-item-wrapper {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+    }
+
     .country-item {
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 6px;
+        padding: 4px 2px;
         text-decoration: none;
-        color: black;
+        color: var(--text-color);
         border: 1px solid transparent;
+        border-radius: 2px;
+        transition: all 0.1s ease;
+        width: 100%;
+        max-width: 100px;
+        cursor: pointer;
+        box-sizing: border-box;
+        min-height: 60px;
     }
-    
+
+    @media (min-width: 360px) {
+        .country-item {
+            padding: 6px 2px;
+            max-width: 110px;
+            min-height: 70px;
+        }
+    }
+
+    @media (min-width: 480px) {
+        .country-item {
+            padding: 8px 4px;
+            max-width: 120px;
+            min-height: 80px;
+        }
+    }
+
     .country-item:hover {
-        background-color: #d0d1d5;
-        border: 1px dotted #000;
+        background-color: var(--folder-hover);
+        border: 1px dotted var(--text-color);
+        color: var(--text-color);
+        text-decoration: none;
     }
-    
-    .country-item:active {
-        background-color: #000080;
-        color: white;
+
+    .country-item:active,
+    .country-item:focus {
+        background-color: var(--folder-active);
+        color: var(--folder-active-text);
+        outline: none;
     }
-    
-    .country-icon {
+
+    .country-item:active img,
+    .country-item:focus img {
+        filter: brightness(1.2);
+    }    .country-icon {
         display: flex;
         justify-content: center;
         align-items: center;
-        width: 48px;
-        height: 48px;
-        margin-bottom: 4px;
+        height: 32px;
+        margin-bottom: 2px;
+        width: 100%;
     }
-    
+
     .country-icon img {
-        max-width: 100%;
-        max-height: 100%;
-        border: 1px solid #ccc;
+        height: 20px;
+        width: 30px;
+        border: 1px solid var(--poster-border);
+        object-fit: cover;
     }
-    
-    .country-label {
+
+    @media (min-width: 360px) {
+        .country-icon {
+            height: 40px;
+            margin-bottom: 4px;
+        }
+        .country-icon img {
+            height: 24px;
+            width: 36px;
+        }
+    }
+
+    @media (min-width: 480px) {
+        .country-icon {
+            height: 48px;
+        }
+        .country-icon img {
+            height: 32px;
+            width: 48px;
+        }
+    }
+
+    @media (min-width: 640px) {
+        .country-icon {
+            height: 56px;
+        }
+        .country-icon img {
+            height: 36px;
+            width: 54px;
+        }
+    }
+
+    @media (min-width: 768px) {
+        .country-icon {
+            height: 64px;
+        }
+        .country-icon img {
+            height: 40px;
+            width: 60px;
+        }
+    }    .country-label {
         text-align: center;
-        font-size: 0.85rem;
+        font-size: 0.6rem;
         width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        line-height: 1.1;
+        margin-top: auto;
     }
-    
+
+    @media (min-width: 360px) {
+        .country-label {
+            font-size: 0.65rem;
+            line-height: 1.2;
+        }
+    }
+
+    @media (min-width: 480px) {
+        .country-label {
+            font-size: 0.7rem;
+        }
+    }
+
+    @media (min-width: 640px) {
+        .country-label {
+            font-size: 0.75rem;
+        }
+    }
+
+    @media (min-width: 768px) {
+        .country-label {
+            font-size: 0.8rem;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .country-label {
+            font-size: 0.85rem;
+        }
+    }
+
+    /* No countries message */
+    .no-countries-message {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 200px;
+        padding: 20px;
+    }
+
+    .message-content {
+        text-align: center;
+        border: 2px inset var(--bg-color);
+        border-radius: 0;
+        background-color: var(--alert-bg);
+        padding: 16px 20px;
+        color: var(--text-color);
+        max-width: 300px;
+    }
+
+    .message-icon {
+        font-size: 2rem;
+        margin-bottom: 8px;
+    }
+
+    .message-text {
+        font-size: 0.9rem;
+        font-family: 'MS Sans Serif', sans-serif;
+        margin-bottom: 8px;
+    }
+
+    .message-subtext {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-family: 'MS Sans Serif', sans-serif;
+    }
+
     /* Status bar */
     .status-bar {
         display: flex;
         justify-content: space-between;
-        border: 2px inset white;
-        padding: 2px 4px;
+        align-items: center;
+        border-top: 1px solid var(--border-dark);
+        background-color: var(--bg-color);
+        padding: 4px 8px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+        gap: 8px;
     }
-    
+
+    @media (max-width: 767px) {
+        .status-bar {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 4px;
+        }
+    }
+
     .status-bar-field {
-        font-size: 0.85rem;
+        font-size: 11px;
+        color: var(--text-color);
+        display: flex;
+        align-items: center;
     }
-    
-    /* Responsive adjustments */
-    @media (max-width: 576px) {
-        .toolbar {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            padding-bottom: 8px;
+
+    @media (max-width: 767px) {
+        .status-bar-field {
+            justify-content: center;
+        }
+    }
+
+    /* Retro button styling matching discover page */
+    .retro-btn {
+        border: 1px outset var(--button-bg);
+        background: var(--button-bg);
+        color: var(--button-text);
+        padding: 2px 8px;
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: background-color 0.1s ease;
+        min-width: 60px;
+    }
+
+    @media (max-width: 767px) {
+        .retro-btn {
+            width: 100%;
+            text-align: center;
+        }
+    }
+
+    .retro-btn:hover {
+        background: var(--button-hover);
+        color: var(--button-text);
+        text-decoration: none;
+    }
+
+    .retro-btn:active {
+        border: 1px inset var(--button-bg);
+    }
+
+    .retro-btn:focus {
+        outline: 2px solid var(--folder-active);
+        outline-offset: 2px;
+    }
+
+    /* Enhanced button styling for dark mode */
+    @media (prefers-color-scheme: dark) {
+        .retro-btn {
+            border-color: var(--border-light);
+            box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
         }
         
-        .toolbar button {
-            flex-shrink: 0;
+        .retro-btn:hover {
+            box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+        }
+    }
+
+    /* Accessibility improvements */
+    @media (prefers-reduced-motion: reduce) {
+        .country-item {
+            transition: none;
         }
         
-        .row-cols-2 {
-            grid-template-columns: repeat(3, 1fr) !important;
+        .retro-btn {
+            transition: none;
+        }
+    }
+
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+        .country-item {
+            border: 2px solid var(--text-color);
+        }
+        
+        .country-item:hover,
+        .country-item:focus {
+            border: 2px solid var(--folder-active);
+        }
+    }
+
+    /* Touch-friendly improvements for mobile */
+    @media (hover: none) and (pointer: coarse) {
+        .country-item {
+            padding: 10px 6px;
+        }
+        
+        .retro-btn {
+            padding: 8px 12px;
+            font-size: 12px;
         }
     }
 </style>
 
 <script>
-    // Simulate Windows Explorer behavior
+    // Enhanced Windows Explorer behavior with better mobile support
     document.addEventListener('DOMContentLoaded', function() {
         const countryItems = document.querySelectorAll('.country-item');
+        let touchStartTime = 0;
         
         countryItems.forEach(item => {
+            // Mouse/pointer events
             item.addEventListener('click', function(e) {
                 // Add a small delay to mimic Windows 95/98 behavior
                 e.preventDefault();
@@ -165,7 +603,52 @@
                     window.location.href = href;
                 }, 100);
             });
+
+            // Touch events for mobile
+            item.addEventListener('touchstart', function(e) {
+                touchStartTime = Date.now();
+                this.classList.add('touch-active');
+            });
+
+            item.addEventListener('touchend', function(e) {
+                this.classList.remove('touch-active');
+                const touchDuration = Date.now() - touchStartTime;
+                
+                // Only trigger if it's a quick tap (not a scroll)
+                if (touchDuration < 300) {
+                    e.preventDefault();
+                    const href = this.getAttribute('href');
+                    setTimeout(() => {
+                        window.location.href = href;
+                    }, 100);
+                }
+            });
+
+            // Keyboard navigation
+            item.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    const href = this.getAttribute('href');
+                    setTimeout(() => {
+                        window.location.href = href;
+                    }, 100);
+                }
+            });
         });
+
+        // Add visual feedback for touch devices
+        const style = document.createElement('style');
+        style.textContent = `
+            .country-item.touch-active {
+                background-color: var(--folder-active) !important;
+                color: var(--folder-active-text) !important;
+            }
+            
+            .country-item.touch-active img {
+                filter: brightness(1.2);
+            }
+        `;
+        document.head.appendChild(style);
     });
 </script>
 {% endblock %}
