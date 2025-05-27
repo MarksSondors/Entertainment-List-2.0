@@ -341,6 +341,13 @@ def discover_genres(request):
     
     return JsonResponse({'genres': genres_data})
 
+@login_required
+def browse_by_genre(request):
+    genres = Genre.objects.all().order_by('name')
+    return render(request, 'browse_by_genre.html', {
+        'genres': genres,
+    })
+
 # old and vibe coded code
 
 def login_page(request):
@@ -375,27 +382,20 @@ def home_page(request):
     else:
         return redirect('login_page')
 
-@login_required
-def browse_by_genre(request):
-    anime_only = request.GET.get('anime_only') == 'on'
-    genres = Genre.objects.all()
-    return render(request, 'browse_by_genre.html', {
-        'genres': genres,
-        'anime_only': anime_only,
-    })
-
 
 @login_required
 def genre_detail(request, genre_id):
     genre = get_object_or_404(Genre, pk=genre_id)
     anime_filter = request.GET.get('anime_filter', 'all')
     view_type = request.GET.get('view_type', 'grid')
+    sort_by = request.GET.get('sort_by', 'title')
+    sort_order = request.GET.get('sort_order', 'asc')
+    watched_status = request.GET.get('watched_status', 'all')
     
     # Get content types for Movie and TVShow models
     movie_content_type = ContentType.objects.get_for_model(Movie)
     tv_show_content_type = ContentType.objects.get_for_model(TVShow)
-    
-    # Filter movies and TV shows based on anime_filter
+      # Filter movies and TV shows based on anime_filter
     if (anime_filter == 'anime_only'):
         movies = Movie.objects.filter(genres=genre, is_anime=True)
         tv_shows = TVShow.objects.filter(genres=genre, is_anime=True)
@@ -405,6 +405,37 @@ def genre_detail(request, genre_id):
     else:  # 'all' is the default
         movies = Movie.objects.filter(genres=genre)
         tv_shows = TVShow.objects.filter(genres=genre)
+    
+    # Apply sorting to movies and TV shows
+    # Define sort fields based on sort_by parameter
+    if sort_by == 'release_date':
+        movie_sort_field = 'release_date'
+        tv_sort_field = 'first_air_date'
+    elif sort_by == 'rating':
+        # For rating, we'll sort by the tmdb rating first, then handle user rating later
+        movie_sort_field = 'rating'
+        tv_sort_field = 'rating'
+    elif sort_by == 'user_rating':
+        # We'll handle user rating sorting after getting the reviews
+        movie_sort_field = 'title'  # Default fallback for initial query
+        tv_sort_field = 'title'
+    else:  # 'title' is the default
+        movie_sort_field = 'title'
+        tv_sort_field = 'title'
+    
+    # Apply sort direction
+    if sort_order == 'desc':
+        movie_sort_field = f'-{movie_sort_field}'
+        tv_sort_field = f'-{tv_sort_field}'
+    
+    # Sort the querysets (except for user_rating which we'll handle later)
+    if sort_by != 'user_rating':
+        movies = movies.order_by(movie_sort_field)
+        tv_shows = tv_shows.order_by(tv_sort_field)
+    else:
+        # For user rating, we'll sort after getting the reviews
+        movies = movies.order_by('title')  # Default order first
+        tv_shows = tv_shows.order_by('title')
     
     # Get user's reviews for movies in this genre
     user_movie_reviews = {
@@ -429,20 +460,108 @@ def genre_detail(request, genre_id):
     ):
         avg_movie_ratings[item['object_id']] = round(item['avg_rating'], 1)
         movie_rating_counts[item['object_id']] = item['count']
-    
-    # Annotate movies with user ratings and average ratings
+      # Annotate movies with user ratings and average ratings
     for movie in movies:
         movie.user_rating = user_movie_reviews.get(movie.id)
         if movie.id in avg_movie_ratings:
             movie.avg_rating = avg_movie_ratings[movie.id]
             movie.rating_count = movie_rating_counts[movie.id]
+      # Handle user rating sorting if selected
+    if sort_by == 'user_rating':
+        # Convert querysets to lists for custom sorting
+        movies_list = list(movies)
+        tv_shows_list = list(tv_shows)
+        
+        # Sort movies by user rating (None values go to the end)
+        movies_list.sort(
+            key=lambda x: (x.user_rating is None, x.user_rating or 0),
+            reverse=(sort_order == 'desc')
+        )
+        
+        # Get user's reviews for TV shows as well
+        user_tv_reviews = {
+            review.object_id: review.rating 
+            for review in Review.objects.filter(
+                user=request.user,
+                content_type=tv_show_content_type,
+                object_id__in=tv_shows.values_list('id', flat=True)
+            )
+        }
+        
+        # Annotate TV shows with user ratings
+        for tv_show in tv_shows_list:
+            tv_show.user_rating = user_tv_reviews.get(tv_show.id)
+        
+        # Sort TV shows by user rating (None values go to the end)
+        tv_shows_list.sort(
+            key=lambda x: (x.user_rating is None, x.user_rating or 0),
+            reverse=(sort_order == 'desc')
+        )
+        
+        # Replace the querysets with sorted lists
+        movies = movies_list
+        tv_shows = tv_shows_list
     
+    # Apply watched status filter
+    if watched_status != 'all':
+        if watched_status == 'watched':
+            # For movies: filter to only movies the user has reviewed
+            user_reviewed_movies = set(Review.objects.filter(
+                user=request.user,
+                content_type=movie_content_type,
+                object_id__in=movies.values_list('id', flat=True) if hasattr(movies, 'values_list') else [m.id for m in movies]
+            ).values_list('object_id', flat=True))
+            
+            if hasattr(movies, 'filter'):  # QuerySet
+                movies = movies.filter(id__in=user_reviewed_movies)
+            else:  # List (from user_rating sorting)
+                movies = [m for m in movies if m.id in user_reviewed_movies]
+            
+            # For TV shows: filter to only shows where user has watched at least one episode
+            from tvshows.models import WatchedEpisode
+            user_watched_shows = set(WatchedEpisode.objects.filter(
+                user=request.user,
+                episode__season__show_id__in=tv_shows.values_list('id', flat=True) if hasattr(tv_shows, 'values_list') else [s.id for s in tv_shows]
+            ).values_list('episode__season__show_id', flat=True))
+            
+            if hasattr(tv_shows, 'filter'):  # QuerySet
+                tv_shows = tv_shows.filter(id__in=user_watched_shows)
+            else:  # List (from user_rating sorting)
+                tv_shows = [s for s in tv_shows if s.id in user_watched_shows]
+                
+        elif watched_status == 'not_watched':
+            # For movies: filter to only movies the user has NOT reviewed
+            user_reviewed_movies = set(Review.objects.filter(
+                user=request.user,
+                content_type=movie_content_type,
+                object_id__in=movies.values_list('id', flat=True) if hasattr(movies, 'values_list') else [m.id for m in movies]
+            ).values_list('object_id', flat=True))
+            
+            if hasattr(movies, 'exclude'):  # QuerySet
+                movies = movies.exclude(id__in=user_reviewed_movies)
+            else:  # List (from user_rating sorting)
+                movies = [m for m in movies if m.id not in user_reviewed_movies]
+            
+            # For TV shows: filter to only shows where user has NOT watched any episodes
+            from tvshows.models import WatchedEpisode
+            user_watched_shows = set(WatchedEpisode.objects.filter(
+                user=request.user,
+                episode__season__show_id__in=tv_shows.values_list('id', flat=True) if hasattr(tv_shows, 'values_list') else [s.id for s in tv_shows]
+            ).values_list('episode__season__show_id', flat=True))
+            
+            if hasattr(tv_shows, 'exclude'):  # QuerySet
+                tv_shows = tv_shows.exclude(id__in=user_watched_shows)
+            else:  # List (from user_rating sorting)
+                tv_shows = [s for s in tv_shows if s.id not in user_watched_shows]
     return render(request, 'genre_detail.html', {
         'genre': genre,
         'movies': movies,
         'tv_shows': tv_shows,
         'anime_filter': anime_filter,
         'view_type': view_type,
+        'sort_by': sort_by,
+        'sort_order': sort_order,
+        'watched_status': watched_status,
     })
 
 @login_required

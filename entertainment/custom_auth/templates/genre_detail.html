@@ -4,7 +4,7 @@
 {% block title %}{{ genre.name }} | Entertainment List{% endblock %}
 
 {% block content %}
-<div class="container py-4">
+<div class="genre-detail-container">
     <div class="window">
         <div class="title-bar">
             <div class="title-bar-text">{{ genre.name }}</div>
@@ -13,315 +13,696 @@
                 <button aria-label="Maximize"></button>
                 <button aria-label="Close"></button>
             </div>
-        </div>
-        <div class="window-body">
-            <!-- Filter Section -->
-            <form method="get" action="" class="mb-4">
-                <div class="field-row">
-                    <label>Content Filter:</label>
-                    <div class="btn-group" role="group">
-                        <input type="radio" name="anime_filter" id="all" value="all" {% if anime_filter == 'all' %}checked{% endif %}>
-                        <label for="all">All Content</label>
-                        
-                        <input type="radio" name="anime_filter" id="anime_only" value="anime_only" {% if anime_filter == 'anime_only' %}checked{% endif %}>
-                        <label for="anime_only">Anime Only</label>
-                        
-                        <input type="radio" name="anime_filter" id="no_anime" value="no_anime" {% if anime_filter == 'no_anime' %}checked{% endif %}>
-                        <label for="no_anime">No Anime</label>
-                    </div>
+        </div>        <div class="window-body">            <!-- Content Type Selector (only show if both movies and TV shows exist) -->
+            {% if movies and tv_shows %}
+            <div class="content-type-selector">
+                <div class="horizontal-tabs">
+                    <button class="horizontal-tab-btn active" id="movies_tab" data-content="movies">
+                        📽️ Movies ({{ movies|length }})
+                    </button>
                     
-                    <label for="view_type" class="ms-3">View:</label>
-                    <div class="btn-group" role="group">
-                        <input type="radio" name="view_type" id="grid" value="grid" {% if view_type == 'grid' %}checked{% endif %}>
-                        <label for="grid">Grid</label>
-                        <input type="radio" name="view_type" id="table" value="table" {% if view_type == 'table' %}checked{% endif %}>
-                        <label for="table">Table</label>
-                    </div>
-                    
-                    <button type="submit" class="ms-2">Apply Filters</button>
+                    <button class="horizontal-tab-btn" id="tvshows_tab" data-content="tvshows">
+                        📺 TV Shows ({{ tv_shows|length }})
+                    </button>
                 </div>
-            </form>
-
-            <div id="accordion">
-                <!-- Movies Section -->
-                <div class="accordion-section mb-3">
-                    <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#movies">
-                        <h4 class="mb-0">
-                            <span class="chevron">▼</span> Movies
-                            <span class="badge">{{ movies|length }}</span>
-                        </h4>
-                    </div>
-                    <div id="movies" class="collapse show">
-                        <div class="section-content pt-2">
-                            {% if movies %}
-                                <!-- Grid View -->
-                                {% if view_type == 'grid' %}
-                                <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
-                                    {% for movie in movies %}
-                                    <div class="col">
-                                        <!-- For Movies Grid View -->
-                                        <a href="{% url 'movie_page' movie.tmdb_id %}" class="text-decoration-none">
-                                            <div class="card h-100 movie-card">
-                                                {% if movie.poster %}
-                                                <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}">
-                                                {% else %}
-                                                <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
-                                                    <span>No Image</span>
-                                                </div>
-                                                {% endif %}
-                                                <div class="card-body">
-                                                    <h5 class="card-title">{{ movie.title }}</h5>
-                                                    <p class="card-text">
-                                                        {% if movie.release_date %}
-                                                        <small class="text-muted">{{ movie.release_date|date:"Y" }}</small>
-                                                        {% endif %}
-                                                        {% if movie.is_anime %}
-                                                        <span class="badge badge-anime">Anime</span>
-                                                        {% endif %}
-                                                    </p>
-                                                
-                                                    <!-- User Rating Badge (if available) -->
-                                                    {% if movie.user_rating %}
-                                                    <div class="user-rating-badge {% if movie.user_rating >= 7 %}high-rating{% elif movie.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
-                                                        {{ movie.user_rating }}<span class="rating-max">/10</span>
-                                                    </div>
-                                                    {% endif %}
-                                                
-                                                    <!-- Average Rating Badge (if available) -->
-                                                    {% if movie.avg_rating %}
-                                                    <div class="avg-rating-badge">
-                                                        {{ movie.avg_rating }} ({{ movie.rating_count }})
-                                                    </div>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </a>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                {% else %}
-                                <!-- Table View -->
-                                <div class="sunken-panel">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>Title</th>
-                                                <th>Release Date</th>
-                                                <th>Type</th>
-                                                <th>Rating</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for movie in movies %}
-                                            <tr>
-                                                <td><a href="{% url 'movie_page' movie.tmdb_id %}">{{ movie.title }}</a></td>
-                                                <td>{{ movie.release_date|date:"M d, Y" }}</td>
-                                                <td>{% if movie.is_anime %}<span class="badge badge-anime">Anime</span>{% else %}Movie{% endif %}</td>
-                                                <!-- For Movies Table View -->
-                                                <td>
-                                                    {% if movie.user_rating %}
-                                                    <span class="badge badge-rating-user {% if movie.user_rating >= 7 %}high-rating{% elif movie.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
-                                                        {{ movie.user_rating }}<span class="rating-max">/10</span>
-                                                    </span>
-                                                    {% endif %}
-                                                    {% if movie.avg_rating %}
-                                                    <span class="badge badge-rating-avg">Avg: {{ movie.avg_rating }} ({{ movie.rating_count }})</span>
-                                                    {% else %}
-                                                    {{ movie.rating }} / 10
-                                                    {% endif %}
-                                                </td>
-                                                <td><a href="{% url 'movie_page' movie.tmdb_id %}">View</a></td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {% endif %}
-                            {% else %}
-                                <div class="alert alert-info">No movies found in this genre.</div>
-                            {% endif %}
+            </div>
+            {% endif %}            <!-- Hidden Filter Form -->
+            <form method="get" action="" class="filter-form" id="filterForm" style="display: none;">                <div class="window">
+                    <div class="title-bar">
+                        <div class="title-bar-text">🔧 Filters & Sorting</div>
+                        <div class="title-bar-controls">
+                            <button aria-label="Minimize"></button>
+                            <button aria-label="Maximize"></button>
+                            <button aria-label="Close" onclick="toggleFilters()"></button>
+                        </div>
+                    </div>                    <div class="window-body">
+                        <div class="filter-group">
+                            <label>Content Filter:</label>
+                            <div class="btn-group" role="group">
+                                <input type="radio" name="anime_filter" id="all" value="all" {% if anime_filter == 'all' %}checked{% endif %}>
+                                <label for="all" class="retro-btn filter-btn">All Content</label>
+                                
+                                <input type="radio" name="anime_filter" id="anime_only" value="anime_only" {% if anime_filter == 'anime_only' %}checked{% endif %}>
+                                <label for="anime_only" class="retro-btn filter-btn">Anime Only</label>
+                                
+                                <input type="radio" name="anime_filter" id="no_anime" value="no_anime" {% if anime_filter == 'no_anime' %}checked{% endif %}>
+                                <label for="no_anime" class="retro-btn filter-btn">No Anime</label>                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>Watched Status:</label>
+                            <div class="btn-group" role="group">
+                                <input type="radio" name="watched_status" id="all_status" value="all" {% if watched_status == 'all' or not watched_status %}checked{% endif %}>
+                                <label for="all_status" class="retro-btn filter-btn">All</label>
+                                
+                                <input type="radio" name="watched_status" id="watched" value="watched" {% if watched_status == 'watched' %}checked{% endif %}>
+                                <label for="watched" class="retro-btn filter-btn">Watched</label>
+                                
+                                <input type="radio" name="watched_status" id="not_watched" value="not_watched" {% if watched_status == 'not_watched' %}checked{% endif %}>
+                                <label for="not_watched" class="retro-btn filter-btn">Not Watched</label>
+                            </div>
+                        </div>
+                        
+                      <div class="filter-group">
+                        <label>Sort By:</label>
+                        <div class="btn-group" role="group">
+                            <input type="radio" name="sort_by" id="title" value="title" {% if sort_by == 'title' or not sort_by %}checked{% endif %}>
+                            <label for="title" class="retro-btn filter-btn">Title</label>
+                            
+                            <input type="radio" name="sort_by" id="release_date" value="release_date" {% if sort_by == 'release_date' %}checked{% endif %}>
+                            <label for="release_date" class="retro-btn filter-btn">Release Date</label>
+                            
+                            <input type="radio" name="sort_by" id="rating" value="rating" {% if sort_by == 'rating' %}checked{% endif %}>
+                            <label for="rating" class="retro-btn filter-btn">Rating</label>
+                            
+                            <input type="radio" name="sort_by" id="user_rating" value="user_rating" {% if sort_by == 'user_rating' %}checked{% endif %}>
+                            <label for="user_rating" class="retro-btn filter-btn">My Rating</label>
                         </div>
                     </div>
-                </div>
-
-                <!-- TV Shows Section -->
-                <div class="accordion-section mb-3">
-                    <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#tvshows">
-                        <h4 class="mb-0">
-                            <span class="chevron">▶</span> TV Shows
-                            <span class="badge">{{ tv_shows|length }}</span>
-                        </h4>
-                    </div>
-                    <div id="tvshows" class="collapse">
-                        <div class="section-content pt-2">
-                            {% if tv_shows %}
-                                <!-- Grid View -->
-                                {% if view_type == 'grid' %}
-                                <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
-                                    {% for show in tv_shows %}
-                                    <div class="col">
-                                        <!-- For TV Shows Grid View -->
-                                        <a href="{% url 'tv_show_page' show.tmdb_id %}" class="text-decoration-none">
-                                            <div class="card h-100 movie-card">
-                                                {% if show.poster %}
-                                                <img src="{{ show.poster }}" class="card-img-top" alt="{{ show.title }}">
-                                                {% else %}
-                                                <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
-                                                    <span>No Image</span>
-                                                </div>
-                                                {% endif %}
-                                                <div class="card-body">
-                                                    <h5 class="card-title">{{ show.title }}</h5>
-                                                    <p class="card-text">
-                                                        {% if show.first_air_date %}
-                                                        <small class="text-muted">{{ show.first_air_date|date:"Y" }}</small>
-                                                        {% endif %}
-                                                        {% if show.is_anime %}
-                                                        <span class="badge badge-anime">Anime</span>
-                                                        {% endif %}
-                                                    </p>
-                                                
-                                                    <!-- User Rating Badge (if available) -->
-                                                    {% if show.user_rating %}
-                                                    <div class="user-rating-badge {% if show.user_rating >= 7 %}high-rating{% elif show.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
-                                                        {{ show.user_rating }}<span class="rating-max">/10</span>
-                                                    </div>
-                                                    {% endif %}
-                                                
-                                                    <!-- Average Rating Badge (if available) -->
-                                                    {% if show.avg_rating %}
-                                                    <div class="avg-rating-badge">
-                                                        {{ show.avg_rating }} ({{ show.rating_count }})
-                                                    </div>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </a>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                {% else %}
-                                <!-- Table View -->
-                                <div class="sunken-panel">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>Title</th>
-                                                <th>First Air Date</th>
-                                                <th>Type</th>
-                                                <th>Rating</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for show in tv_shows %}
-                                            <tr>
-                                                <td>{{ show.title }}</td>
-                                                <td>{{ show.first_air_date|date:"M d, Y" }}</td>
-                                                <td>{% if show.is_anime %}<span class="badge badge-anime">Anime</span>{% else %}TV Show{% endif %}</td>
-                                                <!-- For TV Shows Table View -->
-                                                <td>
-                                                    {% if show.user_rating %}
-                                                    <span class="badge badge-rating-user {% if show.user_rating >= 7 %}high-rating{% elif show.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
-                                                        {{ show.user_rating }}<span class="rating-max">/10</span>
-                                                    </span>
-                                                    {% endif %}
-                                                    {% if show.avg_rating %}
-                                                    <span class="badge badge-rating-avg">Avg: {{ show.avg_rating }} ({{ show.rating_count }})</span>
-                                                    {% else %}
-                                                    {{ show.rating }} / 10
-                                                    {% endif %}
-                                                </td>
-                                                <td><a href="{% url 'tv_show_page' show.tmdb_id %}">View</a></td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {% endif %}
-                            {% else %}
-                                <div class="alert alert-info">No TV shows found in this genre.</div>
-                            {% endif %}
+                    
+                    <div class="filter-group">
+                        <label>Order:</label>
+                        <div class="btn-group" role="group">
+                            <input type="radio" name="sort_order" id="asc" value="asc" {% if sort_order == 'asc' or not sort_order %}checked{% endif %}>
+                            <label for="asc" class="retro-btn filter-btn">Ascending</label>
+                              <input type="radio" name="sort_order" id="desc" value="desc" {% if sort_order == 'desc' %}checked{% endif %}>
+                            <label for="desc" class="retro-btn filter-btn">Descending</label>
                         </div>
                     </div>
                 </div>
             </div>
+            </form><!-- Content Display Area -->
+            <div class="content-display">
+                <!-- Movies Content -->
+                <div id="movies-content" class="content-section {% if not tv_shows or movies and not tv_shows %}active{% endif %}">
+                    {% if movies %}
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                {% if not tv_shows %}
+                                📽️ Movies
+                                {% else %}
+                                Movies
+                                {% endif %}
+                                <span class="item-count">({{ movies|length }} items)</span>
+                            </h3>
+                        </div>
+                          <div class="sunken-panel content-panel">
+                            <div class="content-grid">
+                                {% for movie in movies %}
+                                <div class="grid-item">
+                                    <a href="{% url 'movie_page' movie.tmdb_id %}" class="item-link">
+                                        <div class="item-card">
+                                            {% if movie.poster %}
+                                            <img src="{{ movie.poster }}" class="item-poster" alt="{{ movie.title }}">
+                                            {% else %}
+                                            <div class="item-poster no-image">
+                                                <span>No Image</span>
+                                            </div>
+                                            {% endif %}
+                                            <div class="item-body">
+                                                <h5 class="item-title">{{ movie.title }}</h5>
+                                                <div class="item-meta">
+                                                    {% if movie.release_date %}
+                                                    <span class="release-year">{{ movie.release_date|date:"Y" }}</span>
+                                                    {% endif %}
+                                                    {% if movie.is_anime %}
+                                                    <span class="badge badge-anime">Anime</span>
+                                                    {% endif %}
+                                                </div>
+                                            
+                                                <!-- User Rating Badge -->
+                                                {% if movie.user_rating %}
+                                                <div class="user-rating-badge {% if movie.user_rating >= 7 %}high-rating{% elif movie.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
+                                                    {{ movie.user_rating }}<span class="rating-max">/10</span>
+                                                </div>
+                                                {% endif %}
+                                            
+                                                <!-- Average Rating Badge -->
+                                                {% if movie.avg_rating %}
+                                                <div class="avg-rating-badge">
+                                                    {{ movie.avg_rating }} ({{ movie.rating_count }})
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </a>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="no-content-message">
+                            <div class="message-content">
+                                <div class="message-icon">🎬</div>
+                                <div class="message-text">No movies found in this genre.</div>
+                                <div class="message-subtext">Movies with this genre will appear here once they are added.</div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- TV Shows Content -->
+                {% if tv_shows %}
+                <div id="tvshows-content" class="content-section {% if tv_shows and not movies %}active{% endif %}">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            {% if not movies %}
+                            📺 TV Shows
+                            {% else %}
+                            TV Shows
+                            {% endif %}
+                            <span class="item-count">({{ tv_shows|length }} items)</span>
+                        </h3>
+                    </div>
+                      <div class="sunken-panel content-panel">
+                        <div class="content-grid">
+                            {% for show in tv_shows %}
+                            <div class="grid-item">
+                                <a href="{% url 'tv_show_page' show.tmdb_id %}" class="item-link">
+                                    <div class="item-card">
+                                        {% if show.poster %}
+                                        <img src="{{ show.poster }}" class="item-poster" alt="{{ show.title }}">
+                                        {% else %}
+                                        <div class="item-poster no-image">
+                                            <span>No Image</span>
+                                        </div>
+                                        {% endif %}
+                                        <div class="item-body">
+                                            <h5 class="item-title">{{ show.title }}</h5>
+                                            <div class="item-meta">
+                                                {% if show.first_air_date %}
+                                                <span class="release-year">{{ show.first_air_date|date:"Y" }}</span>
+                                                {% endif %}
+                                                {% if show.is_anime %}
+                                                <span class="badge badge-anime">Anime</span>
+                                                {% endif %}
+                                            </div>
+                                        
+                                            <!-- User Rating Badge -->
+                                            {% if show.user_rating %}
+                                            <div class="user-rating-badge {% if show.user_rating >= 7 %}high-rating{% elif show.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
+                                                {{ show.user_rating }}<span class="rating-max">/10</span>
+                                            </div>
+                                            {% endif %}
+                                        
+                                            <!-- Average Rating Badge -->
+                                            {% if show.avg_rating %}
+                                            <div class="avg-rating-badge">
+                                                {{ show.avg_rating }} ({{ show.rating_count }})
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Show message if neither movies nor TV shows exist -->
+                {% if not movies and not tv_shows %}
+                <div class="no-content-message">
+                    <div class="message-content">
+                        <div class="message-icon">📂</div>
+                        <div class="message-text">No content found in this genre.</div>
+                        <div class="message-subtext">Movies and TV shows with this genre will appear here once they are added to the system.</div>
+                    </div>
+                </div>                {% endif %}
+            </div>
         </div>
+          <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-info">
+                <span class="status-field">{{ genre.name }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Fixed Filter Button at Bottom -->
+    <div class="fixed-filter-container">
+        <button class="retro-btn fixed-filters-btn" id="filtersBtn" onclick="toggleFilters()">
+            🔧 Filters <span id="activeFiltersCount" style="display: none;"></span>
+        </button>
     </div>
 </div>
 
 <style>
-    /* Accordion styles */
-    .section-header {
-        cursor: pointer;
-        background-color: rgb(225, 225, 225);
-        border: 2px outset white;
-        padding: 6px 12px;
-        margin-bottom: 0;
+    /* Theme-adaptive CSS variables matching discover page */
+    :root {
+        --bg-color: #c0c0c0;
+        --text-color: #000;
+        --text-muted: #666;
+        --border-dark: #808080;
+        --border-light: #dfdfdf;
+        --window-bg: #c0c0c0;
+        --button-bg: #c0c0c0;
+        --button-text: #000;
+        --button-hover: #e0e0e0;
+        --progress-bg: #fff;
+        --progress-bar: #008080;
+        --shadow-color: rgba(0,0,0,0.25);
+        --poster-border: #a0a0a0;
+        --explorer-bg: #ffffff;
+        --folder-hover: #d0d1d5;
+        --folder-active: #000080;
+        --folder-active-text: #ffffff;
+        --input-bg: #ffffff;
+        --alert-bg: #e1e1e1;
+        --tab-active: #ffffff;
+        --tab-inactive: #e0e0e0;
     }
-    
-    .section-header h4 {
-        margin: 0;
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-color: #383838;
+            --text-color: #ffffff;
+            --text-muted: #b0b0b0;
+            --border-dark: #2a2a2a;
+            --border-light: #505050;
+            --window-bg: #404040;
+            --button-bg: #505050;
+            --button-text: #ffffff;
+            --button-hover: #606060;
+            --progress-bg: #2a2a2a;
+            --progress-bar: #00a0a0;
+            --shadow-color: rgba(0,0,0,0.5);
+            --poster-border: #606060;
+            --explorer-bg: #2a2a2a;
+            --folder-hover: #404040;
+            --folder-active: #0060ff;
+            --folder-active-text: #ffffff;
+            --input-bg: #2a2a2a;
+            --alert-bg: #404040;
+            --tab-active: #2a2a2a;
+            --tab-inactive: #383838;
+        }
+    }    /* Page container - mobile-first approach */
+    .genre-detail-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 10px;
+        position: relative;
+    }
+
+    @media (min-width: 768px) {
+        .genre-detail-container {
+            padding: 20px;
+        }
+    }
+
+    /* Window styling matching discover page */
+    .window {
+        border: 2px outset var(--bg-color);
+        background-color: var(--bg-color);
+        font-family: 'MS Sans Serif', sans-serif;
+        box-shadow: 2px 2px 4px var(--shadow-color);
+    }
+
+    .title-bar {
+        background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+        color: white;
+        padding: 2px;
+        font-size: 11px;
+        font-weight: bold;
         display: flex;
+        justify-content: space-between;
         align-items: center;
     }
-    
-    .section-content {
-        border: 2px inset white;
-        border-top: none;
+
+    @media (prefers-color-scheme: dark) {
+        .title-bar {
+            background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+        }
+    }
+
+    .title-bar-controls button {
+        width: 16px;
+        height: 14px;
+        border: 1px outset var(--button-bg);
+        background: var(--button-bg);
+        margin-left: 2px;
+        font-size: 8px;
+        cursor: pointer;
+    }
+
+    .title-bar-controls button:active {
+        border: 1px inset var(--button-bg);
+    }    .window-body {
+        background-color: var(--window-bg);
+        color: var(--text-color);
         padding: 8px;
-        background-color: white;
+        position: relative;
+    }
+
+    @media (min-width: 768px) {
+        .window-body {
+            padding: 12px;
+        }
+    }
+
+    /* Status Bar */
+    .status-bar {
+        border-top: 1px solid var(--border-dark);
+        background-color: var(--bg-color);
+        padding: 4px 8px;
+        font-size: 11px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .status-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .status-field {
+        border: 1px inset var(--bg-color);
+        padding: 2px 6px;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        font-size: 10px;
+    }    #activeFiltersCount {
+        background: #ff0000;
+        color: white;
+        border-radius: 8px;
+        padding: 1px 4px;
+        font-size: 8px;
+        margin-left: 4px;
+    }/* Content Type Selector - Full Width Horizontal */
+    .content-type-selector {
+        margin-bottom: 12px;
+        border-bottom: 1px solid var(--border-dark);
+    }
+
+    .horizontal-tabs {
+        display: flex;
+        width: 100%;
+    }
+
+    .horizontal-tab-btn {
+        flex: 1;
+        padding: 12px 16px !important;
+        font-size: 13px !important;
+        font-weight: bold;
+        border: 1px outset var(--button-bg) !important;
+        background: var(--tab-inactive) !important;
+        color: var(--button-text) !important;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.1s ease;
+        text-align: center;
+        border-radius: 0;
+        margin: 0;
+    }
+
+    .horizontal-tab-btn:first-child {
+        border-right: none !important;
+    }    .horizontal-tab-btn:hover {
+        background: var(--button-hover) !important;
+    }
+
+    .horizontal-tab-btn.active {
+        background: var(--tab-active) !important;
+        border: 1px inset var(--button-bg) !important;
+        box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3);
+    }
+
+    @media (max-width: 480px) {
+        .horizontal-tab-btn {
+            padding: 10px 8px !important;
+            font-size: 11px !important;
+        }
+    }    /* Filter Section - Windows 98 Style Window */    .filter-form {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 9999;
+        min-width: 320px;
+        max-width: 90vw;
+    }
+
+    .filter-form::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: -1;
+    }
+
+    @media (max-width: 480px) {
+        .filter-form {
+            min-width: 280px;
+            max-width: 95vw;
+            top: 40%;
+        }    }    
+    
+    /* Filter styles use the standard window styling */
+    /* Filter section styling uses the standard window-body styling */    /* Fixed Filter Button Container */    
+    .fixed-filter-container {
+        position: fixed;
+        bottom: 120px; /* Increased to be above navbar on all screen sizes */
+        right: 20px;
+        z-index: 9999;
+        pointer-events: auto;
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    .fixed-filters-btn {
+        padding: 8px 16px !important;
+        font-size: 12px !important;
+        font-weight: bold;
+        box-shadow: 2px 2px 4px var(--shadow-color);
+        border: 2px outset var(--button-bg) !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }    .fixed-filters-btn {
+        background-color: var(--button-bg) !important; /* Match Windows 98 style */
+        color: var(--button-text) !important;
     }
     
-    .badge {
-        margin-left: 8px;
-        background-color: navy;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: 0.7rem;
+    .fixed-filters-btn:hover {
+        background: var(--button-hover) !important; /* Standard button hover */
     }
-    
-    .badge-anime {
-        background-color: #007bff;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: 0.7rem;
-    }
+
+    .fixed-filters-btn:active {
+        border: 2px inset var(--button-bg) !important;
+        background: var(--button-bg) !important; /* Standard button active */
+    }@media (max-width: 768px) {
+        .fixed-filter-container {
+            bottom: 100px; /* Increased to be above mobile navbar */
+            right: 15px;
+        }
         
-    .chevron {
-        font-size: 0.75rem;
-        margin-right: 8px;
-        transition: transform 0.2s;
+        .fixed-filters-btn {
+            padding: 10px 14px !important;
+            font-size: 11px !important;
+        }
     }
-    
-    .collapse {
+      /* Specific styles for larger screens */
+    @media (min-width: 1024px) {
+        .fixed-filter-container {
+            bottom: 120px; /* Keep consistent with base value to stay above navbar */
+            right: 30px;
+        }
+        
+        .fixed-filters-btn {
+            padding: 10px 20px !important;
+            font-size: 14px !important;
+            box-shadow: 3px 3px 6px var(--shadow-color);
+        }
+    }.filter-group {
+        display: block;
+        margin-bottom: 15px;
+    }
+
+    .filter-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .filter-group label:first-child {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .filter-group .btn-group {
+        display: flex;
+        gap: 2px;
+        flex-wrap: wrap;
+    }    .filter-btn {
+        font-size: 11px;
+        min-width: 60px;
+        margin-right: 4px;
+        margin-bottom: 4px;
+    }
+
+    /* Content Display */
+    .content-display {
+        margin-top: 8px;
+    }
+
+    .content-section {
         display: none;
     }
-    
-    .collapse.show {
+
+    .content-section.active {
         display: block;
     }
-    
-    /* Card styling */
-    .movie-card {
+
+    .section-header {
+        margin-bottom: 12px;
+    }
+
+    .section-title {
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 14px;
+        margin: 0;
+        color: var(--text-color);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .item-count {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-weight: normal;
+    }
+
+    /* Content Panel */
+    .content-panel {
+        border: 2px inset var(--bg-color);
+        background-color: var(--explorer-bg);
+        color: var(--text-color);
+        padding: 8px;
+        min-height: 200px;
+    }
+
+    /* Grid View */
+    .content-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    @media (min-width: 480px) {
+        .content-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+    }
+
+    @media (min-width: 768px) {
+        .content-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .content-grid {
+            grid-template-columns: repeat(5, 1fr);
+            gap: 20px;
+        }
+    }
+
+    .grid-item {
+        display: flex;
+        justify-content: center;
+    }
+
+    .item-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        width: 100%;
+        max-width: 200px;
+    }
+
+    .item-link:hover {
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .item-card {
         position: relative;
-        border: 2px outset white !important;
+        border: 1px outset var(--bg-color);
+        background-color: var(--window-bg);
+        transition: all 0.1s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
     }
-    
-    .card-body {
-        padding: 0.5rem !important;
+
+    .item-card:hover {
+        border: 1px inset var(--bg-color);
     }
-    
-    .card-footer {
-        background-color: rgb(225, 225, 225);
-        border-top: 2px inset white;
-        padding: 0.5rem !important;
+
+    .item-poster {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        border-bottom: 1px solid var(--border-dark);
     }
-    
-    /* Rating badge styles */
+
+    @media (max-width: 480px) {
+        .item-poster {
+            height: 150px;
+        }
+    }
+
+    .item-poster.no-image {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: var(--alert-bg);
+        color: var(--text-muted);
+        font-size: 12px;
+    }
+
+    .item-body {
+        padding: 8px;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .item-title {
+        font-size: 12px;
+        margin: 0 0 4px 0;
+        color: var(--text-color);
+        line-height: 1.3;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    .item-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: auto;
+    }
+
+    .release-year {
+        font-size: 10px;
+        color: var(--text-muted);
+    }
+
+    /* Rating badges */
     .user-rating-badge {
         position: absolute;
         top: 8px;
@@ -329,181 +710,303 @@
         padding: 2px 6px;
         border-radius: 3px;
         font-weight: bold;
-        font-size: 0.75rem;
+        font-size: 10px;
         box-shadow: 0 0 3px rgba(0,0,0,0.5);
         z-index: 5;
     }
-    
+
     .avg-rating-badge {
         position: absolute;
-        top: 40px;
+        top: 32px;
         right: 8px;
         background: rgba(0, 0, 0, 0.7);
         color: white;
         padding: 2px 6px;
         border-radius: 3px;
         font-weight: bold;
-        font-size: 0.75rem;
+        font-size: 10px;
         box-shadow: 0 0 3px rgba(0,0,0,0.5);
         z-index: 5;
     }
-    
+
     /* Rating color classes */
     .high-rating {
         background-color: #4CAF50;
         color: white;
     }
-    
+
     .mid-rating {
         background-color: #FFC107;
         color: black;
     }
-    
+
     .low-rating {
         background-color: #F44336;
         color: white;
     }
-    
+
     .rating-max {
-        font-size: 10px;
+        font-size: 8px;
         font-weight: normal;
         vertical-align: text-top;
     }
-    
-    /* Text decoration removal for card links */
-    .text-decoration-none {
-        color: inherit;
-        text-decoration: none;
-    }
-    
-    /* Form controls */
-    input, select {
-        height: 21px;
-        padding: 1px 5px;
-        box-sizing: border-box;
-        font-size: 0.9rem;
-    }
-    
-    .field-row {
-        display: flex;
-        align-items: center;
-    }
-    
-    .field-row label {
-        margin-bottom: 0;
-        margin-right: 4px;
-    }
-    
-    /* Table styling */
-    .sunken-panel {
-        border: 2px inset white;
-        padding: 1px;
-        background-color: white;
-    }
-    
-    .table {
-        width: 100%;
-        margin-bottom: 0;
-        border-collapse: collapse;
-    }
-    
-    .table th {
-        background-color: rgb(225, 225, 225);
-        border: 1px solid #ddd;
-        padding: 4px 8px;
-        font-weight: bold;
-    }
-    
-    .table td {
-        border: 1px solid #ddd;
-        padding: 4px 8px;
-    }
-    
-    .table tr:nth-child(odd) {
-        background-color: rgb(245, 245, 245);
-    }
-    
-    /* Alert styling */
-    .alert {
-        border: 2px inset white;
-        border-radius: 0;
-        background-color: rgb(225, 225, 225);
-        padding: 8px;
-        color: black;
-    }
-    
-    /* Style for the table ratings to match */
-    .badge-rating-user {
+
+    /* Badge styles */
+    .badge {
         padding: 2px 6px;
-        border-radius: 3px;
+        border-radius: 10px;
+        font-size: 9px;
         font-weight: bold;
     }
-    
+
+    .badge-anime {
+        background-color: #007bff;
+        color: white;
+    }
+
+    .badge-rating-user {
+        border-radius: 3px;
+    }
+
     .badge-rating-avg {
         background-color: #6c757d;
         color: white;
-        padding: 2px 6px;
         border-radius: 3px;
+    }    /* Retro button styling */
+    .retro-btn {
+        border: 1px outset var(--button-bg);
+        background: var(--button-bg);
+        color: var(--button-text);
+        padding: 2px 8px;
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: background-color 0.1s ease;
     }
-    
-    /* Mobile optimization */
-    @media (max-width: 768px) {
-        .field-row {
-            flex-direction: column;
-            align-items: flex-start;
+
+    .retro-btn:hover {
+        background: var(--button-hover);
+        color: var(--button-text);
+        text-decoration: none;
+    }
+
+    .retro-btn:active {
+        border: 1px inset var(--button-bg);
+    }
+
+    .view-btn {
+        font-size: 10px;
+        padding: 1px 6px;
+    }
+
+    /* No content message */
+    .no-content-message {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 200px;
+        padding: 20px;
+    }
+
+    .message-content {
+        text-align: center;
+        border: 2px inset var(--bg-color);
+        border-radius: 0;
+        background-color: var(--alert-bg);
+        padding: 16px 20px;
+        color: var(--text-color);
+        max-width: 300px;
+    }
+
+    .message-icon {
+        font-size: 2rem;
+        margin-bottom: 8px;
+    }
+
+    .message-text {
+        font-size: 0.9rem;
+        font-family: 'MS Sans Serif', sans-serif;
+        margin-bottom: 8px;
+    }
+
+    .message-subtext {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-family: 'MS Sans Serif', sans-serif;
+    }
+
+    /* Hide radio buttons */
+    input[type="radio"] {
+        display: none;
+    }
+
+    /* Enhanced button styling for dark mode */
+    @media (prefers-color-scheme: dark) {
+        .retro-btn, .tab-btn, .filter-btn {
+            border-color: var(--border-light);
+            box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
         }
         
-        .field-row label {
-            margin-top: 8px;
+        .retro-btn:hover, .tab-btn:hover, .filter-btn:hover {
+            box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+        }
+    }
+
+    /* Accessibility improvements */
+    @media (prefers-reduced-motion: reduce) {
+        .item-card, .retro-btn, .tab-btn, .filter-btn {
+            transition: none;
+        }
+    }
+
+    /* Touch-friendly improvements for mobile */
+    @media (hover: none) and (pointer: coarse) {
+        .tab-btn, .filter-btn {
+            padding: 8px 12px !important;
+            font-size: 12px !important;
         }
         
-        .card-title {
-            font-size: 0.85rem;
-        }
-        
-        .card-body {
-            padding: 0.35rem !important;
+        .retro-btn {
+            padding: 6px 10px;
+            font-size: 12px;
         }
     }
 </style>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Accordion functionality
-        const headers = document.querySelectorAll('.section-header');
-        headers.forEach(header => {
-            header.addEventListener('click', function() {
-                const target = document.querySelector(this.dataset.target);
-                if (target.classList.contains('show')) {
-                    target.classList.remove('show');
-                    this.querySelector('.chevron').textContent = '▶';
-                } else {
-                    target.classList.add('show');
-                    this.querySelector('.chevron').textContent = '▼';
+    document.addEventListener('DOMContentLoaded', function() {        // Content type switcher functionality
+        const moviesTab = document.getElementById('movies_tab');
+        const tvshowsTab = document.getElementById('tvshows_tab');
+        const moviesContent = document.getElementById('movies-content');
+        const tvshowsContent = document.getElementById('tvshows-content');
+        
+        // Only set up tab switching if both content types exist
+        if (moviesTab && tvshowsTab && moviesContent && tvshowsContent) {
+            function switchToContent(contentType) {
+                // Remove active class from all tabs
+                document.querySelectorAll('.horizontal-tab-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                // Add active class to clicked tab
+                if (contentType === 'movies') {
+                    moviesTab.classList.add('active');
+                    moviesContent.classList.add('active');
+                    tvshowsContent.classList.remove('active');
+                } else if (contentType === 'tvshows') {
+                    tvshowsTab.classList.add('active');
+                    tvshowsContent.classList.add('active');
+                    moviesContent.classList.remove('active');
+                }
+            }
+            
+            // Initialize default state - show movies by default
+            switchToContent('movies');
+            
+            moviesTab.addEventListener('click', function(e) {
+                e.preventDefault();
+                switchToContent('movies');
+            });
+            
+            tvshowsTab.addEventListener('click', function(e) {
+                e.preventDefault();
+                switchToContent('tvshows');
+            });
+        } else {
+            // If only one content type exists, make sure it's visible
+            if (moviesContent && !tvshowsContent) {
+                moviesContent.classList.add('active');
+            } else if (tvshowsContent && !moviesContent) {
+                tvshowsContent.classList.add('active');
+            }
+        }// Auto-submit form when filters change
+        const filterInputs = document.querySelectorAll('input[name="anime_filter"], input[name="sort_by"], input[name="sort_order"]');
+        filterInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                this.form.submit();
+            });
+        });        
+        // Filter button click handlers
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        filterButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const radioId = this.getAttribute('for');
+                const radio = document.getElementById(radioId);
+                if (radio) {
+                    radio.checked = true;
+                    radio.dispatchEvent(new Event('change'));
+                }
+            });
+            
+            // Keyboard support
+            button.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this.click();
                 }
             });
         });
-        
-        // JavaScript to automatically submit the form when view type changes
-        document.getElementById('grid').addEventListener('change', function() {
-            this.form.submit();
+          // Add visual feedback for button interactions
+        const allButtons = document.querySelectorAll('.retro-btn, .horizontal-tab-btn, .filter-btn');
+        allButtons.forEach(button => {
+            button.addEventListener('mousedown', function() {
+                this.style.border = '1px inset var(--button-bg)';
+            });
+            
+            button.addEventListener('mouseup', function() {
+                this.style.border = '1px outset var(--button-bg)';
+            });
+            
+            button.addEventListener('mouseleave', function() {
+                this.style.border = '1px outset var(--button-bg)';
+            });
         });
+
+        // Initialize active filters count display
+        updateActiveFiltersCount();
+    });    // Toggle filters panel
+    function toggleFilters() {
+        const filterForm = document.getElementById('filterForm');
+        const filtersBtn = document.getElementById('filtersBtn');
         
-        document.getElementById('table').addEventListener('change', function() {
-            this.form.submit();
-        });
+        if (filterForm.style.display === 'none' || filterForm.style.display === '') {
+            filterForm.style.display = 'block';
+            filtersBtn.innerHTML = '🔧 Filters (Open) <span id="activeFiltersCount" style="display: none;"></span>';
+        } else {
+            filterForm.style.display = 'none';
+            filtersBtn.innerHTML = '🔧 Filters <span id="activeFiltersCount" style="display: none;"></span>';
+        }
+        updateActiveFiltersCount();
+    }// Update active filters count
+    function updateActiveFiltersCount() {
+        const filterForm = document.getElementById('filterForm');
+        const activeFiltersSpan = document.getElementById('activeFiltersCount');
         
-        document.getElementById('all').addEventListener('change', function() {
-            this.form.submit();
-        });
+        if (!filterForm || !activeFiltersSpan) return;
         
-        document.getElementById('anime_only').addEventListener('change', function() {
-            this.form.submit();
-        });
+        let activeCount = 0;
+          // Check for non-default filters
+        const animeFilter = document.querySelector('input[name="anime_filter"]:checked');
+        if (animeFilter && animeFilter.value !== 'all') activeCount++;
         
-        document.getElementById('no_anime').addEventListener('change', function() {
-            this.form.submit();
-        });
-    });
+        const watchedStatus = document.querySelector('input[name="watched_status"]:checked');
+        if (watchedStatus && watchedStatus.value !== 'all') activeCount++;
+        
+        const sortBy = document.querySelector('input[name="sort_by"]:checked');
+        if (sortBy && sortBy.value !== 'title') activeCount++;
+        
+        const sortOrder = document.querySelector('input[name="sort_order"]:checked');
+        if (sortOrder && sortOrder.value !== 'asc') activeCount++;
+        
+        if (activeCount > 0) {
+            activeFiltersSpan.textContent = activeCount;
+            activeFiltersSpan.style.display = 'inline';
+        } else {
+            activeFiltersSpan.style.display = 'none';
+        }
+    }
 </script>
 {% endblock %}
