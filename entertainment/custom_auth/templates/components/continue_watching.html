@@ -255,7 +255,7 @@ function createContinueWatchingCard(itemData) {
     
     const url = item.content_type_model === 'movie' 
         ? `/movie/${item.media_tmdb_id}/`
-        : `/tv/${item.media_tmdb_id}/`;
+        : `/tvshows/${item.media_tmdb_id}/`;
     
     card.innerHTML = `
         <a href="${url}" style="text-decoration: none; color: inherit;">
