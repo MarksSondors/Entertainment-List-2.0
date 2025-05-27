@@ -348,6 +348,17 @@ def browse_by_genre(request):
         'genres': genres,
     })
 
+@login_required
+def browse_by_country(request):
+    """
+    View for displaying all available countries for browsing
+    """
+    countries = Country.objects.all().order_by('name')
+    return render(request, 'browse_by_country.html', {
+        'countries': countries,
+    })
+
+
 # old and vibe coded code
 
 def login_page(request):
@@ -1364,16 +1375,6 @@ def people_detail(request, person_id):
     }
     
     return render(request, 'people_page.html', context)
-
-@login_required
-def browse_by_country(request):
-    """
-    View for displaying all available countries for browsing
-    """
-    countries = Country.objects.all().order_by('name')
-    return render(request, 'browse_by_country.html', {
-        'countries': countries,
-    })
 
 @login_required
 def country_detail(request, country_id):
