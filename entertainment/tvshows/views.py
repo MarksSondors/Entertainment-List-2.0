@@ -35,6 +35,7 @@ def tv_show_page(request, show_id):
             'keywords',
             'seasons',
             'seasons__episodes',
+            'production_companies',
             Prefetch(
                 'episode_groups__sub_groups',
                 queryset=EpisodeSubGroup.objects.prefetch_related(

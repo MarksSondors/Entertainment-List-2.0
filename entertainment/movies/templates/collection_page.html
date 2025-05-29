@@ -1,7 +1,7 @@
 {% extends "components/base.html" %}
 
 {% block content %}
-<div class="container py-4">
+<div class="collection-page-container">
     <!-- Collection Information Window -->
     <div class="window mb-4">
         <div class="title-bar">
@@ -96,138 +96,289 @@
 </div>
 
 <style>
-    /* Background image setup */
-    body {
-        background: url('{{ collection.backdrop }}') no-repeat center center fixed;
-        background-size: cover;
+/* Theme-adaptive CSS variables */
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --progress-bg: #fff;
+    --progress-bar: #008080;
+    --shadow-color: rgba(0,0,0,0.25);
+    --poster-border: #a0a0a0;
+    --backdrop-overlay: rgba(192, 192, 192, 0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --progress-bg: #2a2a2a;
+        --progress-bar: #00a0a0;
+        --shadow-color: rgba(0,0,0,0.5);
+        --poster-border: #606060;
+        --backdrop-overlay: rgba(56, 56, 56, 0.9);
+    }
+}
+
+/* Collection page specific styles */
+.collection-page-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    position: relative;
+}
+
+@media (max-width: 768px) {
+    .collection-page-container {
+        padding: 10px;
+    }
+}
+
+/* Background image setup */
+body {
+    background: url('{{ collection.backdrop }}') no-repeat center center fixed;
+    background-size: cover;
+}
+
+/* Window styling matching other pages */
+.window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+}
+
+.title-bar {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+    color: white;
+    padding: 2px;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
+}
+
+.title-bar-controls button {
+    width: 16px;
+    height: 14px;
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    margin-left: 2px;
+    font-size: 8px;
+    cursor: pointer;
+}
+
+.title-bar-controls button:active {
+    border: 1px inset var(--button-bg);
+}
+
+.window-body {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 12px;
+}
+
+/* Collection info styling */
+.collection-info {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.poster-container {
+    flex-shrink: 0;
+}
+
+.collection-poster {
+    width: 200px;
+    border: 2px solid var(--poster-border);
+    border-radius: 4px;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    cursor: pointer;
+}
+
+.collection-details {
+    flex-grow: 1;
+}
+
+.collection-description {
+    background-color: var(--progress-bg);
+    color: var(--text-color);
+    padding: 10px;
+    border: 2px inset var(--bg-color);
+}
+
+/* Modal styling */
+.modal-hidden {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    max-width: 90%;
+}
+
+.modal-image {
+    max-width: 100%;
+    max-height: 80vh;
+    border: 2px solid var(--poster-border);
+    border-radius: 4px;
+}
+
+/* Movie card styling */
+.movie-card {
+    position: relative;
+    border: 2px outset var(--bg-color) !important;
+    background-color: var(--window-bg);
+    transition: all 0.1s ease;
+}
+
+.movie-card:hover {
+    border: 2px inset var(--bg-color) !important;
+}
+
+.card-body {
+    padding: 0.5rem !important;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+}
+
+.card-title {
+    color: var(--text-color);
+}
+
+.card-text .text-muted {
+    color: var(--text-muted) !important;
+}
+
+.card-footer {
+    background-color: var(--bg-color);
+    border-top: 2px inset var(--bg-color);
+    padding: 0.5rem !important;
+}
+
+/* Rating badge styles */
+.user-rating-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+    font-size: 0.75rem;
+    box-shadow: 0 0 3px var(--shadow-color);
+    z-index: 5;
+}
+
+/* Card type indicators */
+.card-reviewed img, .card-reviewed .card-img-top {
+    border-top: 3px solid #2196F3;
+    border-left: 3px solid #2196F3;
+    border-right: 3px solid #2196F3;
+}
+
+.card-watchlist img, .card-watchlist .card-img-top {
+    border-top: 3px solid #4CAF50;
+    border-left: 3px solid #4CAF50;
+    border-right: 3px solid #4CAF50;
+}
+
+/* Section styling */
+.section-content {
+    padding: 8px;
+    background-color: var(--progress-bg);
+    color: var(--text-color);
+}
+
+/* Enhanced image styling */
+.card-img-top {
+    border-bottom: 1px solid var(--border-dark);
+}
+
+/* Link styling for better visibility */
+.window-body a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.window-body a:hover {
+    color: var(--text-color);
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Text utilities */
+.text-center {
+    text-align: center;
+}
+
+.text-decoration-none {
+    text-decoration: none;
+    color: inherit;
+}
+
+/* Enhanced button styling for dark mode */
+@media (prefers-color-scheme: dark) {
+    .title-bar-controls button {
+        border-color: var(--border-light);
+        box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
     }
     
-    /* Collection info styling */
+    .title-bar-controls button:hover {
+        box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+    }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
     .collection-info {
-        display: flex;
-        gap: 20px;
-        align-items: flex-start;
+        flex-direction: column;
     }
     
     .poster-container {
-        flex-shrink: 0;
+        align-self: center;
+        margin-bottom: 20px;
     }
     
     .collection-poster {
-        width: 200px;
-        border: 2px outset white;
-        cursor: pointer;
+        width: 160px;
     }
     
-    .collection-details {
-        flex-grow: 1;
-    }
-    
-    .collection-description {
-        background-color: white;
-        padding: 10px;
-        border: 2px inset white;
-    }
-    
-    /* Modal styling */
-    .modal-hidden {
-        display: none;
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        z-index: 1000;
-        max-width: 90%;
-    }
-    
-    .modal-image {
-        max-width: 100%;
-        max-height: 80vh;
-    }
-    
-    /* Movie card styling */
-    .movie-card {
-        position: relative;
-        border: 2px outset white !important;
+    .card-title {
+        font-size: 0.85rem;
     }
     
     .card-body {
-        padding: 0.5rem !important;
+        padding: 0.35rem !important;
     }
     
-    .card-footer {
-        background-color: rgb(225, 225, 225);
-        border-top: 2px inset white;
-        padding: 0.5rem !important;
-    }
-    
-    /* Rating badge styles */
-    .user-rating-badge {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        background: rgba(0, 0, 0, 0.7);
-        color: white;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-weight: bold;
-        font-size: 0.75rem;
-        box-shadow: 0 0 3px rgba(0,0,0,0.5);
-        z-index: 5;
-    }
-    
-    /* Card type indicators */
-    .card-reviewed img, .card-reviewed .card-img-top {
-        border-top: 3px solid #2196F3;
-        border-left: 3px solid #2196F3;
-        border-right: 3px solid #2196F3;
-    }
-    
-    .card-watchlist img, .card-watchlist .card-img-top {
-        border-top: 3px solid #4CAF50;
-        border-left: 3px solid #4CAF50;
-        border-right: 3px solid #4CAF50;
-    }
-    
-    /* Section styling */
-    .section-content {
+    .window-body {
         padding: 8px;
-        background-color: white;
     }
-    
-    /* Text utilities */
-    .text-center {
-        text-align: center;
-    }
-    
-    .text-decoration-none {
-        text-decoration: none;
-        color: inherit;
-    }
-    
-    /* Mobile responsiveness */
-    @media (max-width: 768px) {
-        .collection-info {
-            flex-direction: column;
-        }
-        
-        .poster-container {
-            align-self: center;
-            margin-bottom: 20px;
-        }
-        
-        .collection-poster {
-            width: 160px;
-        }
-        
-        .card-title {
-            font-size: 0.85rem;
-        }
-        
-        .card-body {
-            padding: 0.35rem !important;
-        }
-    }
+}
 </style>
 
 <script>
