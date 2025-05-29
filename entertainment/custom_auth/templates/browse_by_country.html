@@ -587,41 +587,69 @@
     }
 </style>
 
-<script>
-    // Enhanced Windows Explorer behavior with better mobile support
+<script>    // Enhanced Windows Explorer behavior with better mobile support
     document.addEventListener('DOMContentLoaded', function() {
         const countryItems = document.querySelectorAll('.country-item');
         let touchStartTime = 0;
+        let touchStartY = 0;
+        let touchStartX = 0;
+        let hasMoved = false;
         
         countryItems.forEach(item => {
-            // Mouse/pointer events
+            // Mouse/pointer events (only for non-touch devices)
             item.addEventListener('click', function(e) {
-                // Add a small delay to mimic Windows 95/98 behavior
-                e.preventDefault();
-                const href = this.getAttribute('href');
-                setTimeout(() => {
-                    window.location.href = href;
-                }, 100);
-            });
-
-            // Touch events for mobile
-            item.addEventListener('touchstart', function(e) {
-                touchStartTime = Date.now();
-                this.classList.add('touch-active');
-            });
-
-            item.addEventListener('touchend', function(e) {
-                this.classList.remove('touch-active');
-                const touchDuration = Date.now() - touchStartTime;
-                
-                // Only trigger if it's a quick tap (not a scroll)
-                if (touchDuration < 300) {
+                // Only handle click if it's not a touch device or if touch events didn't handle it
+                if (!('ontouchstart' in window)) {
                     e.preventDefault();
                     const href = this.getAttribute('href');
                     setTimeout(() => {
                         window.location.href = href;
                     }, 100);
                 }
+            });
+
+            // Touch events for mobile with better scroll detection
+            item.addEventListener('touchstart', function(e) {
+                touchStartTime = Date.now();
+                touchStartY = e.touches[0].clientY;
+                touchStartX = e.touches[0].clientX;
+                hasMoved = false;
+                this.classList.add('touch-active');
+            }, { passive: true });
+
+            item.addEventListener('touchmove', function(e) {
+                if (!touchStartY || !touchStartX) return;
+                
+                const currentY = e.touches[0].clientY;
+                const currentX = e.touches[0].clientX;
+                const deltaY = Math.abs(currentY - touchStartY);
+                const deltaX = Math.abs(currentX - touchStartX);
+                
+                // If the finger has moved more than 10px in any direction, consider it a scroll
+                if (deltaY > 10 || deltaX > 10) {
+                    hasMoved = true;
+                    this.classList.remove('touch-active');
+                }
+            }, { passive: true });
+
+            item.addEventListener('touchend', function(e) {
+                this.classList.remove('touch-active');
+                const touchDuration = Date.now() - touchStartTime;
+                
+                // Only trigger if it's a quick tap (not a scroll) and finger didn't move much
+                if (touchDuration < 300 && !hasMoved) {
+                    e.preventDefault();
+                    const href = this.getAttribute('href');
+                    setTimeout(() => {
+                        window.location.href = href;
+                    }, 100);
+                }
+                
+                // Reset values
+                touchStartTime = 0;
+                touchStartY = 0;
+                touchStartX = 0;
+                hasMoved = false;
             });
 
             // Keyboard navigation
