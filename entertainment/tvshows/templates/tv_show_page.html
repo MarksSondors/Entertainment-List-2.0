@@ -664,7 +664,7 @@
                     </p>
                     <p><strong>Keywords:</strong>
                         {% for keyword in tv_show.keywords.all %}
-                            <a href="keyword">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
+                            <a href="#">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
                         {% endfor %}
                     </p>
                 </div>

@@ -3,7 +3,61 @@
 {% load calendar_extras %}
 
 {% block content %}
-<div class="container px-2 py-2">
+<style>
+/* Theme-adaptive CSS variables */
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --window-content-bg: #eee;
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --shadow-color: rgba(0,0,0,0.25);
+    --calendar-day-bg: white;
+    --calendar-header-bg: #d4d0c8;
+    --calendar-empty-bg: #d4d0c8;
+    --calendar-today-bg: #ffffcc;
+    --movie-item-bg: #ff9090;
+    --movie-item-border: #d06060;
+    --tvshow-item-bg: #90b0ff;
+    --tvshow-item-border: #6080d0;
+    --episode-item-bg: #90ff90;
+    --episode-item-border: #60d060;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --window-content-bg: #353535;
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --shadow-color: rgba(0,0,0,0.5);
+        --calendar-day-bg: #454545;
+        --calendar-header-bg: #555555;
+        --calendar-empty-bg: #353535;
+        --calendar-today-bg: #606030;
+        --movie-item-bg: #804040;
+        --movie-item-border: #a05050;
+        --tvshow-item-bg: #404080;
+        --tvshow-item-border: #5050a0;
+        --episode-item-bg: #408040;
+        --episode-item-border: #50a050;
+    }
+}
+</style>
+
+<div class="calendar-page-container">
+    <div class="container px-2 py-2">
     <div class="window" style="width: 100%;">
         <div class="title-bar">
             <div class="title-bar-text">Release Calendar - {{ month_name }} {{ year }}</div>
@@ -13,20 +67,18 @@
                 <button aria-label="Close"></button>
             </div>
         </div>
-        <div class="window-body">
-            <!-- Month navigation -->
+        <div class="window-body">            <!-- Month navigation -->
             <div class="calendar-navigation">
                 <a href="?year={{ prev_year }}&month={{ prev_month }}" class="nav-btn prev-btn">
-                    <button>❮ Previous</button>
+                    <button class="retro-btn">❮ Previous</button>
                 </a>
                 <span class="current-month">{{ month_name }} {{ year }}</span>
                 <a href="?year={{ next_year }}&month={{ next_month }}" class="nav-btn next-btn">
-                    <button>Next ❯</button>
+                    <button class="retro-btn">Next ❯</button>
                 </a>
             </div>
-            
-            <!-- Calendar view -->
-            <div class="sunken-panel" style="padding: 8px; background-color: #eee;">
+              <!-- Calendar view -->
+            <div class="sunken-panel">
                 <table class="calendar-table" width="100%" border="0" cellspacing="0" cellpadding="2">
                     <thead>
                         <tr>
@@ -112,29 +164,28 @@
                     <!-- Will be populated by JavaScript -->
                 </div>
             </div>
-            
-            <!-- Legend -->
+              <!-- Legend -->
             <div class="legend-container" style="margin-top: 10px;">
                 <div class="legend-item">
-                    <span class="legend-color" style="background-color: #ff9090;"></span>
+                    <span class="legend-color movie-legend"></span>
                     Movies
                 </div>
                 <div class="legend-item">
-                    <span class="legend-color" style="background-color: #90b0ff;"></span>
+                    <span class="legend-color tvshow-legend"></span>
                     TV Shows
                 </div>
                 <div class="legend-item">
-                    <span class="legend-color" style="background-color: #90ff90;"></span>
+                    <span class="legend-color episode-legend"></span>
                     Episodes
                 </div>
             </div>
             
-        </div>
-        <div class="status-bar">
+        </div>        <div class="status-bar">
             <div class="status-bar-field">Release dates may vary by region</div>
             <div class="status-bar-field">Total this month: {{ releases_by_date|length }} days with releases</div>
         </div>
     </div>
+</div>
 </div>
 
 <style>
@@ -151,6 +202,7 @@
         font-size: 16px;
         text-align: center;
         flex: 1;
+        color: var(--text-color);
     }
 
     .calendar-navigation .nav-btn {
@@ -165,27 +217,29 @@
     }
     
     .calendar-table th {
-        background-color: #d4d0c8;
-        border: 1px solid #a0a0a0;
+        background-color: var(--calendar-header-bg);
+        border: 1px solid var(--border-dark);
         padding: 4px;
         font-weight: bold;
         text-align: center;
+        color: var(--text-color);
     }
     
     .calendar-day {
         height: 100px;
-        border: 1px solid #a0a0a0;
+        border: 1px solid var(--border-dark);
         vertical-align: top;
-        background-color: white;
+        background-color: var(--calendar-day-bg);
         padding: 3px;
+        color: var(--text-color);
     }
     
     .empty-day {
-        background-color: #d4d0c8;
+        background-color: var(--calendar-empty-bg);
     }
     
     .today {
-        background-color: #ffffcc;
+        background-color: var(--calendar-today-bg);
         font-weight: bold;
     }
     
@@ -194,6 +248,7 @@
         font-size: 14px;
         margin-bottom: 5px;
         text-align: right;
+        color: var(--text-color);
     }
     
     .day-releases {
@@ -207,7 +262,7 @@
         margin-bottom: 3px;
         padding: 2px;
         text-decoration: none;
-        color: inherit;
+        color: var(--text-color);
         font-size: 10px;
         white-space: nowrap;
         overflow: hidden;
@@ -215,18 +270,18 @@
     }
     
     .movie-item {
-        background-color: #ff9090;
-        border: 1px solid #d06060;
+        background-color: var(--movie-item-bg);
+        border: 1px solid var(--movie-item-border);
     }
     
     .tvshow-item {
-        background-color: #90b0ff;
-        border: 1px solid #6080d0;
+        background-color: var(--tvshow-item-bg);
+        border: 1px solid var(--tvshow-item-border);
     }
     
     .episode-item {
-        background-color: #90ff90;
-        border: 1px solid #60d060;
+        background-color: var(--episode-item-bg);
+        border: 1px solid var(--episode-item-border);
     }
     
     .legend-container {
@@ -240,23 +295,136 @@
         margin-right: 15px;
         margin-bottom: 5px;
         font-size: 12px;
+        color: var(--text-color);
     }
-    
-    .legend-color {
+      .legend-color {
         display: inline-block;
         width: 16px;
         height: 16px;
         margin-right: 5px;
-        border: 1px solid #808080;
+        border: 1px solid var(--border-dark);
     }
-    
-    .sunken-panel {
+
+    .movie-legend {
+        background-color: var(--movie-item-bg);
+    }
+
+    .tvshow-legend {
+        background-color: var(--tvshow-item-bg);
+    }
+
+    .episode-legend {
+        background-color: var(--episode-item-bg);
+    }
+      .sunken-panel {
         border: 2px solid;
-        border-color: #808080 #ffffff #ffffff #808080;
+        border-color: var(--border-dark) var(--border-light) var(--border-light) var(--border-dark);
         padding: 8px;
+        background-color: var(--window-content-bg);
     }
-    
-    /* Mobile list view styles */
+
+    /* Window styling to match other pages */
+    .window {
+        border: 2px outset var(--bg-color);
+        background-color: var(--bg-color);
+        font-family: 'MS Sans Serif', sans-serif;
+        box-shadow: 2px 2px 4px var(--shadow-color);
+    }
+
+    .title-bar {
+        background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+        color: white;
+        padding: 2px;
+        font-size: 11px;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .title-bar {
+            background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+        }
+    }
+
+    .title-bar-controls button {
+        width: 16px;
+        height: 14px;
+        border: 1px outset var(--button-bg);
+        background: var(--button-bg);
+        color: var(--button-text);
+        margin-left: 2px;
+        font-size: 8px;
+        cursor: pointer;
+    }
+
+    .title-bar-controls button:active {
+        border: 1px inset var(--button-bg);
+    }
+
+    .window-body {
+        background-color: var(--window-bg);
+        color: var(--text-color);
+        padding: 12px;
+    }
+
+    .status-bar {
+        border-top: 1px solid var(--border-dark);
+        background-color: var(--bg-color);
+        padding: 2px 4px;
+        font-size: 11px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }    .status-bar-field {
+        border: 1px inset var(--bg-color);
+        padding: 2px 4px;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+    }
+
+    /* Retro button styling */
+    .retro-btn {
+        border: 1px outset var(--button-bg);
+        background: var(--button-bg);
+        color: var(--button-text);
+        padding: 2px 8px;
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: background-color 0.1s ease;
+    }
+
+    .retro-btn:hover {
+        background: var(--button-hover);
+        color: var(--button-text);
+        text-decoration: none;
+    }
+
+    .retro-btn:active {
+        border: 1px inset var(--button-bg);
+    }    /* Enhanced button styling for dark mode */
+    @media (prefers-color-scheme: dark) {
+        .retro-btn {
+            border-color: var(--border-light);
+            box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+        }
+        
+        .retro-btn:hover {
+            box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+        }
+    }
+
+    /* Calendar page container */
+    .calendar-page-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+      /* Mobile list view styles */
     .mobile-releases-list {
         display: none;  /* Hidden by default */
         margin-top: 10px;
@@ -267,21 +435,23 @@
         text-align: center;
         margin-bottom: 10px;
         font-size: 16px;
+        color: var(--text-color);
     }
     
     .date-releases {
         margin-bottom: 15px;
-        border: 1px solid #a0a0a0;
+        border: 1px solid var(--border-dark);
         border-radius: 3px;
         overflow: hidden;
-        background-color: white;
+        background-color: var(--calendar-day-bg);
     }
     
     .date-header {
-        background-color: #d4d0c8;
+        background-color: var(--calendar-header-bg);
+        color: var(--text-color);
         padding: 8px;
         font-weight: bold;
-        border-bottom: 1px solid #a0a0a0;
+        border-bottom: 1px solid var(--border-dark);
     }
     
     .date-content {
@@ -291,7 +461,7 @@
     .list-release-item {
         padding: 5px;
         margin-bottom: 5px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--border-light);
     }
     
     .list-release-item:last-child {
@@ -303,7 +473,7 @@
         display: flex;
         align-items: center;
         text-decoration: none;
-        color: inherit;
+        color: var(--text-color);
     }
     
     .type-indicator {
@@ -333,10 +503,14 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        color: var(--text-color);
     }
-    
-    /* Mobile responsive styles */
+      /* Mobile responsive styles */
     @media (max-width: 768px) {
+        .calendar-page-container {
+            padding: 10px;
+        }
+
         /* Show list view, hide calendar on mobile */
         .mobile-releases-list {
             display: block;
@@ -376,13 +550,12 @@
             font-size: 10px;
             margin-right: 10px;
         }
-        
-        .legend-color {
+          .legend-color {
             width: 12px;
             height: 12px;
         }
         
-        .calendar-nav button {
+        .retro-btn {
             font-size: 12px;
             padding: 2px 5px;
         }
@@ -424,8 +597,11 @@
         .status-bar {
             flex-direction: column;
         }
+          .calendar-nav span {
+            font-size: 14px;
+        }
         
-        .calendar-nav span {
+        .current-month {
             font-size: 14px;
         }
     }
@@ -587,8 +763,7 @@
             link.appendChild(titleSpan);
             container.appendChild(link);
             
-            return container;
-        }
+            return container;        }
     });
 </script>
 {% endblock %}

@@ -1,21 +1,21 @@
-<div id="castModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; border: 2px solid black; z-index: 1000; width: 400px;">
+<div id="castModal" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 400px; max-width: 90vw;">
     <div class="title-bar">
         <div class="title-bar-text">Cast</div>
         <div class="title-bar-controls">
         <button aria-label="Close" onclick="closeCastModal()"></button>
         </div>
     </div>
-    <div style="padding: 10px; background-color: white; max-height: 70vh; overflow-y: auto;">
-        <h3 style="margin: 5px 0; font-size: 16px;">Actors</h3>
+    <div class="window-body" style="max-height: 70vh; overflow-y: auto;">
+        <h3 style="margin: 5px 0; font-size: 16px; color: var(--text-color);">Actors</h3>
         <ul style="margin: 0; padding-left: 20px;">
             {% for cast_member in tv_show.cast %}
                 <li style="display: flex; align-items: center; margin-bottom: 10px;">
                     <img data-src="{{ cast_member.person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
                          alt="{{ cast_member.person.name }}" 
-                         style="width: 75px; object-fit: cover; border: 2px solid black; margin-right: 10px;">
+                         style="width: 75px; object-fit: cover; border: 2px solid var(--poster-border); margin-right: 10px;">
                     <div>
-                        <div><a href="{% url 'person_detail' cast_member.person.id %}" style="text-decoration: none; color: black;">{{ cast_member.person.name }}</a></div>
-                        <div style="font-size: 0.9em; color: #666;">
+                        <div><a href="{% url 'person_detail' cast_member.person.id %}" style="text-decoration: none; color: var(--text-color);">{{ cast_member.person.name }}</a></div>
+                        <div style="font-size: 0.9em; color: var(--text-muted);">
                             {% if cast_member.character_name %}
                                 as {{ cast_member.character_name }}
                             {% endif %}
@@ -23,7 +23,7 @@
                     </div>
                 </li>
                 {% empty %}
-                <li>No cast information available</li>
+                <li style="color: var(--text-muted);">No cast information available</li>
                 {% endfor %}
         </ul>
     </div>

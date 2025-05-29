@@ -7,11 +7,56 @@
 
 {% block content %}
 <style>
+/* Theme-adaptive CSS variables */
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --window-content-bg: rgba(255, 255, 255, 0.86);
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --shadow-color: rgba(0,0,0,0.25);
+    --profile-container-bg: rgba(195, 195, 195, 0.7);
+    --productions-container-bg: #E0E0E0;
+    --modal-bg: white;
+    --overlay-bg: rgba(0, 0, 0, 0.5);
+    --logo-bg: white;
+    --highlight-bg: #000080;
+    --highlight-text: white;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --window-content-bg: rgba(64, 64, 64, 0.86);
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --shadow-color: rgba(0,0,0,0.5);
+        --profile-container-bg: rgba(64, 64, 64, 0.8);
+        --productions-container-bg: #404040;
+        --modal-bg: #404040;
+        --overlay-bg: rgba(0, 0, 0, 0.7);
+        --logo-bg: #606060;
+        --highlight-bg: #0060c0;
+        --highlight-text: white;
+    }
+}
+
 body {
     font-family: 'MS Sans Serif', Arial, sans-serif;
-    background: url('{{ random_backdrop|default:"" }}') no-repeat center center fixed;
+    background: var(--bg-color) url('{{ random_backdrop|default:"" }}') no-repeat center center fixed;
     background-size: cover;
-    color: black;
+    color: var(--text-color);
     margin: 0;
     padding: 0;
     position: relative;
@@ -25,33 +70,35 @@ body::before {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay-bg);
     z-index: -1;
 }
 
 .profile-container {
     font-family: 'MS Sans Serif', Arial, sans-serif;
-    background-color: rgba(195, 195, 195, 0.7);
-    color: black;
+    background-color: var(--profile-container-bg);
+    color: var(--text-color);
     padding: 15px;
-    border: 2px solid black;
+    border: 2px solid var(--border-dark);
     display: flex;
     flex-direction: row;
     align-items: flex-start;
     gap: 20px;
     margin: 10px;
+    box-shadow: 2px 2px 4px var(--shadow-color);
 }
 
 .company-logo {
     width: 200px;
     height: 200px;
-    border: 2px solid black;
+    border: 2px solid var(--border-dark);
     cursor: pointer;
-    background-color: white;
+    background-color: var(--logo-bg);
     padding: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 1px 1px 3px var(--shadow-color);
 }
 
 .company-logo img {
@@ -64,31 +111,131 @@ body::before {
     flex-grow: 1;
 }
 
-.window-title {
-    background-color: #000080;
+/* Window structure styling */
+.window {
+    border: 2px outset var(--border-dark);
+    background: var(--window-bg);
+    margin: 10px;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+}
+
+.title-bar {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
     color: white;
-    padding: 5px;
-    margin-bottom: 10px;
+    padding: 2px 4px;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
+}
+
+.title-bar-controls {
+    display: flex;
+}
+
+.title-bar-controls button {
+    width: 16px;
+    height: 14px;
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--button-text);
+    margin-left: 2px;
+    font-size: 8px;
+    cursor: pointer;
+}
+
+.title-bar-controls button:active {
+    border: 1px inset var(--button-bg);
+}
+
+.window-body {
+    background: var(--window-content-bg);
+    padding: 10px;
+}
+
+.status-bar {
+    background: var(--bg-color);
+    border-top: 1px solid var(--border-dark);
+    padding: 2px 4px;
+    font-size: 11px;
+    color: var(--text-color);
+    display: flex;
+    justify-content: space-between;
 }
 
 .window-content {
-    background-color: rgba(255, 255, 255, 0.86);
+    background-color: var(--window-content-bg);
+    color: var(--text-color);
     padding: 10px;
-    border: 2px inset;
+    border: 2px inset var(--border-dark);
+}
+
+/* Productions grid for mobile view */
+.productions-grid {
+    display: none;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 10px;
+}
+
+.production-card {
+    background: var(--window-content-bg);
+    border: 2px inset var(--border-dark);
+    padding: 10px;
+    text-align: center;
+    box-shadow: 1px 1px 3px var(--shadow-color);
+}
+
+.production-card h4 {
+    margin: 0 0 5px 0;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.production-card p {
+    margin: 2px 0;
+    font-size: 12px;
+}
+
+.production-card a {
+    color: var(--text-color);
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.production-card a:hover {
+    opacity: 0.8;
+}
+
+/* Desktop view for productions */
+.productions-desktop-view {
+    display: block;
+}
+
+.productions-mobile-view {
+    display: none;
 }
 
 .productions-container {
     font-family: 'MS Sans Serif', Arial, sans-serif;
-    background-color: #E0E0E0;
-    color: black;
+    background-color: var(--productions-container-bg);
+    color: var(--text-color);
     padding: 15px;
-    border: 2px solid black;
+    border: 2px solid var(--border-dark);
     margin: 10px;
+    box-shadow: 2px 2px 4px var(--shadow-color);
 }
 
 .productions-table-container {
-    background-color: white;
-    border: 2px inset;
+    background-color: var(--window-content-bg);
+    border: 2px inset var(--border-dark);
     padding: 10px;
     max-height: 300px;
     overflow-y: auto;
@@ -98,25 +245,42 @@ body::before {
 .productions-table {
     width: 100%;
     border-collapse: collapse;
+    color: var(--text-color);
 }
 
 .productions-table th {
     text-align: left;
     padding: 5px;
-    background-color: #C3C3C3;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-dark);
 }
 
 .productions-table td {
     padding: 5px;
+    border: 1px solid var(--border-light);
+    background-color: var(--window-content-bg);
+    color: var(--text-color);
 }
 
 .interactive tr.highlighted {
-    background-color: #000080;
-    color: white;
+    background-color: var(--highlight-bg);
+    color: var(--highlight-text);
 }
 
 .interactive tr.highlighted a {
-    color: white;
+    color: var(--highlight-text);
+}
+
+/* Link styling for better dark mode */
+.productions-table a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.productions-table a:hover {
+    color: var(--text-color);
+    opacity: 0.8;
 }
 
 #logoModal {
@@ -125,11 +289,45 @@ body::before {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: white;
-    border: 2px solid black;
+    background-color: var(--modal-bg);
+    color: var(--text-color);
+    border: 2px solid var(--border-dark);
     z-index: 1000;
     max-width: 90%;
     max-height: 90%;
+    box-shadow: 4px 4px 8px var(--shadow-color);
+}
+
+.title-bar {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+    color: white;
+    padding: 2px;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
+}
+
+.title-bar-controls button {
+    width: 16px;
+    height: 14px;
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--button-text);
+    margin-left: 2px;
+    font-size: 8px;
+    cursor: pointer;
+}
+
+.title-bar-controls button:active {
+    border: 1px inset var(--button-bg);
 }
 
 /* Mobile responsive styles */
@@ -146,128 +344,195 @@ body::before {
         margin: 0 auto;
     }
     
-    .productions-table-container {
-        max-height: none;
-        overflow-x: auto;
+    /* Switch to mobile grid view */
+    .productions-desktop-view {
+        display: none;
     }
     
-    .productions-table {
+    .productions-mobile-view {
         display: block;
-        width: 100%;
     }
     
-    .window-title h1, .window-title h2 {
-        font-size: 16px;
+    .productions-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
     }
     
     #logoModal {
         max-width: 95%;
     }
 }
+
+@media screen and (min-width: 768px) {
+    .productions-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Enhanced backdrop attribution styling */
+.backdrop-attribution {
+    position: fixed;
+    bottom: 5px;
+    right: 10px;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    z-index: 2;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+}
+
+@media (prefers-color-scheme: dark) {
+    .backdrop-attribution {
+        color: rgba(255,255,255,0.8);
+    }
+}
 </style>
 
 <!-- Add a small attribution for the backdrop if available -->
 {% if random_backdrop %}
-<div style="position: fixed; bottom: 5px; right: 10px; color: rgba(255,255,255,0.7); font-size: 12px; z-index: 2;">
+<div class="backdrop-attribution">
     Backdrop from {{ company.name }}'s productions
 </div>
 {% endif %}
 
-<div class="profile-container">
-    <div class="company-logo" onclick="openLogoModal()">
-        {% if company.logo_path %}
-            <img src="{{ company.logo_path }}" alt="{{ company.name }} Logo">
-        {% else %}
-            <div style="text-align: center; padding: 20px;">
-                <span>No Logo Available</span>
-            </div>
-        {% endif %}
-    </div>
-
-    <div id="logoModal">
-        <div class="title-bar">
-            <div class="title-bar-text">{{ company.name }} Logo</div>
-            <div class="title-bar-controls">
-                <button aria-label="Close" onclick="closeLogoModal()"></button>
-            </div>
+<!-- Company Profile Window -->
+<div class="window">
+    <div class="title-bar">
+        <div class="title-bar-text">{{ company.name }}</div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize"></button>
+            <button aria-label="Maximize"></button>
+            <button aria-label="Close"></button>
         </div>
-        <div style="padding: 10px; text-align: center; background-color: white;">
-            {% if company.logo_path %}
-                <img src="{{ company.logo_path }}" alt="{{ company.name }} Logo" style="max-width: 100%; max-height: 80vh;">
-            {% else %}
-                <div style="padding: 40px; text-align: center;">
-                    <span>No Logo Available</span>
+    </div>    <div class="window-body">
+        <div class="profile-container">
+            <div class="company-logo" onclick="openLogoModal()">
+                {% if company.logo_path %}
+                    <img src="{{ company.logo_path }}" alt="{{ company.name }} Logo">
+                {% else %}
+                    <div style="text-align: center; padding: 20px;">
+                        <span>No Logo Available</span>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="profile-content">
+                <h1 style="margin: 0 0 10px 0; font-size: 18px;">{{ company.name }}</h1>
+                <div class="window-content">
+                    {% if company.country %}
+                    <p><strong>Country:</strong> {{ company.country.name }}</p>
+                    {% endif %}
+                    
+                    {% if average_rating is not None %}
+                    <p><strong>Average Rating of Productions (All Users):</strong> {{ average_rating }} / 10</p>
+                    {% endif %}
+
+                    {% if user_average_rating is not None %}
+                    <p><strong>Average Rating of Productions (Your Reviews):</strong> {{ user_average_rating }} / 10</p>
+                    {% endif %}
+                    
+                    {% if company.tmdb_id %}
+                    <p>
+                        <a href="https://www.themoviedb.org/company/{{ company.tmdb_id }}" target="_blank" style="text-decoration: none;">
+                            <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDB" style="height: 18px; vertical-align: middle;">
+                            View on TMDB
+                        </a>
+                    </p>
+                    {% endif %}
                 </div>
-            {% endif %}
+            </div>
+        </div>
+        
+        <!-- Productions Section -->
+        <div class="productions-container">
+            <h2 style="margin: 0 0 10px 0; font-size: 18px;">Productions</h2>
+            
+            <!-- Desktop Table View -->
+            <div class="productions-desktop-view">
+                <div class="productions-table-container">
+                    <table class="productions-table interactive">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Year</th>
+                                <th>Type</th>
+                                <th>Rating</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in productions %}
+                            <tr>
+                                <td>
+                                    {% if item.type == 'movie' %}
+                                        <a href="{% url 'movie_page' item.tmdb_id %}" style="text-decoration: none; color: var(--text-color);">{{ item.title }}</a>
+                                    {% elif item.type == 'tvshow' %}
+                                        <a href="{% url 'tv_show_page' item.tmdb_id %}" style="text-decoration: none; color: var(--text-color);">{{ item.title }}</a>
+                                    {% else %}
+                                        {{ item.title }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.year|default:"-" }}</td>
+                                <td>{{ item.type_display }}</td>
+                                <td>{{ item.rating|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4">No productions available.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Mobile Grid View -->
+            <div class="productions-mobile-view">
+                <div class="productions-grid">
+                    {% for item in productions %}
+                    <div class="production-card">
+                        <h4>
+                            {% if item.type == 'movie' %}
+                                <a href="{% url 'movie_page' item.tmdb_id %}">{{ item.title }}</a>
+                            {% elif item.type == 'tvshow' %}
+                                <a href="{% url 'tv_show_page' item.tmdb_id %}">{{ item.title }}</a>
+                            {% else %}
+                                {{ item.title }}
+                            {% endif %}
+                        </h4>
+                        <p><strong>Year:</strong> {{ item.year|default:"-" }}</p>
+                        <p><strong>Type:</strong> {{ item.type_display }}</p>
+                        <p><strong>Rating:</strong> {{ item.rating|default:"-" }}</p>
+                    </div>
+                    {% empty %}
+                    <div class="production-card">
+                        <p>No productions available.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
-
-    <div class="profile-content">
-        <div class="window-title">
-            <h1 style="margin: 0; font-size: 18px;">{{ company.name }}</h1>
-        </div>
-        <div class="window-content">
-            {% if company.country %}
-            <p><strong>Country:</strong> {{ company.country.name }}</p>
-            {% endif %}
-            
-            {% if average_rating is not None %}
-            <p><strong>Average Rating of Productions (All Users):</strong> {{ average_rating }} / 10</p>
-            {% endif %}
-
-            {% if user_average_rating is not None %}
-            <p><strong>Average Rating of Productions (Your Reviews):</strong> {{ user_average_rating }} / 10</p>
-            {% endif %}
-            
-            {% if company.tmdb_id %}
-            <p>
-                <a href="https://www.themoviedb.org/company/{{ company.tmdb_id }}" target="_blank" style="text-decoration: none;">
-                    <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDB" style="height: 18px; vertical-align: middle;">
-                    View on TMDB
-                </a>
-            </p>
-            {% endif %}
-        </div>
+    <div class="status-bar">
+        <span>{{ company.name }}</span>
+        <span>{{ productions|length }} production{{ productions|length|pluralize }}</span>
     </div>
 </div>
 
-<div class="productions-container">
-    <div class="window-title">
-        <h2 style="margin: 0; font-size: 18px;">Productions</h2>
+<!-- Logo Modal -->
+<div id="logoModal">
+    <div class="title-bar">
+        <div class="title-bar-text">{{ company.name }} Logo</div>
+        <div class="title-bar-controls">
+            <button aria-label="Close" onclick="closeLogoModal()"></button>
+        </div>
     </div>
-    <div class="productions-table-container">
-        <table class="productions-table interactive">
-            <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Year</th>
-                    <th>Type</th>
-                    <th>Rating</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in productions %}
-                <tr>
-                    <td>
-                        {% if item.type == 'movie' %}
-                            <a href="{% url 'movie_page' item.tmdb_id %}" style="text-decoration: none; color: black;">{{ item.title }}</a>
-                        {% elif item.type == 'tvshow' %}
-                            <a href="{% url 'tv_show_page' item.tmdb_id %}" style="text-decoration: none; color: black;">{{ item.title }}</a>
-                        {% else %}
-                            {{ item.title }}
-                        {% endif %}
-                    </td>
-                    <td>{{ item.year|default:"-" }}</td>
-                    <td>{{ item.type_display }}</td>
-                    <td>{{ item.rating|default:"-" }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4">No productions available.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div style="padding: 10px; text-align: center; background-color: var(--modal-bg);">
+        {% if company.logo_path %}
+            <img src="{{ company.logo_path }}" alt="{{ company.name }} Logo" style="max-width: 100%; max-height: 80vh;">
+        {% else %}
+            <div style="padding: 40px; text-align: center; color: var(--text-color);">
+                <span>No Logo Available</span>
+            </div>
+        {% endif %}
     </div>
 </div>
 
