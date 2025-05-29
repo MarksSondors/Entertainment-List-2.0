@@ -4,7 +4,7 @@
 {% block title %}My Watchlist | Entertainment List{% endblock %}
 
 {% block content %}
-<div class="container py-4">
+<div class="watchlist-container">
   <div class="window">
     <div class="title-bar">
       <div class="title-bar-text">My Watchlist</div>
@@ -15,396 +15,976 @@
       </div>
     </div>
     <div class="window-body">
-      <!-- Search Panel -->
-      <div class="field-row mb-4">
-        <input type="text" id="searchInput" placeholder="Search titles..." class="me-2 flex-grow-1">
-        
-        <label for="genreFilter" class="ms-3">Genre:</label>
-        <select id="genreFilter" class="form-control">
-          <option value="">All Genres</option>
-          {% for genre in genres %}
-          <option value="{{ genre.id }}">{{ genre.name }}</option>
-          {% endfor %}
-        </select>
+      <!-- Hidden Filter Form -->
+      <form method="get" action="" class="filter-form" id="filterForm" style="display: none;">
+        <div class="window">
+          <div class="title-bar">
+            <div class="title-bar-text">🔧 Filters & Sorting</div>
+            <div class="title-bar-controls">
+              <button aria-label="Minimize"></button>
+              <button aria-label="Maximize"></button>
+              <button aria-label="Close" type="button" onclick="toggleFilters()"></button>
+            </div>
+          </div>
+          <div class="window-body">
+            <div class="filter-group">
+              <label>Search:</label>
+              <input type="text" id="searchInput" placeholder="Search titles..." class="address-input">
+            </div>
+            
+            <div class="filter-group">
+              <label>Genre:</label>
+              <select id="genreFilter" class="address-input">
+                <option value="">All Genres</option>
+                {% for genre in genres %}
+                <option value="{{ genre.id }}">{{ genre.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
 
-        <label for="countryFilter" class="ms-3">Country:</label>
-        <select id="countryFilter" class="form-control">
-            <option value="">All Countries</option>
-            {% for country in countries %}
-            <option value="{{ country.id }}">{{ country.name }}</option>
-            {% endfor %}
-        </select>
-        
-        <label for="sortBy" class="ms-3">Sort:</label>
-        <select id="sortBy" class="form-control">
-          <option value="date_added">Date Added</option>
-          <option value="title">Title (A-Z)</option>
-          <option value="-title">Title (Z-A)</option>
-          <option value="release_date">Oldest First</option>
-          <option value="-release_date">Newest First</option>
-        </select>
-      </div>
-
-      <div id="accordion">
+            <div class="filter-group">
+              <label>Country:</label>
+              <select id="countryFilter" class="address-input">
+                <option value="">All Countries</option>
+                {% for country in countries %}
+                <option value="{{ country.id }}">{{ country.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            
+            <div class="filter-group">
+              <label>Sort By:</label>
+              <div class="btn-group" role="group">
+                <input type="radio" name="sort_by" id="date_added" value="date_added" checked>
+                <label for="date_added" class="retro-btn filter-btn">Date Added</label>
+                
+                <input type="radio" name="sort_by" id="title_asc" value="title">
+                <label for="title_asc" class="retro-btn filter-btn">Title (A-Z)</label>
+                
+                <input type="radio" name="sort_by" id="title_desc" value="-title">
+                <label for="title_desc" class="retro-btn filter-btn">Title (Z-A)</label>
+                
+                <input type="radio" name="sort_by" id="release_date_asc" value="release_date">
+                <label for="release_date_asc" class="retro-btn filter-btn">Oldest First</label>
+                
+                <input type="radio" name="sort_by" id="release_date_desc" value="-release_date">
+                <label for="release_date_desc" class="retro-btn filter-btn">Newest First</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>      <!-- Content Display Area -->
+      <div class="content-display">
         <!-- Continue Watching Section -->
-        <div class="accordion-section mb-3">
-          <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#continueWatching">
-            <h4 class="mb-0">
+        <div class="accordion-section">
+          <div class="section-header" data-target="#continueWatching">
+            <h3 class="section-title">
               <span class="chevron">▼</span> Continue Watching
-              <span class="badge" id="continueWatchingCount">{{ continue_watching|length }}</span>
-            </h4>
+              <span class="item-count" id="continueWatchingCount">({{ continue_watching|length }} items)</span>
+            </h3>
           </div>
-          <div id="continueWatching" class="collapse show">
-            <div class="section-content pt-2">
-              <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3" id="continueWatchingContent">
-                {% for item in continue_watching %}
-<div class="col" data-media-id="{{ item.media_id }}">
-  <div class="card h-100 position-relative">
-    <a href="{% if item.content_type_model == 'movie' %}{% url 'movie_page' item.media_tmdb_id %}{% else %}{% url 'tv_show_page' item.media_tmdb_id %}{% endif %}">
-      {% if item.media_poster %}
-      <img src="{{ item.media_poster }}" class="card-img-top" alt="{{ item.media_title }}">
-      {% else %}
-      <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>
-      {% endif %}
-    </a>
-    
-    {% if item.avg_rating %}
-    <div class="avg-rating-badge">{{ item.avg_rating }} ({{ item.rating_count }})</div>
-    {% endif %}
-    
-    <div class="progress-badge">{{ item.progress|floatformat:0 }}%</div>
-    
-    <div class="card-body p-2">
-      <h6 class="card-title mb-1">{{ item.media_title }}</h6>
-      <small class="text-muted">
-        {% if item.content_type_model == 'movie' %}
-        {{ item.media_release_date|date:"Y" }}
-        {% else %}
-        {{ item.media_first_air_date|date:"Y" }}
-        {% endif %}
-      </small>
-      <div class="progress mt-2" style="height:6px">
-        <div class="progress-bar" role="progressbar" style="width: {{ item.progress }}%" aria-valuenow="{{ item.progress }}" aria-valuemin="0" aria-valuemax="100"></div>
-      </div>
-    </div>
-    
-    <div class="card-footer p-2 d-flex justify-content-between">
-      <small class="text-muted">Added {{ item.date_added|timesince }} ago</small>
-      <button class="btn-sm remove-item" data-id="{{ item.id }}">✕</button>
-    </div>
-  </div>
-</div>
-{% empty %}
-<div class="col-12 text-center py-4">
-  <p class="text-muted">No shows in progress</p>
-</div>
-{% endfor %}
+          <div id="continueWatching" class="section-content show">
+            <div class="sunken-panel content-panel">
+              <div class="content-grid" id="continueWatchingContent">                {% for item in continue_watching %}
+                <div class="grid-item" data-media-id="{{ item.media_id }}">
+                  <a href="{% if item.content_type_model == 'movie' %}{% url 'movie_page' item.media_tmdb_id %}{% else %}{% url 'tv_show_page' item.media_tmdb_id %}{% endif %}" class="item-link">
+                    <div class="item-card">
+                      {% if item.media_poster %}
+                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      {% else %}
+                      <div class="item-poster no-image">
+                        <span>No Image</span>
+                      </div>
+                      {% endif %}
+                      <div class="item-body">
+                        <h5 class="item-title">{{ item.media_title }}</h5>
+                        <div class="item-meta">
+                          {% if item.content_type_model == 'movie' %}
+                          <span class="release-year">{{ item.media_release_date|date:"Y" }}</span>
+                          {% else %}
+                          <span class="release-year">{{ item.media_first_air_date|date:"Y" }}</span>
+                          {% endif %}
+                        </div>
+                        
+                        <!-- Progress Badge -->
+                        <div class="progress-badge">{{ item.progress|floatformat:0 }}%</div>
+                        
+                        <!-- Average Rating Badge -->
+                        {% if item.avg_rating %}
+                        <div class="avg-rating-badge">
+                          {{ item.avg_rating }} ({{ item.rating_count }})
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Progress Bar -->
+                        <div class="progress-bar-container">
+                          <div class="progress-bar" style="width: {{ item.progress }}%"></div>
+                        </div>
+                      </div>
+                      <button class="remove-item" data-id="{{ item.id }}">✕</button>
+                    </div>
+                  </a>
+                </div>
+                {% empty %}
+                <div class="no-content-message">
+                  <div class="message-content">
+                    <div class="message-icon">📺</div>
+                    <div class="message-text">No shows in progress</div>
+                  </div>
+                </div>
+                {% endfor %}
               </div>
             </div>
           </div>
-        </div>
-        
-        <!-- Haven't Started Section -->
-        <div class="accordion-section mb-3">
-          <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#haventStarted">
-            <h4 class="mb-0">
+        </div>        <!-- Haven't Started Section -->
+        <div class="accordion-section">
+          <div class="section-header" data-target="#haventStarted">
+            <h3 class="section-title">
               <span class="chevron">▶</span> Haven't Started
-              <span class="badge" id="haventStartedCount">{{ havent_started|length }}</span>
-            </h4>
+              <span class="item-count" id="haventStartedCount">({{ havent_started|length }} items)</span>
+            </h3>
           </div>
-          <div id="haventStarted" class="collapse">
-            <div class="section-content pt-2">
-              <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3" id="haventStartedContent">
+          <div id="haventStarted" class="section-content">
+            <div class="sunken-panel content-panel">
+              <div class="content-grid" id="haventStartedContent">
                 {% for item in havent_started %}
-<div class="col" data-media-id="{{ item.media_id }}">
-  <div class="card h-100 position-relative">
-    <a href="{% if item.content_type_model == 'movie' %}{% url 'movie_page' item.media_tmdb_id %}{% else %}{% url 'tv_show_page' item.media_tmdb_id %}{% endif %}">
-      {% if item.media_poster %}
-      <img src="{{ item.media_poster }}" class="card-img-top" alt="{{ item.media_title }}">
-      {% else %}
-      <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>
-      {% endif %}
-    </a>
-    
-    {% if item.avg_rating %}
-    <div class="avg-rating-badge">{{ item.avg_rating }} ({{ item.rating_count }})</div>
-    {% endif %}
-    
-    <div class="card-body p-2">
-      <h6 class="card-title mb-1">{{ item.media_title }}</h6>
-      <small class="text-muted">
-        {% if item.content_type_model == 'movie' %}
-        {{ item.media_release_date|date:"Y" }}
-        {% else %}
-        {{ item.media_first_air_date|date:"Y" }}
-        {% endif %}
-      </small>
-    </div>
-    
-    <div class="card-footer p-2 d-flex justify-content-between">
-      <small class="text-muted">Added {{ item.date_added|timesince }} ago</small>
-      <button class="btn-sm remove-item" data-id="{{ item.id }}">✕</button>
-    </div>
-  </div>
-</div>
-{% empty %}
-<div class="col-12 text-center py-4">
-  <p class="text-muted">No unwatched TV shows in your list</p>
-</div>
-{% endfor %}
+                <div class="grid-item" data-media-id="{{ item.media_id }}">
+                  <a href="{% if item.content_type_model == 'movie' %}{% url 'movie_page' item.media_tmdb_id %}{% else %}{% url 'tv_show_page' item.media_tmdb_id %}{% endif %}" class="item-link">
+                    <div class="item-card">
+                      {% if item.media_poster %}
+                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      {% else %}
+                      <div class="item-poster no-image">
+                        <span>No Image</span>
+                      </div>
+                      {% endif %}
+                      <div class="item-body">
+                        <h5 class="item-title">{{ item.media_title }}</h5>
+                        <div class="item-meta">
+                          {% if item.content_type_model == 'movie' %}
+                          <span class="release-year">{{ item.media_release_date|date:"Y" }}</span>
+                          {% else %}
+                          <span class="release-year">{{ item.media_first_air_date|date:"Y" }}</span>
+                          {% endif %}
+                        </div>
+                        
+                        <!-- Average Rating Badge -->
+                        {% if item.avg_rating %}
+                        <div class="avg-rating-badge">
+                          {{ item.avg_rating }} ({{ item.rating_count }})
+                        </div>
+                        {% endif %}
+                      </div>
+                      <button class="remove-item" data-id="{{ item.id }}">✕</button>
+                    </div>
+                  </a>
+                </div>
+                {% empty %}
+                <div class="no-content-message">
+                  <div class="message-content">
+                    <div class="message-icon">📺</div>
+                    <div class="message-text">No unwatched TV shows in your list</div>
+                  </div>
+                </div>
+                {% endfor %}
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- Finished Shows Section -->
-        <div class="accordion-section mb-3">
-          <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#finishedShows">
-            <h4 class="mb-0">
+        </div>        <!-- Finished Shows Section -->
+        <div class="accordion-section">
+          <div class="section-header" data-target="#finishedShows">
+            <h3 class="section-title">
               <span class="chevron">▶</span> Finished Shows
-              <span class="badge" id="finishedShowsCount">{{ finished_shows|length }}</span>
-            </h4>
+              <span class="item-count" id="finishedShowsCount">({{ finished_shows|length }} items)</span>
+            </h3>
           </div>
-          <div id="finishedShows" class="collapse">
-            <div class="section-content pt-2">
-              <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3" id="finishedShowsContent">
+          <div id="finishedShows" class="section-content">
+            <div class="sunken-panel content-panel">
+              <div class="content-grid" id="finishedShowsContent">
                 {% for item in finished_shows %}
-<div class="col" data-media-id="{{ item.media_id }}">
-  <div class="card h-100 position-relative">
-    <a href="{% url 'tv_show_page' item.media_tmdb_id %}">
-      {% if item.media_poster %}
-      <img src="{{ item.media_poster }}" class="card-img-top" alt="{{ item.media_title }}">
-      {% else %}
-      <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>
-      {% endif %}
-    </a>
-    
-    <div class="completed-badge">Completed</div>
-    
-    {% if item.avg_rating %}
-    <div class="avg-rating-badge">{{ item.avg_rating }} ({{ item.rating_count }})</div>
-    {% endif %}
-    
-    <div class="card-body p-2">
-      <h6 class="card-title mb-1">{{ item.media_title }}</h6>
-      <small class="text-muted">{{ item.media_first_air_date|date:"Y" }}</small>
-    </div>
-    
-    <div class="card-footer p-2 d-flex justify-content-between">
-      <small class="text-muted">Added {{ item.date_added|timesince }} ago</small>
-      <button class="btn-sm remove-item" data-id="{{ item.id }}">✕</button>
-    </div>
-  </div>
-</div>
-{% empty %}
-<div class="col-12 text-center py-4">
-  <p class="text-muted">No completed shows in your list</p>
-</div>
-{% endfor %}
+                <div class="grid-item" data-media-id="{{ item.media_id }}">
+                  <a href="{% url 'tv_show_page' item.media_tmdb_id %}" class="item-link">
+                    <div class="item-card">
+                      {% if item.media_poster %}
+                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      {% else %}
+                      <div class="item-poster no-image">
+                        <span>No Image</span>
+                      </div>
+                      {% endif %}
+                      <div class="item-body">
+                        <h5 class="item-title">{{ item.media_title }}</h5>
+                        <div class="item-meta">
+                          <span class="release-year">{{ item.media_first_air_date|date:"Y" }}</span>
+                        </div>
+                        
+                        <!-- Completed Badge -->
+                        <div class="completed-badge">Completed</div>
+                        
+                        <!-- Average Rating Badge -->
+                        {% if item.avg_rating %}
+                        <div class="avg-rating-badge">
+                          {{ item.avg_rating }} ({{ item.rating_count }})
+                        </div>
+                        {% endif %}
+                      </div>
+                      <button class="remove-item" data-id="{{ item.id }}">✕</button>
+                    </div>
+                  </a>
+                </div>
+                {% empty %}
+                <div class="no-content-message">
+                  <div class="message-content">
+                    <div class="message-icon">✅</div>
+                    <div class="message-text">No completed shows in your list</div>
+                  </div>
+                </div>
+                {% endfor %}
               </div>
             </div>
           </div>
         </div>
-        
+</div>
         <!-- Movies Section -->
-        <div class="accordion-section mb-3">
-          <div class="section-header field-row-stacked" data-toggle="collapse" data-target="#movies">
-            <h4 class="mb-0">
+        <div class="accordion-section">
+          <div class="section-header" data-target="#movies">
+            <h3 class="section-title">
               <span class="chevron">▶</span> Movies
-              <span class="badge" id="moviesCount">{{ movies|length }}</span>
-            </h4>
+              <span class="item-count" id="moviesCount">({{ movies|length }} items)</span>
+            </h3>
           </div>
-          <div id="movies" class="collapse">
-            <div class="section-content pt-2">
-              <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3" id="moviesContent">
+          <div id="movies" class="section-content">
+            <div class="sunken-panel content-panel">
+              <div class="content-grid" id="moviesContent">
                 {% for item in movies %}
-<div class="col" data-media-id="{{ item.media_id }}">
-  <div class="card h-100 position-relative">
-    <a href="{% url 'movie_page' item.media_tmdb_id %}">
-      {% if item.media_poster %}
-      <img src="{{ item.media_poster }}" class="card-img-top" alt="{{ item.media_title }}">
-      {% else %}
-      <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>
-      {% endif %}
-    </a>
-    
-    {% if item.avg_rating %}
-    <div class="avg-rating-badge">{{ item.avg_rating }} ({{ item.rating_count }})</div>
-    {% endif %}
-    
-    <div class="card-body p-2">
-      <h6 class="card-title mb-1">{{ item.media_title }}</h6>
-      <small class="text-muted">{{ item.media_release_date|date:"Y" }}</small>
-    </div>
-    
-    <div class="card-footer p-2 d-flex justify-content-between">
-      <small class="text-muted">Added {{ item.date_added|timesince }} ago</small>
-      <button class="btn-sm remove-item" data-id="{{ item.id }}">✕</button>
-    </div>
-  </div>
-</div>
-{% empty %}
-<div class="col-12 text-center py-4">
-  <p class="text-muted">No movies in your watchlist</p>
-</div>
-{% endfor %}
+                <div class="grid-item" data-media-id="{{ item.media_id }}">
+                  <a href="{% url 'movie_page' item.media_tmdb_id %}" class="item-link">
+                    <div class="item-card">
+                      {% if item.media_poster %}
+                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      {% else %}
+                      <div class="item-poster no-image">
+                        <span>No Image</span>
+                      </div>
+                      {% endif %}
+                      <div class="item-body">
+                        <h5 class="item-title">{{ item.media_title }}</h5>
+                        <div class="item-meta">
+                          <span class="release-year">{{ item.media_release_date|date:"Y" }}</span>
+                        </div>
+                        
+                        <!-- Average Rating Badge -->
+                        {% if item.avg_rating %}
+                        <div class="avg-rating-badge">
+                          {{ item.avg_rating }} ({{ item.rating_count }})
+                        </div>
+                        {% endif %}
+                      </div>
+                      <button class="remove-item" data-id="{{ item.id }}">✕</button>
+                    </div>
+                  </a>
+                </div>
+                {% empty %}
+                <div class="no-content-message">
+                  <div class="message-content">
+                    <div class="message-icon">🎬</div>
+                    <div class="message-text">No movies in your watchlist</div>
+                  </div>
+                </div>
+                {% endfor %}
               </div>
             </div>
           </div>
         </div>
+    </div>
+    
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-info">
+        <span class="status-field">My Watchlist</span>
+        <span class="status-separator">•</span>
+        <span class="status-field" id="totalItemsCount">{{ continue_watching|length|add:havent_started|length|add:finished_shows|length|add:movies|length }} items</span>
+        <span class="status-separator" id="filterSeparator" style="display: none;">•</span>
+        <span class="status-field" id="filterStatus" style="display: none;"></span>
       </div>
     </div>
+  </div>
+  
+  <!-- Fixed Filter Button at Bottom -->
+  <div class="fixed-filter-container">
+    <button class="retro-btn fixed-filters-btn" id="filtersBtn" onclick="toggleFilters()">
+      🔧 Filters <span id="activeFiltersCount" style="display: none;"></span>
+    </button>
   </div>
 </div>
 
 <style>
-  /* Card styling */
-  .avg-rating-badge {
-    position: absolute;
-    top: 40px;
-    right: 8px;
-    background: rgba(0, 0, 0, 0.7);
+  /* Theme-adaptive CSS variables matching discover page */
+  :root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --progress-bg: #fff;
+    --progress-bar: #008080;
+    --shadow-color: rgba(0,0,0,0.25);
+    --poster-border: #a0a0a0;
+    --explorer-bg: #ffffff;
+    --folder-hover: #d0d1d5;
+    --folder-active: #000080;
+    --folder-active-text: #ffffff;
+    --input-bg: #ffffff;
+    --alert-bg: #e1e1e1;
+    --tab-active: #ffffff;
+    --tab-inactive: #e0e0e0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-color: #383838;
+      --text-color: #ffffff;
+      --text-muted: #b0b0b0;
+      --border-dark: #2a2a2a;
+      --border-light: #505050;
+      --window-bg: #404040;
+      --button-bg: #505050;
+      --button-text: #ffffff;
+      --button-hover: #606060;
+      --progress-bg: #2a2a2a;
+      --progress-bar: #00a0a0;
+      --shadow-color: rgba(0,0,0,0.5);
+      --poster-border: #606060;
+      --explorer-bg: #2a2a2a;
+      --folder-hover: #404040;
+      --folder-active: #0060ff;
+      --folder-active-text: #ffffff;
+      --input-bg: #2a2a2a;
+      --alert-bg: #404040;
+      --tab-active: #2a2a2a;
+      --tab-inactive: #383838;
+    }
+  }
+
+  /* Page container - mobile-first approach */
+  .watchlist-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 10px;
+    font-family: 'MS Sans Serif', sans-serif;
+  }
+
+  @media (min-width: 768px) {
+    .watchlist-container {
+      padding: 20px;
+    }
+  }
+
+  /* Window structure styling */
+  .window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    margin-bottom: 20px;
+  }
+
+  .title-bar {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
     color: white;
-    padding: 2px 6px;
-    font-size: 0.75rem;
-    border-radius: 3px;
-  }
-  
-  /* Filter elements adjustment */
-  #searchInput, 
-  #genreFilter,
-  #countryFilter,
-  #sortBy {
-    height: 21px;
-    padding: 1px 5px;
-    box-sizing: border-box;
-    font-size: 0.9rem;
-  }
-  
-  .field-row {
+    padding: 2px;
+    font-size: 11px;
+    font-weight: bold;
     display: flex;
+    justify-content: space-between;
     align-items: center;
   }
-  
-  .field-row label {
-    margin-bottom: 0;
-    margin-right: 4px;
+
+  @media (prefers-color-scheme: dark) {
+    .title-bar {
+      background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
   }
-  
-  /* Progress badge */
-  .progress-badge {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
+
+  .title-bar-controls button {
+    width: 16px;
+    height: 14px;
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    margin-left: 2px;
+    font-size: 8px;
+    cursor: pointer;
+  }
+
+  .title-bar-controls button:active {
+    border: 1px inset var(--button-bg);
+  }
+
+  .window-body {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 8px;
+    position: relative;
+  }
+
+  @media (min-width: 768px) {
+    .window-body {
+      padding: 12px;
+    }
+  }
+
+  /* Status Bar */
+  .status-bar {
+    border-top: 1px solid var(--border-dark);
+    background-color: var(--bg-color);
+    padding: 4px 8px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .status-field {
+    border: 1px inset var(--bg-color);
     padding: 2px 6px;
-    font-size: 0.75rem;
-    border-radius: 3px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-size: 10px;
   }
-  
-  /* Accordion styles */
+
+  .status-separator {
+    color: var(--text-muted);
+    font-size: 10px;
+    margin: 0 2px;
+  }
+
+  #filterStatus {
+    color: var(--text-muted);
+    font-style: italic;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #activeFiltersCount {
+    background: #ff0000;
+    color: white;
+    border-radius: 8px;
+    padding: 1px 4px;
+    font-size: 8px;
+    margin-left: 4px;
+  }
+
+  /* Filter Section - Windows 98 Style Window */
+  .filter-form {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    min-width: 320px;
+    max-width: 90vw;
+  }
+
+  .filter-form::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: -1;
+  }
+
+  @media (max-width: 480px) {
+    .filter-form {
+      min-width: 280px;
+      max-width: 95vw;
+      top: 40%;
+    }
+  }
+
+  /* Fixed Filter Button Container */
+  .fixed-filter-container {
+    position: fixed;
+    bottom: 120px; /* Increased to be above navbar on all screen sizes */
+    right: 20px;
+    z-index: 9999;
+    pointer-events: auto;
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  .fixed-filters-btn {
+    padding: 8px 16px !important;
+    font-size: 12px !important;
+    font-weight: bold;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    border: 2px outset var(--button-bg) !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background-color: var(--button-bg) !important;
+    color: var(--button-text) !important;
+  }
+
+  .fixed-filters-btn:hover {
+    background: var(--button-hover) !important;
+  }
+
+  .fixed-filters-btn:active {
+    border: 2px inset var(--button-bg) !important;
+    background: var(--button-bg) !important;
+  }
+
+  @media (max-width: 768px) {
+    .fixed-filter-container {
+      bottom: 100px;
+      right: 15px;
+    }
+    
+    .fixed-filters-btn {
+      padding: 10px 14px !important;
+      font-size: 11px !important;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .fixed-filter-container {
+      bottom: 120px;
+      right: 30px;
+    }
+    
+    .fixed-filters-btn {
+      padding: 10px 20px !important;
+      font-size: 14px !important;
+      box-shadow: 3px 3px 6px var(--shadow-color);
+    }
+  }
+
+  .filter-group {
+    display: block;
+    margin-bottom: 15px;
+  }
+
+  .filter-group:last-child {
+    margin-bottom: 0;
+  }
+
+  .filter-group label:first-child {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+
+  .filter-group .btn-group {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    font-size: 11px;
+    min-width: 60px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+  }
+
+  /* Address input styling for filters */
+  .address-input {
+    background-color: var(--input-bg);
+    border: 1px inset var(--bg-color);
+    color: var(--text-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    padding: 2px 4px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Content Display */
+  .content-display {
+    margin-top: 8px;
+  }
+
+  .accordion-section {
+    margin-bottom: 20px;
+  }
+
   .section-header {
     cursor: pointer;
-    background-color: rgb(225, 225, 225);
-    border: 2px outset white;
+    background-color: var(--button-bg);
+    border: 2px outset var(--button-bg);
     padding: 6px 12px;
     margin-bottom: 0;
   }
-  
-  .section-header h4 {
+
+  .section-header:hover {
+    background-color: var(--button-hover);
+  }
+
+  .section-header:active {
+    border: 2px inset var(--button-bg);
+  }
+
+  .section-title {
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 14px;
     margin: 0;
+    color: var(--text-color);
     display: flex;
     align-items: center;
+    gap: 8px;
   }
-  
-  .section-content {
-    border: 2px inset white;
-    border-top: none;
-    padding: 8px;
-    background-color: white;
-  }
-  
-  .badge {
-    margin-left: 8px;
-    background-color: navy;
-    color: white;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 0.7rem;
-  }
-    
+
   .chevron {
-    font-size: 0.75rem;
-    margin-right: 8px;
+    font-size: 12px;
     transition: transform 0.2s;
   }
-  
-    .completed-badge {
+
+  .section-header[aria-expanded="false"] .chevron {
+    transform: rotate(-90deg);
+  }
+
+  .item-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .section-content {
+    display: none;
+    border: 2px inset var(--bg-color);
+    border-top: none;
+    padding: 8px;
+    background-color: var(--explorer-bg);
+  }
+
+  .section-content.show {
+    display: block;
+  }
+
+  /* Sunken panel for content */
+  .sunken-panel {
+    border: 2px inset var(--bg-color);
+    background-color: var(--explorer-bg);
+    color: var(--text-color);
+    padding: 8px;
+  }
+
+  /* Content Grid - mobile-first responsive design */
+  .content-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  @media (min-width: 480px) {
+    .content-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .content-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .content-grid {
+      grid-template-columns: repeat(5, 1fr);
+      gap: 15px;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    .content-grid {
+      grid-template-columns: repeat(6, 1fr);
+    }
+  }
+
+  /* Grid items */
+  .grid-item {
+    position: relative;
+    width: 100%;
+  }
+
+  .item-link {
+        text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  .item-card {
+    border: 1px solid var(--poster-border);
+    background-color: var(--window-bg);
+    height: 360px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    border-radius: 0;
+    font-family: 'MS Sans Serif', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    margin: 0;
+  }
+  .item-card:hover {
+    border: 2px solid var(--button-hover);
+    margin: -1px;
+  }  .item-poster {
+    height: 280px;
+    object-fit: contain;
+    display: block;
+    background-color: var(--alert-bg);
+    margin: 0;
+    padding: 0;
+  }
+
+  .item-poster.no-image {
+    background-color: var(--alert-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .item-body {
+    padding: 8px;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .item-title {
+    font-size: 11px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    line-height: 1.2;
+    color: var(--text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .item-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  .release-year {
+    font-weight: normal;
+  }
+
+  /* Rating badges */
+  .avg-rating-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background-color: rgba(255, 193, 7, 0.9);
+    color: #000;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: bold;
+    z-index: 2;
+  }
+
+  .progress-badge {
     position: absolute;
     top: 8px;
     right: 8px;
     background: rgba(0, 128, 0, 0.7);
     color: white;
     padding: 2px 6px;
-    font-size: 0.75rem;
+    font-size: 9px;
     border-radius: 3px;
-  }
-  
-  .section-header[aria-expanded="false"] .chevron {
-    transform: rotate(-90deg);
-  }
-  
-  .card {
-    border: 2px outset white;
-  }
-  
-  .card-body {
-    padding: 0.5rem !important;
-  }
-  
-  .card-footer {
-    background-color: rgb(225, 225, 225);
-    border-top: 2px inset white;
-  }
-  
-  .btn-sm {
-    padding: 0px 5px;
-    background: rgb(225, 225, 225);
-    border: 2px outset white;
     font-weight: bold;
-  }
-  
-  .btn-sm:active {
-    border-style: inset;
+    z-index: 2;
   }
 
-  /* Mobile optimization */
+  .completed-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 128, 0, 0.7);
+    color: white;
+    padding: 2px 6px;
+    font-size: 9px;
+    border-radius: 3px;
+    font-weight: bold;
+    z-index: 2;
+  }
+
+  /* Progress bar for continue watching */
+  .progress-bar-container {
+    width: 100%;
+    height: 4px;
+    background-color: var(--progress-bg);
+    border: 1px inset var(--bg-color);
+    margin-top: 4px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background-color: var(--progress-bar);
+    transition: width 0.3s ease;
+  }  /* Remove item button */
+  .remove-item {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    background: #ff4444 !important;
+    color: white !important;
+    border: 1px outset #ff4444 !important;
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    font-size: 10px !important;
+    cursor: pointer;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  .remove-item:hover {
+    background: #ff6666 !important;
+  }
+
+  .remove-item:active {
+    border: 1px inset #ff4444 !important;
+  }
+
+  /* No content message */
+  .no-content-message {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+  }
+
+  .message-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .message-icon {
+    font-size: 24px;
+    opacity: 0.7;
+  }
+
+  .message-text {
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  .message-subtext {
+    font-size: 10px;
+    opacity: 0.8;
+  }
+
+  /* Retro button styling */
+  .retro-btn {
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--button-text);
+    padding: 2px 8px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background-color 0.1s ease;
+  }
+
+  .retro-btn:hover {
+    background: var(--button-hover);
+    color: var(--button-text);
+    text-decoration: none;
+  }
+
+  .retro-btn:active {
+    border: 1px inset var(--button-bg);
+  }  /* Mobile responsive adjustments */
   @media (max-width: 576px) {
-    .field-row {
-      flex-direction: column;
-      align-items: flex-start;
+    .item-card {
+      height: 290px;
     }
     
-    .field-row label {
-      margin-top: 8px;
+    .item-poster {
+      height: 220px;
     }
     
-    .card-title {
-      font-size: 0.85rem;
+    .item-title {
+      font-size: 10px;
     }
     
-    .card-body {
-      padding: 0.35rem !important;
+    .item-meta {
+      font-size: 9px;
+    }
+      .avg-rating-badge, .progress-badge, .completed-badge {
+      font-size: 13px;
+      padding: 2px 5px;
     }
     
-    .avg-rating-badge, .progress-badge {
-      font-size: 0.7rem;
+    .remove-item {
+      width: 20px !important;
+      height: 20px !important;
+      min-width: 20px !important;
+      min-height: 20px !important;
+      font-size: 10px !important;
+      top: -1px;
+      right: -1px;
+    }
+    
+    .progress-badge, .completed-badge {
+      top: 25px !important;
+      right: 8px !important;
     }
   }
 </style>
 
 <script>
+  // Simple toggleFilters function
+  function toggleFilters() {
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm.style.display === 'none' || filterForm.style.display === '') {
+      filterForm.style.display = 'block';
+    } else {
+      filterForm.style.display = 'none';
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', function() {
     // Accordion functionality
     const headers = document.querySelectorAll('.section-header');
@@ -419,22 +999,115 @@
           this.querySelector('.chevron').textContent = '▼';
         }
       });
-    });
+    });      // Filter modal functionality
+    const filterForm = document.getElementById('filterForm');
     
     // AJAX search and filtering
     let searchTimer;
     const searchInput = document.getElementById('searchInput');
     const genreFilter = document.getElementById('genreFilter');
-    const countryFilter = document.getElementById('countryFilter');
-    const sortBy = document.getElementById('sortBy');
+    const countryFilter = document.getElementById('countryFilter');    const sortByRadios = document.querySelectorAll('input[name="sort_by"]');    // Update total count in status bar
+    function updateTotalCount() {
+        const totalCountElement = document.getElementById('totalItemsCount');
+        if (!totalCountElement) return;
+        
+        // Count all items across all sections
+        const continueWatchingItems = document.querySelectorAll('#continueWatchingContent .grid-item').length;
+        const haventStartedItems = document.querySelectorAll('#haventStartedContent .grid-item').length;
+        const finishedShowsItems = document.querySelectorAll('#finishedShowsContent .grid-item').length;
+        const moviesItems = document.querySelectorAll('#moviesContent .grid-item').length;
+        
+        const totalItems = continueWatchingItems + haventStartedItems + finishedShowsItems + moviesItems;
+        totalCountElement.textContent = `${totalItems} item${totalItems !== 1 ? 's' : ''}`;
+    }
+
+    // Update active filters count and status description
+    function updateActiveFiltersCount() {
+        const filterForm = document.getElementById('filterForm');
+        const activeFiltersSpan = document.getElementById('activeFiltersCount');
+        const filterStatus = document.getElementById('filterStatus');
+        const filterSeparator = document.getElementById('filterSeparator');
+        
+        if (!filterForm || !activeFiltersSpan) return;
+        
+        let activeCount = 0;
+        let filterDescriptions = [];
+        
+        // Check search input
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput && searchInput.value.trim() !== '') {
+            activeCount++;
+            filterDescriptions.push(`Search: "${searchInput.value.trim()}"`);
+        }
+        
+        // Check genre filter
+        const genreFilter = document.getElementById('genreFilter');
+        if (genreFilter && genreFilter.value !== '') {
+            activeCount++;
+            const selectedOption = genreFilter.options[genreFilter.selectedIndex];
+            filterDescriptions.push(`Genre: ${selectedOption.text}`);
+        }
+        
+        // Check country filter
+        const countryFilter = document.getElementById('countryFilter');
+        if (countryFilter && countryFilter.value !== '') {
+            activeCount++;
+            const selectedOption = countryFilter.options[countryFilter.selectedIndex];
+            filterDescriptions.push(`Country: ${selectedOption.text}`);
+        }
+        
+        // Check sort radio buttons (if not default)
+        const sortByRadios = document.querySelectorAll('input[name="sort_by"]:checked');
+        if (sortByRadios.length > 0 && sortByRadios[0].value !== 'date_added') {
+            activeCount++;
+            const sortLabels = {
+                'title': 'Title A-Z',
+                'title_desc': 'Title Z-A',
+                'release_date': 'Release Date',
+                'release_date_desc': 'Release Date (Newest)',
+                'date_added': 'Date Added',
+                'rating': 'Rating'
+            };
+            filterDescriptions.push(`Sorted by: ${sortLabels[sortByRadios[0].value] || sortByRadios[0].value}`);
+        }
+        
+        // Update filter button count
+        if (activeCount > 0) {
+            activeFiltersSpan.textContent = ` (${activeCount})`;
+            activeFiltersSpan.style.display = 'inline';
+        } else {
+            activeFiltersSpan.style.display = 'none';
+        }
+        
+        // Update status bar filter description
+        if (filterDescriptions.length > 0 && filterStatus && filterSeparator) {
+            filterStatus.textContent = filterDescriptions.join(', ');
+            filterStatus.style.display = 'inline';
+            filterSeparator.style.display = 'inline';
+        } else if (filterStatus && filterSeparator) {
+            filterStatus.style.display = 'none';
+            filterSeparator.style.display = 'none';
+        }
+    }// Close filter modal when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!filterForm.contains(e.target) && !e.target.closest('.fixed-filters-btn')) {
+        filterForm.style.display = 'none';
+      }
+    });
 
     function updateWatchlist() {
       const searchQuery = searchInput.value;
       const genre = genreFilter.value;
       const country = countryFilter.value;
-      const sort = sortBy.value;
       
-      fetch(`/api/watchlist/?search=${searchQuery}&genre=${genre}&country=${country}&sort_by=${sort}`)
+      // Get selected sort option from radio buttons
+      let sort = 'date_added';
+      sortByRadios.forEach(radio => {
+        if (radio.checked) {
+          sort = radio.value;
+        }
+      });
+        fetch(`/api/watchlist/?search=${searchQuery}&genre=${genre}&country=${country}&sort_by=${sort}`)
         .then(response => response.json())
         .then(data => {
           // Update continue watching section
@@ -450,17 +1123,25 @@
           // Update movies section
           updateSection('movies', data.movies);
           document.getElementById('moviesCount').textContent = data.movies.length;
+          
+          // Update status bar total count
+          updateTotalCount();
+          // Update filter descriptions in status bar
+          updateActiveFiltersCount();
         })
         .catch(error => console.error('Error updating watchlist:', error));
     }
-    
-    function updateSection(sectionId, items) {
+      function updateSection(sectionId, items) {
       const contentDiv = document.getElementById(sectionId + 'Content');
       
       if (items.length === 0) {
         contentDiv.innerHTML = `
-          <div class="col-12 text-center py-4">
-            <p class="text-muted">No items found</p>
+          <div class="no-content-message">
+            <div class="message-content">
+              <div class="message-icon">📺</div>
+              <div class="message-text">No items found</div>
+              <div class="message-subtext">Try adjusting your filters</div>
+            </div>
           </div>
         `;
         return;
@@ -485,9 +1166,7 @@
       document.querySelectorAll('.remove-item').forEach(btn => {
         btn.addEventListener('click', removeFromWatchlist);
       });
-    }
-    
-    function createItemHtml(item, progress = null) {
+    }      function createItemHtml(item, progress = null) {
       const isMovie = item.content_type_model === 'movie';
       const detailUrl = isMovie ? 
         `/movies/${item.media_tmdb_id}/` : 
@@ -504,14 +1183,16 @@
       
       // Progress bar for under the title
       const progressBar = progress !== null ? `
-        <div class="progress mt-2" style="height:6px">
-          <div class="progress-bar" role="progressbar" style="width: ${progress}%" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"></div>
+        <div class="progress-bar-container">
+          <div class="progress-bar" style="width: ${progress}%"></div>
         </div>
       ` : '';
       
-      // Rating badge - should always be shown if available
+      // Average Rating badge - should always be shown if available
       const ratingHtml = item.avg_rating ? `
-        <div class="avg-rating-badge">${item.avg_rating} (${item.rating_count})</div>
+        <div class="avg-rating-badge">
+          ${item.avg_rating} (${item.rating_count})
+        </div>
       ` : '';
       
       // Completed badge for finished shows
@@ -520,30 +1201,28 @@
       ` : '';
       
       return `
-        <div class="col" data-media-id="${item.media_id}">
-          <div class="card h-100 position-relative">
-            <a href="${detailUrl}">
+        <div class="grid-item" data-media-id="${item.media_id}">
+          <a href="${detailUrl}" class="item-link">
+            <div class="item-card">
               ${item.media_poster ? 
-                `<img src="${item.media_poster}" class="card-img-top" alt="${item.media_title}">` : 
-                `<div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">No Image</div>`
+                `<img src="${item.media_poster}" class="item-poster" alt="${item.media_title}">` : 
+                `<div class="item-poster no-image">
+                  <span>No Image</span>
+                </div>`
               }
-            </a>
-            
-            ${progressBadge}
-            ${completedBadge}
-            ${ratingHtml}
-            
-            <div class="card-body p-2">
-              <h6 class="card-title mb-1">${item.media_title}</h6>
-              <small class="text-muted">${dateDisplay}</small>
-              ${progressBar}
+              <div class="item-body">
+                <h5 class="item-title">${item.media_title}</h5>
+                <div class="item-meta">
+                  <span class="release-year">${dateDisplay}</span>
+                </div>
+                
+                ${progressBadge}
+                ${ratingHtml}
+                ${progressBar}
+              </div>
+              <button class="remove-item" data-id="${item.id}" title="Remove from watchlist">✕</button>
             </div>
-            
-            <div class="card-footer p-2 d-flex justify-content-between">
-              <small class="text-muted">Added ${formatTimeSince(item.date_added)} ago</small>
-              <button class="btn-sm remove-item" data-id="${item.id}">✕</button>
-            </div>
-          </div>
+          </a>
         </div>
       `;
     }
@@ -575,13 +1254,11 @@
       if (interval >= 1) return interval + " minute" + (interval === 1 ? "" : "s");
       
       return Math.floor(seconds) + " second" + (seconds === 1 ? "" : "s");
-    }
-    
-    function removeFromWatchlist(event) {
+    }      function removeFromWatchlist(event) {
       event.preventDefault();
       const itemId = event.target.dataset.id;
-      const itemElement = event.target.closest('.col');
-      const mediaTitle = itemElement.querySelector('.card-title').textContent.trim();
+      const itemElement = event.target.closest('.grid-item');
+      const mediaTitle = itemElement.querySelector('.item-title').textContent.trim();
       
       // Show confirmation dialog
       if (!confirm(`Are you sure you want to remove "${mediaTitle}" from your watchlist?`)) {
@@ -603,11 +1280,11 @@
         if (data.success) {
           // Remove the item from the DOM with a fade-out effect
           itemElement.style.transition = 'opacity 0.3s ease';
-          itemElement.style.opacity = '0';
-          setTimeout(() => {
+          itemElement.style.opacity = '0';          setTimeout(() => {
             itemElement.remove();
             // Update counts
             updateWatchlist();
+            updateTotalCount();
           }, 300);
         } else {
           alert("Error removing item: " + data.error);
@@ -629,22 +1306,74 @@
         }
       }
       return cookieValue;
-    }
-    
-    // Set up event listeners for filters
+    }    // Set up event listeners for filters
     searchInput.addEventListener('input', function() {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(updateWatchlist, 500);
+      updateActiveFiltersCount(); // Update filter count when search changes
     });
     
-    genreFilter.addEventListener('change', updateWatchlist);
-    countryFilter.addEventListener('change', updateWatchlist);
-    sortBy.addEventListener('change', updateWatchlist);
+    genreFilter.addEventListener('change', function() {
+      updateWatchlist();
+      updateActiveFiltersCount(); // Update filter count when genre changes
+    });
     
-    // Attach event listeners to remove buttons
+    countryFilter.addEventListener('change', function() {
+      updateWatchlist();
+      updateActiveFiltersCount(); // Update filter count when country changes
+    });
+    
+    // Add event listeners for sort radio buttons
+    sortByRadios.forEach(radio => {
+      radio.addEventListener('change', function() {
+        updateWatchlist();
+        updateActiveFiltersCount(); // Update filter count when sort changes
+      });    });
+    
+    // Filter button click handlers (make labels clickable)
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const radioId = this.getAttribute('for');
+            const radio = document.getElementById(radioId);
+            if (radio) {
+                radio.checked = true;
+                radio.dispatchEvent(new Event('change'));
+            }
+        });
+        
+        // Keyboard support
+        button.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+    });
+    
+    // Add visual feedback for button interactions
+    const allButtons = document.querySelectorAll('.retro-btn, .filter-btn');
+    allButtons.forEach(button => {
+        button.addEventListener('mousedown', function() {
+            this.style.border = '1px inset var(--button-bg)';
+        });
+        
+        button.addEventListener('mouseup', function() {
+            this.style.border = '1px outset var(--button-bg)';
+        });
+        
+        button.addEventListener('mouseleave', function() {
+            this.style.border = '1px outset var(--button-bg)';
+        });
+    });    // Attach event listeners to remove buttons
     document.querySelectorAll('.remove-item').forEach(btn => {
       btn.addEventListener('click', removeFromWatchlist);
     });
+    
+    // Initialize status bar counts and filters
+    updateTotalCount();
+    updateActiveFiltersCount();
   });
 </script>
 {% endblock %}

@@ -7,11 +7,54 @@
 
 {% block content %}
 <style>
+/* Theme-adaptive CSS variables */
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --window-content-bg: rgba(255, 255, 255, 0.86);
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --shadow-color: rgba(0,0,0,0.25);
+    --profile-container-bg: rgba(195, 195, 195, 0.7);
+    --filmography-container-bg: #E0E0E0;
+    --modal-bg: white;
+    --overlay-bg: rgba(0, 0, 0, 0.5);
+    --highlight-bg: #000080;
+    --highlight-text: white;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --window-content-bg: rgba(64, 64, 64, 0.86);
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --shadow-color: rgba(0,0,0,0.5);
+        --profile-container-bg: rgba(64, 64, 64, 0.8);
+        --filmography-container-bg: #404040;
+        --modal-bg: #404040;
+        --overlay-bg: rgba(0, 0, 0, 0.7);
+        --highlight-bg: #0060c0;
+        --highlight-text: white;
+    }
+}
+
 body {
     font-family: 'MS Sans Serif', Arial, sans-serif;
-    background: url('{{ random_backdrop|default:person.profile_picture|default:"" }}') no-repeat center center fixed;
+    background: var(--bg-color) url('{{ random_backdrop|default:person.profile_picture|default:"" }}') no-repeat center center fixed;
     background-size: cover;
-    color: black;
+    color: var(--text-color);
     margin: 0;
     padding: 0;
     position: relative;
@@ -25,60 +68,128 @@ body::before {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay-bg);
     z-index: -1;
 }
 
+/* Window styling to match discover page */
+.window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    margin: 10px;
+}
+
+.title-bar {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+    color: white;
+    padding: 2px;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
+}
+
+.title-bar-controls {
+    display: flex;
+}
+
+.title-bar-controls button {
+    width: 16px;
+    height: 14px;
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--button-text);
+    margin-left: 2px;
+    font-size: 8px;
+    cursor: pointer;
+}
+
+.title-bar-controls button:hover {
+    background-color: var(--button-hover);
+}
+
+.title-bar-controls button:active {
+    border: 1px inset var(--button-bg);
+}
+
+.window-body {
+    padding: 8px;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+}
+
+.status-bar {
+    background-color: var(--bg-color);
+    border-top: 1px solid var(--border-dark);
+    padding: 2px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-color);
+}
+
+.status-bar-field {
+    padding: 0 8px;
+    border-right: 1px solid var(--border-dark);
+}
+
+.status-bar-field:last-child {
+    border-right: none;
+}
+
 .profile-container {
-    font-family: 'MS Sans Serif', Arial, sans-serif;
-    background-color: rgba(195, 195, 195, 0.7);
-    color: black;
+    background-color: var(--profile-container-bg);
+    color: var(--text-color);
     padding: 15px;
-    border: 2px solid black;
+    border: 2px inset var(--border-dark);
     display: flex;
     flex-direction: row;
     align-items: flex-start;
     gap: 20px;
-    margin: 10px;
+    box-shadow: inset 1px 1px 2px var(--shadow-color);
 }
 
 .profile-image {
     width: 200px;
-    border: 2px solid black;
+    border: 2px solid var(--border-dark);
     cursor: pointer;
+    box-shadow: 1px 1px 3px var(--shadow-color);
 }
 
 .profile-content {
     flex-grow: 1;
 }
 
-.window-title {
-    background-color: #000080;
-    color: white;
-    padding: 5px;
-    margin-bottom: 10px;
-}
-
 .window-content {
-    background-color: rgba(255, 255, 255, 0.86);
+    background-color: var(--window-content-bg);
+    color: var(--text-color);
     padding: 10px;
-    border: 2px inset;
+    border: 2px inset var(--border-dark);
 }
 
-.filmography-container {
-    font-family: 'MS Sans Serif', Arial, sans-serif;
-    background-color: #E0E0E0;
-    color: black;
-    padding: 15px;
-    border: 2px solid black;
-    margin: 10px;
+/* Filmography responsive views */
+.filmography-desktop-view {
+    display: block;
+}
+
+.filmography-mobile-view {
+    display: none;
 }
 
 .filmography-table-container {
-    background-color: white;
-    border: 2px inset;
+    background-color: var(--window-content-bg);
+    border: 2px inset var(--border-dark);
     padding: 10px;
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
     width: 100%;
 }
@@ -86,25 +197,145 @@ body::before {
 .filmography-table {
     width: 100%;
     border-collapse: collapse;
+    color: var(--text-color);
 }
 
 .filmography-table th {
     text-align: left;
-    padding: 5px;
-    background-color: #C3C3C3;
+    padding: 8px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-dark);
+    font-weight: bold;
 }
 
 .filmography-table td {
-    padding: 5px;
+    padding: 8px;
+    border: 1px solid var(--border-light);
+    vertical-align: top;
+    background-color: var(--window-content-bg);
+    color: var(--text-color);
+}
+
+/* Filmography grid for mobile */
+.filmography-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 4px;
+}
+
+.filmography-item {
+    display: flex;
+    justify-content: center;
+}
+
+.filmography-card {
+    background-color: var(--window-bg);
+    border: 1px outset var(--bg-color);
+    transition: all 0.1s ease;
+    width: 100%;
+    max-width: 180px;
+    display: flex;
+    flex-direction: column;
+}
+
+.filmography-card:hover {
+    border: 1px inset var(--bg-color);
+}
+
+.filmography-poster {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2/3;
+    background-color: var(--window-content-bg);
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.filmography-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.poster-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--button-bg);
+    color: var(--text-color);
+    font-size: 32px;
+    font-weight: bold;
+}
+
+.filmography-info {
+    padding: 6px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.filmography-title {
+    font-weight: bold;
+    font-size: 12px;
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+
+.filmography-title a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.filmography-title a:hover {
+    text-decoration: underline;
+}
+
+.filmography-year {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.filmography-role {
+    font-size: 10px;
+    color: var(--text-color);
+    font-style: italic;
+}
+
+.filmography-character {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.no-filmography {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
 }
 
 .interactive tr.highlighted {
-    background-color: #000080;
-    color: white;
+    background-color: var(--highlight-bg);
+    color: var(--highlight-text);
 }
 
 .interactive tr.highlighted a {
-    color: white;
+    color: var(--highlight-text);
+}
+
+/* Link styling for better dark mode */
+.filmography-table a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.filmography-table a:hover {
+    color: var(--text-color);
+    opacity: 0.8;
 }
 
 #profileModal {
@@ -113,15 +344,53 @@ body::before {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: white;
-    border: 2px solid black;
+    background-color: var(--modal-bg);
+    color: var(--text-color);
+    border: 2px solid var(--border-dark);
     z-index: 1000;
     max-width: 90%;
     max-height: 90%;
+    box-shadow: 4px 4px 8px var(--shadow-color);
+}
+
+.title-bar {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+    color: white;
+    padding: 2px;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
+}
+
+.title-bar-controls button {
+    width: 16px;
+    height: 14px;
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--button-text);
+    margin-left: 2px;
+    font-size: 8px;
+    cursor: pointer;
+}
+
+.title-bar-controls button:active {
+    border: 1px inset var(--button-bg);
 }
 
 /* Mobile responsive styles */
 @media screen and (max-width: 767px) {
+    .window {
+        margin: 5px;
+    }
+    
     .profile-container {
         flex-direction: column;
         padding: 10px;
@@ -134,14 +403,18 @@ body::before {
         display: block;
     }
     
-    .filmography-table-container {
-        max-height: none;
-        overflow-x: auto;
+    /* Switch to mobile filmography view */
+    .filmography-desktop-view {
+        display: none;
     }
     
-    .filmography-table {
+    .filmography-mobile-view {
         display: block;
-        width: 100%;
+    }
+    
+    .filmography-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
     }
     
     .window-title h1, .window-title h2 {
@@ -152,123 +425,244 @@ body::before {
         max-width: 95%;
     }
 }
+
+@media screen and (max-width: 480px) {
+    .filmography-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .filmography-card {
+        max-width: none;
+    }
+}
+
+@media (min-width: 768px) {
+    .filmography-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .filmography-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+    }
+}
+
+/* Enhanced backdrop attribution styling */
+.backdrop-attribution {
+    position: fixed;
+    bottom: 5px;
+    right: 10px;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    z-index: 2;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+}
+
+@media (prefers-color-scheme: dark) {
+    .backdrop-attribution {
+        color: rgba(255,255,255,0.8);
+    }
+}
 </style>
 
 <!-- Add a small attribution for the backdrop if available -->
 {% if random_backdrop %}
-<div style="position: fixed; bottom: 5px; right: 10px; color: rgba(255,255,255,0.7); font-size: 12px; z-index: 2;">
+<div class="backdrop-attribution">
     Backdrop from {{ person.name }}'s filmography
 </div>
 {% endif %}
 
-<div class="profile-container">
-    <div>
-        <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
-             alt="{{ person.name }} Profile" 
-             class="profile-image"
-             onclick="openProfileModal()">
-
-        <div id="profileModal">
-            <div class="title-bar">
-                <div class="title-bar-text">{{ person.name }} Profile</div>
-                <div class="title-bar-controls">
-                    <button aria-label="Close" onclick="closeProfileModal()"></button>
-                </div>
-            </div>
-            <div style="padding: 10px; text-align: center;">
+<!-- Profile Window -->
+<div class="window">
+    <div class="title-bar">
+        <div class="title-bar-text">{{ person.name }}</div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize"></button>
+            <button aria-label="Maximize"></button>
+            <button aria-label="Close"></button>
+        </div>    </div>
+    <div class="window-body">
+        <div class="profile-container">
+            <div>
                 <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
                      alt="{{ person.name }} Profile" 
-                     style="max-width: 100%; max-height: 80vh;">
+                     class="profile-image"
+                     onclick="openProfileModal()">
+            </div>
+
+            <div class="profile-content">
+                <h1 style="margin: 0 0 10px 0; font-size: 18px;">{{ person.name }}</h1>
+                <div class="window-content">
+                    <p><strong>Bio:</strong> {{ person.bio|default:"No biography available." }}</p>
+                    
+                    {% if person.date_of_birth %}
+                    <p><strong>Born:</strong> {{ person.date_of_birth|date:"F j, Y" }}</p>
+                    {% endif %}
+                    
+                    {% if person.date_of_death %}
+                    <p><strong>Died:</strong> {{ person.date_of_death|date:"F j, Y" }}</p>
+                    {% endif %}
+                    
+                    <p><strong>Roles:</strong> 
+                        {% if person.is_actor %}<span>Actor</span>{% endif %}{% if person.is_director %}{% if person.is_actor %}, {% endif %}<span>Director</span>{% endif %}{% if person.is_screenwriter %}{% if person.is_actor or person.is_director %}, {% endif %}<span>Screenwriter</span>{% endif %}{% if person.is_writer %}{% if person.is_actor or person.is_director or person.is_screenwriter %}, {% endif %}<span>Writer</span>{% endif %}{% if person.is_original_music_composer %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer %}, {% endif %}<span>Composer</span>{% endif %}{% if person.is_tv_creator %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer or person.is_original_music_composer %}, {% endif %}<span>TV Creator</span>{% endif %}{% if not person.is_actor and not person.is_director and not person.is_screenwriter and not person.is_writer and not person.is_original_music_composer and not person.is_tv_creator %}Unknown{% endif %}
+                    </p>
+
+                    {% if average_rating is not None %}
+                    <p><strong>Average Rating of Works (All Users):</strong> {{ average_rating }} / 10</p>
+                    {% endif %}
+
+                    {% if user_average_rating is not None %}
+                    <p><strong>Average Rating of Works (Your Reviews):</strong> {{ user_average_rating }} / 10</p>
+                    {% endif %}
+                    
+                    {% if person.imdb_id %}
+                    <p>
+                        <a href="https://www.imdb.com/name/{{ person.imdb_id }}/" target="_blank" style="text-decoration: none;">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/6/69/IMDB_Logo_2016.svg" alt="IMDb" style="height: 18px; vertical-align: middle;">
+                            View Profile
+                        </a>
+                    </p>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
-
-    <div class="profile-content">
-        <div class="window-title">
-            <h1 style="margin: 0; font-size: 18px;">{{ person.name }}</h1>
-        </div>
-        <div class="window-content">
-            <p><strong>Bio:</strong> {{ person.bio|default:"No biography available." }}</p>
-            
-            {% if person.date_of_birth %}
-            <p><strong>Born:</strong> {{ person.date_of_birth|date:"F j, Y" }}</p>
-            {% endif %}
-            
-            {% if person.date_of_death %}
-            <p><strong>Died:</strong> {{ person.date_of_death|date:"F j, Y" }}</p>
-            {% endif %}
-            
-            <p><strong>Roles:</strong> 
-                {% if person.is_actor %}<span>Actor</span>{% endif %}{% if person.is_director %}{% if person.is_actor %}, {% endif %}<span>Director</span>{% endif %}{% if person.is_screenwriter %}{% if person.is_actor or person.is_director %}, {% endif %}<span>Screenwriter</span>{% endif %}{% if person.is_writer %}{% if person.is_actor or person.is_director or person.is_screenwriter %}, {% endif %}<span>Writer</span>{% endif %}{% if person.is_original_music_composer %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer %}, {% endif %}<span>Composer</span>{% endif %}{% if person.is_tv_creator %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer or person.is_original_music_composer %}, {% endif %}<span>TV Creator</span>{% endif %}{% if not person.is_actor and not person.is_director and not person.is_screenwriter and not person.is_writer and not person.is_original_music_composer and not person.is_tv_creator %}Unknown{% endif %}
-            </p>
-
-            {% if average_rating is not None %}
-            <p><strong>Average Rating of Works (All Users):</strong> {{ average_rating }} / 10</p>
-            {% endif %}
-
-            {% if user_average_rating is not None %}
-            <p><strong>Average Rating of Works (Your Reviews):</strong> {{ user_average_rating }} / 10</p>
-            {% endif %}
-            
-            {% if person.imdb_id %}
-            <p>
-                <a href="https://www.imdb.com/name/{{ person.imdb_id }}/" target="_blank" style="text-decoration: none;">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/69/IMDB_Logo_2016.svg" alt="IMDb" style="height: 18px; vertical-align: middle;">
-                    View Profile
-                </a>
-            </p>
-            {% endif %}
-        </div>
+    <div class="status-bar">
+        <div class="status-bar-field">{{ person.name }}</div>
+        <div class="status-bar-field">{{ combined_credits|length }} credit{{ combined_credits|length|pluralize }}</div>
     </div>
 </div>
 
-<div class="filmography-container">
-    <div class="window-title">
-        <h2 style="margin: 0; font-size: 18px;">Filmography</h2>
+<!-- Profile Modal -->
+<div id="profileModal">
+    <div class="title-bar">
+        <div class="title-bar-text">{{ person.name }} Profile</div>
+        <div class="title-bar-controls">
+            <button aria-label="Close" onclick="closeProfileModal()"></button>
+        </div>
     </div>
-    <div class="filmography-table-container">
-        <table class="filmography-table interactive">
-            <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Year</th>
-                    <th>Role(s)</th>
-                    <th>Character(s)</th>
-                </tr>
-            </thead>
-            <tbody>
+    <div style="padding: 10px; text-align: center; background-color: var(--modal-bg);">
+        <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+             alt="{{ person.name }} Profile" 
+             style="max-width: 100%; max-height: 80vh;">
+    </div>
+</div>
+
+<!-- Filmography Window -->
+<div class="window">
+    <div class="title-bar">
+        <div class="title-bar-text">Filmography</div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize"></button>
+            <button aria-label="Maximize"></button>
+            <button aria-label="Close"></button>
+        </div>
+    </div>
+    <div class="window-body">
+        <!-- Desktop table view -->
+        <div class="filmography-desktop-view">
+            <div class="filmography-table-container">
+                <table class="filmography-table interactive">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Year</th>
+                            <th>Role(s)</th>
+                            <th>Character(s)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in combined_credits %}
+                        <tr>
+                            {% with media=item.media %}
+                            <td>
+                                {% if media.release_date %}
+                                    <a href="{% url 'movie_page' media.tmdb_id %}">{{ media.title }}</a>
+                                {% elif media.first_air_date %}
+                                    <a href="{% url 'tv_show_page' media.tmdb_id %}">{{ media.title }}</a>
+                                {% else %}
+                                    {{ media.title }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if media.release_date %}
+                                    {{ media.release_date|date:"Y" }}
+                                {% elif media.first_air_date %}
+                                    {{ media.first_air_date|date:"Y" }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            {% endwith %}
+                            <td>{{ item.roles|join:", " }}</td>
+                            <td>{{ item.characters|join:", "|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4">No filmography available.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Mobile grid view -->
+        <div class="filmography-mobile-view">
+            <div class="filmography-grid">
                 {% for item in combined_credits %}
-                <tr>
+                <div class="filmography-item">
                     {% with media=item.media %}
-                    <td>
-                        {% if media.release_date %}
-                            <a href="{% url 'movie_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
-                        {% elif media.first_air_date %}
-                            <a href="{% url 'tv_show_page' media.tmdb_id %}" style="text-decoration: none; color: black;">{{ media.title }}</a>
-                        {% else %}
-                            {{ media.title }}
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if media.release_date %}
-                            {{ media.release_date|date:"Y" }}
-                        {% elif media.first_air_date %}
-                            {{ media.first_air_date|date:"Y" }}
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
+                    <div class="filmography-card">
+                        <div class="filmography-poster">
+                            {% if media.poster %}
+                            <img src="{{ media.poster }}" alt="{{ media.title }}" loading="lazy">
+                            {% else %}
+                            <div class="poster-placeholder">{{ media.title|first }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="filmography-info">
+                            <div class="filmography-title">
+                                {% if media.release_date %}
+                                    <a href="{% url 'movie_page' media.tmdb_id %}">{{ media.title }}</a>
+                                {% elif media.first_air_date %}
+                                    <a href="{% url 'tv_show_page' media.tmdb_id %}">{{ media.title }}</a>
+                                {% else %}
+                                    {{ media.title }}
+                                {% endif %}
+                            </div>
+                            <div class="filmography-year">
+                                {% if media.release_date %}
+                                    {{ media.release_date|date:"Y" }}
+                                {% elif media.first_air_date %}
+                                    {{ media.first_air_date|date:"Y" }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </div>
+                            <div class="filmography-role">{{ item.roles|join:", " }}</div>
+                            {% if item.characters %}
+                            <div class="filmography-character">{{ item.characters|join:", " }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
                     {% endwith %}
-                    <td>{{ item.roles|join:", " }}</td>
-                    <td>{{ item.characters|join:", "|default:"-" }}</td>
-                </tr>
+                </div>
                 {% empty %}
-                <tr>
-                    <td colspan="4">No filmography available.</td>
-                </tr>
+                <div class="no-filmography">
+                    <p>No filmography available.</p>
+                </div>
                 {% endfor %}
-            </tbody>
-        </table>
+            </div>
+        </div>
+    </div>
+    <div class="status-bar">
+        <div class="status-bar-field">Filmography</div>
+        <div class="status-bar-field">{{ combined_credits|length }} item{{ combined_credits|length|pluralize }}</div>
     </div>
 </div>
 
