@@ -1170,11 +1170,13 @@ def api_watchlist(request):
         # Get all TV show IDs
         tv_show_ids = [item.object_id for item in tv_shows_items]
         
-        # Get all episodes for these shows
+        # Get all episodes for these shows that have aired
         from tvshows.models import Episode
         total_episodes = Episode.objects.filter(
             season__show_id__in=tv_show_ids,
-            season__season_number__gt=0 
+            season__season_number__gt=0,
+            air_date__isnull=False,
+            air_date__lte=timezone.now()
         ).values('season__show_id').annotate(
             count=models.Count('id')
         )
