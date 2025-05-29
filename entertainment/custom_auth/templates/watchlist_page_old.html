@@ -369,13 +369,14 @@
       --tab-inactive: #383838;
     }
   }
-
   /* Page container - mobile-first approach */
   .watchlist-container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 10px;
     font-family: 'MS Sans Serif', sans-serif;
+    overflow-x: hidden;
+    box-sizing: border-box;
   }
 
   @media (min-width: 768px) {
@@ -664,27 +665,30 @@
     font-size: 11px;
     color: var(--text-muted);
   }
-
   .section-content {
     display: none;
     border: 2px inset var(--bg-color);
     border-top: none;
     padding: 8px;
     background-color: var(--explorer-bg);
+    overflow: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .section-content.show {
     display: block;
   }
-
   /* Sunken panel for content */
   .sunken-panel {
     border: 2px inset var(--bg-color);
     background-color: var(--explorer-bg);
     color: var(--text-color);
     padding: 8px;
+    overflow: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
   }
-
   /* Content Grid - mobile-first responsive design */
   .content-grid {
     display: grid;
@@ -692,6 +696,8 @@
     gap: 8px;
     width: 100%;
     box-sizing: border-box;
+    overflow: hidden;
+    max-width: 100%;
   }
 
   @media (min-width: 480px) {
@@ -720,19 +726,19 @@
       grid-template-columns: repeat(6, 1fr);
     }
   }
-
   /* Grid items */
   .grid-item {
     position: relative;
     width: 100%;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .item-link {
         text-decoration: none;
     color: inherit;
     display: block;
-  }
-  .item-card {
+  }  .item-card {
     border: 1px solid var(--poster-border);
     background-color: var(--window-bg);
     height: 360px;
@@ -746,6 +752,8 @@
     transition: all 0.2s ease;
     padding: 0;
     margin: 0;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   .item-card:hover {
     border: 2px solid var(--button-hover);
