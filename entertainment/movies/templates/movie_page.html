@@ -700,6 +700,18 @@
 
 
 <script>
+    function toggleProductionCompanies() {
+        const container = document.getElementById('production-companies-container');
+        const arrow = document.getElementById('production-companies-arrow');
+        
+        if (container.style.display === 'none' || container.style.display === '') {
+            container.style.display = 'flex';
+            arrow.textContent = '▼'; // Change to down arrow
+        } else {
+            container.style.display = 'none';
+            arrow.textContent = '►'; // Change to right arrow
+        }
+    }
     // Add this helper function at the beginning of your script section
     function sanitizeContent(content) {
         if (!content) return '';

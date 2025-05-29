@@ -2,33 +2,584 @@
 {% load static %}
 
 {% block content %}
-<div class="container py-4">
-    <!-- Page Header -->
-    <div class="window mb-4">
+<!-- Add DOMPurify for content sanitization -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+
+<style>
+/* Theme-adaptive CSS variables */
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --progress-bg: #fff;
+    --progress-bar: #008080;
+    --shadow-color: rgba(0,0,0,0.25);
+    --poster-border: #a0a0a0;
+    --backdrop-overlay: rgba(192, 192, 192, 0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --progress-bg: #2a2a2a;
+        --progress-bar: #00a0a0;
+        --shadow-color: rgba(0,0,0,0.5);
+        --poster-border: #606060;
+        --backdrop-overlay: rgba(56, 56, 56, 0.9);
+    }
+}
+
+/* Community page specific styles */
+.community-page-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Backdrop overlay */
+.backdrop-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: {% if current_pick %}url('{{ current_pick.movie.backdrop }}') no-repeat center center fixed{% else %}linear-gradient(135deg, #667eea 0%, #764ba2 100%){% endif %};
+    background-size: cover;
+    z-index: -2;
+}
+
+.backdrop-overlay::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--backdrop-overlay);
+    z-index: -1;
+}
+
+/* Window styling */
+.window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    margin-bottom: 20px;
+}
+
+.title-bar {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+    color: white;
+    padding: 2px;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
+}
+
+.title-bar-controls button {
+    width: 16px;
+    height: 14px;
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    margin-left: 2px;
+    font-size: 8px;
+    cursor: pointer;
+}
+
+.title-bar-controls button:active {
+    border: 1px inset var(--button-bg);
+}
+
+.window-body {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 12px;
+}
+
+.status-bar {
+    border-top: 1px solid var(--border-dark);
+    background-color: var(--bg-color);
+    padding: 2px 4px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-bar-field {
+    border: 1px inset var(--bg-color);
+    padding: 2px 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.retro-btn {
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--button-text);
+    padding: 2px 8px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background-color 0.1s ease;
+}
+
+.retro-btn:hover {
+    background: var(--button-hover);
+    color: var(--button-text);
+    text-decoration: none;
+}
+
+.retro-btn:active {
+    border: 1px inset var(--button-bg);
+}
+
+/* Enhanced button styling for dark mode */
+@media (prefers-color-scheme: dark) {
+    .retro-btn {
+        border-color: var(--border-light);
+        box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+    }
+    
+    .retro-btn:hover {
+        box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+    }
+}
+
+/* Movie info container */
+.movie-info-container {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.movie-poster {
+    flex: 0 0 auto;
+    width: 250px;
+}
+
+.movie-poster img {
+    width: 100%;
+    border: 2px solid var(--poster-border);
+    border-radius: 4px;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    cursor: pointer;
+}
+
+.movie-details {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Progress bar styling */
+.progress {
+    border: 1px inset var(--bg-color);
+    background-color: var(--progress-bg);
+    border-radius: 0;
+    overflow: hidden;
+    height: 25px;
+}
+
+.progress-bar {
+    background-color: var(--progress-bar) !important;
+    transition: none;
+    border-radius: 0;
+    font-weight: bold;
+    color: #ffffff !important;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+}
+
+/* Horizontal scrolling container for previously watched movies */
+.horizontal-scroll {
+    display: flex;
+    overflow-x: auto;
+    gap: 15px;
+    padding: 10px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-dark) var(--window-bg);
+}
+
+.horizontal-scroll::-webkit-scrollbar {
+    height: 12px;
+}
+
+.horizontal-scroll::-webkit-scrollbar-track {
+    background: var(--window-bg);
+    border: 1px inset var(--border-dark);
+}
+
+.horizontal-scroll::-webkit-scrollbar-thumb {
+    background: var(--button-bg);
+    border: 1px outset var(--button-bg);
+}
+
+.horizontal-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--button-hover);
+}
+
+.movie-card {
+    flex: 0 0 auto;
+    width: 150px;
+    background-color: var(--window-bg);
+    border: 2px outset var(--bg-color);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    transition: transform 0.1s ease;
+}
+
+.movie-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 3px 3px 6px var(--shadow-color);
+}
+
+.movie-card img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.movie-card-body {
+    padding: 8px;
+}
+
+.movie-card-title {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: var(--text-color);
+    line-height: 1.2;
+    height: 2.4em;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.movie-card-date {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.movie-card-btn {
+    font-size: 10px;
+    padding: 2px 6px;
+    width: 100%;
+}
+
+/* Watchers display */
+.watchers-container {
+    background-color: var(--progress-bg);
+    border: 1px inset var(--border-dark);
+    padding: 8px;
+    margin: 10px 0;
+}
+
+.watcher-item {
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    margin-bottom: 4px;
+    background-color: var(--window-bg);
+    border: 1px outset var(--border-light);
+    border-radius: 2px;
+}
+
+.watcher-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    margin-right: 8px;
+    border: 1px solid var(--border-dark);
+}
+
+.watcher-name {
+    font-size: 11px;
+    color: var(--text-color);
+}
+
+.you-badge {
+    background-color: var(--progress-bar);
+    color: white;
+    font-size: 8px;
+    padding: 1px 4px;
+    margin-left: auto;
+    border-radius: 2px;
+}
+
+/* Review styling */
+.review-card {
+    background-color: var(--window-bg);
+    border: 2px outset var(--bg-color);
+    margin-bottom: 12px;
+    border-radius: 4px;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+}
+
+.review-header {
+    background-color: var(--bg-color);
+    border-bottom: 1px solid var(--border-dark);
+    padding: 6px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.review-user {
+    display: flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.review-rating {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    color: white;
+    font-weight: bold;
+}
+
+.review-body {
+    padding: 8px;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.review-footer {
+    border-top: 1px solid var(--border-dark);
+    padding: 4px 8px;
+    font-size: 9px;
+    color: var(--text-muted);
+    background-color: var(--bg-color);
+}
+
+/* Table styling */
+.retro-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    font-size: 11px;
+}
+
+.retro-table th {
+    background-color: var(--bg-color);
+    border: 1px outset var(--border-light);
+    padding: 4px 8px;
+    font-weight: bold;
+    text-align: left;
+}
+
+.retro-table td {
+    border: 1px inset var(--border-dark);
+    padding: 6px 8px;
+    vertical-align: top;
+}
+
+.retro-table tr:hover {
+    background-color: var(--button-hover);
+}
+
+/* Form styling */
+.retro-input {
+    border: 1px inset var(--border-dark);
+    background-color: var(--progress-bg);
+    color: var(--text-color);
+    padding: 4px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+}
+
+.retro-textarea {
+    border: 1px inset var(--border-dark);
+    background-color: var(--progress-bg);
+    color: var(--text-color);
+    padding: 4px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    resize: vertical;
+}
+
+/* Mobile optimization */
+@media (max-width: 768px) {
+    .community-page-container {
+        padding: 10px;
+    }
+    
+    .movie-info-container {
+        flex-direction: column;
+    }
+    
+    .movie-poster {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 15px;
+    }
+    
+    .movie-poster img {
+        width: 200px;
+        max-width: 80%;
+    }
+    
+    .movie-details {
+        width: 100%;
+    }
+    
+    .horizontal-scroll {
+        gap: 10px;
+    }
+    
+    .movie-card {
+        width: 120px;
+    }
+    
+    .movie-card img {
+        height: 160px;
+    }
+    
+    .retro-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .community-page-container {
+        padding: 5px;
+    }
+    
+    .movie-card {
+        width: 100px;
+    }
+    
+    .movie-card img {
+        height: 140px;
+    }
+}
+
+/* Modal styling */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.7);
+    z-index: 999;
+}
+
+.modal-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    width: 400px;
+    max-width: 90%;
+}
+
+/* Collapsible sections */
+.collapsible-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    color: var(--text-color);
+    border: 1px outset var(--button-bg);
+    padding: 4px 8px;
+    background-color: var(--button-bg);
+}
+
+.collapsible-header:hover {
+    background-color: var(--button-hover);
+}
+
+.collapsible-arrow {
+    display: inline-block;
+    width: 12px;
+    margin-right: 5px;
+    color: var(--text-color);
+}
+
+.collapsible-content {
+    display: none;
+    background-color: var(--progress-bg);
+    padding: 8px;
+    border: 1px inset var(--border-dark);
+}
+</style>
+
+<!-- Backdrop overlay -->
+<div class="backdrop-overlay"></div>
+
+<div class="community-page-container">    <!-- Page Header -->
+    <div class="window">
         <div class="title-bar">
             <div class="title-bar-text">Community Movie Club</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize">_</button>
+                <button aria-label="Maximize">□</button>
+                <button aria-label="Close">✕</button>
+            </div>
         </div>
         <div class="window-body">
             <h4>Watch movies together with the community!</h4>
             <p>Every week, a new movie suggested by a community member becomes our focus. 
                Watch it, review it, and discuss with others.</p>
         </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Community Club</div>
+            <div class="status-bar-field">Active Members: {{ amount_of_users }}</div>
+        </div>
     </div>
-    
-    <!-- Current Movie of the Week Section -->
-    <div class="window mb-4">
+      <!-- Current Movie of the Week Section -->
+    <div class="window">
         <div class="title-bar">
             <div class="title-bar-text">Current Movie of the Week</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize">_</button>
+                <button aria-label="Maximize">□</button>
+                <button aria-label="Close">✕</button>
+            </div>
         </div>
         <div class="window-body">
             {% if current_pick %}
-                <div class="row">
+                <div class="movie-info-container">
                     <!-- Movie Poster -->
-                    <div class="col-md-4 text-center">
+                    <div class="movie-poster">
                         <img src="{{ current_pick.movie.poster }}" alt="{{ current_pick.movie.title }}" 
-                             style="max-height: 300px; border: 2px solid #c0c0c0; margin-bottom: 10px;">
+                             onclick="window.open('{{ current_pick.movie.poster }}', '_blank')">
                         
-                        <div class="mt-2">
+                        <div style="margin-top: 10px; font-size: 11px;">
                             <strong>Runtime:</strong> {{ current_pick.movie.minutes_to_hours }}
                             <br>
                             <strong>Rating:</strong> {{ current_pick.movie.rating }}/10
@@ -36,81 +587,79 @@
                     </div>
                     
                     <!-- Movie Details -->
-                    <div class="col-md-8">
-                        <h3 class="mb-2">{{ current_pick.movie.title }}</h3>
-                        <p class="text-muted">
+                    <div class="movie-details">
+                        <h3 style="margin-bottom: 8px; font-size: 16px;">{{ current_pick.movie.title }}</h3>
+                        <p style="color: var(--text-muted); font-size: 11px; margin-bottom: 10px;">
                             <em>Suggested by {{ current_pick.suggested_by.username }}</em>
                         </p>
                         
                         <!-- Suggestion Reason -->
-                        <div class="card p-3 mb-3" style="background-color: #f0f0f0; border: 1px solid #c0c0c0;">
-                            <h5>Why watch this movie:</h5>
-                            <p>{{ current_pick.suggestion_reason }}</p>
+                        <div style="background-color: var(--progress-bg); border: 1px inset var(--border-dark); padding: 8px; margin-bottom: 12px;">
+                            <div style="font-weight: bold; margin-bottom: 4px;">Why watch this movie:</div>
+                            <p style="margin: 0; font-size: 11px;">{{ current_pick.suggestion_reason }}</p>
                         </div>
                         
-                        <p>{{ current_pick.movie.description|truncatewords:50 }}</p>
+                        <p style="font-size: 11px; line-height: 1.4; margin-bottom: 12px;">{{ current_pick.movie.description|truncatewords:50 }}</p>
                         
                         <!-- Watch Progress -->
-                        <div class="mb-3">
-                        <label><strong>Community Watch Progress:</strong></label>
-                        <div class="progress" style="height: 25px; border: 1px solid #000;">
-                            <div class="progress-bar" role="progressbar" 
-                                style="width: {% widthratio current_pick.watched_count amount_of_users 100 %}%; background-color: #008080; color: #fff;"
-                                aria-valuenow="{{ current_pick.watched_count }}" aria-valuemin="0" aria-valuemax="{{ amount_of_users }}">
-                                {{ current_pick.watched_count }} out of {{ amount_of_users }} watchers
+                        <div style="margin-bottom: 12px;">
+                            <label style="font-weight: bold; font-size: 11px;">Community Watch Progress:</label>
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" 
+                                    style="width: {% widthratio current_pick.watched_count amount_of_users 100 %}%;"
+                                    aria-valuenow="{{ current_pick.watched_count }}" aria-valuemin="0" aria-valuemax="{{ amount_of_users }}">
+                                    {{ current_pick.watched_count }} out of {{ amount_of_users }} watchers
+                                </div>
                             </div>
-                        </div>
-                        <small class="text-muted">Ends on: {{ current_pick.end_date|date:"F j, Y" }}</small>
-                            
+                            <small style="color: var(--text-muted); font-size: 10px;">Ends on: {{ current_pick.end_date|date:"F j, Y" }}</small>
+                                
                             <!-- User Watch Status Section -->
-                            <div class="mt-3 mb-2">
-                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" 
-                                        data-bs-target="#watchStatusCollapse" aria-expanded="false">
-                                    Show Watchers <i class="fas fa-chevron-down ms-1"></i>
-                                </button>
-                            </div>
-                            
-                            <div class="collapse" id="watchStatusCollapse">
-                                <div class="card card-body">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <h6 class="text-success"><i class="fas fa-check-circle me-1"></i> Have Watched:</h6>
-                                            <ul class="list-group">
+                            <div style="margin-top: 12px;">
+                                <div class="collapsible-header" onclick="toggleCollapsible('watchStatus')">
+                                    <span class="collapsible-arrow" id="watchStatusArrow">▶</span>
+                                    Show Watchers
+                                </div>
+                                
+                                <div id="watchStatusContent" class="collapsible-content">
+                                    <div style="display: flex; gap: 20px;">
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: bold; color: #008000; margin-bottom: 6px; font-size: 11px;">✓ Have Watched:</div>
+                                            <div class="watchers-container">
                                                 {% if current_pick.watched_by.exists %}
                                                     {% for watcher in current_pick.watched_by.all %}
-                                                        <li class="list-group-item d-flex align-items-center py-2">
+                                                        <div class="watcher-item">
                                                             <img src="{{ watcher.get_profile_picture }}" alt="{{ watcher.username }}" 
-                                                                 class="rounded-circle me-2" style="width: 24px; height: 24px;">
-                                                            <span>{{ watcher.username }}</span>
+                                                                 class="watcher-avatar">
+                                                            <span class="watcher-name">{{ watcher.username }}</span>
                                                             {% if watcher.id == user.id %}
-                                                                <span class="badge bg-primary ms-2">You</span>
+                                                                <span class="you-badge">You</span>
                                                             {% endif %}
-                                                        </li>
+                                                        </div>
                                                     {% endfor %}
                                                 {% else %}
-                                                    <li class="list-group-item text-muted">No one has watched yet</li>
+                                                    <div style="color: var(--text-muted); font-size: 10px; padding: 4px;">No one has watched yet</div>
                                                 {% endif %}
-                                            </ul>
+                                            </div>
                                         </div>
                                         
-                                        <div class="col-md-6">
-                                            <h6 class="text-secondary"><i class="fas fa-clock me-1"></i> Haven't Watched Yet:</h6>
-                                            <ul class="list-group">
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: bold; color: var(--text-muted); margin-bottom: 6px; font-size: 11px;">⏱ Haven't Watched Yet:</div>
+                                            <div class="watchers-container">
                                                 {% if not_watched_users %}
                                                     {% for user_item in not_watched_users %}
-                                                        <li class="list-group-item d-flex align-items-center py-2">
+                                                        <div class="watcher-item">
                                                             <img src="{{ user_item.get_profile_picture }}" alt="{{ user_item.username }}" 
-                                                                 class="rounded-circle me-2" style="width: 24px; height: 24px;">
-                                                            <span>{{ user_item.username }}</span>
+                                                                 class="watcher-avatar">
+                                                            <span class="watcher-name">{{ user_item.username }}</span>
                                                             {% if user_item.id == user.id %}
-                                                                <span class="badge bg-secondary ms-2">You</span>
+                                                                <span class="you-badge">You</span>
                                                             {% endif %}
-                                                        </li>
+                                                        </div>
                                                     {% endfor %}
                                                 {% else %}
-                                                    <li class="list-group-item text-muted">Everyone has watched!</li>
+                                                    <div style="color: var(--text-muted); font-size: 10px; padding: 4px;">Everyone has watched!</div>
                                                 {% endif %}
-                                            </ul>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -118,166 +667,201 @@
                         </div>
                         
                         <!-- Action Buttons -->
-                        <div class="button-group">
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             {% if user.is_authenticated %}
                                 {% if user_context.has_watched_current %}
-                                    <button class="btn btn-success" disabled>✓ Watched</button>
+                                    <button class="retro-btn" disabled style="background-color: #008000; color: white;">✓ Watched</button>
                                     
                                     {% if user_context.has_reviewed_current %}
-                                        <button class="btn btn-info" onclick="openReviewModal()">Edit Review</button>
+                                        <button class="retro-btn" onclick="openReviewModal()">Edit Review</button>
                                     {% else %}
-                                        <button class="btn btn-outline-primary" onclick="openReviewModal()">Add Review</button>
+                                        <button class="retro-btn" onclick="openReviewModal()">Add Review</button>
                                     {% endif %}
                                 {% else %}
                                     <form method="post" action="{% url 'mark_movie_watched' current_pick.id %}" style="display:inline;">
                                         {% csrf_token %}
-                                        <button type="submit" class="btn btn-primary">Mark as Watched</button>
+                                        <button type="submit" class="retro-btn">Mark as Watched</button>
                                     </form>
-                                    <button class="btn btn-outline-primary" onclick="openReviewModal()">Watch & Review</button>
+                                    <button class="retro-btn" onclick="openReviewModal()">Watch & Review</button>
                                 {% endif %}
                             {% endif %}
-                            <a href="{% url 'movie_page' current_pick.movie.tmdb_id %}" class="btn btn-outline-secondary">Movie Details</a>
+                            <a href="{% url 'movie_page' current_pick.movie.tmdb_id %}" class="retro-btn">Movie Details</a>
                         </div>
                     </div>
                 </div>
             {% else %}
-                <div class="text-center py-4">
+                <div style="text-align: center; padding: 40px 20px;">
                     <h5>No active movie currently selected.</h5>
                     <p>Be the first to suggest a movie for the community to watch!</p>
                 </div>
             {% endif %}
         </div>
+        <div class="status-bar">
+            {% if current_pick %}
+                <div class="status-bar-field">{{ current_pick.movie.title }}</div>
+                <div class="status-bar-field">{{ current_pick.watched_count }}/{{ amount_of_users }} watched</div>
+            {% else %}
+                <div class="status-bar-field">No active movie</div>
+            {% endif %}
+        </div>
     </div>
-    
-    <!-- Movie Reviews Section (for current movie) -->
+      <!-- Movie Reviews Section (for current movie) -->
     {% if current_pick %}
-    <div class="window mb-4" id="movie-reviews-section">
+    <div class="window" id="movie-reviews-section">
         <div class="title-bar">
             <div class="title-bar-text">Reviews for {{ current_pick.movie.title }}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize">_</button>
+                <button aria-label="Maximize">□</button>
+                <button aria-label="Close">✕</button>
+            </div>
         </div>
         <div class="window-body">
             <!-- User's Review (or Review Form) -->
-            <div class="mb-4">
+            <div style="margin-bottom: 16px;">
                 {% if user.is_authenticated %}
                     {% if user_context.has_reviewed_current %}
                         <!-- Show user's review -->
-                        <div class="card mb-3">
-                            <div class="card-header d-flex justify-content-between">
+                        <div class="review-card">
+                            <div class="review-header">
                                 <span>Your Review</span>
-                                <span class="badge" style="background-color: {% if user_context.current_review.rating >= 7 %}#28a745{% elif user_context.current_review.rating >= 5 %}#ffc107{% else %}#dc3545{% endif %}; color: #fff;">
+                                <span class="review-rating" style="background-color: {% if user_context.current_review.rating >= 7 %}#28a745{% elif user_context.current_review.rating >= 5 %}#ffc107{% else %}#dc3545{% endif %};">
                                     {{ user_context.current_review.rating }}/10
                                 </span>
                             </div>
-                            <div class="card-body">
+                            <div class="review-body">
                                 {% if user_context.current_review.review_text %}
                                     <p>{{ user_context.current_review.review_text|linebreaks }}</p>
                                 {% else %}
-                                    <p class="text-muted">(No written review provided)</p>
+                                    <p style="color: var(--text-muted); font-style: italic;">(No written review provided)</p>
                                 {% endif %}
-                                <button class="btn btn-sm btn-outline-secondary" onclick="openReviewModal()">Edit Review</button>
+                                <button class="retro-btn" onclick="openReviewModal()">Edit Review</button>
                             </div>
                         </div>
                     {% else %}
                         <!-- Button to add review -->
-                        <div class="text-center py-3">
-                            <button class="btn btn-primary" onclick="openReviewModal()">Write a Review</button>
-                            <p class="small text-muted mt-2">Writing a review will automatically mark the movie as watched.</p>
+                        <div style="text-align: center; padding: 20px; background-color: var(--progress-bg); border: 1px inset var(--border-dark);">
+                            <button class="retro-btn" onclick="openReviewModal()">Write a Review</button>
+                            <p style="font-size: 10px; color: var(--text-muted); margin-top: 8px;">Writing a review will automatically mark the movie as watched.</p>
                         </div>
                     {% endif %}
                 {% else %}
-                    <div class="alert alert-secondary">
-                        Please <a href="{% url 'login' %}">log in</a> to review this movie.
+                    <div style="padding: 12px; background-color: var(--progress-bg); border: 1px inset var(--border-dark); text-align: center;">
+                        <p style="margin: 0;">Please <a href="{% url 'login' %}" style="color: var(--text-color);">log in</a> to review this movie.</p>
                     </div>
                 {% endif %}
             </div>
 
             <!-- Community Reviews -->
-            <h5 class="mb-3">Community Reviews</h5>
+            <div style="font-weight: bold; margin-bottom: 12px; font-size: 12px;">Community Reviews</div>
             {% if current_pick.reviews %}
                 {% for review in current_pick.reviews %}
                     {% if review.user != user or not user.is_authenticated %}
-                        <div class="card mb-3">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <div class="d-flex align-items-center">
+                        <div class="review-card">
+                            <div class="review-header">
+                                <div style="display: flex; align-items: center;">
                                     <img src="{{ review.user.get_profile_picture }}" alt="{{ review.user.username }}" 
-                                         class="rounded-circle me-2" style="width: 24px; height: 24px;">
+                                         class="watcher-avatar">
                                     <span>{{ review.user.username }}</span>
                                 </div>
-                                <span class="badge" style="background-color: {% if review.rating >= 7 %}#28a745{% elif review.rating >= 5 %}#ffc107{% else %}#dc3545{% endif %}; color: #fff;">
+                                <span class="review-rating" style="background-color: {% if review.rating >= 7 %}#28a745{% elif review.rating >= 5 %}#ffc107{% else %}#dc3545{% endif %};">
                                     {{ review.rating }}/10
                                 </span>
                             </div>
-                            <div class="card-body">
+                            <div class="review-body">
                                 {% if review.review_text %}
                                     <p>{{ review.review_text|linebreaks }}</p>
                                 {% else %}
-                                    <p class="text-muted">(No written review provided)</p>
+                                    <p style="color: var(--text-muted); font-style: italic;">(No written review provided)</p>
                                 {% endif %}
                             </div>
-                            <div class="card-footer text-muted">
-                                <small>{{ review.date_added|date:"M d, Y" }}</small>
+                            <div class="review-footer">
+                                {{ review.date_added|date:"M d, Y" }}
                             </div>
                         </div>
                     {% endif %}
                 {% endfor %}
             {% else %}
-                <p class="text-center text-muted">No reviews yet. Be the first to review this movie!</p>
+                <p style="text-align: center; color: var(--text-muted); padding: 20px;">No reviews yet. Be the first to review this movie!</p>
             {% endif %}
         </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Reviews: {{ current_pick.reviews|length }}</div>
+            <div class="status-bar-field">Average Rating: {% if current_pick.reviews %}{{ current_pick.average_rating|floatformat:1 }}/10{% else %}N/A{% endif %}</div>
+        </div>
     </div>
-    {% endif %}
-
-    <!-- Suggest a Movie Section -->
-    <div class="window mb-4">
+    {% endif %}    <!-- Suggest a Movie Section -->
+    <div class="window">
         <div class="title-bar">
             <div class="title-bar-text">Suggest a Movie</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize">_</button>
+                <button aria-label="Maximize">□</button>
+                <button aria-label="Close">✕</button>
+            </div>
         </div>
         <div class="window-body">
             {% if user.is_authenticated %}
                 {% if not user_context.has_active_suggestion %}
                     <form method="post" action="{% url 'suggest_movie' %}">
                         {% csrf_token %}
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="movie-search">Search for a movie:</label>
-                                <div class="input-group">
-                                    <input type="text" id="movie-search" class="form-control" placeholder="Type to search...">
-                                    <button type="button" class="btn btn-outline-secondary" id="search-btn">Search</button>
+                        <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                            <div style="flex: 1;">
+                                <label for="movie-search" style="font-weight: bold; display: block; margin-bottom: 4px;">Search for a movie:</label>
+                                <div style="display: flex; gap: 4px;">
+                                    <input type="text" id="movie-search" class="retro-input" placeholder="Type to search..." 
+                                           style="flex: 1;">
+                                    <button type="button" class="retro-btn" id="search-btn">Search</button>
                                 </div>
-                                <div id="movie-results" class="mt-2" style="max-height: 300px; overflow-y: auto;"></div>
+                                <div id="movie-results" style="margin-top: 8px; max-height: 300px; overflow-y: auto; background-color: var(--progress-bg); border: 1px inset var(--border-dark);"></div>
                                 <input type="hidden" name="movie_id" id="selected-movie-id" required>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="reason">Why should the community watch this movie?</label>
-                                <textarea name="reason" id="reason" class="form-control" rows="5" required></textarea>
-                                <small class="text-muted">Explain what makes this movie special or worth discussing.</small>
+                            <div style="flex: 1;">
+                                <label for="reason" style="font-weight: bold; display: block; margin-bottom: 4px;">Why should the community watch this movie?</label>
+                                <textarea name="reason" id="reason" class="retro-textarea" rows="5" required 
+                                          style="width: 100%; resize: vertical;" placeholder="Explain what makes this movie special..."></textarea>
+                                <small style="color: var(--text-muted); font-size: 10px;">Explain what makes this movie special or worth discussing.</small>
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-primary">Submit Suggestion</button>
+                        <button type="submit" class="retro-btn">Submit Suggestion</button>
                     </form>
                 {% else %}
-                    <div class="alert alert-info">
-                        <p>You already have an active movie suggestion in the queue. 
+                    <div style="padding: 12px; background-color: var(--progress-bg); border: 1px inset var(--border-dark);">
+                        <p style="margin: 0;">You already have an active movie suggestion in the queue. 
                            You can suggest another movie after your current suggestion has been completed.</p>
                     </div>
                 {% endif %}
             {% else %}
-                <div class="alert alert-secondary">
-                    Please <a href="{% url 'login' %}">log in</a> to suggest a movie.
+                <div style="padding: 12px; background-color: var(--progress-bg); border: 1px inset var(--border-dark); text-align: center;">
+                    <p style="margin: 0;">Please <a href="{% url 'login' %}" style="color: var(--text-color);">log in</a> to suggest a movie.</p>
                 </div>
             {% endif %}
         </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Movie Suggestions</div>
+            {% if user.is_authenticated %}
+                {% if user_context.has_active_suggestion %}
+                    <div class="status-bar-field">You have an active suggestion</div>
+                {% else %}
+                    <div class="status-bar-field">Ready to suggest</div>
+                {% endif %}
+            {% endif %}
+        </div>
     </div>
-    
-    <!-- Upcoming Movies Queue -->
-    <div class="window mb-4">
+      <!-- Upcoming Movies Queue -->
+    <div class="window">
         <div class="title-bar">
             <div class="title-bar-text">Upcoming Movie Suggestions</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize">_</button>
+                <button aria-label="Maximize">□</button>
+                <button aria-label="Close">✕</button>
+            </div>
         </div>
         <div class="window-body">
             {% if queued_picks %}
-                <div class="table-responsive">
-                    <table class="table">
+                <div style="overflow-x: auto;">
+                    <table class="retro-table">
                         <thead>
                             <tr>
                                 <th>Position</th>
@@ -291,10 +875,10 @@
                                 <tr>
                                     <td>#{{ forloop.counter }}</td>
                                     <td>
-                                        <div class="d-flex align-items-center">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
                                             <img src="{{ pick.movie.poster }}" alt="{{ pick.movie.title }}" 
-                                                 style="height: 50px; margin-right: 10px;">
-                                            <a href="{% url 'movie_page' pick.movie.tmdb_id %}">{{ pick.movie.title }}</a>
+                                                 style="height: 40px; width: auto; border: 1px solid var(--border-dark);">
+                                            <a href="{% url 'movie_page' pick.movie.tmdb_id %}" style="color: var(--text-color); text-decoration: none;">{{ pick.movie.title }}</a>
                                         </div>
                                     </td>
                                     <td>{{ pick.suggested_by.username }}</td>
@@ -305,55 +889,59 @@
                     </table>
                 </div>
             {% else %}
-                <p class="text-center py-3">No movies in the queue. Be the first to suggest one!</p>
+                <p style="text-align: center; padding: 20px; color: var(--text-muted);">No movies in the queue. Be the first to suggest one!</p>
             {% endif %}
         </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Queue</div>
+            <div class="status-bar-field">{{ queued_picks|length }} movie{{ queued_picks|length|pluralize }} waiting</div>
+        </div>
     </div>
-    
-    <!-- Previously Watched Movies -->
-    <div class="window mb-4">
+      <!-- Previously Watched Movies -->
+    <div class="window">
         <div class="title-bar">
             <div class="title-bar-text">Previously Watched Movies</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize">_</button>
+                <button aria-label="Maximize">□</button>
+                <button aria-label="Close">✕</button>
+            </div>
         </div>
         <div class="window-body">
             {% if completed_picks %}
-                <div class="row">
-                    {% for pick in completed_picks|slice:":6" %}
-                        <div class="col-6 col-md-4 col-lg-2 mb-3">
-                            <div class="card h-100" style="border: 1px solid #c0c0c0;">
-                                <img src="{{ pick.movie.poster }}" class="card-img-top" alt="{{ pick.movie.title }}">
-                                <div class="card-body p-2">
-                                    <h6 class="card-title mb-1">{{ pick.movie.title }}</h6>
-                                    <p class="card-text small mb-1">{{ pick.start_date|date:"M d, Y" }}</p>
-                                    <a href="{% url 'movie_week_discussion' pick.id %}" class="btn btn-sm btn-outline-secondary w-100">
-                                        View Discussion
-                                    </a>
-                                </div>
+                <div class="horizontal-scroll">
+                    {% for pick in completed_picks %}
+                        <div class="movie-card">
+                            <img src="{{ pick.movie.poster }}" alt="{{ pick.movie.title }}">
+                            <div class="movie-card-body">
+                                <div class="movie-card-title">{{ pick.movie.title }}</div>
+                                <div class="movie-card-date">{{ pick.start_date|date:"M d, Y" }}</div>
+                                <a href="{% url 'movie_week_discussion' pick.id %}" class="retro-btn movie-card-btn">
+                                    Discussion
+                                </a>
                             </div>
                         </div>
                     {% endfor %}
                 </div>
-                
-                {% if completed_picks.count > 6 %}
-                    <div class="text-center mt-3">
-                        <a href="#" class="btn btn-outline-secondary">View All Past Movies</a>
-                    </div>
-                {% endif %}
             {% else %}
-                <p class="text-center py-3">No movies have been completed yet.</p>
+                <p style="text-align: center; padding: 20px; color: var(--text-muted);">No movies have been completed yet.</p>
             {% endif %}
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Previously Watched</div>
+            <div class="status-bar-field">{{ completed_picks|length }} movie{{ completed_picks|length|pluralize }} completed</div>
         </div>
     </div>
 </div>
 
 <!-- Review Modal -->
-<div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999;"></div>
+<div id="overlay" class="modal-overlay" style="display: none;"></div>
 
-<div id="reviewModal" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 400px; max-width: 90%;">
+<div id="reviewModal" class="window modal-window" style="display: none;">
     <div class="title-bar">
         <div class="title-bar-text">Review Movie of the Week</div>
         <div class="title-bar-controls">
-            <button aria-label="Close" onclick="closeReviewModal()"></button>
+            <button aria-label="Close" onclick="closeReviewModal()">✕</button>
         </div>
     </div>
     <div class="window-body">
@@ -362,37 +950,59 @@
             {% if current_pick %}
                 <input type="hidden" name="movie_id" value="{{ current_pick.movie.id }}">
             {% endif %}
-            <div class="field-row-stacked">
-                <label for="rating">Rating:</label>
-                <div class="field-row">
-                    <input type="range" id="rating" name="rating" min="1" max="10" value="5" step="1" oninput="updateRatingDisplay(this.value)">
-                    <div class="status-bar" style="width: auto; margin-left: 10px; padding: 2px 8px;">
+            <div style="margin-bottom: 12px;">
+                <label for="rating" style="font-weight: bold; display: block; margin-bottom: 4px;">Rating:</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="range" id="rating" name="rating" min="1" max="10" value="5" step="1" 
+                           oninput="updateRatingDisplay(this.value)" style="flex: 1;">
+                    <div class="status-bar-field" style="width: auto;">
                         <span id="ratingValue">5.0</span>/10
                     </div>
                 </div>
             </div>
             
-            <div class="field-row-stacked">
-                <label for="reviewText">Review:</label>
-                <textarea id="reviewText" name="review_text" rows="4" placeholder="Write your review here..."></textarea>
-                <p id="charCount" style="text-align: right; font-size: 0.8em; margin: 2px 0;">0 characters</p>
+            <div style="margin-bottom: 12px;">
+                <label for="reviewText" style="font-weight: bold; display: block; margin-bottom: 4px;">Review:</label>
+                <textarea id="reviewText" name="review_text" rows="4" class="retro-textarea" 
+                          placeholder="Write your review here..." style="width: 100%; resize: vertical;"></textarea>
+                <p id="charCount" style="text-align: right; font-size: 10px; margin: 4px 0; color: var(--text-muted);">0 characters</p>
             </div>
             
-            <section class="field-row" style="justify-content: space-between; margin-top: 16px;">
-                <div id="reviewLoadingIndicator" style="display: none; align-items: center;">
-                    <img src="{% static 'images/hourglass.webp' %}" alt="Loading" style="width: 20px; height: 20px; margin-right: 5px;">
-                    <span>Submitting...</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                <div id="reviewLoadingIndicator" style="display: none; align-items: center; gap: 4px;">
+                    <img src="{% static 'images/hourglass.webp' %}" alt="Loading" style="width: 16px; height: 16px;">
+                    <span style="font-size: 10px;">Submitting...</span>
                 </div>
-                <div style="margin-left: auto;">
-                    <button type="button" onclick="closeReviewModal()">Cancel</button>
-                    <button type="submit" id="submitBtn">Submit</button>
+                <div style="display: flex; gap: 4px;">
+                    <button type="button" class="retro-btn" onclick="closeReviewModal()">Cancel</button>
+                    <button type="submit" id="submitBtn" class="retro-btn">Submit</button>
                 </div>
-            </section>
+            </div>
         </form>
     </div>
 </div>
 
 <script>
+    // Add this helper function at the beginning of your script section
+    function sanitizeContent(content) {
+        if (!content) return '';
+        return DOMPurify.sanitize(content);
+    }
+    
+    // Collapsible sections functionality
+    function toggleCollapsible(id) {
+        const content = document.getElementById(id + 'Content');
+        const arrow = document.getElementById(id + 'Arrow');
+        
+        if (content.style.display === 'none' || !content.style.display) {
+            content.style.display = 'block';
+            arrow.textContent = '▼';
+        } else {
+            content.style.display = 'none';
+            arrow.textContent = '▶';
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const searchBtn = document.getElementById('search-btn');
         const searchInput = document.getElementById('movie-search');
@@ -416,11 +1026,11 @@
             const query = searchInput.value.trim();
             
             if (query.length < 2) {
-                resultsContainer.innerHTML = '<div class="alert alert-warning">Please enter at least 2 characters</div>';
+                resultsContainer.innerHTML = '<div style="padding: 8px; color: var(--text-color);">Please enter at least 2 characters</div>';
                 return;
             }
             
-            resultsContainer.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Searching...</div>';
+            resultsContainer.innerHTML = '<div style="padding: 8px; text-align: center; color: var(--text-color);">Searching...</div>';
             
             // Using the new local search endpoint instead of TMDB API directly
             fetch(`/movies/search-local/?q=${encodeURIComponent(query)}`)
@@ -433,16 +1043,13 @@
                             const year = movie.release_date ? movie.release_date.substring(0, 4) : 'N/A';
                             
                             html += `
-                                <div class="movie-result p-2" style="border-bottom: 1px solid #eee; cursor: pointer;" 
-                                     data-id="${movie.id}" data-title="${movie.title}">
-                                    <div class="d-flex align-items-center">
-                                        <img src="${posterUrl}" style="width: 45px; height: auto; margin-right: 10px;">
-                                        <div>
-                                            <strong>${movie.title}</strong> 
-                                            <small>(${year})</small>
-                                            <div class="small text-muted">
-                                                ${movie.rating.toFixed(1)}/10 · ${movie.runtime} min
-                                            </div>
+                                <div class="movie-result" style="padding: 6px; border-bottom: 1px solid var(--border-dark); cursor: pointer; display: flex; align-items: center; gap: 8px;" 
+                                     data-id="${movie.id}" data-title="${movie.title}" onmouseover="this.style.backgroundColor='var(--button-hover)'" onmouseout="this.style.backgroundColor='transparent'">
+                                    <img src="${posterUrl}" style="width: 36px; height: auto;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: bold; font-size: 11px;">${movie.title} <span style="font-weight: normal;">(${year})</span></div>
+                                        <div style="font-size: 10px; color: var(--text-muted);">
+                                            ${movie.rating.toFixed(1)}/10 · ${movie.runtime} min
                                         </div>
                                     </div>
                                 </div>
@@ -461,12 +1068,12 @@
                             });
                         });
                     } else {
-                        resultsContainer.innerHTML = '<div class="alert alert-info">No movies found</div>';
+                        resultsContainer.innerHTML = '<div style="padding: 8px; color: var(--text-color);">No movies found</div>';
                     }
                 })
                 .catch(error => {
                     console.error('Error searching movies:', error);
-                    resultsContainer.innerHTML = '<div class="alert alert-danger">Error searching. Please try again.</div>';
+                    resultsContainer.innerHTML = '<div style="padding: 8px; color: red;">Error searching. Please try again.</div>';
                 });
         }
     });
@@ -494,8 +1101,6 @@
         {% endif %}
         
         // Show modal
-        overlay.style.zIndex = "999";
-        modal.style.zIndex = "1000";
         modal.style.display = 'block';
         overlay.style.display = 'block';
         document.body.style.overflow = 'hidden';
