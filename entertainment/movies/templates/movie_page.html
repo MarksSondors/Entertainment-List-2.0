@@ -1,20 +1,183 @@
 {% extends "components/base.html" %}
+{% load static %}
 
 {% block content %}
 <!-- Add this near the top of your content block, before any scripts -->
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
 <style>
-body {
-    font-family: 'MS Sans Serif', Arial, sans-serif;
+/* Theme-adaptive CSS variables */
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --progress-bg: #fff;
+    --progress-bar: #008080;
+    --shadow-color: rgba(0,0,0,0.25);
+    --poster-border: #a0a0a0;
+    --backdrop-overlay: rgba(192, 192, 192, 0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --progress-bg: #2a2a2a;
+        --progress-bar: #00a0a0;
+        --shadow-color: rgba(0,0,0,0.5);
+        --poster-border: #606060;
+        --backdrop-overlay: rgba(56, 56, 56, 0.9);
+    }
+}
+
+/* Movie page specific styles */
+.movie-page-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Backdrop overlay */
+.backdrop-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: url('{{ movie.backdrop }}') no-repeat center center fixed;
     background-size: cover;
-    color: black;
+    z-index: -2;
+}
+
+.backdrop-overlay::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--backdrop-overlay);
+    z-index: -1;
+}
+
+/* Window styling */
+.window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    margin-bottom: 20px;
+}
+
+.title-bar {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+    color: white;
+    padding: 2px;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
+}
+
+.title-bar-controls button {
+    width: 16px;
+    height: 14px;
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    margin-left: 2px;
+    font-size: 8px;
+    cursor: pointer;
+}
+
+.title-bar-controls button:active {
+    border: 1px inset var(--button-bg);
+}
+
+.window-body {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 12px;
+}
+
+.status-bar {
+    border-top: 1px solid var(--border-dark);
+    background-color: var(--bg-color);
+    padding: 2px 4px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-bar-field {
+    border: 1px inset var(--bg-color);
+    padding: 2px 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.retro-btn {
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--button-text);
+    padding: 2px 8px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background-color 0.1s ease;
+}
+
+.retro-btn:hover {
+    background: var(--button-hover);
+    color: var(--button-text);
+    text-decoration: none;
+}
+
+.retro-btn:active {
+    border: 1px inset var(--button-bg);
+}
+
+/* Enhanced button styling for dark mode */
+@media (prefers-color-scheme: dark) {
+    .retro-btn {
+        border-color: var(--border-light);
+        box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+    }
+    
+    .retro-btn:hover {
+        box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+    }
 }
 
 /* Mobile optimization styles */
 @media (max-width: 768px) {
-    .movie-container {
+    .movie-page-container {
+        padding: 10px;
+    }
+    
+    .movie-info-container {
         flex-direction: column !important;
     }
     
@@ -43,16 +206,21 @@ body {
         gap: 8px !important;
     }
     
-    .button-container button {
+    .button-container .retro-btn {
         width: 100% !important;
         font-size: 14px !important;
     }
     
-    .sunken-panel {
-        height: auto !important;
-        max-height: 350px !important;
+    /* Hide desktop table view on mobile */
+    .review-table.desktop-view {
+        display: none !important;
     }
     
+    /* Show mobile review cards */
+    .mobile-view.review-cards {
+        display: flex !important;
+    }
+}    
     .review-table {
         display: block;
         overflow-x: auto;
@@ -61,9 +229,8 @@ body {
 }
 
 @media (max-width: 480px) {
-    .movie-container, .review-container {
-        padding: 10px !important;
-        margin: 10px !important;
+    .movie-page-container {
+        padding: 5px !important;
     }
     
     .button-container {
@@ -77,9 +244,36 @@ body {
     }
 }
 
+/* Highlighted rows for interactive tables */
 .interactive tr.highlighted {
     background-color: #000080;
     color: white;
+}
+
+/* Review table styling */
+.review-table {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+}
+
+.review-table thead th {
+    background-color: var(--window-bg);
+    border-bottom: 2px solid var(--border-dark);
+    color: var(--text-color);
+    font-weight: bold;
+}
+
+.review-table tbody tr:hover {
+    background-color: var(--button-hover);
+}
+
+.review-table tbody tr.highlighted {
+    background-color: #000080 !important;
+    color: white !important;
+}
+
+.review-table tbody tr.highlighted td {
+    color: white !important;
 }
 
 /* Review text handling improvements */
@@ -99,12 +293,24 @@ body {
     word-break: break-word;
     overflow-wrap: break-word;
     white-space: pre-wrap;
-    background-color: #f9f9f9;
+    background-color: var(--progress-bg);
+    color: var(--text-color);
     padding: 8px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-dark);
     max-height: 300px;
     overflow-y: auto;
     overflow-x: hidden;
+}
+
+/* Modal styling */
+.modal {
+    background-color: rgba(0,0,0,0.7);
+}
+
+.modal-content {
+    background-color: var(--window-bg);
+    border: 2px outset var(--bg-color);
+    box-shadow: 2px 2px 4px var(--shadow-color);
 }
 
 @media (max-width: 768px) {
@@ -119,87 +325,263 @@ body {
         aspect-ratio: 16/9;
     }
 }
+
+/* Link styling for better visibility */
+.window-body a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.window-body a:hover {
+    color: var(--text-color);
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Progress bar styling */
+.progress {
+    border: 1px inset var(--bg-color);
+    background-color: var(--progress-bg);
+    border-radius: 0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background-color: var(--progress-bar) !important;
+    transition: none;
+    border-radius: 0;
+    font-weight: bold;
+    color: #ffffff !important;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+}
+
+/* Enhanced poster styling */
+.movie-poster img {
+    border: 2px solid var(--poster-border);
+    border-radius: 4px;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    cursor: pointer;
+}
+
+/* Crew member cards */
+.crew-member {
+    flex: 0 0 auto;
+    min-width: 120px;
+    max-width: 180px;
+    text-align: left;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 6px;
+    border: 2px outset var(--bg-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: 2px;
+}
+
+.crew-member a {
+    color: var(--text-color);
+    font-weight: bold;
+    font-size: 13px;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-decoration: none;
+}
+
+.crew-member p {
+    margin: 2px 0 0;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-muted);
+}
+
+/* Production companies styling */
+.production-company {
+    display: block;
+    width: 120px;
+    height: 60px;
+    margin: 5px;
+    text-align: center;
+    text-decoration: none;
+}
+
+.production-company img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.production-company-placeholder {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    border: 1px outset var(--border-light);
+    font-size: 12px;
+    text-align: center;
+}
+
+/* Collapsible sections */
+.collapsible-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    color: var(--text-color);
+}
+
+.collapsible-arrow {
+    display: inline-block;
+    width: 12px;
+    margin-right: 5px;
+    color: var(--text-color);
+}
+
+.collapsible-content {
+    display: none;
+    flex-wrap: wrap;
+    gap: 10px;
+    overflow-x: auto;
+    background-color: var(--progress-bg);
+    padding: 5px;
+    border: 1px inset var(--border-dark);
+}
+
+/* Fellow movie hoarders section */
+.fellow-hoarders {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    max-height: 80px;
+    overflow-y: auto;
+    background-color: var(--progress-bg);
+    padding: 5px;
+    border: 1px inset var(--border-dark);
+}
+
+.hoarder-badge {
+    text-decoration: none;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 3px 6px;
+    border: 1px outset var(--border-light);
+    font-size: 12px;
+    white-space: nowrap;
+    display: inline-block;
+    margin-bottom: 3px;
+}
+
+.hoarder-badge:hover {
+    background-color: var(--button-hover);
+    color: var(--text-color);
+    text-decoration: none;
+}
 </style>
 
-<div class="movie-container" style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: rgba(195, 195, 195, 0.7); color: black; padding: 20px; border: 2px solid black; display: flex; align-items: flex-start; gap: 20px; margin: 20px;">
-    <div class="movie-poster" style="flex-shrink: 0;">
-        <img src="{{ movie.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" alt="{{ movie.title }} Poster" style="width: 200px; border: 2px solid black; cursor: pointer;" onclick="openPosterModal()">
+<!-- Backdrop overlay -->
+<div class="backdrop-overlay"></div>
 
-        {% include "components/poster_modal.html" with poster_url=movie.poster title=movie.title %}
-    </div>
-    <div class="movie-details" style="flex-grow: 1;">
-        <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
-            <h1 style="margin: 0; font-size: 18px;">{{ movie.title }} {% if movie.title != movie.original_title %} ({{ movie.original_title }}){% endif %}
-            </h1>
-        </div>
-        <div style="background-color: rgba(255, 255, 255, 0.86); padding: 10px; border: 2px inset;">
-            <!-- Plot section - hide based on show_plot setting -->
-            {% if not request.user.is_authenticated or user_settings.show_plot %}
-            <p><strong>Plot:</strong> {{movie.description}}</p>
-            {% else %}
-            <p><strong>Plot:</strong> <em>Plot hidden based on your settings</em>
-            </p>
-            {% endif %}
-            <p><strong>Release Year:</strong> {{movie.release_date|date:"Y"}}</p>
-            <p><strong>Genre:</strong> 
-                {% for genre in movie.genres.all %}
-                    <a href="{{ genre.get_absolute_url }}" style="text-decoration: none; color: black;">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
-                {% endfor %}
-            </p>
-            <p><strong>Rating:</strong> {{ movie.rating }}</p>
-            <p><strong>Runtime:</strong> {{ movie.minutes_to_hours }}</p>
-            <p><strong>Country:</strong> 
-                {% for country in movie.countries.all %}
-                    <a href="{{ country.get_absolute_url }}" style="text-decoration: none; color: black;">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
-                {% endfor %}
-            </p>
-            <!-- Keywords section - hide based on show_keywords setting -->
-            {% if not request.user.is_authenticated or user_settings.show_keywords %}
-            <p><strong>Keywords:</strong>
-                {% for keyword in movie.keywords.all %}
-                    <a href="#" style="text-decoration: none; color: black;">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
-                {% endfor %}
-            </p>
-            {% else %}
-            <p><strong>Keywords:</strong> <em>Keywords hidden based on your settings</em>
-            </p>
-            {% endif %}
-            {% if movie.collection %}
-            <p><strong>Collection:</strong>
-                <a href="{% url 'collection_detail' movie.collection.id %}" style="text-decoration: none; color: black;">{{ movie.collection.name }}</a>
-            </p>
-            {% endif %}
-            <div class="crew-scroll" style="display: flex; overflow-x: auto; gap: 8px; margin-bottom: 10px; padding-bottom: 5px; -webkit-overflow-scrolling: touch;">
-                {% for person, roles in movie.get_crew.items %}
-                    <div style="flex: 0 0 auto; min-width: 120px; max-width: 180px; text-align: left; background-color: #C3C3C3; color: black; padding: 6px; border: 2px outset; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        <a href="{% url 'person_detail' person.id %}" style="text-decoration: none; color: black; font-weight: bold; font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            {{ person.name }}
-                        </a>
-                        <p style="margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            {{ roles|join:", " }}
-                        </p>
-                    </div>
-                {% empty %}
-                    <div style="text-align: center; font-style: italic; width: 100%; background-color: #C3C3C3; padding: 5px; border: 2px inset;">No crew information available</div>
-                {% endfor %}
+<div class="movie-page-container">
+    <!-- Movie Information Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">{{ movie.title }}{% if movie.title != movie.original_title %} ({{ movie.original_title }}){% endif %}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
             </div>
-            <!-- Only show Production Companies section if companies exist -->
+        </div>
+        <div class="window-body">
+            <div class="movie-info-container" style="display: flex; align-items: flex-start; gap: 20px;">
+                <div class="movie-poster" style="flex-shrink: 0;">
+                    <img src="{{ movie.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                         alt="{{ movie.title }} Poster" 
+                         style="width: 200px;" 
+                         onclick="openPosterModal()">
+                    {% include "components/poster_modal.html" with poster_url=movie.poster title=movie.title %}
+                </div>
+                <div class="movie-details" style="flex-grow: 1;">
+                    <!-- Plot section - hide based on show_plot setting -->
+                    {% if not request.user.is_authenticated or user_settings.show_plot %}
+                    <p><strong>Plot:</strong> {{ movie.description }}</p>
+                    {% else %}
+                    <p><strong>Plot:</strong> <em style="color: var(--text-muted);">Plot hidden based on your settings</em></p>
+                    {% endif %}
+                    
+                    <p><strong>Release Year:</strong> {{ movie.release_date|date:"Y" }}</p>
+                    <p><strong>Genre:</strong> 
+                        {% for genre in movie.genres.all %}
+                            <a href="{{ genre.get_absolute_url }}">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                    <p><strong>Rating:</strong> {{ movie.rating }}</p>
+                    <p><strong>Runtime:</strong> {{ movie.minutes_to_hours }}</p>
+                    <p><strong>Country:</strong> 
+                        {% for country in movie.countries.all %}
+                            <a href="{{ country.get_absolute_url }}">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                    
+                    <!-- Keywords section - hide based on show_keywords setting -->
+                    {% if not request.user.is_authenticated or user_settings.show_keywords %}
+                    <p><strong>Keywords:</strong>
+                        {% for keyword in movie.keywords.all %}
+                            <a href="#">{{ keyword.name }}</a>{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                    {% else %}
+                    <p><strong>Keywords:</strong> <em style="color: var(--text-muted);">Keywords hidden based on your settings</em></p>
+                    {% endif %}
+                    
+                    {% if movie.collection %}
+                    <p><strong>Collection:</strong>
+                        <a href="{% url 'collection_detail' movie.collection.id %}">{{ movie.collection.name }}</a>
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Crew section -->
+            <div style="margin-top: 15px;">
+                <p style="font-weight: bold; margin-bottom: 10px; color: var(--text-color);">Crew:</p>
+                <div class="crew-scroll" style="display: flex; overflow-x: auto; gap: 8px; margin-bottom: 10px; padding-bottom: 5px; -webkit-overflow-scrolling: touch;">
+                    {% for person, roles in movie.get_crew.items %}
+                        <div class="crew-member">
+                            <a href="{% url 'person_detail' person.id %}">{{ person.name }}</a>
+                            <p>{{ roles|join:", " }}</p>
+                        </div>
+                    {% empty %}
+                        <div style="text-align: center; font-style: italic; width: 100%; background-color: var(--window-bg); padding: 5px; border: 2px inset var(--bg-color); color: var(--text-muted);">
+                            No crew information available
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Production Companies section -->
             {% if movie.production_companies.all %}
             <div style="margin-top: 10px;">
-                <p style="font-weight: bold; margin-bottom: 5px; cursor: pointer; display: flex; align-items: center;" 
-                   onclick="toggleProductionCompanies()">
-                   <span id="production-companies-arrow" style="display: inline-block; width: 12px; margin-right: 5px;">►</span>
+                <p class="collapsible-header" onclick="toggleProductionCompanies()">
+                   <span id="production-companies-arrow" class="collapsible-arrow">►</span>
                    Production Companies:
                 </p>
-                <div id="production-companies-container" style="display: none; flex-wrap: wrap; gap: 10px; overflow-x: auto; background-color: #f9f9f9; padding: 5px; border: 1px inset #ddd;">
+                <div id="production-companies-container" class="collapsible-content">
                     {% for company in movie.production_companies.all %}
-                        <a href="{{ company.get_absolute_url }}" style="text-decoration: none; display: block; width: 120px; height: 60px; margin: 5px; text-align: center;">
+                        <a href="{{ company.get_absolute_url }}" class="production-company">
                             {% if company.logo_path %}
                                 <div style="height: 100%; display: flex; justify-content: center; align-items: center;">
-                                    <img src="{{ company.logo_path }}" alt="{{ company.name }}" title="{{ company.name }}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                                    <img src="{{ company.logo_path }}" alt="{{ company.name }}" title="{{ company.name }}">
                                 </div>
                             {% else %}
-                                <div style="height: 100%; display: flex; justify-content: center; align-items: center; background-color: #C3C3C3; color: black; border: 1px outset #ddd; font-size: 12px; text-align: center;">
+                                <div class="production-company-placeholder">
                                     {{ company.name }}
                                 </div>
                             {% endif %}
@@ -209,170 +591,109 @@ body {
             </div>
             {% endif %}
 
-            <!-- Only show Fellow Movie Hoarders section if users exist -->
+            <!-- Fellow Movie Hoarders section -->
             {% if watchlist_users %}
             <div style="margin-top: 10px;">
-                <p style="font-weight: bold; margin-bottom: 5px;">Fellow Movie Hoarders:</p>
-                <div style="display: flex; flex-wrap: wrap; gap: 5px; max-height: 80px; overflow-y: auto; background-color: #f9f9f9; padding: 5px; border: 1px inset #ddd;">
+                <p style="font-weight: bold; margin-bottom: 5px; color: var(--text-color);">Fellow Movie Hoarders:</p>
+                <div class="fellow-hoarders">
                     {% for user in watchlist_users %}
-                        <a href="/profile/{{ user.username }}/" style="text-decoration: none; background-color: #C3C3C3; color: black; padding: 3px 6px; border: 1px outset #ddd; font-size: 12px; white-space: nowrap; display: inline-block; margin-bottom: 3px;">
+                        <a href="/profile/{{ user.username }}/" class="hoarder-badge">
                             {{ user.username }}
                         </a>
                     {% endfor %}
                 </div>
             </div>
             {% endif %}
-            <div style="text-align: right; font-size: 11px; color: #666; margin-top: 10px; font-style: italic;">
-                Last updated: {{ movie.date_updated|date:"M d, Y" }}
-            </div>
-        </div>
-        <div style="margin-top: 10px;" class="button-container">
-            <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openTrailerModal()">Watch Trailer</button>
-            {% include "components/trailer_modal.html" with trailer_url=movie.trailer %}
+            
+            <!-- Action buttons -->
+            <div style="margin-top: 15px;" class="button-container" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="retro-btn" onclick="openTrailerModal()">Watch Trailer</button>
+                {% include "components/trailer_modal.html" with trailer_url=movie.trailer %}
 
-            {% if user_watchlist %}
-                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="removeFromWatchlist()">Remove from Watchlist</button>
-            {% else %}
-                <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="addToWatchlist()">Add to Watchlist</button>
-            {% endif %}
-            {% if movie.status == "Released" %}
-            <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openReviewModal()">Write a Review</button>
-            {% endif %}
-            <button style="font-family: 'MS Sans Serif'; background-color: #C3C3C3; border: 2px outset; padding: 5px;" onclick="openCastModal()">Cast</button>
-
-            {% include "components/movie_review_modal.html" with content_id=movie.id content_type='movie' %}
-            {% include "components/cast_modal.html" with cast=movie.cast %}
-
-
-            <script>
+                {% if user_watchlist %}
+                    <button class="retro-btn" onclick="removeFromWatchlist()">Remove from Watchlist</button>
+                {% else %}
+                    <button class="retro-btn" onclick="addToWatchlist()">Add to Watchlist</button>
+                {% endif %}
                 
-                function addToWatchlist(){
-                    fetch('/movies/watchlist/', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken')
-                        },
-                        body: JSON.stringify({
-                            id: {{ movie.id }}
-                        })
-                    })
-                    .then(response => {
-                        if (response.ok) {
-                            window.location.reload();
-                        } else {
-                            response.json().then(data => {
-                                alert('Failed to add movie to watchlist: ' + (data.error || 'Unknown error'));
-                            }).catch(() => {
-                                alert('Failed to add movie to watchlist');
-                            });
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        alert('Error adding movie to watchlist');
-                    });
-                }
-                function removeFromWatchlist() {
-                    fetch('/movies/watchlist/', {
-                        method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken')
-                        },
-                        body: JSON.stringify({
-                            id: {{ movie.id }}
-                        })
-                    })
-                    .then(response => {
-                        if (response.ok) {
-                            window.location.reload();
-                        } else {
-                            alert('Failed to remove movie from watchlist');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        alert('Error removing movie from watchlist');
-                    });
-                }
+                {% if movie.status == "Released" %}
+                <button class="retro-btn" onclick="openReviewModal()">Write a Review</button>
+                {% endif %}
+                
+                <button class="retro-btn" onclick="openCastModal()">Cast</button>
 
-                document.addEventListener('DOMContentLoaded', function() {
-                    const ratingSlider = document.getElementById('rating');
-                    const ratingValue = document.getElementById('ratingValue');
-                    
-                    ratingSlider.addEventListener('input', function() {
-                        ratingValue.textContent = this.value;
-                    });
-                    
-                    // Load reviews when page loads
-                    loadReviews({{ movie.id }}, 'movie');
-                });
-
-                function toggleProductionCompanies() {
-                    const container = document.getElementById('production-companies-container');
-                    const arrow = document.getElementById('production-companies-arrow');
-                    
-                    if (container.style.display === 'none' || container.style.display === '') {
-                        container.style.display = 'flex';
-                        arrow.textContent = '▼';
-                    } else {
-                        container.style.display = 'none';
-                        arrow.textContent = '►';
-                    }
-                }
-            </script>
-        </div>
-    </div>
-</div>
-
-<div class="review-container" style="font-family: 'MS Sans Serif', Arial, sans-serif; background-color: #E0E0E0; color: black; padding: 20px; border: 2px solid black; margin: 20px;">
-    <div style="background-color: #000080; color: white; padding: 5px; margin-bottom: 10px;">
-        <h2 style="margin: 0; font-size: 18px;">User Reviews</h2>
-    </div>
-    <div class="sunken-panel" style="background-color: white; border: 2px inset; padding: 10px; max-height: 500px; overflow-y: auto;">
-        <!-- Desktop view -->
-        <table class="interactive review-table desktop-view" style="width: 100%; border-collapse: collapse; display: table;">
-            <thead>
-                <tr style="background-color: #C3C3C3;">
-                    <th style="text-align: left; padding: 4px; width: 15%;">User</th>
-                    <th style="text-align: center; padding: 4px; width: 10%;">Rating</th>
-                    <th style="text-align: left; padding: 4px; width: 55%;">Review</th>
-                    <th style="text-align: right; padding: 4px; width: 20%;">Date</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Reviews will be dynamically loaded here -->
-                <tr>
-                    <td colspan="4" style="padding: 4px; text-align: center;">Loading reviews...</td>
-                </tr>
-            </tbody>
-        </table>
-        
-        <!-- Mobile view -->
-        <div class="mobile-view review-cards" style="display: none; flex-direction: column; gap: 10px;">
-            <!-- Reviews will be dynamically loaded here -->
-            <div class="loading-message" style="padding: 10px; text-align: center;">Loading reviews...</div>
-        </div>
-    </div>
-</div>
-
-<div id="reviewDetailModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.7);">
-    <div class="modal-content" style="background-color: #C3C3C3; margin: 10% auto; padding: 5px; border: 2px outset #fff; width: 80%; max-width: 600px; position: relative; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);">
-        <div style="background-color: #000080; color: white; padding: 5px; display: flex; justify-content: space-between; align-items: center;">
-            <h2 id="reviewModalUsername" style="margin: 0; font-size: 16px; font-weight: bold;">User Review</h2>
-            <span onclick="closeReviewDetailModal()" style="cursor: pointer; font-weight: bold; font-size: 16px; margin-right: 5px;">✕</span>
-        </div>
-        <div style="background-color: white; border: 2px inset #dedede; padding: 10px; margin: 5px 0;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                <p style="margin: 0;"><strong>Rating: </strong><span id="reviewModalRating"></span>/10</p>
-                <p style="margin: 0;"><strong>Date: </strong><span id="reviewModalDate"></span></p>
+                {% include "components/movie_review_modal.html" with content_id=movie.id content_type='movie' %}
+                {% include "components/cast_modal.html" with cast=movie.cast %}
             </div>
-            <p style="margin: 10px 0 5px;"><strong>Review:</strong></p>
-            <div id="reviewModalText" style="margin-top: 5px; white-space: pre-wrap; background-color: #f9f9f9; padding: 8px; border: 1px solid #ddd; max-height: 300px; overflow-y: auto;"></div>
         </div>
-        <div style="padding: 5px; display: flex; justify-content: flex-end; gap: 5px;">
-            <div id="reviewModalActions"></div>
+        <div class="status-bar">
+            <div class="status-bar-field">{{ movie.rating }} • {{ movie.release_date|date:"Y" }} • {{ movie.minutes_to_hours }}</div>
+            <div class="status-bar-field">Last updated: {{ movie.date_updated|date:"M d, Y" }}</div>
+        </div>
+    </div>    
+    <!-- User Reviews Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">User Reviews</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <!-- Desktop view -->
+            <table class="interactive review-table desktop-view" style="width: 100%; border-collapse: collapse; display: table;">
+                <thead>
+                    <tr style="background-color: var(--window-bg); border-bottom: 2px solid var(--border-dark);">
+                        <th style="text-align: left; padding: 8px; width: 15%; color: var(--text-color);">User</th>
+                        <th style="text-align: center; padding: 8px; width: 10%; color: var(--text-color);">Rating</th>
+                        <th style="text-align: left; padding: 8px; width: 55%; color: var(--text-color);">Review</th>
+                        <th style="text-align: right; padding: 8px; width: 20%; color: var(--text-color);">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Reviews will be dynamically loaded here -->
+                    <tr>
+                        <td colspan="4" style="padding: 8px; text-align: center; color: var(--text-muted);">Loading reviews...</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <!-- Mobile view -->
+            <div class="mobile-view review-cards" style="display: none; flex-direction: column; gap: 10px;">
+                <!-- Reviews will be dynamically loaded here -->
+                <div class="loading-message" style="padding: 10px; text-align: center; color: var(--text-muted);">Loading reviews...</div>
+            </div>
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Community Reviews</div>
+            <div class="status-bar-field">
+                <button class="retro-btn" onclick="openReviewModal()" style="font-size: 12px; padding: 2px 8px;">
+                    Add Review
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Review Detail Modal -->
+<div id="reviewDetailModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto;">
+    <div class="modal-content window" style="margin: 10% auto; width: 80%; max-width: 600px; position: relative;">
+        <div class="title-bar">
+            <div class="title-bar-text" id="reviewModalUsername">User Review</div>
+            <div class="title-bar-controls">
+                <button onclick="closeReviewDetailModal()" aria-label="Close">✕</button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <p style="margin: 0; color: var(--text-color);"><strong>Rating: </strong><span id="reviewModalRating"></span>/10</p>
+                <p style="margin: 0; color: var(--text-color);"><strong>Date: </strong><span id="reviewModalDate"></span></p>
+            </div>
+            <p style="margin: 10px 0 5px; color: var(--text-color);"><strong>Review:</strong></p>
+            <div id="reviewModalText"></div>
+            <div id="reviewModalActions" style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 5px;"></div>
         </div>
     </div>
 </div>
@@ -422,16 +743,15 @@ body {
     
     window.loadReviews = function(contentId, contentType) {
         fetch(`/${contentType}s/reviews/?${contentType}_id=${contentId}`)
-        .then(response => response.json())
-        .then(reviews => {
+        .then(response => response.json())        .then(reviews => {
             // Handle desktop table view
-            const reviewsTable = document.querySelector('.sunken-panel table tbody');
+            const reviewsTable = document.querySelector('.review-table.desktop-view tbody');
             if (reviewsTable) {
                 reviewsTable.innerHTML = '';
                 
                 if (reviews.length === 0) {
                     const row = document.createElement('tr');
-                    row.innerHTML = `<td colspan="4" style="padding: 4px; text-align: center;">No reviews yet. Be the first to review!</td>`;
+                    row.innerHTML = `<td colspan="4" style="padding: 4px; text-align: center; color: var(--text-color); border-bottom: 1px solid var(--border-light);">No reviews yet. Be the first to review!</td>`;
                     reviewsTable.appendChild(row);
                 } else {
                     const currentUsername = document.querySelector('meta[name="username"]')?.content || '';
@@ -471,15 +791,15 @@ body {
                         
                         // Create the row element safely
                         const tdUser = document.createElement('td');
-                        tdUser.style.cssText = "padding: 4px; border-bottom: 1px solid #ddd;";
+                        tdUser.style.cssText = "padding: 4px; border-bottom: 1px solid var(--border-light); color: var(--text-color);";
                         tdUser.textContent = review.user;
                         
                         const tdRating = document.createElement('td');
-                        tdRating.style.cssText = "padding: 4px; text-align: center; border-bottom: 1px solid #ddd;";
+                        tdRating.style.cssText = "padding: 4px; text-align: center; border-bottom: 1px solid var(--border-light); color: var(--text-color);";
                         tdRating.textContent = `${review.rating}/10`;
                         
                         const tdContent = document.createElement('td');
-                        tdContent.style.cssText = "padding: 4px; border-bottom: 1px solid #ddd; cursor: pointer;";
+                        tdContent.style.cssText = "padding: 4px; border-bottom: 1px solid var(--border-light); cursor: pointer; color: var(--text-color);";
                         if (displayText) {
                             tdContent.innerHTML = sanitizedDisplayText.substring(0, 100) + 
                                 (sanitizedDisplayText.length > 100 ? '...' : '');
@@ -501,7 +821,7 @@ body {
                         };
                         
                         const tdDate = document.createElement('td');
-                        tdDate.style.cssText = "padding: 4px; text-align: right; border-bottom: 1px solid #ddd;";
+                        tdDate.style.cssText = "padding: 4px; text-align: right; border-bottom: 1px solid var(--border-light); color: var(--text-color);";
                         tdDate.textContent = formattedDate;
                         
                         // Add action buttons if user is author
@@ -530,7 +850,7 @@ body {
                 if (reviews.length === 0) {
                     const emptyCard = document.createElement('div');
                     emptyCard.className = 'review-card';
-                    emptyCard.style.cssText = 'padding: 10px; text-align: center; background-color: white; border: 1px solid #ddd;';
+                    emptyCard.style.cssText = 'padding: 10px; text-align: center; background-color: var(--window-bg); border: 1px solid var(--border-light); color: var(--text-color);';
                     emptyCard.textContent = 'No reviews yet. Be the first to review!';
                     reviewCards.appendChild(emptyCard);
                 } else {
@@ -554,7 +874,7 @@ body {
                         
                         const reviewCard = document.createElement('div');
                         reviewCard.className = 'review-card';
-                        reviewCard.style.cssText = 'background-color: white; border: 1px solid #ddd; padding: 12px; margin-bottom: 8px; border-radius: 3px;';
+                        reviewCard.style.cssText = 'background-color: var(--window-bg); border: 1px solid var(--border-light); padding: 12px; margin-bottom: 8px; border-radius: 3px; color: var(--text-color);';
                         
                         // Create card header with user and date
                         const headerDiv = document.createElement('div');
@@ -604,7 +924,7 @@ body {
                         if (hasLongText) {
                             const toggleBtn = document.createElement('button');
                             toggleBtn.className = 'toggle-text';
-                            toggleBtn.style.cssText = 'background: none; border: none; color: blue; padding: 0; text-decoration: underline; cursor: pointer; font-size: 12px;';
+                            toggleBtn.style.cssText = 'background: none; border: none; color: var(--text-color); padding: 0; text-decoration: underline; cursor: pointer; font-size: 12px; opacity: 0.8;';
                             toggleBtn.textContent = 'Read more';
                             
                             toggleBtn.addEventListener('click', function() {
@@ -678,11 +998,10 @@ body {
             
             // Update viewport display after loading reviews
             checkViewport();
-        })
-        .catch(error => {
+        })        .catch(error => {
             console.error('Error loading reviews:', error);
             const elements = [
-                document.querySelector('.sunken-panel table tbody'),
+                document.querySelector('.review-table.desktop-view tbody'),
                 document.querySelector('.mobile-view.review-cards')
             ];
             
@@ -760,8 +1079,97 @@ body {
             }, 50);
         }
     });
+      window.addEventListener('resize', checkViewport);
     
-    window.addEventListener('resize', checkViewport);
+    // Function to get CSRF token from cookies
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    // Function to add movie to watchlist
+    function addToWatchlist(movieId = {{ movie.id }}, buttonElement = null) {
+        if (!buttonElement) {
+            buttonElement = event.target;
+        }
+        
+        fetch('/movies/watchlist/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: movieId
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                // Update button appearance
+                buttonElement.textContent = 'Remove from Watchlist';
+                buttonElement.onclick = function() { 
+                    removeFromWatchlist(movieId, buttonElement); 
+                };
+                // Show success message
+                alert('Movie added to watchlist!');
+            } else {
+                response.json().then(data => {
+                    alert('Failed to add movie to watchlist: ' + (data.error || 'Unknown error'));
+                }).catch(() => {
+                    alert('Failed to add movie to watchlist');
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding movie to watchlist');
+        });
+    }
+    
+    // Function to remove movie from watchlist
+    function removeFromWatchlist(movieId = {{ movie.id }}, buttonElement = null) {
+        if (!buttonElement) {
+            buttonElement = event.target;
+        }
+        
+        fetch('/movies/watchlist/', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: movieId
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                // Update button appearance
+                buttonElement.textContent = 'Add to Watchlist';
+                buttonElement.onclick = function() { 
+                    addToWatchlist(movieId, buttonElement); 
+                };
+                // Show success message
+                alert('Movie removed from watchlist!');
+            } else {
+                alert('Failed to remove movie from watchlist');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error removing movie from watchlist');
+        });
+    }
 </script>
 
 <!-- ... rest of your HTML ... -->

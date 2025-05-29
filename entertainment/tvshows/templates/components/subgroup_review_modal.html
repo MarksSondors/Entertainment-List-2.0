@@ -106,14 +106,44 @@
                 review_text: reviewText
             })
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(response => response.json())        .then(data => {
             loadingIndicator.style.display = 'none';
             submitButton.disabled = false;
             
             if (data.success) {
                 closeSubgroupReviewModal();
-                // Optional: Show success message or update UI
+                
+                // Update the UI to show the rating similar to season reviews
+                if (!subgroupsData[subgroupId]) {
+                    subgroupsData[subgroupId] = {};
+                }
+                subgroupsData[subgroupId].user_rating = parseFloat(rating);
+                
+                // Update the review button text to "Edit Review"
+                const reviewButton = document.getElementById(`subgroup-review-button-${subgroupId}`);
+                if (reviewButton) {
+                    reviewButton.textContent = 'Edit Review';
+                }
+                
+                // Add a rating display if it doesn't exist
+                let ratingDisplay = document.querySelector(`[onclick="openSubgroupEpisodes('${subgroupId}')"]`).parentNode.querySelector('.user-rating');
+                if (!ratingDisplay) {
+                    ratingDisplay = document.createElement('div');
+                    ratingDisplay.className = 'user-rating';
+                    ratingDisplay.style.marginTop = '5px';
+                    ratingDisplay.style.fontWeight = 'bold';
+                    ratingDisplay.style.fontSize = '11px';
+                    
+                    // Insert before the "View Episodes" button
+                    const viewEpisodesButton = document.querySelector(`[onclick="openSubgroupEpisodes('${subgroupId}')"]`);
+                    const subgroupCard = viewEpisodesButton.parentNode;
+                    subgroupCard.insertBefore(ratingDisplay, viewEpisodesButton);
+                }
+                
+                if (ratingDisplay) {
+                    ratingDisplay.innerHTML = `<span style="color: var(--progress-bar);">Your Rating: ⭐ ${rating}/10</span>`;
+                }
+                
                 alert('Review submitted successfully!');
             } else {
                 alert('Error submitting review: ' + (data.error || 'Unknown error'));
