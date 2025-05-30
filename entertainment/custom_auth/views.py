@@ -73,7 +73,7 @@ def search_bar_discover(request):
         if not movies:
             movies = Movie.objects.annotate(
                 similarity=TrigramSimilarity('title', search_query) + TrigramSimilarity('original_title', search_query)
-            ).filter(similarity__gt=0.3).order_by('-similarity')[:10]
+            ).filter(similarity__gt=0.5).order_by('-similarity')[:10]
         
         # If still no results, try partial case-insensitive matching
         if not movies:
@@ -157,7 +157,7 @@ def search_bar_discover(request):
         if not tv_shows:
             tv_shows = TVShow.objects.annotate(
                 similarity=TrigramSimilarity('title', search_query) + TrigramSimilarity('original_title', search_query)
-            ).filter(similarity__gt=0.3).order_by('-similarity')[:10]
+            ).filter(similarity__gt=0.5).order_by('-similarity')[:10]
         
         # If still no results, try partial case-insensitive matching
         if not tv_shows:

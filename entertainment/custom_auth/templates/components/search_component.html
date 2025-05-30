@@ -258,6 +258,12 @@
         color: var(--secondary-text);
     }    /* Mobile-specific styles */
     @media (max-width: 768px) {
+        .search-results-container {
+            max-height: 85vh !important;
+            padding-bottom: 210px !important;
+            margin-bottom: 0 !important;
+        }
+
         .add-content-container {
             position: fixed !important;
             bottom: 70px !important;
@@ -284,11 +290,6 @@
             padding: 10px 12px;
         }
 
-        .search-results-container {
-            padding-bottom: 210px !important;
-            margin-bottom: 0 !important;
-        }
-
         .add-content-container[style*="block"] {
             display: block !important;
         }
@@ -301,13 +302,36 @@
             bottom: 20px;
             margin-top: 20px;
         }
-    }
-
-    /* Search Results Styles */
+    }    /* Search Results Styles */
     .search-results-container {
         max-width: 800px;
         margin: 0 auto;
         padding: 0;
+        max-height: 90vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-dark) var(--bg-color);
+    }
+
+    /* Custom scrollbar styling for search results */
+    .search-results-container::-webkit-scrollbar {
+        width: 12px;
+    }
+
+    .search-results-container::-webkit-scrollbar-track {
+        background: var(--bg-color);
+        border: 1px inset var(--border-dark);
+    }
+
+    .search-results-container::-webkit-scrollbar-thumb {
+        background: var(--border-dark);
+        border: 1px outset var(--border-dark);
+        border-radius: 0;
+    }
+
+    .search-results-container::-webkit-scrollbar-thumb:hover {
+        background: var(--border-light);
     }
 
     .search-results-list {
@@ -487,13 +511,43 @@
         padding: 30px;
         font-family: 'MS Sans Serif', sans-serif;
         color: var(--secondary-text);
-    }
-
-    .loading {
+    }    .loading {
         text-align: center;
         padding: 30px;
         font-family: 'MS Sans Serif', sans-serif;
         color: var(--secondary-text);
+    }    /* Add Content Result Styles */
+    .add-content-result {
+        background: var(--bg-color) !important;
+    }
+
+    .add-content-result:hover {
+        background: var(--hover-bg) !important;
+    }
+
+    .add-icon-placeholder {
+        background: var(--poster-bg) !important;
+        color: white !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 1px solid var(--border-dark) !important;
+    }
+
+    .add-icon-large {
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    .add-content-result .result-title {
+        color: var(--text-color) !important;
+        font-weight: bold !important;
+    }
+
+    .add-content-description {
+        font-style: italic;
+        color: var(--secondary-text) !important;
+        font-size: 9px !important;
     }
 </style>
 
@@ -543,9 +597,7 @@
             searchInput.blur();
             
             document.querySelector('.search-container').classList.remove('searching');
-        }
-
-        function performSearch(query, type) {
+        }        function performSearch(query, type) {
             if (!query.trim()) {
                 clearSearch();
                 return;
@@ -556,10 +608,9 @@
             searchResults.style.display = 'block';
             if (defaultContent) defaultContent.style.display = 'none';
             
-            addContentContainer.style.display = 'block';
+            // Hide the floating add content container since we'll show it as results
+            addContentContainer.style.display = 'none';
             resultsGrid.innerHTML = '<div class="loading">Searching...</div>';
-
-            updateAddButtons();
 
             fetch(`{% url 'discover_search' %}?search=${encodeURIComponent(query)}&type=${type}`)
                 .then(response => response.json())
@@ -574,14 +625,14 @@
                     console.error('Search error:', error);
                     resultsGrid.innerHTML = '<div class="no-results">Search failed. Please try again.</div>';
                 });
-        }
-
-        function displayResults(data) {
+        }function displayResults(data) {
             resultsCount.textContent = `${data.count} result${data.count !== 1 ? 's' : ''} found`;
 
             if (data.results.length === 0) {
                 resultsGrid.innerHTML = '<div class="no-results">No results found</div>';
                 resultsCount.style.display = 'none';
+                // Add the add content buttons as results even when no results found
+                addAddContentResults();
                 return;
             }
 
@@ -685,21 +736,58 @@
 
                 resultsGrid.appendChild(resultItem);
             });
+            
+            // Add the add content buttons as results at the end
+            addAddContentResults();
         }
 
-        searchInput.addEventListener('focus', function() {
+        function addAddContentResults() {
+            // Only show add buttons for movies and tvshows
+            if (currentEndpoint === 'movies' || currentEndpoint === 'tvshows') {
+                const addResultItem = document.createElement('div');
+                addResultItem.className = 'result-item add-content-result';
+                
+                const buttonText = currentEndpoint === 'movies' ? 'Add Movie' : 'Add TV Show';
+                const currentQuery = searchInput.value.trim();
+                
+                addResultItem.innerHTML = `
+                    <div class="result-poster-placeholder add-icon-placeholder">
+                        <span class="add-icon-large">+</span>
+                    </div>
+                    <div class="result-content">
+                        <div class="result-title">${buttonText}</div>
+                        <div class="result-meta">
+                            <span class="add-content-description">Can't find what you're looking for? Add it to our database!</span>
+                        </div>
+                    </div>
+                `;
+                
+                addResultItem.onclick = () => {
+                    if (currentEndpoint === 'movies') {
+                        if (typeof openModal === 'function') {
+                            openModal(currentQuery);
+                        } else {
+                            window.location.href = "{% url 'home_page' %}";
+                        }
+                    } else if (currentEndpoint === 'tvshows') {
+                        if (typeof openTVShowModal === 'function') {
+                            openTVShowModal(currentQuery);
+                        } else {
+                            window.location.href = "{% url 'home_page' %}";
+                        }
+                    }
+                };
+                
+                resultsGrid.appendChild(addResultItem);
+            }
+        }        searchInput.addEventListener('focus', function() {
             searchTabs.style.display = 'flex';
             cancelButton.style.display = 'block';
-            
-            addContentContainer.style.display = 'block';
-            updateAddButtons();
             
             if (searchInput.value.trim()) {
                 performSearch(searchInput.value, currentEndpoint);
             }
-        });
-
-        document.querySelectorAll('.search-tab').forEach(tab => {
+        });        document.querySelectorAll('.search-tab').forEach(tab => {
             tab.addEventListener('click', function() {
                 document.querySelectorAll('.search-tab').forEach(t => {
                     t.classList.remove('active');
@@ -710,8 +798,6 @@
                 const endpoint = this.getAttribute('data-endpoint');
                 currentEndpoint = endpoint;
                 searchInput.placeholder = placeholders[endpoint];
-                
-                updateAddButtons();
                 
                 if (searchInput.value.trim()) {
                     performSearch(searchInput.value, currentEndpoint);
