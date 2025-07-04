@@ -337,6 +337,10 @@ def update_single_season(season_id):
         # Use TVShowsService to get detailed season info
         tvshows_service = TVShowsService()
         data = tvshows_service.get_season_details(tvshow.tmdb_id, season.season_number)
+
+        if not season.poster and data.get('poster_path'):
+            season.poster = f"https://image.tmdb.org/t/p/original{data['poster_path']}"
+            season.save(update_fields=['poster'])
         
         if not data or 'episodes' not in data:
             logger.error(f"TMDB API error for season {season.season_number} of {tvshow.title}: Failed to retrieve data")
