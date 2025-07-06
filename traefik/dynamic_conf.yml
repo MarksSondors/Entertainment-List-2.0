@@ -1,7 +1,7 @@
 http:
   routers:
     entertainment:
-      rule: "Host(`${DOMAIN:-your-actual-domain.com}`)"
+      rule: "Host(`${DOMAIN:-localhost}`)"
       service: entertainment
       entryPoints:
         - websecure
@@ -9,9 +9,18 @@ http:
         certResolver: myresolver
       middlewares:
         - redirect-to-https
+        - security-headers
+
+    entertainment-http:
+      rule: "Host(`${DOMAIN:-localhost}`)"
+      service: entertainment
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-to-https
 
     api:
-      rule: "Host(`${DOMAIN:-your-actual-domain.com}`) && PathPrefix(`/dashboard`)"
+      rule: "Host(`${DOMAIN:-localhost}`) && PathPrefix(`/dashboard`)"
       service: "api@internal"
       entrypoints:
         - websecure
@@ -24,7 +33,7 @@ http:
     entertainment:
       loadBalancer:
         servers:
-          - url: "http://web:8000"  # Matches your docker-compose service name
+          - url: "http://nginx:80"  # Now points to nginx instead of web
 
   middlewares:
     redirect-to-https:
