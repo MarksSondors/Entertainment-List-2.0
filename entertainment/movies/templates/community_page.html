@@ -409,6 +409,15 @@
 }
 
 /* Form styling */
+input[type=text], input[type=url], select {
+    background-color: var(--progress-bg);
+    border: 1px inset var(--border-dark);
+    color: var(--text-color);
+    padding: 4px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+}
+
 .retro-input {
     border: 1px inset var(--border-dark);
     background-color: var(--progress-bg);
@@ -426,6 +435,90 @@
     font-family: 'MS Sans Serif', sans-serif;
     font-size: 11px;
     resize: vertical;
+}
+
+/* Suggest Movie Form styling */
+.suggest-movie-form {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+}
+
+.suggest-movie-left {
+    flex: 1;
+}
+
+.suggest-movie-right {
+    flex: 1;
+}
+
+.movie-search-container {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.movie-search-input {
+    flex: 1;
+}
+
+.movie-results-container {
+    margin-top: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: var(--progress-bg);
+    border: 1px inset var(--border-dark);
+}
+
+/* Movie search result styling */
+.movie-result {
+    padding: 6px;
+    border-bottom: 1px solid var(--border-dark);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.1s ease;
+    min-height: 48px; /* Better touch target for mobile */
+}
+
+.movie-result:hover {
+    background-color: var(--button-hover);
+}
+
+.movie-result:active {
+    background-color: var(--border-dark);
+}
+
+.movie-result img {
+    width: 36px;
+    height: auto;
+    flex-shrink: 0;
+    border-radius: 2px;
+}
+
+.movie-result-content {
+    flex: 1;
+    min-width: 0; /* Allows text truncation */
+}
+
+.movie-result-title {
+    font-weight: bold;
+    font-size: 11px;
+    word-wrap: break-word;
+    line-height: 1.2;
+}
+
+.movie-result-details {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.reason-textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 120px;
 }
 
 /* Mobile optimization */
@@ -469,6 +562,60 @@
         font-size: 12px;
         padding: 4px 8px;
     }
+    
+    /* Suggest Movie Form mobile styles */
+    .suggest-movie-form {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .suggest-movie-left,
+    .suggest-movie-right {
+        flex: none;
+        width: 100%;
+    }
+    
+    .movie-search-container {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .movie-search-input {
+        width: 100%;
+    }
+    
+    .reason-textarea {
+        min-height: 100px;
+    }
+    
+    .retro-input,
+    .retro-textarea {
+        font-size: 14px;
+        padding: 8px;
+    }
+}
+
+/* Tablet optimization */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .suggest-movie-form {
+        gap: 15px;
+    }
+    
+    .movie-search-container {
+        flex-direction: row;
+        gap: 6px;
+    }
+    
+    .retro-input,
+    .retro-textarea {
+        font-size: 12px;
+        padding: 6px;
+    }
+    
+    .retro-btn {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -482,6 +629,54 @@
     
     .movie-card img {
         height: 140px;
+    }
+    
+    /* Additional mobile optimizations for suggest movie form */
+    .suggest-movie-form {
+        gap: 12px;
+    }
+    
+    .movie-search-container {
+        gap: 6px;
+    }
+    
+    .reason-textarea {
+        min-height: 80px;
+    }
+    
+    .retro-input,
+    .retro-textarea {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 10px;
+    }
+    
+    .retro-btn {
+        font-size: 14px;
+        padding: 8px 12px;
+        min-height: 44px; /* Better touch target */
+    }
+    
+    .movie-results-container {
+        max-height: 200px;
+    }
+    
+    /* Movie result mobile styling */
+    .movie-result {
+        padding: 10px 6px;
+        gap: 10px;
+    }
+    
+    .movie-result img {
+        width: 40px;
+    }
+    
+    .movie-result-title {
+        font-size: 12px;
+        line-height: 1.3;
+    }
+    
+    .movie-result-details {
+        font-size: 11px;
     }
 }
 
@@ -805,21 +1000,20 @@
                 {% if not user_context.has_active_suggestion %}
                     <form method="post" action="{% url 'suggest_movie' %}">
                         {% csrf_token %}
-                        <div style="display: flex; gap: 20px; margin-bottom: 15px;">
-                            <div style="flex: 1;">
+                        <div class="suggest-movie-form">
+                            <div class="suggest-movie-left">
                                 <label for="movie-search" style="font-weight: bold; display: block; margin-bottom: 4px;">Search for a movie:</label>
-                                <div style="display: flex; gap: 4px;">
-                                    <input type="text" id="movie-search" class="retro-input" placeholder="Type to search..." 
-                                           style="flex: 1;">
+                                <div class="movie-search-container">
+                                    <input type="text" id="movie-search" class="retro-input movie-search-input" placeholder="Type to search...">
                                     <button type="button" class="retro-btn" id="search-btn">Search</button>
                                 </div>
-                                <div id="movie-results" style="margin-top: 8px; max-height: 300px; overflow-y: auto; background-color: var(--progress-bg); border: 1px inset var(--border-dark);"></div>
+                                <div id="movie-results" class="movie-results-container"></div>
                                 <input type="hidden" name="movie_id" id="selected-movie-id" required>
                             </div>
-                            <div style="flex: 1;">
+                            <div class="suggest-movie-right">
                                 <label for="reason" style="font-weight: bold; display: block; margin-bottom: 4px;">Why should the community watch this movie?</label>
-                                <textarea name="reason" id="reason" class="retro-textarea" rows="5" required 
-                                          style="width: 100%; resize: vertical;" placeholder="Explain what makes this movie special..."></textarea>
+                                <textarea name="reason" id="reason" class="retro-textarea reason-textarea" rows="5" required 
+                                          placeholder="Explain what makes this movie special..."></textarea>
                                 <small style="color: var(--text-muted); font-size: 10px;">Explain what makes this movie special or worth discussing.</small>
                             </div>
                         </div>
@@ -1043,12 +1237,11 @@
                             const year = movie.release_date ? movie.release_date.substring(0, 4) : 'N/A';
                             
                             html += `
-                                <div class="movie-result" style="padding: 6px; border-bottom: 1px solid var(--border-dark); cursor: pointer; display: flex; align-items: center; gap: 8px;" 
-                                     data-id="${movie.id}" data-title="${movie.title}" onmouseover="this.style.backgroundColor='var(--button-hover)'" onmouseout="this.style.backgroundColor='transparent'">
-                                    <img src="${posterUrl}" style="width: 36px; height: auto;">
-                                    <div style="flex: 1;">
-                                        <div style="font-weight: bold; font-size: 11px;">${movie.title} <span style="font-weight: normal;">(${year})</span></div>
-                                        <div style="font-size: 10px; color: var(--text-muted);">
+                                <div class="movie-result" data-id="${movie.id}" data-title="${movie.title}">
+                                    <img src="${posterUrl}" alt="${movie.title}">
+                                    <div class="movie-result-content">
+                                        <div class="movie-result-title">${movie.title} <span style="font-weight: normal;">(${year})</span></div>
+                                        <div class="movie-result-details">
                                             ${movie.rating.toFixed(1)}/10 · ${movie.runtime} min
                                         </div>
                                     </div>
