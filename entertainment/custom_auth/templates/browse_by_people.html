@@ -4,7 +4,7 @@
 {% block title %}Browse by People | Entertainment List{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="people-page-container">
     <div class="window">
         <div class="title-bar">
             <div class="title-bar-text">People Explorer</div>
@@ -14,23 +14,19 @@
                 <button aria-label="Close"></button>
             </div>
         </div>
-        <div class="window-body">            <!-- Breadcrumb navigation -->
-
-            <!-- Address bar - now visible on all screens -->
-            <div class="field-row mb-2">
-                <label>Address:</label>
-                <div class="field-row-stacked" style="width: 100%">
-                    <input type="text" readonly value="C:\Entertainment\People\" style="width: 100%">
-                </div>
+        <div class="window-body">            <!-- Address bar - Windows 95 style -->
+            <div class="field-row">
+                <label for="address-bar">Address:</label>
+                <input type="text" id="address-bar" readonly value="C:\Entertainment\People\" style="width: 100%">
             </div>
             
             <!-- Search and filter row -->
-            <div class="d-flex flex-wrap mb-3 align-items-center">
-                <div class="field-row me-3 mb-2 mb-sm-0 flex-grow-1">
+            <div class="field-row-stacked">
+                <div class="field-row">
                     <label for="search-people">Search:</label>
                     <input type="text" id="search-people" placeholder="Filter by name..." style="flex-grow: 1;">
                 </div>
-                <div class="field-row mb-2 mb-sm-0">
+                <div class="field-row">
                     <label for="sort-by">Sort by:</label>
                     <select id="sort-by">
                         <option value="name-asc">Name (A-Z)</option>
@@ -42,37 +38,40 @@
             </div>
 
             <!-- Mobile-friendly tabs as dropdown on small screens -->
-            <div class="d-block d-md-none mb-3">
-                <select class="form-select" id="mobile-tab-selector">
-                    <option value="0">Directors</option>
-                    <option value="1">Writers</option>
-                    <option value="2">Actors</option>
-                    <option value="3">TV Creators</option>
-                    <option value="4">Musicians</option>
-                    <option value="5">Other Creators</option>
-                </select>
+            <div class="mobile-tab-selector">
+                <div class="field-row">
+                    <label for="mobile-tab-selector">Category:</label>
+                    <select id="mobile-tab-selector">
+                        <option value="0">Directors</option>
+                        <option value="1">Writers</option>
+                        <option value="2">Actors</option>
+                        <option value="3">TV Creators</option>
+                        <option value="4">Musicians</option>
+                        <option value="5">Other Creators</option>
+                    </select>
+                </div>
             </div>
             
             <div class="tabs">
                 <!-- Desktop tabs, hidden on mobile -->
-                <menu role="tablist" class="d-none d-md-flex">
-                    <button role="tab" aria-selected="true">Directors</button>
-                    <button role="tab">Writers</button>
-                    <button role="tab">Actors</button>
-                    <button role="tab">TV Creators</button>
-                    <button role="tab">Musicians</button>
-                    <button role="tab">Other Creators</button>
+                <menu role="tablist" class="desktop-tabs">
+                    <button role="tab" aria-selected="true" class="retro-btn tab-btn">Directors</button>
+                    <button role="tab" class="retro-btn tab-btn">Writers</button>
+                    <button role="tab" class="retro-btn tab-btn">Actors</button>
+                    <button role="tab" class="retro-btn tab-btn">TV Creators</button>
+                    <button role="tab" class="retro-btn tab-btn">Musicians</button>
+                    <button role="tab" class="retro-btn tab-btn">Other Creators</button>
                 </menu>
                   <!-- Directors Tab -->
-                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel" role="tabpanel" style="min-height: 300px;">
                     <div class="tab-loading-overlay" style="display: none;">
                         <div class="loading-spinner"></div>
                     </div>
                     {% if directors %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
+                        <div class="person-grid">
                             {% for person in directors %}
-                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
+                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
                                     <div class="text-center">
                                         <div class="person-img-container">
                                             <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
@@ -84,8 +83,8 @@
                                         <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
                                             <div class="person-rating">
-                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
-                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                                <span class="rating-badge">{{ person.avg_rating }}</span>
+                                                <small class="rating-count">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
                                             <div class="person-no-rating">No ratings</div>
@@ -99,29 +98,31 @@
                                         {% if person.num_works %}
                                             <div>{{ person.num_works }} work(s)</div>
                                         {% endif %}
-                                        <div class="mt-1 small">Click to view profile</div>
+                                        <div class="hover-action">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <div class="alert alert-info">
-                            No directors available.
+                        <div class="no-items-message">
+                            <div class="sunken-panel">
+                                No directors available.
+                            </div>
                         </div>
                     {% endif %}
                 </div>
                   <!-- Writers Tab -->
-                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
                     <div class="tab-loading-overlay" style="display: none;">
                         <div class="loading-spinner"></div>
                     </div>
                     {% if writers %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
+                        <div class="person-grid">
                             {% for person in writers %}
-                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
-                                    <div class="text-center">
+                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
+                                    <div class="person-content">
                                         <div class="person-img-container">
                                             <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
                                                  alt="{{ person.name }}"  
@@ -132,8 +133,8 @@
                                         <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
                                             <div class="person-rating">
-                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
-                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                                <span class="rating-badge">{{ person.avg_rating }}</span>
+                                                <small class="rating-count">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
                                             <div class="person-no-rating">No ratings</div>
@@ -147,29 +148,31 @@
                                         {% if person.num_works %}
                                             <div>{{ person.num_works }} work(s)</div>
                                         {% endif %}
-                                        <div class="mt-1 small">Click to view profile</div>
+                                        <div class="hover-action">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <div class="alert alert-info">
-                            No writers available.
+                        <div class="no-items-message">
+                            <div class="sunken-panel">
+                                No writers available.
+                            </div>
                         </div>
                     {% endif %}
                 </div>
                   <!-- Actors Tab -->
-                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
                     <div class="tab-loading-overlay" style="display: none;">
                         <div class="loading-spinner"></div>
                     </div>
                     {% if actors %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
+                        <div class="person-grid">
                             {% for person in actors %}
-                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
-                                    <div class="text-center">
+                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
+                                    <div class="person-content">
                                         <div class="person-img-container">
                                             <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
                                                  alt="{{ person.name }}"  
@@ -180,8 +183,8 @@
                                         <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
                                             <div class="person-rating">
-                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
-                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                                <span class="rating-badge">{{ person.avg_rating }}</span>
+                                                <small class="rating-count">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
                                             <div class="person-no-rating">No ratings</div>
@@ -195,29 +198,31 @@
                                         {% if person.num_works %}
                                             <div>{{ person.num_works }} work(s)</div>
                                         {% endif %}
-                                        <div class="mt-1 small">Click to view profile</div>
+                                        <div class="hover-action">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <div class="alert alert-info">
-                            No actors available.
+                        <div class="no-items-message">
+                            <div class="sunken-panel">
+                                No actors available.
+                            </div>
                         </div>
                     {% endif %}
                 </div>
                   <!-- TV Creators Tab -->
-                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
                     <div class="tab-loading-overlay" style="display: none;">
                         <div class="loading-spinner"></div>
                     </div>
                     {% if tv_creators %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
+                        <div class="person-grid">
                             {% for person in tv_creators %}
-                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
-                                    <div class="text-center">
+                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
+                                    <div class="person-content">
                                         <div class="person-img-container">
                                             <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
                                                  alt="{{ person.name }}"  
@@ -228,8 +233,8 @@
                                         <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
                                             <div class="person-rating">
-                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
-                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                                <span class="rating-badge">{{ person.avg_rating }}</span>
+                                                <small class="rating-count">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
                                             <div class="person-no-rating">No ratings</div>
@@ -243,29 +248,31 @@
                                         {% if person.num_works %}
                                             <div>{{ person.num_works }} work(s)</div>
                                         {% endif %}
-                                        <div class="mt-1 small">Click to view profile</div>
+                                        <div class="hover-action">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <div class="alert alert-info">
-                            No TV creators available.
+                        <div class="no-items-message">
+                            <div class="sunken-panel">
+                                No TV creators available.
+                            </div>
                         </div>
                     {% endif %}
                 </div>
                   <!-- Musicians Tab -->
-                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
                     <div class="tab-loading-overlay" style="display: none;">
                         <div class="loading-spinner"></div>
                     </div>
                     {% if musicians %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
+                        <div class="person-grid">
                             {% for person in musicians %}
-                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
-                                    <div class="text-center">
+                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
+                                    <div class="person-content">
                                         <div class="person-img-container">
                                             <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
                                                  alt="{{ person.name }}"  
@@ -276,8 +283,8 @@
                                         <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
                                             <div class="person-rating">
-                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
-                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                                <span class="rating-badge">{{ person.avg_rating }}</span>
+                                                <small class="rating-count">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
                                             <div class="person-no-rating">No ratings</div>
@@ -291,29 +298,31 @@
                                         {% if person.num_works %}
                                             <div>{{ person.num_works }} work(s)</div>
                                         {% endif %}
-                                        <div class="mt-1 small">Click to view profile</div>
+                                        <div class="hover-action">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <div class="alert alert-info">
-                            No musicians available.
+                        <div class="no-items-message">
+                            <div class="sunken-panel">
+                                No musicians available.
+                            </div>
                         </div>
                     {% endif %}
                 </div>
                   <!-- Other Creators Tab -->
-                <div class="sunken-panel explorer-panel p-2 p-md-3" role="tabpanel" hidden style="min-height: 300px;">
+                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
                     <div class="tab-loading-overlay" style="display: none;">
                         <div class="loading-spinner"></div>
                     </div>
                     {% if other_creators %}
-                        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-4 person-grid">
+                        <div class="person-grid">
                             {% for person in other_creators %}
-                            <div class="col person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item text-decoration-none text-dark" tabindex="0" title="{{ person.name }}">
-                                    <div class="text-center">
+                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
+                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
+                                    <div class="person-content">
                                         <div class="person-img-container">
                                             <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
                                                  alt="{{ person.name }}"  
@@ -324,8 +333,8 @@
                                         <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
                                         {% if person.avg_rating %}
                                             <div class="person-rating">
-                                                <span class="badge bg-primary">{{ person.avg_rating }}</span>
-                                                <small class="text-muted">({{ person.rating_count }})</small>
+                                                <span class="rating-badge">{{ person.avg_rating }}</span>
+                                                <small class="rating-count">({{ person.rating_count }})</small>
                                             </div>
                                         {% else %}
                                             <div class="person-no-rating">No ratings</div>
@@ -339,25 +348,28 @@
                                         {% if person.num_works %}
                                             <div>{{ person.num_works }} work(s)</div>
                                         {% endif %}
-                                        <div class="mt-1 small">Click to view profile</div>
+                                        <div class="hover-action">Click to view profile</div>
                                     </div>
                                 </a>
                             </div>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <div class="alert alert-info">
-                            No other creators available.
+                        <div class="no-items-message">
+                            <div class="sunken-panel">
+                                No other creators available.
+                            </div>
                         </div>
                     {% endif %}
                 </div>
             </div>
               <!-- Back to top button -->
-            <button id="back-to-top" class="default back-to-top" title="Back to top" aria-label="Back to top">
+            <button id="back-to-top" class="retro-btn back-to-top" title="Back to top" aria-label="Back to top">
                 <span class="arrow-up">▲</span>
             </button>
             
-            <!-- Improved status bar with more info -->            <div class="status-bar mt-3">
+            <!-- Status bar -->
+            <div class="status-bar">
                 <div class="status-bar-field">
                     <span id="item-count">0 item(s)</span>
                 </div>
@@ -371,8 +383,8 @@
                     <span id="total-people">Total: {{ total_people }} people</span>
                 </div>
                 <div class="status-bar-field">
-                    <button class="default" onclick="window.history.back()">Back</button>
-                    <button class="default ms-1" onclick="window.location.href='{% url 'home_page' %}'">Home</button>
+                    <button class="retro-btn" onclick="window.history.back()">Back</button>
+                    <button class="retro-btn" onclick="window.location.href='{% url 'home_page' %}'">Home</button>
                 </div>
             </div>
         </div>
@@ -380,34 +392,271 @@
 </div>
 
 <style>
-    /* Breadcrumb styling */
-    .breadcrumb {
-        font-size: 0.85rem;
-        padding: 4px 0;
-        margin-bottom: 10px;
+    /* CSS Variables for Windows 95 theme consistency */
+    :root {
+        --bg-color: #c0c0c0;
+        --text-color: #000;
+        --text-muted: #666;
+        --border-dark: #808080;
+        --border-light: #dfdfdf;
+        --window-bg: #c0c0c0;
+        --button-bg: #c0c0c0;
+        --button-text: #000;
+        --button-hover: #e0e0e0;
+        --progress-bg: #fff;
+        --progress-bar: #008080;
+        --shadow-color: rgba(0,0,0,0.25);
+        --poster-border: #a0a0a0;
+        --explorer-bg: #ffffff;
+        --folder-hover: #d0d1d5;
+        --folder-active: #000080;
+        --folder-active-text: #ffffff;
+        --input-bg: #ffffff;
+        --alert-bg: #e1e1e1;
     }
-    
-    .breadcrumb-link {
-        color: #0000ee;
-        text-decoration: none;
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-color: #383838;
+            --text-color: #ffffff;
+            --text-muted: #b0b0b0;
+            --border-dark: #2a2a2a;
+            --border-light: #505050;
+            --window-bg: #404040;
+            --button-bg: #505050;
+            --button-text: #ffffff;
+            --button-hover: #606060;
+            --progress-bg: #2a2a2a;
+            --progress-bar: #00a0a0;
+            --shadow-color: rgba(0,0,0,0.5);
+            --poster-border: #606060;
+            --explorer-bg: #2a2a2a;
+            --folder-hover: #404040;
+            --folder-active: #0060ff;
+            --folder-active-text: #ffffff;
+            --input-bg: #2a2a2a;
+            --alert-bg: #404040;
+        }
     }
-    
-    .breadcrumb-link:hover {
-        text-decoration: underline;
+
+    /* Page container - mobile-first approach */
+    .people-page-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 10px;
     }
-    
-    .breadcrumb-current {
-        color: #000;
+
+    @media (min-width: 768px) {
+        .people-page-container {
+            padding: 20px;
+        }
+    }
+
+    /* Window styling matching other pages */
+    .window {
+        border: 2px outset var(--bg-color);
+        background-color: var(--bg-color);
+        font-family: 'MS Sans Serif', sans-serif;
+        box-shadow: 2px 2px 4px var(--shadow-color);
+    }
+
+    .title-bar {
+        background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+        color: white;
+        padding: 2px;
+        font-size: 11px;
         font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .title-bar {
+            background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+        }
+    }
+
+    .title-bar-controls button {
+        width: 16px;
+        height: 14px;
+        border: 1px outset var(--button-bg);
+        background: var(--button-bg);
+        margin-left: 2px;
+        font-size: 8px;
+        cursor: pointer;
+    }
+
+    .title-bar-controls button:active {
+        border: 1px inset var(--button-bg);
+    }
+
+    .window-body {
+        background-color: var(--window-bg);
+        color: var(--text-color);
+        padding: 8px;
+    }
+
+    @media (min-width: 768px) {
+        .window-body {
+            padding: 12px;
+        }
+    }
+
+    /* Form field styling */
+    .field-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .field-row label {
+        font-size: 11px;
+        font-family: 'MS Sans Serif', sans-serif;
+        white-space: nowrap;
+    }
+
+    .field-row input, .field-row select {
+        border: 1px inset var(--border-light);
+        background-color: var(--input-bg);
+        color: var(--text-color);
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        padding: 2px 4px;
+    }
+
+    .field-row-stacked {
+        margin-bottom: 12px;
     }
     
+    .field-row-stacked .field-row:not(:last-child) {
+        margin-bottom: 8px;
+    }
+
+    @media (max-width: 768px) {
+        .field-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+
+        .field-row input, .field-row select {
+            width: 100%;
+        }
+    }
+
+    /* Person grid - mobile-first responsive grid */
+    .person-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        padding: 8px;
+    }
+    
+    @media (min-width: 480px) {
+        .person-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+    }
+    
+    @media (min-width: 768px) {
+        .person-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+    }
+    
+    @media (min-width: 1024px) {
+        .person-grid {
+            grid-template-columns: repeat(5, 1fr);
+            gap: 20px;
+        }
+    }
+    
+    @media (min-width: 1200px) {
+        .person-grid {
+            grid-template-columns: repeat(6, 1fr);
+        }
+    }
+
+    /* Mobile tab selector */
+    .mobile-tab-selector {
+        margin-bottom: 12px;
+    }
+
+    @media (min-width: 768px) {
+        .mobile-tab-selector {
+            display: none;
+        }
+    }
+
+    /* Desktop tabs */
+    .desktop-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 12px;
+    }
+
+    @media (max-width: 767px) {
+        .desktop-tabs {
+            display: none;
+        }
+    }
+
+    /* Tab button styling */
+    .tab-btn {
+        margin-right: 4px;
+        margin-bottom: 8px;
+    }
+
+    .tab-btn[aria-selected="true"] {
+        border: 2px inset var(--button-bg);
+        background-color: var(--window-bg);
+    }
+
     /* Explorer panel styling */
     .explorer-panel {
-        background-color: white;
+        background-color: var(--explorer-bg);
         overflow-y: auto;
         position: relative;
+        min-height: 300px;
+        padding: 8px !important;
     }
-    
+
+    .sunken-panel {
+        border: 2px solid;
+        border-color: var(--border-dark) var(--border-light) var(--border-light) var(--border-dark);
+        padding: 8px;
+        background-color: var(--explorer-bg);
+    }
+
+    /* Custom grid system */
+    .person-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px;
+        padding: 8px;
+    }
+
+    @media (max-width: 480px) {
+        .person-grid {
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 6px;
+            padding: 4px;
+        }
+    }
+
+    @media (min-width: 768px) {
+        .person-grid {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+            padding: 12px;
+        }
+    }
+
     /* Loading overlay */
     .tab-loading-overlay {
         position: absolute;
@@ -415,27 +664,33 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(255,255,255,0.7);
+        background-color: rgba(192, 192, 192, 0.8);
         display: flex;
         justify-content: center;
         align-items: center;
         z-index: 10;
     }
-    
+
+    @media (prefers-color-scheme: dark) {
+        .tab-loading-overlay {
+            background-color: rgba(56, 56, 56, 0.8);
+        }
+    }
+
     .loading-spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #3498db;
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--border-light);
+        border-top: 3px solid var(--progress-bar);
         border-radius: 50%;
         animation: spin 1s linear infinite;
     }
-    
+
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
-    
+
     /* Person item styling */
     .person-item {
         display: flex;
@@ -446,39 +701,86 @@
         position: relative;
         transition: all 0.2s ease;
         height: 100%;
+        color: var(--text-color);
+        text-decoration: none;
+        background-color: var(--explorer-bg);
+        border-radius: 0;
+        min-height: 44px; /* Ensure minimum tap target size */
+        cursor: pointer;
     }
     
+    @media (max-width: 480px) {
+        .person-item {
+            padding: 6px;
+            min-height: 40px;
+        }
+    }
+
     .person-item:hover {
-        background-color: #d0d1d5;
-        border: 1px dotted #000;
-        transform: translateY(-2px);
+        background-color: var(--folder-hover);
+        border: 1px dotted var(--text-color);
+        transform: translateY(-1px);
+        color: var(--text-color);
+        text-decoration: none;
     }
-    
-    .person-item:active {
-        background-color: #000080;
-        color: white !important;
+
+    .person-item:active, .person-item.active {
+        background-color: var(--folder-active);
+        color: var(--folder-active-text) !important;
+        border: 1px solid var(--folder-active);
     }
-    
-    .person-item:active img {
-        filter: brightness(1.2);
+
+    .person-item:active img, .person-item.active img {
+        filter: brightness(1.1);
     }
-    
+
+    /* Person content styling */
+    .person-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        width: 100%;
+        height: 100%;
+    }
+
     /* Person card */
     .person-card {
-        margin-bottom: 10px;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background-color: var(--explorer-bg);
+        border: 1px solid transparent;
+        border-radius: 0;
+        transition: all 0.2s ease;
+        min-height: 120px;
     }
     
+    @media (max-width: 480px) {
+        .person-card {
+            min-height: 110px;
+        }
+    }
+
     /* Person image container for consistent sizing */
     .person-img-container {
         width: 75px;
         height: 75px;
-        margin-bottom: 8px;
+        margin: 0 auto 8px auto;
         overflow: hidden;
-        border-radius: 5px;
-        border: 1px solid #ccc;
+        border-radius: 2px;
+        border: 1px solid var(--border-dark);
         position: relative;
+        background-color: var(--window-bg);
     }
-    
+
+    @media (max-width: 480px) {
+        .person-img-container {
+            width: 60px;
+            height: 60px;
+        }
+    }
+
     /* Person images */
     .person-img {
         width: 100%;
@@ -486,34 +788,59 @@
         object-fit: cover;
         transition: transform 0.2s ease;
     }
-    
+
     .person-item:hover .person-img {
-        transform: scale(1.1);
+        transform: scale(1.05);
     }
-    
+
     .person-name {
         text-align: center;
-        font-size: 0.85rem;
-        max-width: 100px;
-        margin: auto;
-        margin-bottom: 4px;
+        font-size: 11px;
+        max-width: 100%;
+        margin: 0 auto 4px auto;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        font-family: 'MS Sans Serif', sans-serif;
+        font-weight: normal;
+        padding: 0 4px;
     }
-    
+
+    @media (max-width: 480px) {
+        .person-name {
+            font-size: 10px;
+        }
+    }
+
     /* Rating styling */
     .person-rating {
-        font-size: 0.8em;
+        font-size: 10px;
         margin-top: 2px;
+        text-align: center;
     }
-    
+
+    .rating-badge {
+        background-color: var(--progress-bar);
+        color: white;
+        padding: 2px 4px;
+        border-radius: 0;
+        font-weight: bold;
+        font-size: 10px;
+        border: 1px outset var(--border-light);
+    }
+
+    .rating-count {
+        color: var(--text-muted);
+        font-size: 9px;
+        margin-left: 4px;
+    }
+
     .person-no-rating {
-        font-size: 0.8em;
-        color: #999;
+        font-size: 10px;
+        color: var(--text-muted);
         margin-top: 2px;
     }
-    
+
     /* Hover info popup */
     .person-hover-info {
         position: absolute;
@@ -521,48 +848,100 @@
         bottom: 100%;
         left: 50%;
         transform: translateX(-50%);
-        background-color: white;
-        border: 1px solid #ccc;
-        border-radius: 5px;
+        background-color: var(--window-bg);
+        border: 2px outset var(--border-light);
         padding: 8px;
         width: 150px;
         z-index: 100;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        box-shadow: 2px 2px 4px var(--shadow-color);
         text-align: center;
-        font-size: 0.85rem;
+        font-size: 11px;
+        color: var(--text-color);
+        font-family: 'MS Sans Serif', sans-serif;
     }
-    
+
     .person-item:hover .person-hover-info {
         display: block;
     }
-    
+
+    .hover-action {
+        margin-top: 4px;
+        font-style: italic;
+        font-size: 10px;
+    }
+
+    /* Center the content */
+    .text-center {
+        text-align: center;
+        width: 100%;
+    }
+
     /* Status bar styling */
     .status-bar {
+        border-top: 1px solid var(--border-dark);
+        background-color: var(--bg-color);
+        padding: 2px 4px;
+        font-size: 11px;
         display: flex;
         justify-content: space-between;
+        align-items: center;
         flex-wrap: wrap;
-        border: 2px inset white;
-        padding: 2px 4px;
+        gap: 8px;
+        margin-top: 8px;
     }
-    
+
     .status-bar-field {
-        font-size: 0.85rem;
-        margin-right: 10px;
+        border: 1px inset var(--bg-color);
+        padding: 2px 4px;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        font-size: 10px;
     }
-    
-    /* Alert styling */
-    .alert {
-        border: 2px inset white;
-        border-radius: 0;
-        background-color: rgb(225, 225, 225);
-        padding: 8px;
-        color: black;
+
+    /* No items message */
+    .no-items-message {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 200px;
     }
-    
+
+    .no-items-message .sunken-panel {
+        background-color: var(--alert-bg);
+        color: var(--text-color);
+        padding: 16px;
+        text-align: center;
+        font-size: 12px;
+    }
+
+    /* Button styling */
+    .retro-btn {
+        border: 1px outset var(--button-bg);
+        background: var(--button-bg);
+        color: var(--button-text);
+        padding: 2px 8px;
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: background-color 0.1s ease;
+    }
+
+    .retro-btn:hover {
+        background: var(--button-hover);
+        color: var(--button-text);
+        text-decoration: none;
+    }
+
+    .retro-btn:active {
+        border: 1px inset var(--button-bg);
+    }
+
     /* Back to top button */
     .back-to-top {
         position: fixed;
-        bottom: 20px;
+        bottom: 80px;
         right: 20px;
         z-index: 100;
         display: none;
@@ -570,42 +949,108 @@
         height: 40px;
         text-align: center;
         padding: 0;
-        border-radius: 5px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        border-radius: 0;
+        box-shadow: 2px 2px 4px var(--shadow-color);
     }
-    
+
     .back-to-top .arrow-up {
-        font-size: 18px;
-        line-height: 30px;
+        font-size: 16px;
+        line-height: 36px;
+        display: block;
     }
-    
+
+    /* Enhanced mobile responsiveness */
+    @media (max-width: 480px) {
+        .window-body {
+            padding: 6px;
+        }
+        
+        .person-grid {
+            gap: 6px;
+            padding: 6px;
+        }
+        
+        .person-img-container {
+            width: 55px;
+            height: 55px;
+        }
+
+        .person-name {
+            font-size: 10px;
+            max-width: 80px;
+        }
+        
+        .field-row-stacked .field-row {
+            margin-bottom: 6px;
+        }
+    }
+
     /* Mobile adjustments */
-    @media (max-width: 576px) {
+    @media (max-width: 768px) {
+        .back-to-top {
+            bottom: 90px;
+        }
+
         .person-img-container {
             width: 60px;
             height: 60px;
         }
-        
+
         .person-name {
-            font-size: 0.8em;
+            font-size: 10px;
             max-width: 85px;
         }
-        
+
         .status-bar {
             flex-direction: column;
-            gap: 5px;
+            align-items: flex-start;
+            gap: 4px;
+        }
+
+        .status-bar-field {
+            margin-bottom: 2px;
+        }
+
+        .person-grid {
+            justify-content: center;
         }
     }
-    
+
     /* Accessibility focus styles */
     .person-item:focus {
-        outline: 2px solid #000080;
-        border: 1px solid #000080;
+        outline: 2px solid var(--folder-active);
+        border: 1px solid var(--folder-active);
     }
-    
-    /* Keyboard navigation focus style */
+
     .person-item:focus-visible {
-        outline: 3px solid #000080;
+        outline: 3px solid var(--folder-active);
+    }
+
+    /* Enhanced button styling for dark mode */
+    @media (prefers-color-scheme: dark) {
+        .retro-btn {
+            border-color: var(--border-light);
+            box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+        }
+        
+        .retro-btn:hover {
+            box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+        }
+    }
+
+    /* Responsive grid adjustments */
+    .person-grid .col {
+        padding: 4px;
+    }
+
+    @media (max-width: 576px) {
+        .person-grid {
+            --bs-gutter-x: 8px;
+        }
+        
+        .person-grid .col {
+            padding: 2px;
+        }
     }
 </style>
 

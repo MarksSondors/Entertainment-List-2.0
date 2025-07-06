@@ -42,3 +42,36 @@ class BaseService:
             except requests.exceptions.RequestException as e:
                 print(f"Request error: {e}")
                 raise
+
+    def _post(self, endpoint, data=None, max_retries=3):
+        # Ensure endpoint doesn't start with a slash to avoid double slashes
+        endpoint = endpoint.lstrip('/') 
+        url = f'{self.base_url.rstrip("/")}/{endpoint}'
+        headers = {'Content-Type': 'application/json'}
+        
+        if self.bearer_token:
+            headers['Authorization'] = f'Bearer {self.bearer_token}'
+        if self.api_key:
+            headers['api_key'] = self.api_key
+        
+        # Initialize retry counter
+        retries = 0
+        
+        while retries <= max_retries:
+            try:
+                response = requests.post(url, json=data, headers=headers, timeout=10)
+                response.raise_for_status()  # Raises exception for 4XX/5XX responses
+                return response.json()
+            except (ConnectionError, Timeout) as e:
+                retries += 1
+                if retries > max_retries:
+                    print(f"Failed after {max_retries} retries: {e}")
+                    raise
+                
+                # Calculate backoff time with jitter (between 1-3s, 2-6s, 4-12s)
+                backoff = (2 ** (retries - 1)) * (1 + random.random())
+                print(f"Connection error: {e}. Retrying in {backoff:.1f} seconds... (Attempt {retries}/{max_retries})")
+                time.sleep(backoff)
+            except requests.exceptions.RequestException as e:
+                print(f"Request error: {e}")
+                raise
