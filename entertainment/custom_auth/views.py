@@ -1342,6 +1342,48 @@ def people_detail(request, person_id):
     # Convert grouped credits to a list for sorting and template iteration
     combined_credits_list = list(grouped_credits.values())
     
+    # Add rating data for each media item
+    if combined_credits_list:
+        movie_content_type = ContentType.objects.get_for_model(Movie)
+        tv_show_content_type = ContentType.objects.get_for_model(TVShow)
+        
+        # Get user reviews for all media items
+        user_reviews = {}
+        for review in Review.objects.filter(q_objects, user=request.user):
+            key = (review.content_type_id, review.object_id)
+            user_reviews[key] = review.rating
+            
+        # Get average ratings for all media items
+        avg_ratings = {}
+        rating_counts = {}
+        for item in Review.objects.filter(q_objects).values(
+            'content_type_id', 'object_id'
+        ).annotate(
+            avg_rating=models.Avg('rating'),
+            count=models.Count('id')
+        ):
+            key = (item['content_type_id'], item['object_id'])
+            avg_ratings[key] = round(item['avg_rating'], 1)
+            rating_counts[key] = item['count']
+            
+        # Add rating data to each credit
+        for credit in combined_credits_list:
+            media = credit['media']
+            if hasattr(media, 'release_date'):  # Movie
+                content_type_id = movie_content_type.id
+            else:  # TV Show
+                content_type_id = tv_show_content_type.id
+                
+            key = (content_type_id, media.id)
+            
+            # Add user rating
+            credit['user_rating'] = user_reviews.get(key)
+            
+            # Add average rating
+            if key in avg_ratings:
+                credit['avg_rating'] = avg_ratings[key]
+                credit['rating_count'] = rating_counts[key]
+    
     # Sort combined credits by release date (newest first)
     combined_credits_list = sorted(
         combined_credits_list,
