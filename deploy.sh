@@ -1,10 +1,10 @@
 #!/bin/bash
 
 echo "Stopping existing containers..."
-docker-compose down
+docker compose down
 
 echo "Building and starting services..."
-docker-compose up -d --build
+docker compose up -d --build
 
 echo "Waiting for services to be ready..."
 sleep 10

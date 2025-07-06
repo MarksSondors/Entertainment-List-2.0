@@ -1,8 +1,8 @@
 Write-Host "Stopping existing containers..." -ForegroundColor Yellow
-docker-compose down
+docker compose down
 
 Write-Host "Building and starting services..." -ForegroundColor Yellow
-docker-compose up -d --build
+docker compose up -d --build
 
 Write-Host "Waiting for services to be ready..." -ForegroundColor Yellow
 Start-Sleep -Seconds 10
