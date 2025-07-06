@@ -282,7 +282,9 @@ def tv_show_page(request, show_id):
             season_reviews.append({
                 'season_number': review.season.season_number,
                 'rating': review.rating,
-                'id': review.season_id
+                'id': review.season_id,
+                'review_text': review.review_text,
+                'created_at': review.date_added,
             })
         
         # Sort season reviews by season_number
@@ -297,6 +299,8 @@ def tv_show_page(request, show_id):
         subgroup_reviews_data = user_reviews.filter(episode_subgroup__isnull=False).values(
             'id',
             'rating',
+            'review_text',
+            'date_added',
             'episode_subgroup_id',
             'episode_subgroup__name',
             'episode_subgroup__order',
@@ -316,7 +320,9 @@ def tv_show_page(request, show_id):
             subgroup_reviews.append({
                 'name': data['episode_subgroup__name'],
                 'rating': data['rating'],
-                'id': subgroup_id
+                'review_text': data['review_text'],
+                'created_at': data['date_added'],
+                'id': subgroup_id,
             })
 
         # Sort by the predefined order in the database

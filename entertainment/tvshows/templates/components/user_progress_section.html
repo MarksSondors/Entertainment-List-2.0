@@ -21,6 +21,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-bottom: 1px solid var(--border-dark);
 }
 
 .user-progress-body {
@@ -31,16 +32,17 @@
 
 .user-progress-item {
     margin-bottom: 15px;
-    padding: 10px;
+    padding: 8px;
     position: relative;
-    background-color: var(--bg-color);
-    border: 1px inset var(--border-light);
+    background-color: var(--progress-bg);
+    border: 2px inset var(--border-light);
+    box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
 }
 
 .user-progress-item.current-user {
     background-color: var(--progress-bg);
     border: 2px outset var(--border-light);
-    box-shadow: 1px 1px 2px var(--shadow-color);
+    box-shadow: 2px 2px 4px var(--shadow-color);
 }
 
 /* Enhanced Episode Progress Container */
@@ -202,6 +204,37 @@
     font-weight: bold;
     text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
     box-shadow: 1px 1px 2px var(--shadow-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.rating-badge::after {
+    content: '👁️';
+    font-size: 8px;
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.rating-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    border: 1px inset var(--border-light);
+}
+
+.rating-badge:hover::after {
+    opacity: 1;
+    background: rgba(255, 255, 255, 1);
 }
 
 .season-rating-badge {
@@ -227,6 +260,76 @@
     box-shadow: 2px 2px 4px var(--shadow-color);
     text-shadow: 1px 1px 1px rgba(0,0,0,0.7);
     font-weight: bold;
+}
+
+/* Modal Styles */
+.review-modal {
+    display: none;
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    animation: fadeIn 0.2s ease-in-out;
+}
+
+.review-modal .window {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: slideIn 0.3s ease-out;
+}
+
+.review-rating-display {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--progress-bar);
+    margin: 8px 0;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+}
+
+.review-text-content {
+    background: var(--window-bg);
+    border: 2px inset var(--border-light);
+    padding: 8px;
+    margin: 4px 0;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'MS Sans Serif', Arial, sans-serif;
+}
+
+.review-metadata {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-dark);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { 
+        opacity: 0;
+        transform: translate(-50%, -60%);
+    }
+    to { 
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
 }
 
 /* Mobile optimizations */
@@ -270,9 +373,27 @@
         padding: 2px 4px;
     }
     
+    .rating-badge::after {
+        font-size: 7px;
+        width: 10px;
+        height: 10px;
+        top: -1px;
+        right: -1px;
+    }
+    
     .season-label {
         bottom: -18px;
         font-size: 8px;
+    }
+    
+    /* Modal mobile styles */
+    .review-modal .window {
+        width: 95%;
+        max-height: 85vh;
+    }
+    
+    .review-text-content {
+        max-height: 150px;
     }
 }
 
@@ -304,6 +425,17 @@
         font-size: 9px;
         padding: 3px 8px;
     }
+    
+    /* Modal extra small mobile styles */
+    .review-modal .window {
+        width: 98%;
+        max-height: 90vh;
+    }
+    
+    .review-text-content {
+        max-height: 120px;
+        font-size: 11px;
+    }
 }
 </style>
 
@@ -334,11 +466,24 @@
                     
                     <!-- Display user ratings with enhanced styling -->
                     <div class="user-ratings-display">
+                        {% if user_progress.season_reviews or user_progress.subgroup_reviews %}
+                            <div style="width: 100%; margin-bottom: 6px; padding: 4px 6px; background: var(--progress-bg); border: 1px inset var(--border-light); font-size: 10px; color: var(--text-muted); text-align: center;">
+                                💡 Click any rating badge below to view full review text
+                            </div>
+                        {% endif %}
+                        
                         <!-- Season ratings -->
                         {% if user_progress.season_reviews %}
                             <span style="font-size: 11px; font-weight: bold; color: var(--text-color);">Season Ratings:</span>
                             {% for review in user_progress.season_reviews %}
-                                <span class="rating-badge season-rating-badge">
+                                <span class="rating-badge season-rating-badge" 
+                                      data-review-type="season"
+                                      data-review-rating="{{ review.rating }}"
+                                      data-review-text="{{ review.review_text|default:'No review text provided.' }}"
+                                      data-review-title="Season {{ review.season_number }} Review"
+                                      data-review-user="{{ user_progress.username }}"
+                                      data-review-date="{{ review.created_at|date:'M d, Y' }}"
+                                      title="Click to read full review with text and details">
                                     S{{ review.season_number }}: ⭐{{ review.rating }}
                                 </span>
                             {% endfor %}
@@ -349,7 +494,14 @@
                             {% if user_progress.season_reviews %}<br>{% endif %}
                             <span style="font-size: 11px; font-weight: bold; color: var(--text-color);">Group Ratings:</span>
                             {% for review in user_progress.subgroup_reviews %}
-                                <span class="rating-badge group-rating-badge">
+                                <span class="rating-badge group-rating-badge"
+                                      data-review-type="group"
+                                      data-review-rating="{{ review.rating }}"
+                                      data-review-text="{{ review.review_text|default:'No review text provided.' }}"
+                                      data-review-title="{{ review.name }} Review"
+                                      data-review-user="{{ user_progress.username }}"
+                                      data-review-date="{{ review.created_at|date:'M d, Y' }}"
+                                      title="Click to read full review with text and details">
                                     {{ review.name|truncatechars:15 }}: ⭐{{ review.rating }}
                                 </span>
                             {% endfor %}
@@ -497,9 +649,101 @@
     </div>
 </div>
 
+<!-- Review Modal -->
+<div id="reviewModal" class="review-modal">
+    <div class="window review-modal-content">
+        <div class="title-bar">
+            <div class="title-bar-text" id="reviewModalTitle">Review Details</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" id="reviewModalClose"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="field-row-stacked" style="margin-bottom: 12px;">
+                <label>Rating</label>
+                <div class="review-rating-display" id="reviewModalRating">⭐ 0</div>
+                <div class="review-metadata">
+                    <span id="reviewModalUser">User</span> • <span id="reviewModalDate">Date</span>
+                </div>
+            </div>
+            
+            <div class="field-row-stacked">
+                <label>Review Text</label>
+                <div class="review-text-content" id="reviewModalText">
+                    No review text provided.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Enhanced tooltip support for ratings above episodes -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Modal functionality for review badges
+    const modal = document.getElementById('reviewModal');
+    const modalTitle = document.getElementById('reviewModalTitle');
+    const modalRating = document.getElementById('reviewModalRating');
+    const modalText = document.getElementById('reviewModalText');
+    const modalUser = document.getElementById('reviewModalUser');
+    const modalDate = document.getElementById('reviewModalDate');
+    const modalClose = document.getElementById('reviewModalClose');
+    
+    // Function to open modal with review data
+    function openReviewModal(badge) {
+        const reviewType = badge.getAttribute('data-review-type');
+        const rating = badge.getAttribute('data-review-rating');
+        const text = badge.getAttribute('data-review-text');
+        const title = badge.getAttribute('data-review-title');
+        const user = badge.getAttribute('data-review-user');
+        const date = badge.getAttribute('data-review-date');
+        
+        modalTitle.textContent = title;
+        modalRating.innerHTML = `⭐ ${rating}`;
+        modalText.textContent = text || 'No review text provided.';
+        modalUser.textContent = user;
+        modalDate.textContent = date;
+        
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden'; // Prevent scrolling behind modal
+    }
+    
+    // Function to close modal
+    function closeReviewModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = ''; // Restore scrolling
+    }
+    
+    // Add click listeners to all rating badges
+    document.querySelectorAll('.rating-badge').forEach(badge => {
+        badge.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openReviewModal(this);
+        });
+    });
+    
+    // Close modal handlers
+    modalClose.addEventListener('click', closeReviewModal);
+    
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeReviewModal();
+        }
+    });
+    
+    // Prevent clicks inside the modal window from closing it
+    modal.querySelector('.window').addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+    
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'block') {
+            closeReviewModal();
+        }
+    });
+
     // Initialize progress controls for shows with many episodes
     document.querySelectorAll('.user-progress-item').forEach((userProgress, index) => {
         const progressContainer = userProgress.querySelector('.episode-progress-container');
