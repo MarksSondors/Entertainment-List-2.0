@@ -88,6 +88,8 @@ services:
     networks:
       - webnet
     restart: unless-stopped
+    environment:
+      - DOMAIN=yourdomain.com # Replace with your actual domain
     
   watchtower:
     image: containrrr/watchtower
