@@ -7,15 +7,31 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./entertainment:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
     env_file:
       - .env
     depends_on:
       - postgres
       - redis
+    networks:
+      - webnet
+    restart: unless-stopped
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    depends_on:
+      - web
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.entertainment.rule=Host(`${DOMAIN:-localhost}`)"
-      - "traefik.http.services.entertainment.loadbalancer.server.port=8000"
+      - "traefik.http.services.entertainment.loadbalancer.server.port=80"
     networks:
       - webnet
     restart: unless-stopped
@@ -88,3 +104,5 @@ networks:
 volumes:
   redis_data:
   postgres_data:
+  static_volume:
+  media_volume:
