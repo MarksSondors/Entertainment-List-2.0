@@ -55,11 +55,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'django_q',
-    
-    "debug_toolbar",
-    "silk",
-
-
 
     # Custom apps
     'custom_auth',  # user info and tables which are not unique to other apps
@@ -81,19 +76,7 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
-INTERNAL_IPS = [
-    "127.0.0.1",
-    "localhost",
-]
-
-DEBUG_TOOLBAR_CONFIG = {
-    'SHOW_TOOLBAR_CALLBACK': lambda request: True,
-}
-
 MIDDLEWARE = [
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
-    'silk.middleware.SilkyMiddleware',
-
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
