@@ -24,6 +24,13 @@ class MovieAdmin(admin.ModelAdmin):
                       'display_cast', 'display_composers', 'minutes_to_hours')
     inlines = [MediaPersonInline]
     
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        # Make production_companies field not required in admin
+        if 'production_companies' in form.base_fields:
+            form.base_fields['production_companies'].required = False
+        return form
+    
     def display_directors(self, obj):
         return self._format_people_list(obj.directors)
     display_directors.short_description = "Directors"

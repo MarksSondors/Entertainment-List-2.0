@@ -30,16 +30,17 @@
                         </div>
                         <div>
                             <p><strong>Total Results:</strong> <span id="tv-show-total-results">0</span></p>
-                            <p><strong>Page:</strong> <span id="tv-show-current-page">0</span> of <span id="tv-show-total-pages">0</span></p>
-                            <div style="display: flex; gap: 10px;">
-                                <button id="tv-show-prev-button" disabled>Previous</button>
-                                <button id="tv-show-next-button" disabled>Next</button>
+                            <div id="tv-show-loading-more" style="text-align: center; padding: 10px; display: none;">
+                                <p>Loading more results...</p>
                             </div>
                         </div>
                     </fieldset>
                 </div>
                 <!-- Navigation Buttons -->
                 <div style="text-align: right; margin-top: 15px;">
+                    <div id="tv-show-selection-hint" style="text-align: left; margin-bottom: 10px; color: #666; font-style: italic; display: none;">
+                        👆 Click on a TV show above to select it, then click "Next: Edit Details"
+                    </div>
                     <button id="tv-show-to-stage-2-btn" disabled>Next: Edit Details</button>
                 </div>
             </div>
@@ -202,6 +203,9 @@
     let selectedTVShow = null;
     let taskCheckIntervalTV = null;
     let currentTaskIdTV = null;
+    let isLoadingMoreTV = false;
+    let currentTVQuery = '';
+    let hasMoreTVResults = false;
       // Modal Control Functions
     function openTVShowModal(searchQuery = '') {
         $("#tv-show-search-modal").show();
@@ -209,8 +213,11 @@
                 $("#tv-show-query").val(searchQuery);
                 // Auto-trigger search if query provided
                 if (searchQuery.length > 2) {
-                        currentTVShowPage = 1;
-                        fetchTVShowResults(searchQuery, currentTVShowPage);
+                        currentTVQuery = searchQuery;
+                        tvCurrentPage = 1;
+                        allTVResults = [];
+                        $('#tv-show-results-list').empty(); // Clear any existing results
+                        fetchTVResults(searchQuery, tvCurrentPage, false);
                 }
         }
         $("#tv-show-query").focus();
@@ -246,6 +253,16 @@
         $("#add-tv-show-form")[0].reset();
         selectedTVShow = null;
         $("#tv-show-to-stage-2-btn").prop("disabled", true);
+        
+        // Reset infinite scroll variables
+        allTVResults = [];
+        tvCurrentPage = 1;
+        currentTVQuery = '';
+        hasMoreTVResults = false;
+        isLoadingMoreTV = false;
+        
+        // Hide selection hint
+        $('#tv-show-selection-hint').hide();
     }
     
     function goToTVShowStage2() {
@@ -431,9 +448,15 @@
         });
     }
 
-    function renderTVResults() {
-        $('#tv-show-results-list').empty();
-        allTVResults.forEach(function(show) {
+    function renderTVResults(newResults = null) {
+        const resultsToRender = newResults || allTVResults;
+        
+        if (!newResults) {
+            // Clear list for new search
+            $('#tv-show-results-list').empty();
+        }
+        
+        resultsToRender.forEach(function(show) {
             const listItem = $('<li></li>');
             const poster = show.poster_path
                 ? `<img src="https://image.tmdb.org/t/p/w200${show.poster_path}" 
@@ -468,34 +491,61 @@
                 // Highlight selected item
                 $('#tv-show-results-list li').removeClass('selected');
                 $(this).addClass('selected');
+                
+                // Hide the selection hint once a TV show is selected
+                $('#tv-show-selection-hint').hide();
             });
             
             $('#tv-show-results-list').append(listItem);
         });
+        
+        // Show selection hint when results are displayed (but only if no TV show is selected)
+        if (resultsToRender.length > 0 && !selectedTVShow && !newResults) {
+            $('#tv-show-selection-hint').show();
+        }
     }
 
     function updateTVPagination(response) {
         $('#tv-show-total-results').text(response.total_results);
         tvTotalPages = response.total_pages;
-        $('#tv-show-current-page').text(tvCurrentPage);
-        $('#tv-show-total-pages').text(tvTotalPages);
-
-        $('#tv-show-prev-button').prop('disabled', tvCurrentPage <= 1);
-        $('#tv-show-next-button').prop('disabled', tvCurrentPage >= tvTotalPages);
+        hasMoreTVResults = tvCurrentPage < tvTotalPages;
     }
 
-    function fetchTVResults(query, page) {
+    function fetchTVResults(query, page, append = false) {
+        if (isLoadingMoreTV) return; // Prevent multiple simultaneous requests
+        
+        isLoadingMoreTV = true;
+        if (!append) {
+            $("#tv-show-loading-more").hide();
+        } else {
+            $("#tv-show-loading-more").show();
+        }
+        
         $.ajax({
             url: "{% url 'tmdb_tv_search' %}",
             method: "GET",
             data: { query: query, page: page },
             success: function(response) {
-                allTVResults = response.results; 
-                renderTVResults();
+                if (append) {
+                    // Append new results to existing ones
+                    allTVResults = allTVResults.concat(response.results);
+                    // Only render the new results
+                    renderTVResults(response.results);
+                } else {
+                    // Replace results for new search
+                    allTVResults = response.results;
+                    // Render all results (will clear list first)
+                    renderTVResults();
+                }
+                
                 updateTVPagination(response);
+                isLoadingMoreTV = false;
+                $("#tv-show-loading-more").hide();
             },
             error: function() {
                 alert('An error occurred while searching for TV shows.');
+                isLoadingMoreTV = false;
+                $("#tv-show-loading-more").hide();
             }
         });
     }
@@ -635,36 +685,58 @@
         $('#tv-show-query').on('input', function() {
             const query = $('#tv-show-query').val();
             if (query.length > 2) {
-                tvCurrentPage = 1;
-                fetchTVResults(query, tvCurrentPage);
+                if (query !== currentTVQuery) {
+                    // New search - reset everything
+                    currentTVQuery = query;
+                    tvCurrentPage = 1;
+                    allTVResults = [];
+                    $('#tv-show-results-list').empty(); // Clear previous results immediately
+                    fetchTVResults(query, tvCurrentPage, false);
+                }
             } else {
+                // Clear results if query is too short
                 $('#tv-show-results-list').empty();
                 $('#tv-show-total-results').text('0');
-                $('#tv-show-current-page').text('0');
-                $('#tv-show-total-pages').text('0');
+                allTVResults = [];
+                currentTVQuery = '';
+                hasMoreTVResults = false;
             }
         });
 
         $('#tv-show-search-button').on('click', function() {
             const query = $('#tv-show-query').val();
             if (query.length > 2) {
+                currentTVQuery = query;
                 tvCurrentPage = 1;
-                fetchTVResults(query, tvCurrentPage);
+                allTVResults = [];
+                $('#tv-show-results-list').empty(); // Clear previous results immediately
+                fetchTVResults(query, tvCurrentPage, false);
             }
         });
 
-        $('#tv-show-prev-button').on('click', function() {
-            if (tvCurrentPage > 1) {
-                tvCurrentPage--;
-                fetchTVResults($('#tv-show-query').val(), tvCurrentPage);
+        // Infinite scroll functionality
+        $('#tv-show-results-list').parent().on('scroll', function() {
+            const scrollContainer = $(this);
+            const scrollTop = scrollContainer.scrollTop();
+            const scrollHeight = scrollContainer[0].scrollHeight;
+            const containerHeight = scrollContainer.height();
+            
+            // Check if user has scrolled to near the bottom (within 50px)
+            // Also check if there's actually content to scroll (scrollHeight > containerHeight)
+            if (scrollHeight > containerHeight && scrollTop + containerHeight >= scrollHeight - 50) {
+                if (hasMoreTVResults && !isLoadingMoreTV && currentTVQuery.length > 2) {
+                    tvCurrentPage++;
+                    fetchTVResults(currentTVQuery, tvCurrentPage, true);
+                }
             }
         });
-
-        $('#tv-show-next-button').on('click', function() {
-            if (tvCurrentPage < tvTotalPages) {
-                tvCurrentPage++;
-                fetchTVResults($('#tv-show-query').val(), tvCurrentPage);
-            }
+        
+        // Also add a fallback check with mousewheel/touch events for better detection
+        $('#tv-show-results-list').parent().on('mousewheel DOMMouseScroll touchmove', function() {
+            // Trigger the scroll event handler after a short delay
+            setTimeout(() => {
+                $(this).trigger('scroll');
+            }, 100);
         });
 
         // Add this to your existing document ready function
@@ -943,5 +1015,22 @@
         margin-right: 0 !important;
         margin-bottom: 5px !important;
     }
+}
+
+/* Override base template's width: 100% rule for search component elements */
+.modal .field-row > *,
+.modal .field-row-stacked > * {
+    width: auto !important;
+}
+
+/* Specific overrides for elements that should maintain their original styling */
+.modal .field-row span,
+.modal .field-row input:not([type="checkbox"]) {
+    width: auto !important;
+    flex: 1;
+}
+
+.modal .field-row-stacked > div {
+    width: 100% !important; /* Description div should still be full width */
 }
 </style>

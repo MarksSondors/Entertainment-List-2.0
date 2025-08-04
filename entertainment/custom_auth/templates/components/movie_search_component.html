@@ -29,16 +29,17 @@
                 </div>
                 <div>
                     <p><strong>Total Results:</strong> <span id="total-results">0</span></p>
-                    <p><strong>Page:</strong> <span id="current-page">0</span> of <span id="total-pages">0</span></p>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="prev-button" disabled>Previous</button>
-                        <button id="next-button" disabled>Next</button>
+                    <div id="loading-more" style="text-align: center; padding: 10px; display: none;">
+                        <p>Loading more results...</p>
                     </div>
                 </div>
             </fieldset>
         </div>
         <!-- Navigation Buttons -->
         <div style="text-align: right; margin-top: 15px;">
+            <div id="movie-selection-hint" style="text-align: left; margin-bottom: 10px; color: #666; font-style: italic; display: none;">
+                👆 Click on a movie above to select it, then click "Next: Edit Details"
+            </div>
             <button id="to-stage-2-btn" disabled>Next: Edit Details</button>
         </div>
 </div>
@@ -201,6 +202,9 @@ let totalPages = 0;
 let selectedMovie = null;
 let taskCheckInterval = null;
 let currentTaskId = null;
+let isLoadingMore = false;
+let currentQuery = '';
+let hasMoreResults = false;
 
 // Modal Control Functions
 function openModal(searchQuery = '') {
@@ -209,8 +213,11 @@ function openModal(searchQuery = '') {
                 $("#query").val(searchQuery);
                 // Auto-trigger search if query provided
                 if (searchQuery.length > 2) {
+                        currentQuery = searchQuery;
                         currentPage = 1;
-                        fetchResults(searchQuery, currentPage);
+                        allResults = [];
+                        $('#results-list').empty(); // Clear any existing results
+                        fetchResults(searchQuery, currentPage, false);
                 }
         }
         $("#query").focus();
@@ -246,6 +253,16 @@ function resetModal() {
         $("#add-movie-form")[0].reset();
         selectedMovie = null;
         $("#to-stage-2-btn").prop("disabled", true);
+        
+        // Reset infinite scroll variables
+        allResults = [];
+        currentPage = 1;
+        currentQuery = '';
+        hasMoreResults = false;
+        isLoadingMore = false;
+        
+        // Hide selection hint
+        $('#movie-selection-hint').hide();
 }
 
 function goToStage2() {
@@ -430,73 +447,106 @@ function fetchMovieImages(movieId) {
         });
 }
 
-function renderResults() {
-$('#results-list').empty();
-allResults.forEach(function(movie) {
-const listItem = $('<li></li>');
-const poster = movie.poster_path
-? `<img src="https://image.tmdb.org/t/p/w200${movie.poster_path}" 
-alt="${movie.title} poster" style="width: 50px; height: auto; vertical-align: middle; margin-right: 10px;">`
-: '';
+function renderResults(newResults = null) {
+    const resultsToRender = newResults || allResults;
+    
+    if (!newResults) {
+        // Clear list for new search
+        $('#results-list').empty();
+    }
+    
+    resultsToRender.forEach(function(movie) {
+        const listItem = $('<li></li>');
+        const poster = movie.poster_path
+        ? `<img src="https://image.tmdb.org/t/p/w200${movie.poster_path}" 
+        alt="${movie.title} poster" style="width: 50px; height: auto; vertical-align: middle; margin-right: 10px;">`
+        : '';
 
-// Create database status indicators
-let statusIndicators = '';
-if (movie.in_database) {
-statusIndicators += `<span class="status-pill in-database">
-<a href="/movies/${movie.id}/" class="status-link">View Movie</a>
-</span>`;
-}
-if (movie.in_watchlist) {
-statusIndicators += `<span class="status-pill in-watchlist">
-<a href="/watchlist/movies/" class="status-link">In Watchlist</a>
-</span>`;
-}
+        // Create database status indicators
+        let statusIndicators = '';
+        if (movie.in_database) {
+        statusIndicators += `<span class="status-pill in-database">
+        <a href="/movies/${movie.id}/" class="status-link">View Movie</a>
+        </span>`;
+        }
+        if (movie.in_watchlist) {
+        statusIndicators += `<span class="status-pill in-watchlist">
+        <a href="/watchlist/movies/" class="status-link">In Watchlist</a>
+        </span>`;
+        }
 
-listItem.html(`
-<div class="movie-result">
-${poster}
-<span class="movie-title">${movie.title} (${movie.release_date || 'N/A'})</span>
-<div class="movie-status">${statusIndicators}</div>
-</div>
-`);
+        listItem.html(`
+        <div class="movie-result">
+        ${poster}
+        <span class="movie-title">${movie.title} (${movie.release_date || 'N/A'})</span>
+        <div class="movie-status">${statusIndicators}</div>
+        </div>
+        `);
 
-listItem.on('click', function() {
-selectedMovie = movie;
-$("#to-stage-2-btn").prop("disabled", false);
+        listItem.on('click', function() {
+        selectedMovie = movie;
+        $("#to-stage-2-btn").prop("disabled", false);
 
-// Highlight selected item
-$('#results-list li').removeClass('selected');
-$(this).addClass('selected');
-});
+        // Highlight selected item
+        $('#results-list li').removeClass('selected');
+        $(this).addClass('selected');
+        
+        // Hide the selection hint once a movie is selected
+        $('#movie-selection-hint').hide();
+        });
 
-$('#results-list').append(listItem);
-});
+        $('#results-list').append(listItem);
+    });
+    
+    // Show selection hint when results are displayed (but only if no movie is selected)
+    if (resultsToRender.length > 0 && !selectedMovie && !newResults) {
+        $('#movie-selection-hint').show();
+    }
 }
 
 function updatePagination(response) {
-$('#total-results').text(response.total_results);
-totalPages = response.total_pages;
-$('#current-page').text(currentPage);
-$('#total-pages').text(totalPages);
-
-$('#prev-button').prop('disabled', currentPage <= 1);
-$('#next-button').prop('disabled', currentPage >= totalPages);
+    $('#total-results').text(response.total_results);
+    totalPages = response.total_pages;
+    hasMoreResults = currentPage < totalPages;
 }
 
-function fetchResults(query, page) {
-$.ajax({
-url: "{% url 'tmdb_search' %}",
-method: "GET",
-data: { query: query, page: page },
-success: function(response) {
-allResults = response.results; 
-renderResults();
-updatePagination(response);
-},
-error: function() {
-alert('An error occurred while searching for movies.');
-}
-});
+function fetchResults(query, page, append = false) {
+    if (isLoadingMore) return; // Prevent multiple simultaneous requests
+    
+    isLoadingMore = true;
+    if (!append) {
+        $("#loading-more").hide();
+    } else {
+        $("#loading-more").show();
+    }
+    
+    $.ajax({
+        url: "{% url 'tmdb_search' %}",
+        method: "GET",
+        data: { query: query, page: page },
+        success: function(response) {
+            if (append) {
+                // Append new results to existing ones
+                allResults = allResults.concat(response.results);
+                // Only render the new results
+                renderResults(response.results);
+            } else {
+                // Replace results for new search
+                allResults = response.results;
+                // Render all results (will clear list first)
+                renderResults();
+            }
+            
+            updatePagination(response);
+            isLoadingMore = false;
+            $("#loading-more").hide();
+        },
+        error: function() {
+            alert('An error occurred while searching for movies.');
+            isLoadingMore = false;
+            $("#loading-more").hide();
+        }
+    });
 }
 
 // Function to check task status
@@ -631,38 +681,60 @@ $(document).ready(function() {
         
         // Search functionality
         $('#query').on('input', function() {
-                        const query = $('#query').val();
-                        if (query.length > 2) {
-                                        currentPage = 1;
-                                        fetchResults(query, currentPage);
-                        } else {
-                                        $('#results-list').empty();
-                                        $('#total-results').text('0');
-                                        $('#current-page').text('0');
-                                        $('#total-pages').text('0');
-                        }
+            const query = $('#query').val();
+            if (query.length > 2) {
+                if (query !== currentQuery) {
+                    // New search - reset everything
+                    currentQuery = query;
+                    currentPage = 1;
+                    allResults = [];
+                    $('#results-list').empty(); // Clear previous results immediately
+                    fetchResults(query, currentPage, false);
+                }
+            } else {
+                // Clear results if query is too short
+                $('#results-list').empty();
+                $('#total-results').text('0');
+                allResults = [];
+                currentQuery = '';
+                hasMoreResults = false;
+            }
         });
 
         $('#search-button').on('click', function() {
-                        const query = $('#query').val();
-                        if (query.length > 2) {
-                                        currentPage = 1;
-                                        fetchResults(query, currentPage);
-                        }
+            const query = $('#query').val();
+            if (query.length > 2) {
+                currentQuery = query;
+                currentPage = 1;
+                allResults = [];
+                $('#results-list').empty(); // Clear previous results immediately
+                fetchResults(query, currentPage, false);
+            }
         });
 
-        $('#prev-button').on('click', function() {
-                        if (currentPage > 1) {
-                                        currentPage--;
-                                        fetchResults($('#query').val(), currentPage);
-                        }
+        // Infinite scroll functionality
+        $('#results-list').parent().on('scroll', function() {
+            const scrollContainer = $(this);
+            const scrollTop = scrollContainer.scrollTop();
+            const scrollHeight = scrollContainer[0].scrollHeight;
+            const containerHeight = scrollContainer.height();
+            
+            // Check if user has scrolled to near the bottom (within 50px)
+            // Also check if there's actually content to scroll (scrollHeight > containerHeight)
+            if (scrollHeight > containerHeight && scrollTop + containerHeight >= scrollHeight - 50) {
+                if (hasMoreResults && !isLoadingMore && currentQuery.length > 2) {
+                    currentPage++;
+                    fetchResults(currentQuery, currentPage, true);
+                }
+            }
         });
-
-        $('#next-button').on('click', function() {
-                        if (currentPage < totalPages) {
-                                        currentPage++;
-                                        fetchResults($('#query').val(), currentPage);
-                        }
+        
+        // Also add a fallback check with mousewheel/touch events for better detection
+        $('#results-list').parent().on('mousewheel DOMMouseScroll touchmove', function() {
+            // Trigger the scroll event handler after a short delay
+            setTimeout(() => {
+                $(this).trigger('scroll');
+            }, 100);
         });
 
         // Add this to your existing document ready function
@@ -935,5 +1007,22 @@ $(document).ready(function() {
         margin-right: 0 !important;
         margin-bottom: 5px !important;
     }
+}
+
+/* Override base template's width: 100% rule for search component elements */
+.modal .field-row > *,
+.modal .field-row-stacked > * {
+    width: auto !important;
+}
+
+/* Specific overrides for elements that should maintain their original styling */
+.modal .field-row span,
+.modal .field-row input:not([type="checkbox"]) {
+    width: auto !important;
+    flex: 1;
+}
+
+.modal .field-row-stacked > div {
+    width: 100% !important; /* Description div should still be full width */
 }
 </style>
