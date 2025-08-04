@@ -25,8 +25,6 @@ from django.contrib.staticfiles.storage import staticfiles_storage
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
-from debug_toolbar.toolbar import debug_toolbar_urls
-
 @require_http_methods(["GET"])
 def chrome_devtools_manifest(request):
     """Handle Chrome DevTools PWA manifest request"""
