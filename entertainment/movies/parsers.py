@@ -72,6 +72,33 @@ def process_genres_countries_keywords(movie_details):
 
     return genre_instances, country_instances, keyword_instances
 
+def process_production_companies(movie_details):
+    """Process and create production company instances"""
+    companies = movie_details.get('production_companies', [])
+    company_instances = []
+    
+    for company in companies:
+        origin_country = None
+        if company.get('origin_country') and company.get('origin_country') != "":
+            try:
+                origin_country = Country.objects.get(iso_3166_1=company.get('origin_country'))
+            except Country.DoesNotExist:
+                # If country doesn't exist, we can skip it or create it
+                pass
+                
+        logo_path = company.get('logo_path')
+        company_instance, _ = ProductionCompany.objects.get_or_create(
+            tmdb_id=company.get('id'),
+            defaults={
+                'name': company.get('name'),
+                'country': origin_country,
+                'logo_path': f"https://image.tmdb.org/t/p/original{logo_path}" if logo_path else None
+            }
+        )
+        company_instances.append(company_instance)
+    
+    return company_instances
+
 def process_collection(movie, movie_details, movies_service):
     """Process and associate collection if applicable"""
     belongs_to_collection = movie_details.get('belongs_to_collection')
@@ -196,8 +223,35 @@ def add_to_movie_watchlist(movie, user_id):
         object_id=movie.id
     )
 
+def create_movie_basic(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
+    """Create a movie with basic information only - fast creation for immediate user feedback"""
+    movies_service = MoviesService()
+    
+    # Get movie details from API
+    movie_details = movies_service.get_movie_details(movie_id, append_to_response='videos,keywords')
+    if not movie_details:
+        return None
+    
+    # Extract basic movie data
+    movie_dict = extract_movie_data(movie_details, movie_poster, movie_backdrop, is_anime)
+    
+    # Process only essential metadata (genres, countries, keywords - quick operations)
+    genre_instances, country_instances, keyword_instances = process_genres_countries_keywords(movie_details)
+    
+    # Create the movie instance with basic information
+    movie = Movie.objects.create(**movie_dict, added_by=CustomUser.objects.filter(id=user_id).first() if user_id else None)
+    movie.genres.set(genre_instances)
+    movie.countries.set(country_instances)
+    movie.keywords.set(keyword_instances)
+    
+    # Add to watchlist if specified
+    if add_to_watchlist:
+        add_to_movie_watchlist(movie, user_id)
+    
+    return movie
+
 def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
-    """Main function to create a movie from TMDB ID"""
+    """Main function to create a movie from TMDB ID - complete with all foreign objects"""
     movies_service = MoviesService()
     
     # Get movie details from API
@@ -210,12 +264,14 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     
     # Process metadata
     genre_instances, country_instances, keyword_instances = process_genres_countries_keywords(movie_details)
+    company_instances = process_production_companies(movie_details)
     
     # Create the movie instance
     movie = Movie.objects.create(**movie_dict, added_by=CustomUser.objects.filter(id=user_id).first() if user_id else None)
     movie.genres.set(genre_instances)
     movie.countries.set(country_instances)
     movie.keywords.set(keyword_instances)
+    movie.production_companies.set(company_instances)
     
     # Handle collection
     process_collection(movie, movie_details, movies_service)
@@ -230,3 +286,32 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     process_crew(movie, credits.get('crew', []), movies_service)
     
     return movie
+
+def enrich_movie_with_details(movie_id):
+    """Enrich an existing movie with production companies, collections, cast and crew"""
+    try:
+        movie = Movie.objects.get(id=movie_id)
+        movies_service = MoviesService()
+        
+        # Get detailed movie information including credits
+        movie_details = movies_service.get_movie_details(movie.tmdb_id, append_to_response='credits')
+        if not movie_details:
+            return movie
+        
+        # Process production companies
+        company_instances = process_production_companies(movie_details)
+        movie.production_companies.set(company_instances)
+        
+        # Handle collection
+        process_collection(movie, movie_details, movies_service)
+        
+        # Process cast and crew
+        credits = movie_details.get('credits', {})
+        if credits:
+            process_cast(movie, credits.get('cast', []), movies_service)
+            process_crew(movie, credits.get('crew', []), movies_service)
+        
+        return movie
+        
+    except Movie.DoesNotExist:
+        return None

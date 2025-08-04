@@ -413,6 +413,53 @@ def setup_scheduled_tasks():
     )
     return "Scheduled task setup complete"
 
+def create_movie_fast(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
+    """
+    Create movie with basic information immediately, then enrich with details in background
+    This returns the movie object immediately for faster user feedback
+    """
+    # Use a local import to avoid circular imports
+    from .parsers import create_movie_basic
+    
+    # Create movie with basic information first
+    movie = create_movie_basic(
+        movie_id=movie_id, 
+        movie_poster=movie_poster, 
+        movie_backdrop=movie_backdrop, 
+        is_anime=is_anime, 
+        add_to_watchlist=add_to_watchlist, 
+        user_id=user_id
+    )
+    
+    if movie:
+        # Queue background task to enrich with cast, crew, collections, etc.
+        async_task(
+            'movies.tasks.enrich_movie_task',
+            movie.id,
+            hook='movies.tasks.movie_enrichment_complete_hook'
+        )
+    
+    return movie
+
+def enrich_movie_task(movie_id):
+    """
+    Background task to enrich movie with cast, crew, collections, and production companies
+    """
+    from .parsers import enrich_movie_with_details
+    
+    return enrich_movie_with_details(movie_id)
+
+def movie_enrichment_complete_hook(task):
+    """
+    Optional hook that runs when the movie enrichment task completes
+    """
+    if task.success:
+        movie = task.result
+        if movie:
+            logger.info(f"Movie '{movie.title}' was successfully enriched with detailed information.")
+    else:
+        logger.error(f"Movie enrichment failed: {task.result}")
+
 def create_movie_async(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
     """
     Queue movie creation as an async task using Django Q

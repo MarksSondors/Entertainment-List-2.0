@@ -24,7 +24,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .services.recommendation import MovieRecommender
-from .tasks import create_movie_async
+from .tasks import create_movie_async, create_movie_fast
 from datetime import timedelta
 from django.contrib import messages
 from custom_auth.models import CustomUser, Review
@@ -50,35 +50,18 @@ def movie_page(request, movie_id):
             'production_companies'
         ).get(tmdb_id=movie_id)
     except Movie.DoesNotExist:
-        task_id = create_movie_async(
+        # Import the fast movie creation function
+        from .tasks import create_movie_fast
+        
+        # Create movie with basic information immediately
+        movie_db = create_movie_fast(
             movie_id=movie_id,
             user_id=request.user.id,
             add_to_watchlist=False
         )
-        # Replace the wait_for_task import and usage with:
-        from django_q.models import Task
-        from time import sleep
         
-        # Wait for the task to complete
-        max_attempts = 30
-        for _ in range(max_attempts):
-            try:
-                task = Task.objects.get(id=task_id)
-                if task.success is not None:  # Task has completed (success or failure)
-                    break
-            except Task.DoesNotExist:
-                pass
-            sleep(1)
-            
-        # Check task result
-        try:
-            task = Task.objects.get(id=task_id)
-            if task.success:
-                movie_db = Movie.objects.get(tmdb_id=movie_id)
-            else:
-                return JsonResponse({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Task.DoesNotExist:
-            return JsonResponse({"error": "Task processing failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        if not movie_db:
+            return JsonResponse({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
             
     # get user information if he has written a review is the movie in his watchlist
     user_watchlist = Watchlist.objects.filter(
@@ -224,8 +207,21 @@ class MovieViewSet(viewsets.ViewSet):
         if movie_backdrop:
             movie_backdrop = f"https://image.tmdb.org/t/p/original{movie_backdrop}"
 
-        # Queue the movie creation as a background task
-        task_id = create_movie_async(
+        # Check if the movie already exists
+        try:
+            movie = Movie.objects.get(tmdb_id=movie_id)
+            return Response({
+                "message": "Movie already exists",
+                "movie_id": movie.id,
+                "movie_title": movie.title
+            }, status=status.HTTP_200_OK)
+        except Movie.DoesNotExist:
+            pass
+        
+        # Create movie with basic information immediately for faster user feedback
+        from .tasks import create_movie_fast
+        
+        movie = create_movie_fast(
             movie_id=movie_id, 
             movie_poster=movie_poster, 
             movie_backdrop=movie_backdrop, 
@@ -234,11 +230,16 @@ class MovieViewSet(viewsets.ViewSet):
             user_id=request.user.id
         )
         
-        # Return a response immediately with the task ID
-        return Response({
-            "message": "Movie creation has been queued",
-            "task_id": str(task_id)
-        }, status=status.HTTP_202_ACCEPTED)
+        if movie:
+            return Response({
+                "message": "Movie created successfully and is being enriched with detailed information",
+                "movie_id": movie.id,
+                "movie_title": movie.title
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response({
+                "error": "Failed to create movie"
+            }, status=status.HTTP_400_BAD_REQUEST)
     
     @extend_schema(
         summary="Get Movie",
