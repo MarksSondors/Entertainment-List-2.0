@@ -18,18 +18,23 @@ import random
 
 from django.views.decorators.http import require_POST
 
-# Add these imports if they're not already at the top
+# Add these imports if they're not already at the top  
+from django.db import models
 from django.db.models import Count, Avg, F, Q, Case, When, IntegerField
 from django.db.models.functions import ExtractMonth, ExtractYear
 from collections import defaultdict
 import json
+import logging
 from datetime import timedelta, datetime
 from django.contrib.contenttypes.models import ContentType
 from movies.models import Movie, Genre
 from tvshows.models import TVShow
 from custom_auth.models import Review, Person
+import re
 
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank, TrigramSimilarity
+
+logger = logging.getLogger(__name__)
 
 
 # new and polished code
@@ -968,8 +973,9 @@ def add_review_data_to_items(items, current_user):
         if ct_id == tv_show_content_type_id:
             tv_show_ids.append(obj_id)
     
-    # Fetch all direct reviews in a SINGLE query
-    all_reviews = Review.objects.filter(review_query).exclude(user=current_user).select_related('user')
+    # Fetch all direct reviews in a SINGLE query exclude tv show season and episode subgroup reviews
+    all_reviews = Review.objects.filter(review_query).select_related('user').exclude(
+        Q(season__isnull=False) | Q(episode_subgroup__isnull=False))
     
     # For TV shows, also fetch season and episode subgroup reviews
     if tv_show_ids:
@@ -978,8 +984,6 @@ def add_review_data_to_items(items, current_user):
         tv_show_season_reviews = Review.objects.filter(
             content_type_id=tv_show_content_type_id,
             object_id__in=tv_show_ids
-        ).exclude(
-            user=current_user
         ).exclude(
             season=None,
             episode_subgroup=None
@@ -1013,6 +1017,7 @@ def add_review_data_to_items(items, current_user):
         if other_reviews:
             avg_rating = round(sum(review.rating for review in other_reviews) / rating_count, 1)
         
+        
         # Apply to all related items
         for item in item_group:
             item.other_reviews = review_data
@@ -1021,7 +1026,7 @@ def add_review_data_to_items(items, current_user):
 
 @login_required
 def api_watchlist(request):
-    """API endpoint for filtering watchlist items."""
+    """API endpoint for filtering watchlist items - optimized for performance."""
     
     user = request.user
     search_query = request.GET.get('search', '')
@@ -1032,68 +1037,101 @@ def api_watchlist(request):
     # Get user's watchlist items
     watchlist_items = user.get_watchlist()
     
+    if not watchlist_items:
+        return JsonResponse({
+            'continue_watching': [],
+            'havent_started': [],
+            'finished_shows': [],
+            'movies': [],
+        })
+    
+    # Get content types
+    movie_ct = ContentType.objects.get_for_model(Movie)
+    tv_ct = ContentType.objects.get_for_model(TVShow)
+    
+    # Group items by content type for bulk fetching
+    items_by_content_type = {}
+    for item in watchlist_items:
+        if item.content_type_id not in items_by_content_type:
+            items_by_content_type[item.content_type_id] = []
+        items_by_content_type[item.content_type_id].append(item)
+    
+    # Bulk fetch all media objects
+    media_objects = {}
+    
+    # Fetch movies
+    if movie_ct.id in items_by_content_type:
+        movie_items = items_by_content_type[movie_ct.id]
+        movie_ids = [item.object_id for item in movie_items]
+        movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=movie_ids)}
+        for item in movie_items:
+            media_objects[(item.content_type_id, item.object_id)] = movies_by_id.get(item.object_id)
+    
+    # Fetch TV shows
+    if tv_ct.id in items_by_content_type:
+        tv_items = items_by_content_type[tv_ct.id]
+        tv_ids = [item.object_id for item in tv_items]
+        tvshows_by_id = {t.id: t for t in TVShow.objects.filter(id__in=tv_ids)}
+        for item in tv_items:
+            media_objects[(item.content_type_id, item.object_id)] = tvshows_by_id.get(item.object_id)
+    
     # Apply search filter if provided
     if search_query:
-        # Use PostgreSQL's full-text search capabilities
         from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
         
-        # Get content types for efficient filtering
-        movie_ct = ContentType.objects.get_for_model(Movie)
-        tv_ct = ContentType.objects.get_for_model(TVShow)
+        # Get media objects for search
+        movie_items = items_by_content_type.get(movie_ct.id, [])
+        tv_items = items_by_content_type.get(tv_ct.id, [])
         
-        # Group watchlist items by content type
-        movie_items = [item for item in watchlist_items if item.content_type_id == movie_ct.id]
-        tv_items = [item for item in watchlist_items if item.content_type_id == tv_ct.id]
-        other_items = [item for item in watchlist_items if item.content_type_id not in (movie_ct.id, tv_ct.id)]
-        
-        # Extract IDs by content type
         movie_ids = [item.object_id for item in movie_items]
         tv_ids = [item.object_id for item in tv_items]
         
-        # Create search query object with proper config
         search_query_obj = SearchQuery(search_query, config='english')
         
         # Search movies with PostgreSQL full-text search
-        movie_matches = set(Movie.objects.filter(id__in=movie_ids).annotate(
-            search=SearchVector('title', 'original_title', config='english'),
-            rank=SearchRank(SearchVector('title', 'original_title', config='english'), search_query_obj)
-        ).filter(search=search_query_obj).order_by('-rank').values_list('id', flat=True))
+        movie_matches = set()
+        if movie_ids:
+            movie_matches = set(Movie.objects.filter(id__in=movie_ids).annotate(
+                search=SearchVector('title', 'original_title', config='english'),
+                rank=SearchRank(SearchVector('title', 'original_title', config='english'), search_query_obj)
+            ).filter(search=search_query_obj).values_list('id', flat=True))
+            
+            # Fallback search if no results
+            if not movie_matches:
+                movie_matches = set(Movie.objects.filter(
+                    id__in=movie_ids
+                ).filter(
+                    Q(title__icontains=search_query) | 
+                    Q(original_title__icontains=search_query)
+                ).values_list('id', flat=True))
         
         # Search TV shows with PostgreSQL full-text search
-        tv_matches = set(TVShow.objects.filter(id__in=tv_ids).annotate(
-            search=SearchVector('title', 'original_title', config='english'),
-            rank=SearchRank(SearchVector('title', 'original_title', config='english'), search_query_obj)
-        ).filter(search=search_query_obj).order_by('-rank').values_list('id', flat=True))
+        tv_matches = set()
+        if tv_ids:
+            tv_matches = set(TVShow.objects.filter(id__in=tv_ids).annotate(
+                search=SearchVector('title', 'original_title', config='english'),
+                rank=SearchRank(SearchVector('title', 'original_title', config='english'), search_query_obj)
+            ).filter(search=search_query_obj).values_list('id', flat=True))
+            
+            # Fallback search if no results
+            if not tv_matches:
+                tv_matches = set(TVShow.objects.filter(
+                    id__in=tv_ids
+                ).filter(
+                    Q(title__icontains=search_query) | 
+                    Q(original_title__icontains=search_query)
+                ).values_list('id', flat=True))
         
-        # Add fallback search for partial text matches if full-text search found nothing
-        if not movie_matches:
-            movie_matches = set(Movie.objects.filter(
-                id__in=movie_ids
-            ).filter(
-                Q(title__icontains=search_query) | 
-                Q(original_title__icontains=search_query)
-            ).values_list('id', flat=True))
-        
-        if not tv_matches:
-            tv_matches = set(TVShow.objects.filter(
-                id__in=tv_ids
-            ).filter(
-                Q(title__icontains=search_query) | 
-                Q(original_title__icontains=search_query)
-            ).values_list('id', flat=True))
-        
-        # Filter watchlist items based on database matches
+        # Filter watchlist items based on search matches
         filtered_items = []
-        for item in movie_items:
-            if item.object_id in movie_matches:
+        for item in watchlist_items:
+            if item.content_type_id == movie_ct.id and item.object_id in movie_matches:
                 filtered_items.append(item)
-        
-        for item in tv_items:
-            if item.object_id in tv_matches:
+            elif item.content_type_id == tv_ct.id and item.object_id in tv_matches:
                 filtered_items.append(item)
-        
-        # Add other content types (if any)
-        filtered_items.extend(other_items)
+            elif item.content_type_id not in (movie_ct.id, tv_ct.id):
+                # Keep other content types
+                filtered_items.append(item)
         
         watchlist_items = filtered_items
     
@@ -1101,7 +1139,8 @@ def api_watchlist(request):
     if genre_id:
         filtered_items = []
         for item in watchlist_items:
-            if hasattr(item.media, 'genres') and item.media.genres.filter(id=genre_id).exists():
+            media = media_objects.get((item.content_type_id, item.object_id))
+            if media and hasattr(media, 'genres') and media.genres.filter(id=genre_id).exists():
                 filtered_items.append(item)
         watchlist_items = filtered_items
     
@@ -1109,7 +1148,8 @@ def api_watchlist(request):
     if country_id:
         filtered_items = []
         for item in watchlist_items:
-            if hasattr(item.media, 'countries') and item.media.countries.filter(id=country_id).exists():
+            media = media_objects.get((item.content_type_id, item.object_id))
+            if media and hasattr(media, 'countries') and media.countries.filter(id=country_id).exists():
                 filtered_items.append(item)
         watchlist_items = filtered_items
 
@@ -1123,45 +1163,56 @@ def api_watchlist(request):
         elif sort_by == '-date_added':
             watchlist_items = sorted(watchlist_items, key=lambda x: x.date_added)
         elif sort_by == 'title':
-            watchlist_items = sorted(watchlist_items, key=lambda x: x.media.title.lower())
+            def get_title(item):
+                media = media_objects.get((item.content_type_id, item.object_id))
+                return media.title.lower() if media else ''
+            watchlist_items = sorted(watchlist_items, key=get_title)
         elif sort_by == '-title':
-            watchlist_items = sorted(watchlist_items, key=lambda x: x.media.title.lower(), reverse=True)
+            def get_title(item):
+                media = media_objects.get((item.content_type_id, item.object_id))
+                return media.title.lower() if media else ''
+            watchlist_items = sorted(watchlist_items, key=get_title, reverse=True)
         elif sort_by == 'release_date':
-            # Handle both movie release_date and TV show first_air_date
             def get_release_date(item):
-                if hasattr(item.media, 'release_date') and item.media.release_date:
-                    return item.media.release_date
-                elif hasattr(item.media, 'first_air_date') and item.media.first_air_date:
-                    return item.media.first_air_date
-                # Return a far past date for items without release dates
+                media = media_objects.get((item.content_type_id, item.object_id))
+                if not media:
+                    return datetime.min
+                if hasattr(media, 'release_date') and media.release_date:
+                    return media.release_date
+                elif hasattr(media, 'first_air_date') and media.first_air_date:
+                    return media.first_air_date
                 return datetime.min
             watchlist_items = sorted(watchlist_items, key=get_release_date)
         elif sort_by == '-release_date':
-            # Same function but reversed sort
             def get_release_date(item):
-                if hasattr(item.media, 'release_date') and item.media.release_date:
-                    return item.media.release_date
-                elif hasattr(item.media, 'first_air_date') and item.media.first_air_date:
-                    return item.media.first_air_date
-                # Return a far past date for items without release dates
+                media = media_objects.get((item.content_type_id, item.object_id))
+                if not media:
+                    return datetime.min
+                if hasattr(media, 'release_date') and media.release_date:
+                    return media.release_date
+                elif hasattr(media, 'first_air_date') and media.first_air_date:
+                    return media.first_air_date
                 return datetime.min
             watchlist_items = sorted(watchlist_items, key=get_release_date, reverse=True)
     
-    # Categorize items
+    # Categorize items with bulk-fetched media data
     continue_watching = []
     havent_started = []
     finished_shows = []
     movies = []
     
-    movie_ct = ContentType.objects.get_for_model(Movie)
-    tv_ct = ContentType.objects.get_for_model(TVShow)
-    
-    # First, separate TV shows and movies
+    # Separate TV shows and movies
     tv_shows_items = []
     
     for item in watchlist_items:
+        media = media_objects.get((item.content_type_id, item.object_id))
+        if not media:
+            continue  # Skip items with missing media
+            
         if item.content_type_id == movie_ct.id:
-            movies.append(serialize_watchlist_item(item))
+            serialized = serialize_watchlist_item(item, media)
+            if serialized:
+                movies.append(serialized)
         elif item.content_type_id == tv_ct.id:
             tv_shows_items.append(item)
     
@@ -1197,6 +1248,10 @@ def api_watchlist(request):
         
         # Now categorize TV shows with the pre-fetched data
         for item in tv_shows_items:
+            media = media_objects.get((item.content_type_id, item.object_id))
+            if not media:
+                continue
+                
             show_id = item.object_id
             total = total_episodes_map.get(show_id, 0)
             watched = watched_episodes_map.get(show_id, 0)
@@ -1204,16 +1259,18 @@ def api_watchlist(request):
             # Calculate progress percentage
             progress = (watched / total * 100) if total > 0 else 0
             
+            # Serialize with bulk-fetched media
+            serialized = serialize_watchlist_item(item, media)
+            if not serialized:
+                continue
+            
             # Categorize based on progress
             if progress >= 100:
-                # Completed shows
-                finished_shows.append(serialize_watchlist_item(item))
+                finished_shows.append(serialized)
             elif progress > 0:
-                # In-progress shows
-                continue_watching.append({'item': serialize_watchlist_item(item), 'progress': progress})
+                continue_watching.append({'item': serialized, 'progress': progress})
             else:
-                # Not started shows
-                havent_started.append(serialize_watchlist_item(item))
+                havent_started.append(serialized)
     
     return JsonResponse({
         'continue_watching': continue_watching,
@@ -1222,23 +1279,29 @@ def api_watchlist(request):
         'movies': movies,
     })
 
-def serialize_watchlist_item(item):
+def serialize_watchlist_item(item, media_obj=None):
     """Helper function to serialize a watchlist item for JSON response."""
+    # Use prefetched media object if provided, otherwise fall back to GenericForeignKey
+    media = media_obj if media_obj else item.media
+    
+    if not media:
+        return None  # Skip items with no media
+    
     result = {
         'id': item.id,
         'content_type_model': item.content_type.model,  # Flattened
-        'media_id': item.media.id,                      # Flattened
-        'media_title': item.media.title,                # Flattened
-        'media_poster': item.media.poster,              # Flattened
-        'media_tmdb_id': item.media.tmdb_id,            # Flattened
+        'media_id': media.id,                          # Flattened
+        'media_title': media.title,                    # Flattened
+        'media_poster': media.poster,                  # Flattened
+        'media_tmdb_id': media.tmdb_id,               # Flattened
         'date_added': item.date_added.isoformat(),
     }
     
     # Add release date if available
-    if hasattr(item.media, 'release_date') and item.media.release_date:
-        result['media_release_date'] = item.media.release_date.isoformat()  # Flattened
-    elif hasattr(item.media, 'first_air_date') and item.media.first_air_date:
-        result['media_first_air_date'] = item.media.first_air_date.isoformat()  # Flattened
+    if hasattr(media, 'release_date') and media.release_date:
+        result['media_release_date'] = media.release_date.isoformat()  # Flattened
+    elif hasattr(media, 'first_air_date') and media.first_air_date:
+        result['media_first_air_date'] = media.first_air_date.isoformat()  # Flattened
     
     # Add rating if available
     if hasattr(item, 'avg_rating'):
@@ -1754,88 +1817,208 @@ def recent_reviews(request):
 
 def recent_activity(request):
     """
-    Returns recently added reviews, watchlist items, episodes watched, and movies added to the database,
-    combines them in the order of most recent first. Supports pagination for "Show More" functionality.
-    Groups activities that happened at the same minute.
+    Improved version of recent_activity with better performance and maintainability.
     """
     # Get pagination parameters
     page = int(request.GET.get('page', '1'))
     limit = int(request.GET.get('limit', '15'))
-    
-    # Calculate offset for pagination
     offset = (page - 1) * limit
-    fetch_limit = limit * 3  # Fetch more items to ensure we have enough after grouping
     
-    # Fetch recent data with increased limits for pagination
-    reviews = Review.objects.select_related('user', 'season', 'episode_subgroup').order_by('-date_added')[:fetch_limit]
-    watchlist_items = Watchlist.objects.select_related('user').order_by('-date_added')[:fetch_limit]
+    # Use a more conservative fetch limit to improve performance
+    fetch_limit = limit * 3 
+    
+    try:
+        # Get content types once at the beginning
+        content_types = _get_content_types()
+        
+        # Fetch all activities in parallel using a more efficient approach
+        activities_data = _fetch_activities_efficiently(fetch_limit, content_types)
+        
+        # Process and group activities
+        grouped_activities = _process_and_group_activities(activities_data, content_types)
+        
+        # Apply pagination
+        total_count = len(grouped_activities)
+        paginated_results = grouped_activities[offset:offset + limit]
+        
+        # Optimize poster URLs for better performance
+        _optimize_poster_urls(paginated_results)
+        
+        return JsonResponse({
+            'results': paginated_results,
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total': total_count,
+                'has_more': (offset + limit) < total_count
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in recent_activity: {str(e)}")
+        return JsonResponse({'error': 'Internal server error'}, status=500)
+
+
+def _get_content_types():
+    """Cache content types to avoid repeated queries."""
+    from movies.models import Movie
+    from tvshows.models import TVShow
+    
+    return {
+        'movie': ContentType.objects.get_for_model(Movie),
+        'tvshow': ContentType.objects.get_for_model(TVShow)
+    }
+
+
+def _fetch_activities_efficiently(fetch_limit, content_types):
+    """
+    Fetch all activities using optimized queries with proper prefetching.
+    """
+    from custom_auth.models import Review, Watchlist
+    from movies.models import Movie
+    from tvshows.models import WatchedEpisode
+    
+    # Use select_related and prefetch_related more efficiently
+    reviews = Review.objects.select_related(
+        'user', 'content_type', 'season', 'episode_subgroup'
+    ).order_by('-date_added')[:fetch_limit]
+    
+    watchlist_items = Watchlist.objects.select_related(
+        'user', 'content_type'
+    ).order_by('-date_added')[:fetch_limit]
+    
     movies = Movie.objects.select_related('added_by').order_by('-date_added')[:fetch_limit]
     
-    # Prefetch media objects for reviews to avoid N+1 queries
-    from django.contrib.contenttypes.models import ContentType
-    movie_content_type = ContentType.objects.get_for_model(Movie)
-    tvshow_content_type = ContentType.objects.get_for_model(TVShow)
+    # More efficient episode fetching with optimized select_related
+    watched_episodes = WatchedEpisode.objects.select_related(
+        'user', 'episode__season__show'
+    ).order_by('-watched_date')[:fetch_limit * 2]  # Reduced multiplier
     
-    # Get lists of reviews by content type
-    movie_reviews = [r for r in reviews if r.content_type_id == movie_content_type.id]
-    tvshow_reviews = [r for r in reviews if r.content_type_id == tvshow_content_type.id]
+    return {
+        'reviews': reviews,
+        'watchlist_items': watchlist_items,
+        'movies': movies,
+        'watched_episodes': watched_episodes
+    }
+
+
+def _get_media_objects_bulk(activities_data, content_types):
+    """
+    Efficiently fetch all required media objects in bulk.
+    """
+    from movies.models import Movie
+    from tvshows.models import TVShow
     
-    # Get all IDs to fetch in bulk
-    movie_ids = [r.object_id for r in movie_reviews]
-    tvshow_ids = [r.object_id for r in tvshow_reviews]
+    # Collect all required media IDs
+    movie_ids = set()
+    tvshow_ids = set()
     
-    # Also handle watchlist items - group by content type
-    watchlist_movie_items = [w for w in watchlist_items if w.content_type_id == movie_content_type.id]
-    watchlist_tvshow_items = [w for w in watchlist_items if w.content_type_id == tvshow_content_type.id]
+    # From reviews
+    for review in activities_data['reviews']:
+        if review.content_type_id == content_types['movie'].id:
+            movie_ids.add(review.object_id)
+        elif review.content_type_id == content_types['tvshow'].id:
+            tvshow_ids.add(review.object_id)
     
-    # Add watchlist item IDs to the fetch lists
-    movie_ids.extend([w.object_id for w in watchlist_movie_items])
-    tvshow_ids.extend([w.object_id for w in watchlist_tvshow_items])
+    # From watchlist items
+    for item in activities_data['watchlist_items']:
+        if item.content_type_id == content_types['movie'].id:
+            movie_ids.add(item.object_id)
+        elif item.content_type_id == content_types['tvshow'].id:
+            tvshow_ids.add(item.object_id)
     
-    # Fetch all media objects in bulk
-    movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=movie_ids)}
-    tvshows_by_id = {t.id: t for t in TVShow.objects.filter(id__in=tvshow_ids)}
+    # From watched episodes
+    for episode in activities_data['watched_episodes']:
+        tvshow_ids.add(episode.episode.season.show.id)
     
-    # Fetch recently watched episodes
-    from collections import defaultdict
-    from tvshows.models import WatchedEpisode  # Adjust import path if needed
+    # Bulk fetch media objects
+    movies_by_id = {}
+    tvshows_by_id = {}
     
-    # Get recently watched episodes with proper select_related to follow the relationship chain
-    watched_episodes = WatchedEpisode.objects.select_related('episode', 'episode__season', 'episode__season__show', 'user').order_by('-watched_date')[:fetch_limit * 6]
+    if movie_ids:
+        movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=movie_ids)}
+    
+    if tvshow_ids:
+        tvshows_by_id = {t.id: t for t in TVShow.objects.filter(id__in=tvshow_ids)}
+    
+    return movies_by_id, tvshows_by_id
+
+
+def _process_and_group_activities(activities_data, content_types):
+    """
+    Process activities and group them efficiently.
+    """
+    # Get media objects in bulk
+    movies_by_id, tvshows_by_id = _get_media_objects_bulk(activities_data, content_types)
+    
+    # Process each activity type
+    all_activities = []
+    
+    # Process watched episodes (group by day/user/show first)
+    episode_activities = _process_watched_episodes(
+        activities_data['watched_episodes'], tvshows_by_id
+    )
+    all_activities.extend(episode_activities)
+    
+    # Process reviews
+    review_activities = _process_reviews(
+        activities_data['reviews'], movies_by_id, tvshows_by_id, content_types
+    )
+    all_activities.extend(review_activities)
+    
+    # Process watchlist items
+    watchlist_activities = _process_watchlist_items(
+        activities_data['watchlist_items'], movies_by_id, tvshows_by_id, content_types
+    )
+    all_activities.extend(watchlist_activities)
+    
+    # Process new movies
+    movie_activities = _process_new_movies(activities_data['movies'])
+    all_activities.extend(movie_activities)
+    
+    # Sort by date and group by timestamp/media
+    all_activities.sort(key=lambda x: x['date'], reverse=True)
+    
+    return _group_activities_by_timestamp_and_media(all_activities)
+
+
+def _process_watched_episodes(watched_episodes, tvshows_by_id):
+    """Group and process watched episodes efficiently."""
     # Group episodes by day, TV show, and user
     episode_groups = defaultdict(list)
+    
     for episode in watched_episodes:
-        # Use date as the key for grouping (without time)
+        if not hasattr(episode.episode, 'season') or not hasattr(episode.episode.season, 'show'):
+            continue
+            
         day_key = episode.watched_date.strftime('%Y-%m-%d')
-        # Access tv_show through the proper relationship chain
-        tv_show = episode.episode.season.show
-        show_key = tv_show.id
-        user_key = episode.user.id  # Add user to the grouping key
-        group_key = (day_key, show_key, user_key)
+        show_id = episode.episode.season.show.id
+        user_id = episode.user.id
+        group_key = (day_key, show_id, user_id)
         episode_groups[group_key].append(episode)
     
-    # Format individual activities
     activities = []
-    
-    # Format episode watching activities
     for (day_key, show_id, user_id), episodes in episode_groups.items():
-        # Sort episodes by watched_date to ensure we get the most recent timestamp
+        if not episodes:
+            continue
+            
+        # Sort episodes by watched_date and get the most recent
         episodes.sort(key=lambda e: e.watched_date, reverse=True)
         most_recent = episodes[0]
-        # Access tv_show through the proper relationship chain
-        tv_show = most_recent.episode.season.show
         
-        # Use the timestamp of the most recent episode
+        tv_show = tvshows_by_id.get(show_id)
+        if not tv_show:
+            continue
+        
+        # Create activity data
         local_timestamp = timezone.localtime(most_recent.watched_date)
         timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
-        
-        # Create episode count text
         episode_count = len(episodes)
         
         activities.append({
             'type': 'watched_episodes',
             'username': most_recent.user.username,
-            'title': tv_show.title if tv_show.title == tv_show.original_title else f"{tv_show.title} ({tv_show.original_title})",
+            'title': _format_title(tv_show),
             'content_type': 'TV Show',
             'date': most_recent.watched_date,
             'timestamp': timestamp_key,
@@ -1847,52 +2030,46 @@ def recent_activity(request):
             'episode_count': episode_count
         })
     
-    # Format reviews
+    return activities
+
+
+def _process_reviews(reviews, movies_by_id, tvshows_by_id, content_types):
+    """Process review activities efficiently."""
+    activities = []
+    
     for review in reviews:
-        # Use prefetched objects instead of accessing .media property
-        if review.content_type_id == movie_content_type.id:
+        # Get content object efficiently
+        content_object = None
+        if review.content_type_id == content_types['movie'].id:
             content_object = movies_by_id.get(review.object_id)
-        elif review.content_type_id == tvshow_content_type.id:
-            content_object = tvshows_by_id.get(review.object_id)
-        else:
-            content_object = review.media  # Fallback for other content types
-        
-        poster_path = None
-        tmdb_id = None
-        
-        # Rest of the processing remains the same
-        if isinstance(content_object, Movie):
             content_type = "Movie"
-            if content_object.title == content_object.original_title:
-                title = content_object.title
-            else:
-                title = f"{content_object.title} ({content_object.original_title})"
-            poster_path = content_object.poster
-            tmdb_id = content_object.tmdb_id
-        elif isinstance(content_object, TVShow):
+        elif review.content_type_id == content_types['tvshow'].id:
+            content_object = tvshows_by_id.get(review.object_id)
             content_type = "TV Show"
-            if content_object.title == content_object.original_title:
-                title = content_object.title
-            else:
-                title = f"{content_object.title} ({content_object.original_title})"
-            poster_path = content_object.poster
-            tmdb_id = content_object.tmdb_id
+        else:
+            # Fallback for other content types
+            content_object = review.media
+            content_type = review.content_type.model.capitalize()
+        
+        if not content_object:
+            continue
+        
+        # Format title
+        title = _format_title(content_object)
+        if hasattr(content_object, 'first_air_date'):  # TV Show
             if review.season:
                 title += f" - {review.season.title}"
             elif review.episode_subgroup:
                 title += f" - {review.episode_subgroup.name}"
-        else:
-            content_type = review.content_type.model.capitalize()
-            title = getattr(content_object, 'title', 'Unknown')
         
-        # Use the minute as the key for grouping
+        # Create timestamp
         local_timestamp = timezone.localtime(review.date_added)
         timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
         
         activities.append({
             'type': 'review',
             'username': review.user.username,
-            'content': review.review_text[:100] + '...' if review.review_text and len(review.review_text) > 100 else review.review_text,
+            'content': _truncate_text(review.review_text, 100),
             'title': title,
             'rating': review.rating,
             'content_type': content_type,
@@ -1900,69 +2077,66 @@ def recent_activity(request):
             'timestamp': timestamp_key,
             'timestamp_key': timestamp_key,
             'media_id': content_object.id,
-            'poster_path': poster_path,
-            'tmdb_id': tmdb_id
+            'poster_path': getattr(content_object, 'poster', None),
+            'tmdb_id': getattr(content_object, 'tmdb_id', None)
         })
     
-    # Format watchlist items
+    return activities
+
+
+def _process_watchlist_items(watchlist_items, movies_by_id, tvshows_by_id, content_types):
+    """Process watchlist activities efficiently."""
+    activities = []
+    
     for item in watchlist_items:
-        if item.content_type_id == movie_content_type.id:
+        # Get content object efficiently
+        content_object = None
+        if item.content_type_id == content_types['movie'].id:
             content_object = movies_by_id.get(item.object_id)
-        elif item.content_type_id == tvshow_content_type.id:
+            content_type = "Movie"
+        elif item.content_type_id == content_types['tvshow'].id:
             content_object = tvshows_by_id.get(item.object_id)
+            content_type = "TV Show"
         else:
             content_object = item.media
-        poster_path = None
-        tmdb_id = None
-        
-        if isinstance(content_object, Movie):
-            content_type = "Movie"
-            if content_object.title == content_object.original_title:
-                title = content_object.title
-            else:
-                title = f"{content_object.title} ({content_object.original_title})"
-            poster_path = content_object.poster
-            tmdb_id = content_object.tmdb_id
-        elif isinstance(content_object, TVShow):
-            content_type = "TV Show"
-            if content_object.title == content_object.original_title:
-                title = content_object.title
-            else:
-                title = f"{content_object.title} ({content_object.original_title})"
-            poster_path = content_object.poster
-            tmdb_id = content_object.tmdb_id
-        else:
             content_type = item.content_type.model.capitalize()
-            title = getattr(content_object, 'title', 'Unknown')
         
-        # Convert UTC time to local time
+        if not content_object:
+            continue
+        
+        # Create timestamp
         local_timestamp = timezone.localtime(item.date_added)
         timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
-            
+        
         activities.append({
             'type': 'watchlist',
             'username': item.user.username,
-            'title': title,
+            'title': _format_title(content_object),
             'content_type': content_type,
             'date': item.date_added,
             'timestamp': timestamp_key,
             'timestamp_key': timestamp_key,
             'media_id': content_object.id,
             'action': 'added to watchlist',
-            'poster_path': poster_path,
-            'tmdb_id': tmdb_id
+            'poster_path': getattr(content_object, 'poster', None),
+            'tmdb_id': getattr(content_object, 'tmdb_id', None)
         })
     
-    # Format new movies
+    return activities
+
+
+def _process_new_movies(movies):
+    """Process new movie activities efficiently."""
+    activities = []
+    
     for movie in movies:
-        # Convert UTC time to local time
         local_timestamp = timezone.localtime(movie.date_added)
         timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
         
         activities.append({
             'type': 'new_content',
             'username': movie.added_by.username if movie.added_by else 'System',
-            'title': movie.title if movie.title == movie.original_title else f"{movie.title} ({movie.original_title})",
+            'title': _format_title(movie),
             'content_type': 'Movie',
             'date': movie.date_added,
             'timestamp': timestamp_key,
@@ -1973,76 +2147,187 @@ def recent_activity(request):
             'tmdb_id': movie.tmdb_id
         })
     
-    # Sort all activities by date (most recent first)
-    activities.sort(key=lambda x: x['date'], reverse=True)
+    return activities
+
+
+def _group_activities_by_timestamp_and_media(activities):
+    """
+    Group activities by timestamp and media for better presentation.
+    Activities by the same user on the same media within 5 minutes are grouped together.
+    """
+    from datetime import timedelta
     
-    # Group activities by timestamp and media_id
-    grouped_activities = {}
+    # First, group activities by user and media
+    user_media_groups = {}
+    
     for activity in activities:
-        key = (activity['timestamp_key'], activity['title'], activity['media_id'])
-        if key not in grouped_activities:
-            grouped_activities[key] = {
-                'title': activity['title'],
-                'content_type': activity['content_type'],
-                'timestamp': activity['timestamp'],
-                'username': activity['username'],
-                'poster_path': activity['poster_path'],
-                'tmdb_id': activity['tmdb_id'],
+        user_media_key = (activity['username'], activity['media_id'])
+        if user_media_key not in user_media_groups:
+            user_media_groups[user_media_key] = []
+        user_media_groups[user_media_key].append(activity)
+    
+    # Now group activities within each user-media group by time proximity
+    grouped_activities = {}
+    TIME_WINDOW = timedelta(minutes=5)  # Group activities within 5 minutes
+    
+    for (username, media_id), user_activities in user_media_groups.items():
+        # Sort activities by date for this user-media combination
+        user_activities.sort(key=lambda x: x['date'])
+        
+        activity_groups = []
+        current_group = []
+        
+        for activity in user_activities:
+            if not current_group:
+                # First activity in the group
+                current_group.append(activity)
+            else:
+                # Check if this activity is within the time window of the latest activity in current group
+                latest_activity = max(current_group, key=lambda x: x['date'])
+                time_diff = activity['date'] - latest_activity['date']
+                
+                if time_diff <= TIME_WINDOW:
+                    # Add to current group
+                    current_group.append(activity)
+                else:
+                    # Start a new group
+                    activity_groups.append(current_group)
+                    current_group = [activity]
+        
+        # Don't forget the last group
+        if current_group:
+            activity_groups.append(current_group)
+        
+        # Process each group
+        for group in activity_groups:
+            # Use the latest activity's timestamp for the group
+            latest_activity = max(group, key=lambda x: x['date'])
+            
+            # Create unique key for this group
+            group_key = (latest_activity['timestamp_key'], latest_activity['title'], latest_activity['media_id'], latest_activity['username'])
+            
+            grouped_activities[group_key] = {
+                'title': latest_activity['title'],
+                'content_type': latest_activity['content_type'],
+                'timestamp': latest_activity['timestamp'],
+                'username': latest_activity['username'],
+                'poster_path': latest_activity['poster_path'],
+                'tmdb_id': latest_activity['tmdb_id'],
+                'media_id': latest_activity['media_id'],
                 'actions': []
             }
-            if 'content' in activity:
-                grouped_activities[key]['content'] = activity['content']
-            if 'rating' in activity:
-                grouped_activities[key]['rating'] = activity['rating']
-            if 'episode_count' in activity:
-                grouped_activities[key]['episode_count'] = activity['episode_count']
-        
-        # Add action based on type
-        if activity['type'] == 'review':
-            grouped_activities[key]['actions'].append('reviewed')
-        elif activity['type'] == 'watchlist':
-            grouped_activities[key]['actions'].append('added to watchlist')
-        elif activity['type'] == 'new_content':
-            grouped_activities[key]['actions'].append('added to database')
-        elif activity['type'] == 'watched_episodes':
-            episode_count = activity['episode_count']
-            grouped_activities[key]['actions'].append(f'watched {episode_count} episode{"s" if episode_count > 1 else ""}')
+            
+            # Add optional fields from the latest activity (prefer review content if available)
+            review_activity = next((a for a in group if a['type'] == 'review'), None)
+            source_activity = review_activity or latest_activity
+            
+            for field in ['content', 'rating', 'episode_count']:
+                if field in source_activity:
+                    grouped_activities[group_key][field] = source_activity[field]
+            
+            # Add all actions from the group
+            action_map = {
+                'review': 'reviewed',
+                'watchlist': 'added to watchlist',
+                'new_content': 'added to database',
+                'watched_episodes': lambda a: a.get('action', 'watched episodes')
+            }
+            
+            for activity in group:
+                action_func = action_map.get(activity['type'])
+                if callable(action_func):
+                    action = action_func(activity)
+                else:
+                    action = action_func or activity.get('action', 'unknown action')
+                
+                if action not in grouped_activities[group_key]['actions']:
+                    grouped_activities[group_key]['actions'].append(action)
     
-    # Convert grouped activities to list and format actions
+    # Convert to list and format actions
     result_list = []
-    for _, activity in grouped_activities.items():
-        # Format the actions into a readable string
-        if len(activity['actions']) == 1:
-            activity['action'] = activity['actions'][0]
+    for activity_data in grouped_activities.values():
+        # Format actions into readable string
+        actions = activity_data['actions']
+        if len(actions) == 1:
+            activity_data['action'] = actions[0]
+        elif len(actions) == 2:
+            activity_data['action'] = f"{actions[0]} and {actions[1]}"
         else:
-            activity['action'] = ' and '.join([', '.join(activity['actions'][:-1]), activity['actions'][-1]])
+            activity_data['action'] = f"{', '.join(actions[:-1])}, and {actions[-1]}"
         
-        # Remove actions list from final output
-        del activity['actions']
-        result_list.append(activity)
+        # Remove actions list
+        del activity_data['actions']
+        result_list.append(activity_data)
     
-    # Sort by timestamp again to ensure newest first
+    # Sort by timestamp (newest first)
     result_list.sort(key=lambda x: x['timestamp'], reverse=True)
     
-    # Get total count for pagination info
-    total_count = len(result_list)
+    return result_list
+
+
+def _format_title(media_object):
+    """Format title consistently."""
+    if not media_object:
+        return 'Unknown'
     
-    # Apply pagination
-    paginated_results = result_list[offset:offset + limit]
+    title = getattr(media_object, 'title', 'Unknown')
+    original_title = getattr(media_object, 'original_title', None)
     
-    # Create response with pagination metadata
-    response = {
-        'results': paginated_results,
-        'pagination': {
-            'page': page,
-            'limit': limit,
-            'total': total_count,
-            'has_more': (offset + limit) < total_count
-        }
-    }
+    if original_title and title != original_title:
+        return f"{title} ({original_title})"
+    return title
+
+
+def _truncate_text(text, max_length):
+    """Safely truncate text."""
+    if not text:
+        return text
+    if len(text) <= max_length:
+        return text
+    return text[:max_length] + '...'
+
+
+def _optimize_poster_urls(activities):
+    """
+    Optimize poster URLs to use lower quality images from TMDB for better performance.
+    Modifies the activities list in-place.
+    """
+    for activity in activities:
+        poster_path = activity.get('poster_path')
+        if poster_path:
+            activity['poster_path'] = _convert_to_low_quality_tmdb_url(poster_path)
+
+
+def _convert_to_low_quality_tmdb_url(poster_path):
+    """
+    Convert poster URL to use lower quality TMDB image.
+    TMDB image sizes: w92, w154, w185, w342, w500, w780, original
+    We'll use w185 for good balance between quality and file size.
     
-    # Return as JSON
-    return JsonResponse(response)
+    Expected input format: https://image.tmdb.org/t/p/original/dfUCs5HNtGu4fofh83uiE2Qcy3v.jpg
+    Output format: https://image.tmdb.org/t/p/w185/dfUCs5HNtGu4fofh83uiE2Qcy3v.jpg
+    """
+    if not poster_path or not isinstance(poster_path, str):
+        return poster_path
+    
+    # Handle TMDB URLs (which is your standard format)
+    if 'image.tmdb.org/t/p/' in poster_path:
+        # Simply replace /original/ with /w342/ for maximum efficiency
+        if '/original/' in poster_path:
+            return poster_path.replace('/original/', '/w342/')
+
+        # Handle other sizes (w500, w780, etc.) and replace with w342
+        import re
+        pattern = r'/t/p/(w\d+)/'
+        if re.search(pattern, poster_path):
+            return re.sub(pattern, '/t/p/w185/', poster_path)
+        
+        # If no size is specified after /t/p/, add w185
+        if '/t/p//' in poster_path:
+            return poster_path.replace('/t/p//', '/t/p/w185/')
+    
+    # Return original if we can't process it (fallback)
+    return poster_path
 
 @login_required
 def browse_by_people(request):
