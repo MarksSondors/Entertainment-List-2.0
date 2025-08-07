@@ -565,6 +565,10 @@
                         // Task was successful
                         $("#tv-show-loading-screen-modal").hide();
                         showTVShowMessage("Success", "TV Show added successfully!");
+                        // Try to refresh the main search if the function exists
+                        if (typeof performSearch === 'function' && typeof window.getCurrentEndpoint === 'function') {
+                            performSearch(window.getCurrentQuery(), window.getCurrentEndpoint());
+                        }
                         closeTVShowModal();
                     } else {
                         // Task failed
@@ -649,6 +653,10 @@
                     // If no task_id, assume it's a direct response
                     $("#tv-show-loading-screen-modal").hide();
                     showTVShowMessage("Success", "TV Show added successfully!");
+                    // Try to refresh the main search if the function exists
+                    if (typeof performSearch === 'function' && typeof window.getCurrentEndpoint === 'function') {
+                        performSearch(window.getCurrentQuery(), window.getCurrentEndpoint());
+                    }
                     closeTVShowModal();
                 }
             },
