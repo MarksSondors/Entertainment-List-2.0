@@ -564,6 +564,10 @@ function checkMovieTaskStatus(taskId) {
                     // Task was successful
                     $("#loading-screen-modal").hide();
                     showMessage("Success", "Movie added successfully!");
+                    // Try to refresh the main search if the function exists
+                    if (typeof performSearch === 'function' && typeof window.getCurrentEndpoint === 'function') {
+                        performSearch(window.getCurrentQuery(), window.getCurrentEndpoint());
+                    }
                     closeModal();
                 } else {
                     // Task failed
@@ -647,6 +651,10 @@ function submitMovie() {
                                 // If no task_id, assume it's a direct response
                                 $("#loading-screen-modal").hide();
                                 showMessage("Success", "Movie added successfully!");
+                                // Try to refresh the main search if the function exists
+                                if (typeof performSearch === 'function' && typeof window.getCurrentEndpoint === 'function') {
+                                    performSearch(window.getCurrentQuery(), window.getCurrentEndpoint());
+                                }
                                 closeModal();
                             }
                         },

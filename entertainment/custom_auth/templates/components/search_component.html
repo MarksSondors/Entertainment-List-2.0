@@ -854,5 +854,8 @@
         });
 
         window.clearSearch = clearSearch;
+        window.performSearch = performSearch;
+        window.getCurrentEndpoint = function() { return currentEndpoint; };
+        window.getCurrentQuery = function() { return searchInput.value; };
     });
 </script>
