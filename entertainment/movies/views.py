@@ -77,11 +77,30 @@ def movie_page(request, movie_id):
         watchlist_items__object_id=movie_db.id
     ).distinct()
     
+    # Calculate user rating (average of all user reviews for this movie)
+    from django.db.models import Avg, Count
+    user_rating_data = Review.objects.filter(
+        content_type=content_type,
+        object_id=movie_db.id
+    ).aggregate(
+        avg_rating=Avg('rating'),
+        rating_count=Count('rating')
+    )
+    
+    user_avg_rating = user_rating_data['avg_rating']
+    user_rating_count = user_rating_data['rating_count']
+    
+    # Round to 1 decimal place if rating exists
+    if user_avg_rating is not None:
+        user_avg_rating = round(user_avg_rating, 1)
+    
     context = {
         'movie': movie_db,
         'user_watchlist': user_watchlist,
         'user_settings': user_settings,
-        'watchlist_users': watchlist_users
+        'watchlist_users': watchlist_users,
+        'user_avg_rating': user_avg_rating,
+        'user_rating_count': user_rating_count,
     }
     return render(request, 'movie_page.html', context)
 

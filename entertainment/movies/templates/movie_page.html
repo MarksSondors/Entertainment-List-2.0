@@ -516,13 +516,18 @@
                     <p><strong>Plot:</strong> <em style="color: var(--text-muted);">Plot hidden based on your settings</em></p>
                     {% endif %}
                     
-                    <p><strong>Release Year:</strong> {{ movie.release_date|date:"Y" }}</p>
+                    <p><strong>Release Date:</strong> {{ movie.release_date}}</p>
                     <p><strong>Genre:</strong> 
                         {% for genre in movie.genres.all %}
                             <a href="{{ genre.get_absolute_url }}">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
                         {% endfor %}
                     </p>
-                    <p><strong>Rating:</strong> {{ movie.rating }}</p>
+                    <p><strong>TMDB Rating:</strong> {{ movie.rating }}</p>
+                    {% if user_avg_rating %}
+                    <p><strong>User Rating:</strong> {{ user_avg_rating }}/10 ({{ user_rating_count }} review{{ user_rating_count|pluralize }})</p>
+                    {% else %}
+                    <p><strong>User Rating:</strong> <em style="color: var(--text-muted);">No user reviews yet</em></p>
+                    {% endif %}
                     <p><strong>Runtime:</strong> {{ movie.minutes_to_hours }}</p>
                     <p><strong>Country:</strong> 
                         {% for country in movie.countries.all %}
@@ -627,7 +632,9 @@
             </div>
         </div>
         <div class="status-bar">
-            <div class="status-bar-field">{{ movie.rating }} • {{ movie.release_date|date:"Y" }} • {{ movie.minutes_to_hours }}</div>
+            <div class="status-bar-field">
+                TMDB: {{ movie.rating }}{% if user_avg_rating %} • Users: {{ user_avg_rating }}/10{% endif %} • {{ movie.release_date|date:"Y" }} • {{ movie.minutes_to_hours }}
+            </div>
             <div class="status-bar-field">Last updated: {{ movie.date_updated|date:"M d, Y" }}</div>
         </div>
     </div>    
