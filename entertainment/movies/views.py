@@ -1671,6 +1671,7 @@ def network_graph_data(request):
     
     # Add user nodes
     user_nodes = {}
+    user_review_counts = {}
     for user in active_users[:max_nodes//3]:
         node_id = f"user_{user.id}"
         user_nodes[user.id] = node_id
@@ -1678,6 +1679,7 @@ def network_graph_data(request):
         
         # Get movie review count for this user
         user_movie_reviews = user.reviews.filter(content_type=movie_content_type).count()
+        user_review_counts[user.id] = user_movie_reviews
         
         nodes.append({
             'id': node_id,
@@ -1838,6 +1840,17 @@ def network_graph_data(request):
     # Create edges
     
     # 1. User -> Movie edges (based on high ratings)
+    # Determine distribution for hub detection
+    if user_review_counts:
+        sorted_counts = sorted(user_review_counts.values())
+        median_count = sorted_counts[len(sorted_counts)//2]
+        max_count = sorted_counts[-1]
+        hub_user_flag = max_count >= max(20, median_count * 3)
+    else:
+        median_count = 0
+        max_count = 0
+        hub_user_flag = False
+
     for user in active_users:
         if user.id not in user_nodes:
             continue
@@ -1850,6 +1863,12 @@ def network_graph_data(request):
         for review in user_reviews:
             movie_id = review.object_id  # This is the movie's ID
             if movie_id in movie_nodes:
+                # Dynamic length: longer edges for very high review-count users to reduce clustering force
+                rc = user_review_counts.get(user.id, 1)
+                import math
+                dynamic_length = int(160 + 28 * math.log10(rc + 9))  # log10 smoothing
+                if hub_user_flag and rc == max_count:
+                    dynamic_length += 80
                 edges.append({
                     'from': user_nodes[user.id],
                     'to': movie_nodes[movie_id],
@@ -1857,7 +1876,8 @@ def network_graph_data(request):
                     'weight': review.rating / 10.0,
                     'color': {'color': '#4299E1', 'opacity': 0.6},
                     'width': max(1, review.rating / 2),
-                    'label': f"{review.rating}/10"
+                    'label': f"{review.rating}/10",
+                    'length': dynamic_length
                 })
     
     # 2. Movie -> Country edges
@@ -1998,13 +2018,38 @@ def network_graph_data(request):
 
     # Personalized recommendation edges (prediction) - movies the current user hasn't rated
     if current_user and current_user.id in user_nodes:
+        # Build genre & country affinity for current user
+        user_reviews_qs = Review.objects.filter(user=current_user, content_type=movie_content_type)
+        rated_ids_for_affinity = list(user_reviews_qs.values_list('object_id', flat=True))
+        user_review_movies = {m.id: m for m in Movie.objects.filter(id__in=rated_ids_for_affinity).prefetch_related('genres','countries')}
+        genre_pref = defaultdict(lambda: {'sum':0.0,'count':0})
+        country_pref = defaultdict(lambda: {'sum':0.0,'count':0})
+        director_pref = defaultdict(lambda: {'sum':0.0,'count':0})
+        for r in user_reviews_qs:
+            mv = user_review_movies.get(r.object_id)
+            if not mv:
+                continue
+            for g in mv.genres.all():
+                genre_pref[g.id]['sum'] += r.rating
+                genre_pref[g.id]['count'] += 1
+            for c in mv.countries.all():
+                country_pref[c.id]['sum'] += r.rating
+                country_pref[c.id]['count'] += 1
+            for d in mv.directors:
+                director_pref[d.id]['sum'] += r.rating
+                director_pref[d.id]['count'] += 1
+        # Compute normalized affinity (0..1 roughly)
+        genre_affinity_map = {gid: (vals['sum']/vals['count'])/10.0 for gid, vals in genre_pref.items() if vals['count']>0}
+        country_affinity_map = {cid: (vals['sum']/vals['count'])/10.0 for cid, vals in country_pref.items() if vals['count']>0}
+        director_affinity_map = {did: (vals['sum']/vals['count'])/10.0 for did, vals in director_pref.items() if vals['count']>0}
+
         # Movies current user already rated
         rated_movie_ids = set(Review.objects.filter(
             user=current_user,
             content_type=movie_content_type
         ).values_list('object_id', flat=True))
 
-        predicted_scores = []  # (movie_id, score)
+        predicted_scores = []  # (movie_id, predicted_score, genre_affinity, country_affinity)
         # Pre-fetch other users' ratings for efficiency
         other_user_reviews = Review.objects.filter(
             content_type=movie_content_type,
@@ -2025,18 +2070,39 @@ def network_graph_data(request):
             ratings = movie_ratings_map.get(movie.id, [])
             if not ratings:
                 continue
+            # Compute movie genre & country & director affinity factors
+            g_aff_list = []
+            c_aff_list = []
+            d_aff_list = []
+            for g in movie.genres.all():
+                if g.id in genre_affinity_map:
+                    g_aff_list.append(genre_affinity_map[g.id])
+            for c in movie.countries.all():
+                if c.id in country_affinity_map:
+                    c_aff_list.append(country_affinity_map[c.id])
+            for d in movie.directors:
+                if d.id in director_affinity_map:
+                    d_aff_list.append(director_affinity_map[d.id])
+            movie_genre_affinity = sum(g_aff_list)/len(g_aff_list) if g_aff_list else 0.0
+            movie_country_affinity = sum(c_aff_list)/len(c_aff_list) if c_aff_list else 0.0
+            movie_director_affinity = sum(d_aff_list)/len(d_aff_list) if d_aff_list else 0.0
+
             num = 0.0
             denom = 0.0
             for uid, rating in ratings:
                 sim = current_user_similarities.get(uid, 0)
                 if sim <= 0:
                     continue
-                num += sim * rating
-                denom += sim
+                # Weight by similarity and affinities (affinities boost weight)
+                weight = sim * (1 + 0.5*movie_genre_affinity + 0.3*movie_country_affinity + 0.4*movie_director_affinity)
+                num += weight * rating
+                denom += weight
             if denom == 0:
                 continue
-            pred = num / denom  # still in 1-10 scale since ratings that scale
-            predicted_scores.append((movie.id, pred))
+            base_pred = num / denom
+            # Final adjustment adds modest boost but capped at 10
+            final_pred = min(10.0, base_pred * (1 + 0.3*movie_genre_affinity + 0.2*movie_country_affinity + 0.25*movie_director_affinity))
+            predicted_scores.append((movie.id, final_pred, movie_genre_affinity, movie_country_affinity, movie_director_affinity))
 
         # Keep top-N predictions
         predicted_scores.sort(key=lambda x: x[1], reverse=True)
@@ -2048,14 +2114,26 @@ def network_graph_data(request):
             # Sort by average rating descending
             unrated_movies.sort(key=lambda m: movie_stats[m.id]['avg_rating'], reverse=True)
             for movie in unrated_movies[:10]:
+                # Derive affinities for fallback movies
+                g_aff_list = [genre_affinity_map.get(g.id, 0) for g in movie.genres.all()]
+                c_aff_list = [country_affinity_map.get(c.id, 0) for c in movie.countries.all()]
+                d_aff_list = [director_affinity_map.get(d.id, 0) for d in movie.directors]
+                movie_genre_affinity = sum(g_aff_list)/len(g_aff_list) if g_aff_list else 0.0
+                movie_country_affinity = sum(c_aff_list)/len(c_aff_list) if c_aff_list else 0.0
+                movie_director_affinity = sum(d_aff_list)/len(d_aff_list) if d_aff_list else 0.0
                 pred = movie_stats[movie.id]['avg_rating']
-                top_predictions.append((movie.id, pred))
+                final_pred = min(10.0, pred * (1 + 0.2*movie_genre_affinity + 0.15*movie_country_affinity + 0.18*movie_director_affinity))
+                top_predictions.append((movie.id, final_pred, movie_genre_affinity, movie_country_affinity, movie_director_affinity))
+
         # Attach predicted score to node and create edges with shorter length for higher predictions
-        for movie_id, pred in top_predictions:
+        for movie_id, pred, g_aff, c_aff, d_aff in top_predictions:
             # Update movie node with predicted score
             for node in nodes:
                 if node['id'] == movie_nodes[movie_id]:
                     node['predicted_score'] = round(pred, 2)
+                    node['genre_affinity'] = round(g_aff, 3)
+                    node['country_affinity'] = round(c_aff, 3)
+                    node['director_affinity'] = round(d_aff, 3)
                     break
             # Add prediction edge
             # Shorter length => closer proximity; length inversely related to predicted score
@@ -2093,7 +2171,10 @@ def network_graph_data(request):
             'rating_threshold': rating_threshold,
             'max_nodes': max_nodes,
             'chaos': chaos_mode
-        }
+        },
+        'hub_user': hub_user_flag,
+        'hub_max_reviews': max_count if user_review_counts else 0,
+        'hub_median_reviews': median_count if user_review_counts else 0
     }
     
     return Response({
