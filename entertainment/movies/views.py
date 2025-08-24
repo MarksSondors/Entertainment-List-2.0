@@ -1610,6 +1610,12 @@ def network_graph_data(request):
     active_users = CustomUser.objects.annotate(
         movie_review_count=Count('reviews', filter=Q(reviews__content_type=movie_content_type))
     ).filter(movie_review_count__gte=min_reviews)
+
+    # Ensure current authenticated user is included even if below threshold (for personalized recs)
+    current_user = request.user if request.user.is_authenticated else None
+    if current_user and current_user not in active_users:
+        active_users = list(active_users)  # force evaluation
+        active_users.append(current_user)
     
     # If no users meet the criteria, get users with any movie reviews as fallback
     if not active_users.exists():
@@ -1948,6 +1954,7 @@ def network_graph_data(request):
     
     # Calculate user similarities
     user_list = list(user_movie_preferences.keys())
+    current_user_similarities = {}
     for i, user1_id in enumerate(user_list):
         for user2_id in user_list[i+1:]:
             if user1_id in user_nodes and user2_id in user_nodes:
@@ -1967,6 +1974,75 @@ def network_graph_data(request):
                             'label': f"{int(similarity*100)}% similar",
                             'dashes': True
                         })
+                        # Store similarity relative to current user for recommendations
+                        if current_user and current_user.id in (user1_id, user2_id):
+                            other_id = user2_id if current_user.id == user1_id else user1_id
+                            current_user_similarities[other_id] = similarity
+
+    # Personalized recommendation edges (prediction) - movies the current user hasn't rated
+    if current_user and current_user.id in user_nodes:
+        # Movies current user already rated
+        rated_movie_ids = set(Review.objects.filter(
+            user=current_user,
+            content_type=movie_content_type
+        ).values_list('object_id', flat=True))
+
+        predicted_scores = []  # (movie_id, score)
+        # Pre-fetch other users' ratings for efficiency
+        other_user_reviews = Review.objects.filter(
+            content_type=movie_content_type,
+            user__in=[u for u in active_users if u != current_user]
+        ).values('user_id', 'object_id', 'rating')
+
+        # Index ratings by movie
+        movie_ratings_map = defaultdict(list)
+        for r in other_user_reviews:
+            if r['user_id'] in current_user_similarities:  # only consider similar users
+                movie_ratings_map[r['object_id']].append((r['user_id'], r['rating']))
+
+        for movie in well_reviewed_movies:
+            if movie.id in rated_movie_ids:
+                continue
+            if movie.id not in movie_nodes:
+                continue
+            ratings = movie_ratings_map.get(movie.id, [])
+            if not ratings:
+                continue
+            num = 0.0
+            denom = 0.0
+            for uid, rating in ratings:
+                sim = current_user_similarities.get(uid, 0)
+                if sim <= 0:
+                    continue
+                num += sim * rating
+                denom += sim
+            if denom == 0:
+                continue
+            pred = num / denom  # still in 1-10 scale since ratings that scale
+            predicted_scores.append((movie.id, pred))
+
+        # Keep top-N predictions
+        predicted_scores.sort(key=lambda x: x[1], reverse=True)
+        top_predictions = predicted_scores[:25]
+        # Attach predicted score to node and create edges with shorter length for higher predictions
+        for movie_id, pred in top_predictions:
+            # Update movie node with predicted score
+            for node in nodes:
+                if node['id'] == movie_nodes[movie_id]:
+                    node['predicted_score'] = round(pred, 2)
+                    break
+            # Add prediction edge
+            # Shorter length => closer proximity; length inversely related to predicted score
+            length = max(120, 400 - int(pred * 25))
+            edges.append({
+                'from': user_nodes[current_user.id],
+                'to': movie_nodes[movie_id],
+                'type': 'prediction',
+                'color': {'color': '#FFD700', 'opacity': 0.6},
+                'width': max(1, pred / 3),
+                'label': f"Pred {pred:.1f}",
+                'length': length
+            })
     
     # Statistics for the frontend
     stats = {
@@ -1979,6 +2055,7 @@ def network_graph_data(request):
         'directors': len([n for n in nodes if n['type'] == 'director']),
         'actors': len([n for n in nodes if n['type'] == 'actor']),
         'crew': len([n for n in nodes if n['type'] == 'crew']),
+        'recommendations': len([e for e in edges if e.get('type') == 'prediction']),
         'debug_info': {
             'total_active_users': len(active_users),
             'total_good_reviews': len(good_reviews),
