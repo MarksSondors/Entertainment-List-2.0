@@ -756,6 +756,35 @@ input[type=text], input[type=url], select {
             <div class="status-bar-field">Active Members: {{ amount_of_users }}</div>
         </div>
     </div>
+
+    <!-- Community Tools Section -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">Community Tools</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize">_</button>
+                <button aria-label="Maximize">□</button>
+                <button aria-label="Close">✕</button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <a href="{% url 'network_graph_page' %}" class="retro-btn" style="text-decoration: none;">
+                    🕸️ User-Movie Network Graph
+                </a>
+                <button class="retro-btn" onclick="alert('More community tools coming soon!')">
+                    📊 Statistics
+                </button>
+                <button class="retro-btn" onclick="alert('More community tools coming soon!')">
+                    🏆 Leaderboards
+                </button>
+            </div>
+            <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+                Explore the relationships between users, movies, and preferences through interactive visualizations.
+            </p>
+        </div>
+    </div>
+
       <!-- Current Movie of the Week Section -->
     <div class="window">
         <div class="title-bar">

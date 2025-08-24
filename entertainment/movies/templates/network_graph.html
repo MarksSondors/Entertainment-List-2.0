@@ -1,0 +1,222 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block title %}Movie Network Graph{% endblock %}
+
+{% block content %}
+<style>
+/* Retro theme variables (aligned with other pages) */
+:root {
+	--bg-color: #c0c0c0;
+	--text-color: #000;
+	--text-muted: #444;
+	--border-dark: #808080;
+	--border-light: #dfdfdf;
+	--window-bg: #c0c0c0;
+	--button-bg: #c0c0c0;
+	--button-text: #000;
+	--button-hover: #e0e0e0;
+	--shadow-color: rgba(0,0,0,0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg-color: #383838;
+		--text-color: #fff;
+		--text-muted: #b0b0b0;
+		--border-dark: #2a2a2a;
+		--border-light: #505050;
+		--window-bg: #404040;
+		--button-bg: #505050;
+		--button-text: #fff;
+		--button-hover: #606060;
+		--shadow-color: rgba(0,0,0,0.5);
+	}
+}
+
+.network-page-container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+.window { border: 2px outset var(--bg-color); background: var(--window-bg); font-family: 'MS Sans Serif', sans-serif; box-shadow: 2px 2px 4px var(--shadow-color); margin-bottom: 20px; }
+.title-bar { background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%); color:#fff; padding:2px 6px; font-size:11px; font-weight:bold; display:flex; justify-content:space-between; align-items:center; }
+@media (prefers-color-scheme: dark) { .title-bar { background: linear-gradient(90deg,#1a1a3a 0%, #2060a0 100%);} }
+.title-bar-controls button { width:16px; height:14px; border:1px outset var(--button-bg); background: var(--button-bg); font-size:8px; cursor:pointer; }
+.title-bar-controls button:active { border:1px inset var(--button-bg); }
+.window-body { padding:12px; color: var(--text-color); background: var(--window-bg); }
+
+.retro-btn { border:1px outset var(--button-bg); background: var(--button-bg); color:var(--button-text); padding:2px 10px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
+.retro-btn:hover { background: var(--button-hover); text-decoration:none; }
+.retro-btn:active { border:1px inset var(--button-bg); }
+
+/* Layout */
+.graph-layout { display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+@media (max-width: 1100px) { .graph-layout { grid-template-columns: 1fr; } }
+
+.panel { margin-bottom: 20px; }
+.panel h3 { margin:0 0 8px 0; font-size:14px; }
+.muted { color: var(--text-muted); font-size: 12px; }
+
+/* Controls */
+.control-grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap:10px; }
+.control-item { display:flex; flex-direction:column; gap:4px; font-size:11px; }
+.control-item input, .control-item select { padding:4px; font-size:12px; border:1px solid var(--border-dark); background: var(--button-bg); color: var(--text-color); }
+
+/* Graph container */
+#network-visualization { width:100%; height: 750px; border:2px inset var(--bg-color); background: #000; position:relative; }
+@media (max-width: 600px) { #network-visualization { height: 600px; } }
+
+/* Legend & Stats */
+.legend-list, .stats-list { list-style:none; padding:0; margin:0; font-size:12px; }
+.legend-item { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+.legend-color { width:14px; height:14px; border-radius:50%; border:1px solid #000; }
+.stats-list li { display:flex; justify-content:space-between; border-bottom:1px solid var(--border-dark); padding:2px 0; }
+.stats-list li:last-child { border-bottom:none; }
+
+/* Tooltip */
+.node-tooltip { position:absolute; background: var(--window-bg); border:1px solid var(--border-dark); padding:6px 8px; font-size:11px; pointer-events:none; z-index:1000; max-width:200px; box-shadow:2px 2px 4px var(--shadow-color); }
+
+/* Loading & Error */
+.center-box { display:flex; justify-content:center; align-items:center; padding:30px; font-size:13px; color: var(--text-muted); }
+.error { color:#a40000; font-weight:bold; }
+
+</style>
+
+<div class="network-page-container">
+	<div class="window panel">
+		<div class="title-bar">
+			<div>Movie Network Graph</div>
+			<div class="title-bar-controls">
+				<button aria-label="Minimize">_</button>
+				<button aria-label="Maximize">□</button>
+				<button aria-label="Close">×</button>
+			</div>
+		</div>
+		<div class="window-body">
+			<p class="muted">Explore relationships between users, movies, genres, countries and directors based on reviews. Adjust filters to reshape the graph.</p>
+			<div class="control-grid" style="margin-top:10px;">
+				<div class="control-item">
+					<label for="min-reviews">Min Reviews</label>
+					<input type="number" id="min-reviews" value="1" min="1" max="20">
+				</div>
+				<div class="control-item">
+					<label for="rating-threshold">Rating ≥</label>
+					<input type="number" id="rating-threshold" value="5.0" min="1" max="10" step="0.5">
+				</div>
+				<div class="control-item">
+					<label for="max-nodes">Max Nodes</label>
+					<input type="number" id="max-nodes" value="150" min="30" max="400" step="10">
+				</div>
+				<div class="control-item">
+					<label for="layout-type">Layout</label>
+					<select id="layout-type">
+						<option value="forceAtlas2Based">Force Atlas</option>
+						<option value="hierarchical">Hierarchical</option>
+						<option value="physics">Physics</option>
+					</select>
+				</div>
+				<div class="control-item" style="align-self:end;">
+					<button id="refresh-graph" class="retro-btn" style="width:100%;">Refresh</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="graph-layout">
+		<div class="left-column">
+			<div class="window panel">
+				<div class="title-bar"><div>Legend</div><div class="title-bar-controls"></div></div>
+				<div class="window-body">
+					<ul class="legend-list">
+						<li class="legend-item"><span class="legend-color" style="background:#4299E1"></span> Users</li>
+						<li class="legend-item"><span class="legend-color" style="background:#F56565"></span> Movies</li>
+						<li class="legend-item"><span class="legend-color" style="background:#48BB78"></span> Countries</li>
+						<li class="legend-item"><span class="legend-color" style="background:#9F7AEA"></span> Genres</li>
+						<li class="legend-item"><span class="legend-color" style="background:#ED8936"></span> Directors</li>
+					</ul>
+				</div>
+			</div>
+			<div class="window panel">
+				<div class="title-bar"><div>Graph Stats</div><div class="title-bar-controls"></div></div>
+				<div class="window-body">
+					<ul id="stats-list" class="stats-list"><li><span>Loading...</span><span></span></li></ul>
+				</div>
+			</div>
+			<div class="window panel">
+				<div class="title-bar"><div>Tips</div><div class="title-bar-controls"></div></div>
+				<div class="window-body" style="font-size:12px;">
+					<ul style="padding-left:18px; margin:0;">
+						<li>Hover nodes for details</li>
+						<li>Drag to reposition</li>
+						<li>Scroll to zoom</li>
+						<li>Click a movie to open its page</li>
+						<li>Dashed edges connect similar users</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+		<div class="right-column">
+			<div class="window" style="height:100%;">
+				<div class="title-bar"><div>Visualization</div><div class="title-bar-controls"></div></div>
+				<div class="window-body" style="padding:8px;">
+					<div id="network-visualization"></div>
+					<div id="loading" class="center-box" style="display:none;">Loading network data...</div>
+					<div id="error-message" class="center-box error" style="display:none;"></div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script>
+let network = null; let currentData = {nodes:[], edges:[]};
+
+function initNetwork(){
+	const container = document.getElementById('network-visualization');
+	network = new vis.Network(container, {nodes:[], edges:[]}, {
+		nodes:{ borderWidth:2, shape:'dot', font:{ color:'#fff', size:12, strokeWidth:2, strokeColor:'#000'} },
+		edges:{ smooth:{ type:'continuous'}, shadow:true },
+		interaction:{ hover:true, tooltipDelay:150 },
+		physics:{ enabled:true, stabilization:{ iterations:100 }, barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:100, springConstant:0.04, damping:0.09, avoidOverlap:0.1 } }
+	});
+	network.on('hoverNode', showNodeTooltip);
+	network.on('blurNode', hideNodeTooltip);
+	network.on('click', params=>{ if(params.nodes.length){ handleNodeClick(params.nodes[0]); }});
+}
+
+async function loadGraph(){
+	const loading=document.getElementById('loading'); const err=document.getElementById('error-message');
+	loading.style.display='flex'; err.style.display='none';
+	try {
+		const qs = new URLSearchParams({ min_reviews:document.getElementById('min-reviews').value, rating_threshold:document.getElementById('rating-threshold').value, max_nodes:document.getElementById('max-nodes').value });
+		const res = await fetch(`/movies/network-graph/data/?${qs.toString()}`);
+		if(!res.ok) throw new Error('HTTP '+res.status);
+		const data = await res.json(); currentData = data; updateNetwork(); updateStats(data.stats);
+	} catch(e){ console.error(e); err.textContent='Failed to load graph: '+e.message; err.style.display='flex'; }
+	finally { loading.style.display='none'; }
+}
+
+function updateNetwork(){ if(!network) return; const layout=document.getElementById('layout-type').value; let opt={}; if(layout==='hierarchical'){ opt={ layout:{ hierarchical:{ direction:'UD', levelSeparation:150, nodeSpacing:160 }}, physics:{ enabled:false } }; } else if(layout==='forceAtlas2Based'){ opt={ physics:{ enabled:true, barnesHut:{ gravitationalConstant:-8000, centralGravity:0.3, springLength:120, springConstant:0.04, damping:0.09, avoidOverlap:0.2 }}}; } else { opt={ physics:{ enabled:true }}; } network.setOptions(opt); network.setData({ nodes: currentData.nodes, edges: currentData.edges }); }
+
+function updateStats(s){ const list=document.getElementById('stats-list'); if(!s){ list.innerHTML='<li><span>No data</span></li>'; return;} list.innerHTML=`
+	<li><span>Total Nodes</span><span>${s.total_nodes}</span></li>
+	<li><span>Total Edges</span><span>${s.total_edges}</span></li>
+	<li><span>Users</span><span>${s.users}</span></li>
+	<li><span>Movies</span><span>${s.movies}</span></li>
+	<li><span>Countries</span><span>${s.countries}</span></li>
+	<li><span>Genres</span><span>${s.genres}</span></li>
+	<li><span>Directors</span><span>${s.directors}</span></li>`; }
+
+function showNodeTooltip(params){ const id=params.node; const node=currentData.nodes.find(n=>n.id===id); if(!node) return; let html=''; switch(node.type){ case 'user': html=`<strong>${node.label}</strong><br>Type: User<br>Reviews: ${node.review_count}`; break; case 'movie': html=`<strong>${node.label}</strong><br>Type: Movie<br>Rating: ${node.rating}/10<br>Year: ${node.year||'Unknown'}`; break; case 'country': html=`<strong>${node.label}</strong><br>Country Movies: ${node.movie_count}`; break; case 'genre': html=`<strong>${node.label}</strong><br>Genre Movies: ${node.movie_count}`; break; case 'director': html=`<strong>${node.label}</strong><br>Directed Movies: ${node.movie_count}`; break; }
+	const t=document.createElement('div'); t.id='node-tooltip'; t.className='node-tooltip'; t.innerHTML=html; document.body.appendChild(t); document.addEventListener('mousemove', positionTooltip); }
+function hideNodeTooltip(){ const t=document.getElementById('node-tooltip'); if(t){ t.remove(); document.removeEventListener('mousemove', positionTooltip);} }
+function positionTooltip(e){ const t=document.getElementById('node-tooltip'); if(t){ t.style.left=(e.pageX+12)+'px'; t.style.top=(e.pageY+12)+'px'; } }
+function handleNodeClick(id){ const node=currentData.nodes.find(n=>n.id===id); if(!node) return; if(node.type==='movie' && node.id.startsWith('movie_')){ const movieId=id.replace('movie_',''); window.open(`/movies/${movieId}/`,'_blank'); } }
+
+document.getElementById('refresh-graph').addEventListener('click', loadGraph);
+document.getElementById('layout-type').addEventListener('change', ()=> currentData.nodes.length && updateNetwork());
+
+document.addEventListener('DOMContentLoaded', ()=>{ initNetwork(); loadGraph(); });
+window.addEventListener('resize', ()=> network && network.redraw());
+</script>
+{% endblock %}
+

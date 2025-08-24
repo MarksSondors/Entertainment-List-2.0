@@ -28,6 +28,9 @@ from .tasks import create_movie_async, create_movie_fast
 from datetime import timedelta
 from django.contrib import messages
 from custom_auth.models import CustomUser, Review
+from django.db.models import Avg, Count, F
+from collections import defaultdict, Counter
+import json
 
 # Create your views here.
 
@@ -1319,3 +1322,584 @@ def current_community_pick(request):
     }
     
     return Response(data)
+
+
+@login_required
+def movie_analytics_graph(request):
+    """
+    Create a network graph showing relationships between users, movies, countries, and reviews.
+    This creates a graph theory visualization showing how users, movies and countries are connected.
+    """
+    # Get all movies with their related data
+    movies = Movie.objects.select_related().prefetch_related(
+        'countries', 'genres', 'production_companies'
+    ).all()
+    
+    # Get all reviews with user and movie data
+    reviews = Review.objects.select_related('user').filter(
+        content_type=ContentType.objects.get_for_model(Movie)
+    ).all()
+    
+    # Get all users who have reviewed movies
+    users = CustomUser.objects.filter(
+        reviews__content_type=ContentType.objects.get_for_model(Movie)
+    ).distinct()
+    
+    # Build nodes and edges for the graph
+    nodes = []
+    edges = []
+    node_id_counter = 0
+    node_mapping = {}
+    
+    # Create user nodes
+    for user in users:
+        user_id = f"user_{user.id}"
+        node_mapping[user_id] = node_id_counter
+        nodes.append({
+            'id': node_id_counter,
+            'label': user.username,
+            'type': 'user',
+            'group': 'users',
+            'size': 20,
+            'color': '#FF6B6B',
+            'metadata': {
+                'username': user.username,
+                'review_count': user.reviews.filter(content_type=ContentType.objects.get_for_model(Movie)).count()
+            }
+        })
+        node_id_counter += 1
+    
+    # Create movie nodes
+    for movie in movies:
+        movie_id = f"movie_{movie.id}"
+        node_mapping[movie_id] = node_id_counter
+        
+        # Calculate average rating for this movie
+        movie_reviews = reviews.filter(object_id=movie.id)
+        avg_rating = movie_reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
+        
+        nodes.append({
+            'id': node_id_counter,
+            'label': movie.title,
+            'type': 'movie',
+            'group': 'movies',
+            'size': max(15, min(30, len(movie_reviews) * 3)),  # Size based on review count
+            'color': '#4ECDC4',
+            'metadata': {
+                'title': movie.title,
+                'release_date': movie.release_date.strftime('%Y') if movie.release_date else 'Unknown',
+                'rating': round(avg_rating, 1),
+                'review_count': len(movie_reviews),
+                'runtime': movie.runtime,
+                'countries': [country.name for country in movie.countries.all()],
+                'genres': [genre.name for genre in movie.genres.all()]
+            }
+        })
+        node_id_counter += 1
+    
+    # Create country nodes
+    countries = Country.objects.filter(movie__in=movies).distinct()
+    for country in countries:
+        country_id = f"country_{country.id}"
+        node_mapping[country_id] = node_id_counter
+        
+        country_movies = movies.filter(countries=country)
+        
+        nodes.append({
+            'id': node_id_counter,
+            'label': country.name,
+            'type': 'country',
+            'group': 'countries',
+            'size': max(10, min(25, len(country_movies) * 2)),  # Size based on movie count
+            'color': '#95E1D3',
+            'metadata': {
+                'name': country.name,
+                'iso_code': country.iso_3166_1,
+                'movie_count': len(country_movies)
+            }
+        })
+        node_id_counter += 1
+    
+    # Create genre nodes
+    genres = Genre.objects.filter(movie__in=movies).distinct()
+    for genre in genres:
+        genre_id = f"genre_{genre.id}"
+        node_mapping[genre_id] = node_id_counter
+        
+        genre_movies = movies.filter(genres=genre)
+        
+        nodes.append({
+            'id': node_id_counter,
+            'label': genre.name,
+            'type': 'genre',
+            'group': 'genres',
+            'size': max(10, min(25, len(genre_movies) * 1.5)),
+            'color': '#F38BA8',
+            'metadata': {
+                'name': genre.name,
+                'movie_count': len(genre_movies)
+            }
+        })
+        node_id_counter += 1
+    
+    # Create edges between users and movies (reviews)
+    for review in reviews:
+        user_id = f"user_{review.user.id}"
+        movie_id = f"movie_{review.object_id}"
+        
+        if user_id in node_mapping and movie_id in node_mapping:
+            # Color edge based on rating
+            if review.rating >= 8:
+                edge_color = '#2ECC71'  # Green for high ratings
+            elif review.rating >= 6:
+                edge_color = '#F39C12'  # Orange for medium ratings
+            else:
+                edge_color = '#E74C3C'  # Red for low ratings
+            
+            edges.append({
+                'source': node_mapping[user_id],
+                'target': node_mapping[movie_id],
+                'type': 'review',
+                'weight': review.rating / 10,  # Normalize rating to 0-1
+                'color': edge_color,
+                'metadata': {
+                    'rating': review.rating,
+                    'review_text': review.review_text[:100] if review.review_text else None,
+                    'date': review.date_added.strftime('%Y-%m-%d')
+                }
+            })
+    
+    # Create edges between movies and countries
+    for movie in movies:
+        movie_id = f"movie_{movie.id}"
+        for country in movie.countries.all():
+            country_id = f"country_{country.id}"
+            if movie_id in node_mapping and country_id in node_mapping:
+                edges.append({
+                    'source': node_mapping[movie_id],
+                    'target': node_mapping[country_id],
+                    'type': 'origin',
+                    'weight': 0.5,
+                    'color': '#BDC3C7'
+                })
+    
+    # Create edges between movies and genres
+    for movie in movies:
+        movie_id = f"movie_{movie.id}"
+        for genre in movie.genres.all():
+            genre_id = f"genre_{genre.id}"
+            if movie_id in node_mapping and genre_id in node_mapping:
+                edges.append({
+                    'source': node_mapping[movie_id],
+                    'target': node_mapping[genre_id],
+                    'type': 'genre',
+                    'weight': 0.3,
+                    'color': '#9B59B6'
+                })
+    
+    # Calculate user similarity based on reviews
+    user_ratings = defaultdict(dict)
+    for review in reviews:
+        user_ratings[review.user.id][review.object_id] = review.rating
+    
+    # Create edges between users with similar tastes
+    user_list = list(user_ratings.keys())
+    for i, user1_id in enumerate(user_list):
+        for user2_id in user_list[i+1:]:
+            # Find common movies both users have reviewed
+            common_movies = set(user_ratings[user1_id].keys()) & set(user_ratings[user2_id].keys())
+            
+            if len(common_movies) >= 3:  # Only connect users with at least 3 common reviews
+                # Calculate similarity (inverse of average rating difference)
+                rating_diffs = []
+                for movie_id in common_movies:
+                    diff = abs(user_ratings[user1_id][movie_id] - user_ratings[user2_id][movie_id])
+                    rating_diffs.append(diff)
+                
+                avg_diff = sum(rating_diffs) / len(rating_diffs)
+                similarity = 1 - (avg_diff / 10)  # Normalize to 0-1
+                
+                # Only create edge if similarity is above threshold
+                if similarity > 0.7:  # Users with similar taste
+                    user1_node_id = f"user_{user1_id}"
+                    user2_node_id = f"user_{user2_id}"
+                    
+                    if user1_node_id in node_mapping and user2_node_id in node_mapping:
+                        edges.append({
+                            'source': node_mapping[user1_node_id],
+                            'target': node_mapping[user2_node_id],
+                            'type': 'similarity',
+                            'weight': similarity,
+                            'color': '#FFD93D',
+                            'metadata': {
+                                'similarity': round(similarity, 2),
+                                'common_movies': len(common_movies)
+                            }
+                        })
+    
+    # Prepare statistics for the page
+    stats = {
+        'total_movies': len(movies),
+        'total_users': len(users),
+        'total_reviews': len(reviews),
+        'total_countries': len(countries),
+        'total_genres': len(genres),
+        'avg_rating': round(reviews.aggregate(avg=Avg('rating'))['avg'] or 0, 2),
+        'most_reviewed_movie': max([(movie, len(reviews.filter(object_id=movie.id))) for movie in movies], 
+                                  key=lambda x: x[1], default=(None, 0)),
+        'most_active_user': max([(user, user.reviews.filter(content_type=ContentType.objects.get_for_model(Movie)).count()) 
+                               for user in users], key=lambda x: x[1], default=(None, 0)),
+    }
+    
+    # Country statistics
+    country_stats = []
+    for country in countries:
+        country_movies = movies.filter(countries=country)
+        country_reviews = reviews.filter(object_id__in=country_movies.values_list('id', flat=True))
+        avg_rating = country_reviews.aggregate(avg=Avg('rating'))['avg'] or 0
+        
+        country_stats.append({
+            'name': country.name,
+            'movie_count': len(country_movies),
+            'avg_rating': round(avg_rating, 2)
+        })
+    
+    country_stats.sort(key=lambda x: x['movie_count'], reverse=True)
+    
+    context = {
+        'graph_data': {
+            'nodes': nodes,
+            'edges': edges
+        },
+        'stats': stats,
+        'country_stats': country_stats[:10],  # Top 10 countries
+    }
+    
+    return render(request, 'movies/analytics_graph.html', context)
+
+
+@login_required
+def network_graph_page(request):
+    """Render the network graph page"""
+    # Using retro-themed template at app template root
+    return render(request, 'network_graph.html')
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def network_graph_data(request):
+    """
+    Generate network graph data showing relationships between users, movies, and movie attributes.
+    Based on reviews to show user preferences and similarities.
+    """
+    
+    # Get parameters for filtering (more inclusive defaults)
+    min_reviews = int(request.GET.get('min_reviews', 1))  # Changed from 3 to 1
+    rating_threshold = float(request.GET.get('rating_threshold', 5.0))  # Changed from 7.0 to 5.0
+    max_nodes = int(request.GET.get('max_nodes', 150))  # Increased from 100 to 150
+    
+    nodes = []
+    edges = []
+    node_ids = set()
+    
+    # Get the ContentType for Movie model
+    movie_content_type = ContentType.objects.get_for_model(Movie)
+    
+    # Get users with minimum number of movie reviews
+    active_users = CustomUser.objects.annotate(
+        movie_review_count=Count('reviews', filter=Q(reviews__content_type=movie_content_type))
+    ).filter(movie_review_count__gte=min_reviews)
+    
+    # If no users meet the criteria, get users with any movie reviews as fallback
+    if not active_users.exists():
+        active_users = CustomUser.objects.annotate(
+            movie_review_count=Count('reviews', filter=Q(reviews__content_type=movie_content_type))
+        ).filter(movie_review_count__gte=1)[:max_nodes//3]
+    
+    # Get movie reviews with good ratings from active users
+    good_reviews = Review.objects.filter(
+        content_type=movie_content_type,
+        user__in=active_users,
+        rating__gte=rating_threshold
+    ).select_related('user')
+    
+    # Get movies that have been well reviewed
+    well_reviewed_movie_ids = good_reviews.values_list('object_id', flat=True).distinct()
+    
+    # Get movie objects and calculate ratings
+    all_movie_reviews = Review.objects.filter(content_type=movie_content_type)
+    well_reviewed_movies = Movie.objects.filter(
+        id__in=well_reviewed_movie_ids
+    ).prefetch_related('genres', 'countries')
+    
+    # Calculate review stats for each movie
+    movie_stats = {}
+    for movie in well_reviewed_movies:
+        movie_reviews = all_movie_reviews.filter(object_id=movie.id)
+        if movie_reviews.count() >= 1:  # Changed from 2 to 1 - any movie with at least 1 review
+            avg_rating = movie_reviews.aggregate(avg=Avg('rating'))['avg']
+            movie_stats[movie.id] = {
+                'avg_rating': avg_rating,
+                'review_count': movie_reviews.count()
+            }
+    
+    # Filter movies that have enough reviews
+    well_reviewed_movies = [movie for movie in well_reviewed_movies if movie.id in movie_stats][:max_nodes//2]
+    
+    # If no movies meet the criteria, include some movies with any reviews as fallback
+    if not well_reviewed_movies:
+        fallback_movie_ids = all_movie_reviews.values_list('object_id', flat=True).distinct()[:max_nodes//4]
+        fallback_movies = Movie.objects.filter(id__in=fallback_movie_ids).prefetch_related('genres', 'countries')
+        
+        for movie in fallback_movies:
+            movie_reviews = all_movie_reviews.filter(object_id=movie.id)
+            if movie_reviews.count() >= 1:
+                avg_rating = movie_reviews.aggregate(avg=Avg('rating'))['avg']
+                movie_stats[movie.id] = {
+                    'avg_rating': avg_rating,
+                    'review_count': movie_reviews.count()
+                }
+        
+        well_reviewed_movies = [movie for movie in fallback_movies if movie.id in movie_stats]
+    
+    # Add user nodes
+    user_nodes = {}
+    for user in active_users[:max_nodes//3]:
+        node_id = f"user_{user.id}"
+        user_nodes[user.id] = node_id
+        node_ids.add(node_id)
+        
+        # Get movie review count for this user
+        user_movie_reviews = user.reviews.filter(content_type=movie_content_type).count()
+        
+        nodes.append({
+            'id': node_id,
+            'label': user.username,
+            'type': 'user',
+            'size': min(30, user_movie_reviews * 2),
+            'color': '#4299E1',  # Blue for users
+            'review_count': user_movie_reviews
+        })
+    
+    # Add movie nodes
+    movie_nodes = {}
+    for movie in well_reviewed_movies:
+        node_id = f"movie_{movie.id}"
+        movie_nodes[movie.id] = node_id
+        node_ids.add(node_id)
+        
+        stats = movie_stats[movie.id]
+        
+        nodes.append({
+            'id': node_id,
+            'label': movie.title,
+            'type': 'movie',
+            'size': min(25, stats['review_count'] * 3),
+            'color': '#F56565',  # Red for movies
+            'rating': round(stats['avg_rating'], 1),
+            'year': movie.release_date.year if movie.release_date else None,
+            'tmdb_id': movie.tmdb_id
+        })
+    
+    # Add country nodes (for movies with multiple reviews)
+    country_nodes = {}
+    country_counts = defaultdict(int)
+    for movie in well_reviewed_movies:
+        for country in movie.countries.all():
+            country_counts[country] += 1
+    
+    # Only include countries that appear in multiple well-reviewed movies
+    popular_countries = {country: count for country, count in country_counts.items() if count >= 2}
+    
+    for country, count in popular_countries.items():
+        node_id = f"country_{country.id}"
+        country_nodes[country.id] = node_id
+        node_ids.add(node_id)
+        
+        nodes.append({
+            'id': node_id,
+            'label': country.name,
+            'type': 'country',
+            'size': min(20, count * 2),
+            'color': '#48BB78',  # Green for countries
+            'movie_count': count
+        })
+    
+    # Add genre nodes
+    genre_nodes = {}
+    genre_counts = defaultdict(int)
+    for movie in well_reviewed_movies:
+        for genre in movie.genres.all():
+            genre_counts[genre] += 1
+    
+    popular_genres = {genre: count for genre, count in genre_counts.items() if count >= 3}
+    
+    for genre, count in popular_genres.items():
+        node_id = f"genre_{genre.id}"
+        genre_nodes[genre.id] = node_id
+        node_ids.add(node_id)
+        
+        nodes.append({
+            'id': node_id,
+            'label': genre.name,
+            'type': 'genre',
+            'size': min(18, count * 1.5),
+            'color': '#9F7AEA',  # Purple for genres
+            'movie_count': count
+        })
+    
+    # Add director nodes (for directors with multiple well-reviewed movies)
+    director_nodes = {}
+    director_counts = defaultdict(int)
+    for movie in well_reviewed_movies:
+        for director in movie.directors:
+            director_counts[director] += 1
+    
+    popular_directors = {director: count for director, count in director_counts.items() if count >= 2}
+    
+    for director, count in popular_directors.items():
+        node_id = f"director_{director.id}"
+        director_nodes[director.id] = node_id
+        node_ids.add(node_id)
+        
+        nodes.append({
+            'id': node_id,
+            'label': director.name,
+            'type': 'director',
+            'size': min(16, count * 2),
+            'color': '#ED8936',  # Orange for directors
+            'movie_count': count
+        })
+    
+    # Create edges
+    
+    # 1. User -> Movie edges (based on high ratings)
+    for user in active_users:
+        if user.id not in user_nodes:
+            continue
+        
+        user_reviews = user.reviews.filter(
+            content_type=movie_content_type,
+            rating__gte=rating_threshold
+        )
+        
+        for review in user_reviews:
+            movie_id = review.object_id  # This is the movie's ID
+            if movie_id in movie_nodes:
+                edges.append({
+                    'from': user_nodes[user.id],
+                    'to': movie_nodes[movie_id],
+                    'type': 'review',
+                    'weight': review.rating / 10.0,
+                    'color': {'color': '#4299E1', 'opacity': 0.6},
+                    'width': max(1, review.rating / 2),
+                    'label': f"{review.rating}/10"
+                })
+    
+    # 2. Movie -> Country edges
+    for movie in well_reviewed_movies:
+        if movie.id not in movie_nodes:
+            continue
+        
+        for country in movie.countries.all():
+            if country.id in country_nodes:
+                edges.append({
+                    'from': movie_nodes[movie.id],
+                    'to': country_nodes[country.id],
+                    'type': 'origin',
+                    'color': {'color': '#48BB78', 'opacity': 0.4},
+                    'width': 2
+                })
+    
+    # 3. Movie -> Genre edges
+    for movie in well_reviewed_movies:
+        if movie.id not in movie_nodes:
+            continue
+        
+        for genre in movie.genres.all():
+            if genre.id in genre_nodes:
+                edges.append({
+                    'from': movie_nodes[movie.id],
+                    'to': genre_nodes[genre.id],
+                    'type': 'genre',
+                    'color': {'color': '#9F7AEA', 'opacity': 0.4},
+                    'width': 1.5
+                })
+    
+    # 4. Movie -> Director edges
+    for movie in well_reviewed_movies:
+        if movie.id not in movie_nodes:
+            continue
+        
+        for director in movie.directors:
+            if director.id in director_nodes:
+                edges.append({
+                    'from': movie_nodes[movie.id],
+                    'to': director_nodes[director.id],
+                    'type': 'directed_by',
+                    'color': {'color': '#ED8936', 'opacity': 0.5},
+                    'width': 2
+                })
+    
+    # 5. User similarity edges (users who like similar movies)
+    user_movie_preferences = defaultdict(set)
+    for user in active_users:
+        if user.id not in user_nodes:
+            continue
+        
+        liked_movies = user.reviews.filter(
+            content_type=movie_content_type,
+            rating__gte=rating_threshold
+        ).values_list('object_id', flat=True)
+        
+        user_movie_preferences[user.id] = set(liked_movies)
+    
+    # Calculate user similarities
+    user_list = list(user_movie_preferences.keys())
+    for i, user1_id in enumerate(user_list):
+        for user2_id in user_list[i+1:]:
+            if user1_id in user_nodes and user2_id in user_nodes:
+                common_movies = user_movie_preferences[user1_id] & user_movie_preferences[user2_id]
+                if len(common_movies) >= 1:  # Users with at least 1 movie in common (changed from 2)
+                    similarity = len(common_movies) / max(len(user_movie_preferences[user1_id]), 
+                                                        len(user_movie_preferences[user2_id]))
+                    
+                    if similarity >= 0.2:  # 20% similarity threshold (changed from 30%)
+                        edges.append({
+                            'from': user_nodes[user1_id],
+                            'to': user_nodes[user2_id],
+                            'type': 'similarity',
+                            'weight': similarity,
+                            'color': {'color': '#38B2AC', 'opacity': 0.5},
+                            'width': max(1, similarity * 4),
+                            'label': f"{int(similarity*100)}% similar",
+                            'dashes': True
+                        })
+    
+    # Statistics for the frontend
+    stats = {
+        'total_nodes': len(nodes),
+        'total_edges': len(edges),
+        'users': len([n for n in nodes if n['type'] == 'user']),
+        'movies': len([n for n in nodes if n['type'] == 'movie']),
+        'countries': len([n for n in nodes if n['type'] == 'country']),
+        'genres': len([n for n in nodes if n['type'] == 'genre']),
+        'directors': len([n for n in nodes if n['type'] == 'director']),
+        'debug_info': {
+            'total_active_users': len(active_users),
+            'total_good_reviews': len(good_reviews),
+            'total_well_reviewed_movies': len(well_reviewed_movies),
+            'movie_content_type_id': movie_content_type.id,
+        },
+        'parameters': {
+            'min_reviews': min_reviews,
+            'rating_threshold': rating_threshold,
+            'max_nodes': max_nodes
+        }
+    }
+    
+    return Response({
+        'nodes': nodes,
+        'edges': edges,
+        'stats': stats
+    })
