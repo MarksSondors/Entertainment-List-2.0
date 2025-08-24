@@ -1,0 +1,523 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+:root {
+    --bg-color: #1a1a1a;
+    --text-color: #ffffff;
+    --text-muted: #cccccc;
+    --border-color: #333333;
+    --panel-bg: #2a2a2a;
+    --button-bg: #3a3a3a;
+    --button-hover: #4a4a4a;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.network-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.control-panel {
+    background-color: var(--panel-bg);
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.control-group label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.control-group input, .control-group select {
+    background-color: var(--button-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 0.5rem;
+    border-radius: 4px;
+}
+
+.control-group button {
+    background-color: #4299E1;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.control-group button:hover {
+    background-color: #3182CE;
+}
+
+.network-graph {
+    flex: 1;
+    background-color: var(--bg-color);
+    position: relative;
+}
+
+.stats-panel {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background-color: var(--panel-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    min-width: 200px;
+    z-index: 1000;
+}
+
+.stats-panel h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-color);
+}
+
+.stats-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.stats-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stats-list li:last-child {
+    border-bottom: none;
+}
+
+.legend {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    background-color: var(--panel-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    z-index: 1000;
+}
+
+.legend h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-color);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+}
+
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 50vh;
+    font-size: 1.2rem;
+    color: var(--text-muted);
+}
+
+.node-tooltip {
+    position: absolute;
+    background-color: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+    border-radius: 4px;
+    color: var(--text-color);
+    font-size: 0.875rem;
+    z-index: 1001;
+    pointer-events: none;
+    max-width: 200px;
+}
+
+.error-message {
+    color: #F56565;
+    text-align: center;
+    padding: 2rem;
+}
+</style>
+
+<div class="network-container">
+    <div class="control-panel">
+        <div class="control-group">
+            <label for="min-reviews">Minimum Reviews</label>
+            <input type="number" id="min-reviews" value="3" min="1" max="20">
+        </div>
+        
+        <div class="control-group">
+            <label for="rating-threshold">Rating Threshold</label>
+            <input type="number" id="rating-threshold" value="7.0" min="1" max="10" step="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label for="max-nodes">Max Nodes</label>
+            <input type="number" id="max-nodes" value="100" min="20" max="300" step="10">
+        </div>
+        
+        <div class="control-group">
+            <label for="layout-type">Layout</label>
+            <select id="layout-type">
+                <option value="forceAtlas2Based">Force Atlas</option>
+                <option value="hierarchical">Hierarchical</option>
+                <option value="physics">Physics</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <button id="refresh-graph">Refresh Graph</button>
+        </div>
+    </div>
+    
+    <div class="network-graph">
+        <div id="network-visualization"></div>
+        
+        <div class="legend">
+            <h4>Node Types</h4>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #4299E1;"></div>
+                <span>Users</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #F56565;"></div>
+                <span>Movies</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #48BB78;"></div>
+                <span>Countries</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #9F7AEA;"></div>
+                <span>Genres</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ED8936;"></div>
+                <span>Directors</span>
+            </div>
+        </div>
+        
+        <div class="stats-panel">
+            <h4>Graph Statistics</h4>
+            <ul class="stats-list" id="stats-list">
+                <li><span>Loading...</span></li>
+            </ul>
+        </div>
+        
+        <div class="loading" id="loading" style="display: none;">
+            Loading network data...
+        </div>
+        
+        <div class="error-message" id="error-message" style="display: none;"></div>
+    </div>
+</div>
+
+<!-- Vis.js Network -->
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+<script>
+let network = null;
+let currentData = null;
+
+// Initialize the network
+function initializeNetwork() {
+    const container = document.getElementById('network-visualization');
+    
+    // Default options for the network
+    const options = {
+        nodes: {
+            borderWidth: 2,
+            shadow: true,
+            font: {
+                color: '#ffffff',
+                size: 12,
+                face: 'Arial',
+                strokeWidth: 2,
+                strokeColor: '#000000'
+            }
+        },
+        edges: {
+            width: 2,
+            shadow: true,
+            smooth: {
+                type: 'continuous'
+            }
+        },
+        physics: {
+            enabled: true,
+            stabilization: { iterations: 100 },
+            barnesHut: {
+                gravitationalConstant: -2000,
+                centralGravity: 0.3,
+                springLength: 95,
+                springConstant: 0.04,
+                damping: 0.09,
+                avoidOverlap: 0.1
+            }
+        },
+        interaction: {
+            hover: true,
+            tooltipDelay: 200,
+            hideEdgesOnDrag: false,
+            hideEdgesOnZoom: false
+        },
+        layout: {
+            improvedLayout: true
+        }
+    };
+    
+    // Create empty network initially
+    const data = { nodes: [], edges: [] };
+    network = new vis.Network(container, data, options);
+    
+    // Add event listeners
+    network.on('hoverNode', function(params) {
+        showNodeTooltip(params);
+    });
+    
+    network.on('blurNode', function(params) {
+        hideNodeTooltip();
+    });
+    
+    network.on('click', function(params) {
+        if (params.nodes.length > 0) {
+            handleNodeClick(params.nodes[0]);
+        }
+    });
+}
+
+// Load graph data from the API
+async function loadGraphData() {
+    const loading = document.getElementById('loading');
+    const errorMessage = document.getElementById('error-message');
+    
+    loading.style.display = 'flex';
+    errorMessage.style.display = 'none';
+    
+    try {
+        const minReviews = document.getElementById('min-reviews').value;
+        const ratingThreshold = document.getElementById('rating-threshold').value;
+        const maxNodes = document.getElementById('max-nodes').value;
+        
+        const response = await fetch(`/movies/network-graph/data/?min_reviews=${minReviews}&rating_threshold=${ratingThreshold}&max_nodes=${maxNodes}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        currentData = data;
+        
+        updateNetwork(data);
+        updateStats(data.stats);
+        
+    } catch (error) {
+        console.error('Error loading graph data:', error);
+        errorMessage.textContent = `Error loading graph data: ${error.message}`;
+        errorMessage.style.display = 'block';
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+// Update the network with new data
+function updateNetwork(data) {
+    if (!network) return;
+    
+    const layoutType = document.getElementById('layout-type').value;
+    
+    // Update network options based on layout type
+    let options = {
+        physics: {
+            enabled: layoutType === 'physics',
+            stabilization: { iterations: 100 }
+        }
+    };
+    
+    if (layoutType === 'hierarchical') {
+        options.layout = {
+            hierarchical: {
+                direction: 'UD',
+                sortMethod: 'directed',
+                levelSeparation: 150,
+                nodeSpacing: 200
+            }
+        };
+        options.physics.enabled = false;
+    } else if (layoutType === 'forceAtlas2Based') {
+        options.layout = { improvedLayout: true };
+        options.physics = {
+            enabled: true,
+            barnesHut: {
+                gravitationalConstant: -8000,
+                centralGravity: 0.3,
+                springLength: 120,
+                springConstant: 0.04,
+                damping: 0.09,
+                avoidOverlap: 0.2
+            }
+        };
+    }
+    
+    network.setOptions(options);
+    network.setData({ nodes: data.nodes, edges: data.edges });
+}
+
+// Update statistics panel
+function updateStats(stats) {
+    const statsList = document.getElementById('stats-list');
+    statsList.innerHTML = `
+        <li><span>Total Nodes:</span><span>${stats.total_nodes}</span></li>
+        <li><span>Total Edges:</span><span>${stats.total_edges}</span></li>
+        <li><span>Users:</span><span>${stats.users}</span></li>
+        <li><span>Movies:</span><span>${stats.movies}</span></li>
+        <li><span>Countries:</span><span>${stats.countries}</span></li>
+        <li><span>Genres:</span><span>${stats.genres}</span></li>
+        <li><span>Directors:</span><span>${stats.directors}</span></li>
+    `;
+}
+
+// Show tooltip for nodes
+function showNodeTooltip(params) {
+    const nodeId = params.node;
+    const node = currentData.nodes.find(n => n.id === nodeId);
+    
+    if (!node) return;
+    
+    let tooltipContent = '';
+    
+    switch (node.type) {
+        case 'user':
+            tooltipContent = `
+                <strong>${node.label}</strong><br>
+                Type: User<br>
+                Reviews: ${node.review_count}
+            `;
+            break;
+        case 'movie':
+            tooltipContent = `
+                <strong>${node.label}</strong><br>
+                Type: Movie<br>
+                Rating: ${node.rating}/10<br>
+                Year: ${node.year || 'Unknown'}
+            `;
+            break;
+        case 'country':
+            tooltipContent = `
+                <strong>${node.label}</strong><br>
+                Type: Country<br>
+                Movies: ${node.movie_count}
+            `;
+            break;
+        case 'genre':
+            tooltipContent = `
+                <strong>${node.label}</strong><br>
+                Type: Genre<br>
+                Movies: ${node.movie_count}
+            `;
+            break;
+        case 'director':
+            tooltipContent = `
+                <strong>${node.label}</strong><br>
+                Type: Director<br>
+                Movies: ${node.movie_count}
+            `;
+            break;
+    }
+    
+    const tooltip = document.createElement('div');
+    tooltip.className = 'node-tooltip';
+    tooltip.innerHTML = tooltipContent;
+    tooltip.id = 'node-tooltip';
+    
+    document.body.appendChild(tooltip);
+    
+    // Position tooltip near mouse
+    document.addEventListener('mousemove', updateTooltipPosition);
+}
+
+// Hide tooltip
+function hideNodeTooltip() {
+    const tooltip = document.getElementById('node-tooltip');
+    if (tooltip) {
+        tooltip.remove();
+        document.removeEventListener('mousemove', updateTooltipPosition);
+    }
+}
+
+// Update tooltip position
+function updateTooltipPosition(event) {
+    const tooltip = document.getElementById('node-tooltip');
+    if (tooltip) {
+        tooltip.style.left = (event.pageX + 10) + 'px';
+        tooltip.style.top = (event.pageY + 10) + 'px';
+    }
+}
+
+// Handle node clicks
+function handleNodeClick(nodeId) {
+    const node = currentData.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    
+    // For movies, redirect to movie page
+    if (node.type === 'movie' && node.tmdb_id) {
+        // Find the movie ID from the node ID
+        const movieId = nodeId.replace('movie_', '');
+        window.open(`/movies/${movieId}/`, '_blank');
+    }
+    
+    // For users, you could redirect to profile page
+    // For other node types, you could show detailed info
+}
+
+// Event listeners
+document.getElementById('refresh-graph').addEventListener('click', loadGraphData);
+
+// Change layout when dropdown changes
+document.getElementById('layout-type').addEventListener('change', function() {
+    if (currentData) {
+        updateNetwork(currentData);
+    }
+});
+
+// Initialize everything when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeNetwork();
+    loadGraphData();
+});
+
+// Handle window resize
+window.addEventListener('resize', function() {
+    if (network) {
+        network.redraw();
+    }
+});
+</script>
+
+{% endblock %}

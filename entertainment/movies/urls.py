@@ -33,4 +33,11 @@ urlpatterns = [
     path('community/suggest/', views.suggest_movie, name='suggest_movie'),
     path('community/movie/<int:pick_id>/watched/', views.mark_movie_watched, name='mark_movie_watched'),
     path('community/movie/<int:pick_id>/discussion/', views.movie_week_discussion, name='movie_week_discussion'),
+    
+    # Analytics
+    path('analytics/graph/', views.movie_analytics_graph, name='movie_analytics_graph'),
+    
+    # Network Graph (Graph Theory)
+    path('network-graph/', views.network_graph_page, name='network_graph_page'),
+    path('network-graph/data/', views.network_graph_data, name='network_graph_data'),
 ] + router.urls

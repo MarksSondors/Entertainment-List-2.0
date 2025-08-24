@@ -1,0 +1,586 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}Movie Network Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+    .analytics-container {
+        padding: 20px;
+        max-width: 100%;
+    }
+    
+    .graph-container {
+        background: #1a1a1a;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 30px;
+        border: 2px solid #333;
+    }
+    
+    #network-graph {
+        width: 100%;
+        height: 800px;
+        border: 1px solid #444;
+        border-radius: 5px;
+        background: #000;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-card {
+        background: #2a2a2a;
+        border-radius: 10px;
+        padding: 20px;
+        border: 1px solid #444;
+    }
+    
+    .stat-card h3 {
+        color: #fff;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+        border-bottom: 2px solid #555;
+        padding-bottom: 10px;
+    }
+    
+    .stat-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        padding: 5px 0;
+    }
+    
+    .stat-label {
+        color: #ccc;
+    }
+    
+    .stat-value {
+        color: #fff;
+        font-weight: bold;
+    }
+    
+    .controls {
+        background: #2a2a2a;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid #444;
+    }
+    
+    .control-group {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .control-group label {
+        color: #fff;
+        font-weight: bold;
+        min-width: 120px;
+    }
+    
+    .filter-button {
+        background: #4ECDC4;
+        color: #000;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    
+    .filter-button:hover {
+        background: #45B7A8;
+        transform: translateY(-2px);
+    }
+    
+    .filter-button.active {
+        background: #FF6B6B;
+        color: #fff;
+    }
+    
+    .legend {
+        background: #2a2a2a;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+        border: 1px solid #444;
+    }
+    
+    .legend h4 {
+        color: #fff;
+        margin-bottom: 10px;
+    }
+    
+    .legend-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .legend-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+    }
+    
+    .legend-label {
+        color: #ccc;
+        font-size: 0.9em;
+    }
+    
+    .country-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .country-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #444;
+    }
+    
+    .country-item:last-child {
+        border-bottom: none;
+    }
+    
+    .page-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    
+    .page-header h1 {
+        color: #fff;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+    }
+    
+    .page-header p {
+        color: #ccc;
+        font-size: 1.1em;
+    }
+    
+    .graph-info {
+        background: #2a2a2a;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+        border: 1px solid #444;
+    }
+    
+    .graph-info p {
+        color: #ccc;
+        margin-bottom: 10px;
+    }
+    
+    .graph-info ul {
+        color: #ccc;
+        margin-left: 20px;
+    }
+    
+    .graph-info li {
+        margin-bottom: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-container">
+    <div class="page-header">
+        <h1>🎬 Movie Network Analytics</h1>
+        <p>Explore the relationships between users, movies, countries, and genres through interactive network visualization</p>
+    </div>
+    
+    <div class="graph-info">
+        <p><strong>How to read this graph:</strong></p>
+        <ul>
+            <li><strong>Red nodes:</strong> Users who have reviewed movies</li>
+            <li><strong>Teal nodes:</strong> Movies (size indicates number of reviews)</li>
+            <li><strong>Light green nodes:</strong> Countries of origin</li>
+            <li><strong>Pink nodes:</strong> Movie genres</li>
+            <li><strong>Green edges:</strong> High ratings (8-10)</li>
+            <li><strong>Orange edges:</strong> Medium ratings (6-7)</li>
+            <li><strong>Red edges:</strong> Low ratings (below 6)</li>
+            <li><strong>Yellow edges:</strong> Users with similar taste</li>
+            <li><strong>Gray edges:</strong> Movie-country relationships</li>
+            <li><strong>Purple edges:</strong> Movie-genre relationships</li>
+        </ul>
+    </div>
+    
+    <div class="legend">
+        <h4>Legend</h4>
+        <div class="legend-items">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #FF6B6B;"></div>
+                <span class="legend-label">Users</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #4ECDC4;"></div>
+                <span class="legend-label">Movies</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #95E1D3;"></div>
+                <span class="legend-label">Countries</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #F38BA8;"></div>
+                <span class="legend-label">Genres</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #FFD93D;"></div>
+                <span class="legend-label">Similar Users</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label>Filter by type:</label>
+            <button class="filter-button active" data-type="all">All</button>
+            <button class="filter-button" data-type="users">Users</button>
+            <button class="filter-button" data-type="movies">Movies</button>
+            <button class="filter-button" data-type="countries">Countries</button>
+            <button class="filter-button" data-type="genres">Genres</button>
+        </div>
+        <div class="control-group">
+            <label>Edge types:</label>
+            <button class="filter-button active" data-edge="all">All Edges</button>
+            <button class="filter-button" data-edge="reviews">Reviews Only</button>
+            <button class="filter-button" data-edge="similarity">Similar Users</button>
+            <button class="filter-button" data-edge="metadata">Metadata</button>
+        </div>
+    </div>
+    
+    <div class="graph-container">
+        <div id="network-graph"></div>
+    </div>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>📊 General Statistics</h3>
+            <div class="stat-item">
+                <span class="stat-label">Total Movies:</span>
+                <span class="stat-value">{{ stats.total_movies }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Active Users:</span>
+                <span class="stat-value">{{ stats.total_users }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Total Reviews:</span>
+                <span class="stat-value">{{ stats.total_reviews }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Countries:</span>
+                <span class="stat-value">{{ stats.total_countries }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Genres:</span>
+                <span class="stat-value">{{ stats.total_genres }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Average Rating:</span>
+                <span class="stat-value">{{ stats.avg_rating }}/10</span>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>🏆 Top Performers</h3>
+            {% if stats.most_reviewed_movie.0 %}
+            <div class="stat-item">
+                <span class="stat-label">Most Reviewed Movie:</span>
+                <span class="stat-value">{{ stats.most_reviewed_movie.0.title }} ({{ stats.most_reviewed_movie.1 }} reviews)</span>
+            </div>
+            {% endif %}
+            {% if stats.most_active_user.0 %}
+            <div class="stat-item">
+                <span class="stat-label">Most Active User:</span>
+                <span class="stat-value">{{ stats.most_active_user.0.username }} ({{ stats.most_active_user.1 }} reviews)</span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="stat-card">
+            <h3>🌍 Top Countries by Movie Count</h3>
+            <div class="country-list">
+                {% for country in country_stats %}
+                <div class="country-item">
+                    <span class="stat-label">{{ country.name }}</span>
+                    <span class="stat-value">{{ country.movie_count }} movies ({{ country.avg_rating }}/10)</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+    // Graph data from Django
+    const graphData = {{ graph_data|safe }};
+    
+    // Set up the SVG
+    const width = document.getElementById('network-graph').clientWidth;
+    const height = 800;
+    
+    const svg = d3.select("#network-graph")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+    
+    const g = svg.append("g");
+    
+    // Add zoom functionality
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 3])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+    
+    svg.call(zoom);
+    
+    // Set up the simulation
+    const simulation = d3.forceSimulation(graphData.nodes)
+        .force("link", d3.forceLink(graphData.edges).id(d => d.id).distance(100))
+        .force("charge", d3.forceManyBody().strength(-300))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(d => d.size + 5));
+    
+    // Create links
+    const link = g.append("g")
+        .selectAll("line")
+        .data(graphData.edges)
+        .enter().append("line")
+        .attr("stroke", d => d.color)
+        .attr("stroke-opacity", 0.6)
+        .attr("stroke-width", d => Math.max(1, d.weight * 3))
+        .attr("class", d => `edge edge-${d.type}`);
+    
+    // Create nodes
+    const node = g.append("g")
+        .selectAll("circle")
+        .data(graphData.nodes)
+        .enter().append("circle")
+        .attr("r", d => d.size)
+        .attr("fill", d => d.color)
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 2)
+        .attr("class", d => `node node-${d.type}`)
+        .call(d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended));
+    
+    // Add labels
+    const label = g.append("g")
+        .selectAll("text")
+        .data(graphData.nodes)
+        .enter().append("text")
+        .text(d => d.label)
+        .attr("font-size", "12px")
+        .attr("font-family", "Arial, sans-serif")
+        .attr("fill", "#fff")
+        .attr("text-anchor", "middle")
+        .attr("dy", ".35em")
+        .attr("class", d => `label label-${d.type}`)
+        .style("pointer-events", "none");
+    
+    // Add tooltips
+    const tooltip = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0)
+        .style("position", "absolute")
+        .style("background", "rgba(0, 0, 0, 0.9)")
+        .style("color", "white")
+        .style("padding", "10px")
+        .style("border-radius", "5px")
+        .style("font-size", "12px")
+        .style("pointer-events", "none")
+        .style("z-index", "1000");
+    
+    // Node hover events
+    node.on("mouseover", function(event, d) {
+        let tooltipHtml = `<strong>${d.label}</strong><br/>`;
+        tooltipHtml += `Type: ${d.type}<br/>`;
+        
+        if (d.metadata) {
+            if (d.type === 'user') {
+                tooltipHtml += `Reviews: ${d.metadata.review_count}`;
+            } else if (d.type === 'movie') {
+                tooltipHtml += `Release: ${d.metadata.release_date}<br/>`;
+                tooltipHtml += `Rating: ${d.metadata.rating}/10<br/>`;
+                tooltipHtml += `Reviews: ${d.metadata.review_count}<br/>`;
+                tooltipHtml += `Runtime: ${d.metadata.runtime} min<br/>`;
+                tooltipHtml += `Countries: ${d.metadata.countries.join(', ')}<br/>`;
+                tooltipHtml += `Genres: ${d.metadata.genres.join(', ')}`;
+            } else if (d.type === 'country') {
+                tooltipHtml += `Movies: ${d.metadata.movie_count}<br/>`;
+                tooltipHtml += `ISO Code: ${d.metadata.iso_code}`;
+            } else if (d.type === 'genre') {
+                tooltipHtml += `Movies: ${d.metadata.movie_count}`;
+            }
+        }
+        
+        tooltip.transition()
+            .duration(200)
+            .style("opacity", .9);
+        
+        tooltip.html(tooltipHtml)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 28) + "px");
+    })
+    .on("mouseout", function(d) {
+        tooltip.transition()
+            .duration(500)
+            .style("opacity", 0);
+    });
+    
+    // Edge hover events
+    link.on("mouseover", function(event, d) {
+        if (d.metadata) {
+            let tooltipHtml = `<strong>${d.type.toUpperCase()}</strong><br/>`;
+            if (d.type === 'review') {
+                tooltipHtml += `Rating: ${d.metadata.rating}/10<br/>`;
+                tooltipHtml += `Date: ${d.metadata.date}`;
+                if (d.metadata.review_text) {
+                    tooltipHtml += `<br/>Review: ${d.metadata.review_text}`;
+                }
+            } else if (d.type === 'similarity') {
+                tooltipHtml += `Similarity: ${d.metadata.similarity}<br/>`;
+                tooltipHtml += `Common movies: ${d.metadata.common_movies}`;
+            }
+            
+            tooltip.transition()
+                .duration(200)
+                .style("opacity", .9);
+            
+            tooltip.html(tooltipHtml)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 28) + "px");
+        }
+    })
+    .on("mouseout", function(d) {
+        tooltip.transition()
+            .duration(500)
+            .style("opacity", 0);
+    });
+    
+    // Update positions on simulation tick
+    simulation.on("tick", () => {
+        link
+            .attr("x1", d => d.source.x)
+            .attr("y1", d => d.source.y)
+            .attr("x2", d => d.target.x)
+            .attr("y2", d => d.target.y);
+        
+        node
+            .attr("cx", d => d.x)
+            .attr("cy", d => d.y);
+        
+        label
+            .attr("x", d => d.x)
+            .attr("y", d => d.y);
+    });
+    
+    // Drag functions
+    function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
+    
+    function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+    
+    function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+    }
+    
+    // Filter functionality
+    const filterButtons = document.querySelectorAll('.filter-button');
+    
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const filterType = this.dataset.type;
+            const edgeType = this.dataset.edge;
+            
+            // Update button states
+            if (filterType) {
+                document.querySelectorAll('[data-type]').forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Filter nodes
+                if (filterType === 'all') {
+                    node.style('display', 'block');
+                    label.style('display', 'block');
+                } else {
+                    node.style('display', d => d.type === filterType ? 'block' : 'none');
+                    label.style('display', d => d.type === filterType ? 'block' : 'none');
+                }
+            }
+            
+            if (edgeType) {
+                document.querySelectorAll('[data-edge]').forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Filter edges
+                if (edgeType === 'all') {
+                    link.style('display', 'block');
+                } else if (edgeType === 'reviews') {
+                    link.style('display', d => d.type === 'review' ? 'block' : 'none');
+                } else if (edgeType === 'similarity') {
+                    link.style('display', d => d.type === 'similarity' ? 'block' : 'none');
+                } else if (edgeType === 'metadata') {
+                    link.style('display', d => ['origin', 'genre'].includes(d.type) ? 'block' : 'none');
+                }
+            }
+            
+            // Restart simulation
+            simulation.alpha(0.3).restart();
+        });
+    });
+    
+    // Center and zoom to fit
+    function centerGraph() {
+        const bounds = g.node().getBBox();
+        const fullWidth = width;
+        const fullHeight = height;
+        const widthScale = fullWidth / bounds.width;
+        const heightScale = fullHeight / bounds.height;
+        const scale = Math.min(widthScale, heightScale) * 0.9;
+        const translate = [
+            (fullWidth - scale * (bounds.x + bounds.x + bounds.width)) / 2,
+            (fullHeight - scale * (bounds.y + bounds.y + bounds.height)) / 2
+        ];
+        
+        svg.transition()
+            .duration(750)
+            .call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
+    }
+    
+    // Center graph after initial layout
+    setTimeout(centerGraph, 3000);
+</script>
+{% endblock %}
