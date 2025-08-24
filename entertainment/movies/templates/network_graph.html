@@ -127,6 +127,19 @@
 .center-box { display:flex; justify-content:center; align-items:center; padding:30px; font-size:13px; color: var(--text-muted); }
 .error { color:#a40000; font-weight:bold; }
 
+/* Filter toggle visual states */
+.filter-pill label, .ng-filter-label { cursor:pointer; user-select:none; }
+.ng-filter-label { padding:3px 6px; border:1px solid var(--border-dark); background:linear-gradient(#e8e8e8,#c8c8c8); border-radius:3px; box-shadow:1px 1px 0 var(--border-light) inset, -1px -1px 0 var(--border-dark) inset; }
+@media (prefers-color-scheme: dark){ .ng-filter-label { background:linear-gradient(#585858,#404040); } }
+.ng-filter-label.active { font-weight:bold; color:#000; background:linear-gradient(#ffffff,#dcdcdc); }
+@media (prefers-color-scheme: dark){ .ng-filter-label.active { color:#fff; background:linear-gradient(#666,#505050);} }
+.ng-filter-label.inactive { opacity:0.55; text-decoration:line-through; }
+/* Extra emphasis for disabled directors filter */
+.ng-filter-label[data-target=directors].inactive { background:repeating-linear-gradient(45deg,#5a2d00,#5a2d00 6px,#7a3b00 6px,#7a3b00 12px); color:#fff; border-color:#2e1500; }
+@media (prefers-color-scheme: dark){ .ng-filter-label[data-target=directors].inactive { background:repeating-linear-gradient(45deg,#402200,#402200 6px,#5a2d00 6px,#5a2d00 12px); } }
+.legend-item.disabled { opacity:0.28; filter:grayscale(80%); }
+.legend-edge-sample { width:18px; height:0; border-top:2px dashed #38B2AC; display:inline-block; }
+
 </style>
 
 <div class="network-page-container">
@@ -155,6 +168,14 @@
 					<input type="number" id="max-nodes" value="150" min="30" max="400" step="10">
 				</div>
 				<div class="control-item">
+					<label for="movie-limit">Movies</label>
+					<input type="number" id="movie-limit" value="75" min="5" max="300" step="5">
+				</div>
+				<div class="control-item">
+					<label for="predictions-limit">Predictions</label>
+					<input type="number" id="predictions-limit" value="25" min="0" max="100" step="5">
+				</div>
+				<div class="control-item">
 					<label for="layout-type">Layout</label>
 					<select id="layout-type">
 						<option value="forceAtlas2Based">Force Atlas</option>
@@ -175,6 +196,18 @@
 						</span>
 					</button>
 				</div>
+				<div class="control-item" style="grid-column:1/-1; border-top:1px solid var(--border-dark); padding-top:6px;">
+					<label style="font-weight:bold; font-size:11px;">Show Elements:</label>
+					<div id="filter-pills" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; font-size:11px;">
+						<label class="ng-filter-label active" data-target="countries"><input type="checkbox" class="ng-filter" data-param="countries" checked hidden><span class="filter-text">Countries</span></label>
+						<label class="ng-filter-label active" data-target="genres"><input type="checkbox" class="ng-filter" data-param="genres" checked hidden><span class="filter-text">Genres</span></label>
+						<label class="ng-filter-label active" data-target="directors"><input type="checkbox" class="ng-filter" data-param="directors" checked hidden><span class="filter-text">Directors</span></label>
+						<label class="ng-filter-label active" data-target="similarity"><input type="checkbox" class="ng-filter" data-param="similarity" checked hidden><span class="filter-text">Similarity</span></label>
+						<label class="ng-filter-label active" data-target="predictions"><input type="checkbox" class="ng-filter" data-param="predictions" checked hidden><span class="filter-text">Predictions</span></label>
+						<label class="ng-filter-label active chaos-only" data-target="actors" style="display:none;"><input type="checkbox" class="ng-filter" data-param="actors" checked hidden><span class="filter-text">Actors</span></label>
+						<label class="ng-filter-label active chaos-only" data-target="crew" style="display:none;"><input type="checkbox" class="ng-filter" data-param="crew" checked hidden><span class="filter-text">Crew</span></label>
+					</div>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -191,6 +224,7 @@
 						<li class="legend-item"><span class="legend-color" style="background:#9F7AEA"></span> Genres</li>
 						<li class="legend-item"><span class="legend-color" style="background:#ED8936"></span> Directors</li>
 						<li class="legend-item"><span class="legend-color" style="background:#FFD700"></span> Predictions</li>
+						<li class="legend-item"><span class="legend-edge-sample" style="border-color:#38B2AC"></span> Similar Users</li>
 						<li class="legend-item chaos-only" style="display:none;"><span class="legend-color" style="background:#FFD700"></span> Actors</li>
 						<li class="legend-item chaos-only" style="display:none;"><span class="legend-color" style="background:#00CED1"></span> Crew</li>
 					</ul>
@@ -265,8 +299,10 @@ async function loadGraph(){
 	const loading=document.getElementById('loading'); const err=document.getElementById('error-message');
 	loading.style.display='flex'; err.style.display='none';
 	try {
-		const qs = new URLSearchParams({ min_reviews:document.getElementById('min-reviews').value, rating_threshold:document.getElementById('rating-threshold').value, max_nodes:document.getElementById('max-nodes').value });
+		const qs = new URLSearchParams({ min_reviews:document.getElementById('min-reviews').value, rating_threshold:document.getElementById('rating-threshold').value, max_nodes:document.getElementById('max-nodes').value, predictions_limit: document.getElementById('predictions-limit').value, movie_limit: document.getElementById('movie-limit').value });
 		if(chaosModeEnabled){ qs.append('chaos','1'); }
+		// add filter params
+		document.querySelectorAll('.ng-filter').forEach(cb=>{ qs.append(cb.dataset.param, cb.checked ? '1':'0'); });
 		const res = await fetch(`/movies/network-graph/data/?${qs.toString()}`);
 		if(!res.ok) throw new Error('HTTP '+res.status);
 		const data = await res.json(); currentData = data; updateNetwork(); updateStats(data.stats);
@@ -333,6 +369,43 @@ function updateStats(s){ const list=document.getElementById('stats-list'); if(!s
 	<li class="chaos-only" style="display:${chaosModeEnabled && s.crew? 'flex':'none'}; justify-content:space-between;"><span>Crew</span><span>${s.crew||0}</span></li>`; 
 	document.querySelectorAll('.legend-list .chaos-only').forEach(el=>{ el.style.display = chaosModeEnabled ? 'flex':'none'; }); }
 
+function refreshFilterVisuals(){
+	document.querySelectorAll('.ng-filter-label').forEach(lbl=>{
+		const cb = lbl.querySelector('input.ng-filter');
+		if(!cb) return;
+		lbl.classList.toggle('active', cb.checked);
+		lbl.classList.toggle('inactive', !cb.checked);
+		const span = lbl.querySelector('.filter-text');
+		if(!span) return;
+		if(!span.dataset.baseText){ span.dataset.baseText = span.textContent.trim(); }
+		if(!cb.checked){
+			if(!span.textContent.includes('(hidden)')){ span.textContent = span.dataset.baseText + ' (hidden)'; }
+		} else {
+			if(span.textContent.trim() !== span.dataset.baseText){ span.textContent = span.dataset.baseText; }
+		}
+		// legend dimming
+		const target = lbl.getAttribute('data-target');
+		if(target){
+			if(['actors','crew'].includes(target) && !chaosModeEnabled){
+				return; // hidden already
+			}
+			let selectorMatch = '';
+			if(target==='countries') selectorMatch = 'Countries';
+			else if(target==='genres') selectorMatch = 'Genres';
+			else if(target==='directors') selectorMatch = 'Directors';
+			else if(target==='predictions') selectorMatch = 'Predictions';
+			else if(target==='similarity') selectorMatch = 'Similar Users';
+			else if(target==='actors') selectorMatch = 'Actors';
+			else if(target==='crew') selectorMatch = 'Crew';
+			if(selectorMatch){
+				const legendItems = Array.from(document.querySelectorAll('.legend-list .legend-item'));
+				const item = legendItems.find(li=> li.textContent.trim() === selectorMatch);
+				if(item){ item.classList.toggle('disabled', !cb.checked); }
+			}
+		}
+	});
+}
+
 function showNodeTooltip(params){ const id=params.node; const node=currentData.nodes.find(n=>n.id===id); if(!node) return; let html=''; switch(node.type){ case 'user': html=`<strong>${node.label}</strong><br>Type: User<br>Reviews: ${node.review_count}`; break; case 'movie': html=`<strong>${node.label}</strong><br>Type: Movie<br>Rating: ${node.rating}/10<br>Year: ${node.year||'Unknown'}${node.predicted_score? '<br><span style=\"color:#FFD700;\">Predicted: '+node.predicted_score+'/10</span>':''}${(node.genre_affinity!==undefined)? '<br><span style=\\"color:#4FD1C5;\\">Genre affinity: '+(node.genre_affinity*100).toFixed(0)+'%</span>':''}${(node.country_affinity!==undefined)? '<br><span style=\\"color:#63B3ED;\\">Country affinity: '+(node.country_affinity*100).toFixed(0)+'%</span>':''}${(node.director_affinity!==undefined)? '<br><span style=\\"color:#ED8936;\\">Director affinity: '+(node.director_affinity*100).toFixed(0)+'%</span>':''}`; break; case 'country': html=`<strong>${node.label}</strong><br>Country Movies: ${node.movie_count}`; break; case 'genre': html=`<strong>${node.label}</strong><br>Genre Movies: ${node.movie_count}`; break; case 'director': html=`<strong>${node.label}</strong><br>Directed Movies: ${node.movie_count}`; break; case 'actor': html=`<strong>${node.label}</strong><br>Type: Actor<br>Movies: ${node.movie_count}`; break; case 'crew': html=`<strong>${node.label}</strong><br>Crew Member<br>Movies: ${node.movie_count}`; break; }
 	const t=document.createElement('div'); t.id='node-tooltip'; t.className='node-tooltip'; t.innerHTML=html; document.body.appendChild(t); document.addEventListener('mousemove', positionTooltip); }
 function hideNodeTooltip(){ const t=document.getElementById('node-tooltip'); if(t){ t.remove(); document.removeEventListener('mousemove', positionTooltip);} }
@@ -355,9 +428,23 @@ chaosBtn.addEventListener('click', ()=>{
 	chaosBtn.classList.toggle('active', chaosModeEnabled);
 	chaosBtn.setAttribute('aria-pressed', chaosModeEnabled ? 'true':'false');
 	if(chaosModeEnabled){ chaosBtn.title='Chaos Mode ON'; } else { chaosBtn.title='Chaos Mode OFF'; }
+	document.querySelectorAll('.chaos-only').forEach(el=>{ el.style.display = chaosModeEnabled ? 'flex':'none'; });
+	refreshFilterVisuals();
 	loadGraph();
 });
 document.getElementById('layout-type').addEventListener('change', ()=> { if(currentData.nodes.length){ updateNetwork(); } else { clearAutoFreeze(); } });
+
+// auto refresh on checkbox change (debounced)
+let filterChangeTimer=null;
+document.querySelectorAll('.ng-filter').forEach(cb=>{
+	cb.addEventListener('change', ()=>{
+		if(filterChangeTimer) clearTimeout(filterChangeTimer);
+		refreshFilterVisuals();
+		filterChangeTimer = setTimeout(()=>{ loadGraph(); }, 250);
+	});
+});
+// initial visual state
+refreshFilterVisuals();
 
 // Toggle physics manually
 document.getElementById('toggle-physics').addEventListener('click', ()=>{
