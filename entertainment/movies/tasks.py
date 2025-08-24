@@ -35,12 +35,16 @@ def update_unreleased_movies():
     return f"Scheduled updates for {unreleased_movies.count()} movies"
 
 def update_random_movies():
-    """Update information for 10 oldest updated movies in the database."""
-    # Get 10 movies with the oldest updated dates
-    movies = Movie.objects.order_by('date_updated')[:10]
+    """Update information for 10% of the movies in the database (oldest updated first)."""
+    # Calculate 10% of total movies (minimum 1 movie)
+    total_movies = Movie.objects.count()
+    movies_to_update = max(1, int(total_movies * 0.1))
+    
+    # Get movies with the oldest updated dates
+    movies = Movie.objects.order_by('date_updated')[:movies_to_update]
     
     # Log how many movies will be updated
-    logger.info(f"Updating {len(movies)} movies with oldest update dates")
+    logger.info(f"Updating {len(movies)} movies ({movies_to_update} = 10% of {total_movies} total movies) with oldest update dates")
     
     # Update each movie
     updates_count = 0
@@ -53,7 +57,7 @@ def update_random_movies():
         except Exception as e:
             logger.error(f"Error scheduling update for movie {movie.title} (ID: {movie.id}): {e}")
     
-    return f"Scheduled updates for {updates_count} movies with oldest update dates"
+    return f"Scheduled updates for {updates_count} movies ({int(Movie.objects.count() * 0.1)} = 10% of total) with oldest update dates"
 
 def update_single_movie(movie_id):
     """Update a single movie from TMDB."""
