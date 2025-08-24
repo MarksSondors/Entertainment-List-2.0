@@ -1597,6 +1597,7 @@ def network_graph_data(request):
     min_reviews = int(request.GET.get('min_reviews', 1))  # Changed from 3 to 1
     rating_threshold = float(request.GET.get('rating_threshold', 5.0))  # Changed from 7.0 to 5.0
     max_nodes = int(request.GET.get('max_nodes', 150))  # Increased from 100 to 150
+    chaos_mode = request.GET.get('chaos') in ['1', 'true', 'True']  # Include actors & crew
     
     nodes = []
     edges = []
@@ -1771,6 +1772,63 @@ def network_graph_data(request):
             'movie_count': count
         })
     
+    # Track optional chaos mode people
+    actor_nodes = {}
+    crew_nodes = {}
+    actor_counts = defaultdict(int)
+    crew_counts = defaultdict(int)
+
+    if chaos_mode:
+        # First pass: collect counts to size nodes meaningfully; limit per movie to avoid explosion
+        for movie in well_reviewed_movies:
+            # Actors (cast property returns MediaPerson objects with person attribute)
+            for mp in movie.cast[:8]:  # limit first 8 per movie
+                person = getattr(mp, 'person', None)
+                if not person:
+                    continue
+                actor_counts[person] += 1
+            # Crew (exclude directors already handled unless want duplicates)
+            non_director_crew = [mp for mp in movie.crew[:8] if getattr(mp, 'role', '') != 'Director']
+            for mp in non_director_crew:
+                person = getattr(mp, 'person', None)
+                if not person:
+                    continue
+                crew_counts[person] += 1
+
+        # Only include actors/crew appearing in at least 1 (already true) but cap total to keep performance reasonable
+        # Sort by count desc and trim
+        max_actor_nodes = max_nodes // 2  # heuristic
+        max_crew_nodes = max_nodes // 3
+        sorted_actors = sorted(actor_counts.items(), key=lambda x: x[1], reverse=True)[:max_actor_nodes]
+        sorted_crew = sorted(crew_counts.items(), key=lambda x: x[1], reverse=True)[:max_crew_nodes]
+
+        for person, count in sorted_actors:
+            node_id = f"actor_{person.id}"
+            actor_nodes[person.id] = node_id
+            nodes.append({
+                'id': node_id,
+                'label': person.name,
+                'type': 'actor',
+                'size': min(18, 6 + count * 2),
+                'color': '#FFD700',  # Gold for actors
+                'movie_count': count
+            })
+
+        for person, count in sorted_crew:
+            # Skip if this crew person is already a director node
+            if person.id in [d.id for d in director_counts.keys()]:
+                continue
+            node_id = f"crew_{person.id}"
+            crew_nodes[person.id] = node_id
+            nodes.append({
+                'id': node_id,
+                'label': person.name,
+                'type': 'crew',
+                'size': min(16, 6 + count * 1.5),
+                'color': '#00CED1',  # DarkTurquoise for crew
+                'movie_count': count
+            })
+
     # Create edges
     
     # 1. User -> Movie edges (based on high ratings)
@@ -1840,6 +1898,40 @@ def network_graph_data(request):
                     'color': {'color': '#ED8936', 'opacity': 0.5},
                     'width': 2
                 })
+
+    # 4b. Chaos mode Movie -> Actor edges
+    if chaos_mode:
+        for movie in well_reviewed_movies:
+            if movie.id not in movie_nodes:
+                continue
+            for mp in movie.cast[:8]:
+                person = getattr(mp, 'person', None)
+                if not person or person.id not in actor_nodes:
+                    continue
+                edges.append({
+                    'from': movie_nodes[movie.id],
+                    'to': actor_nodes[person.id],
+                    'type': 'acted_in',
+                    'color': {'color': '#FFD700', 'opacity': 0.35},
+                    'width': 1
+                })
+        # 4c. Chaos mode Movie -> Crew edges
+        for movie in well_reviewed_movies:
+            if movie.id not in movie_nodes:
+                continue
+            for mp in movie.crew[:8]:
+                if getattr(mp, 'role', '') == 'Director':
+                    continue
+                person = getattr(mp, 'person', None)
+                if not person or person.id not in crew_nodes:
+                    continue
+                edges.append({
+                    'from': movie_nodes[movie.id],
+                    'to': crew_nodes[person.id],
+                    'type': 'crew',
+                    'color': {'color': '#00CED1', 'opacity': 0.35},
+                    'width': 1
+                })
     
     # 5. User similarity edges (users who like similar movies)
     user_movie_preferences = defaultdict(set)
@@ -1885,6 +1977,8 @@ def network_graph_data(request):
         'countries': len([n for n in nodes if n['type'] == 'country']),
         'genres': len([n for n in nodes if n['type'] == 'genre']),
         'directors': len([n for n in nodes if n['type'] == 'director']),
+        'actors': len([n for n in nodes if n['type'] == 'actor']),
+        'crew': len([n for n in nodes if n['type'] == 'crew']),
         'debug_info': {
             'total_active_users': len(active_users),
             'total_good_reviews': len(good_reviews),
@@ -1894,7 +1988,8 @@ def network_graph_data(request):
         'parameters': {
             'min_reviews': min_reviews,
             'rating_threshold': rating_threshold,
-            'max_nodes': max_nodes
+            'max_nodes': max_nodes,
+            'chaos': chaos_mode
         }
     }
     

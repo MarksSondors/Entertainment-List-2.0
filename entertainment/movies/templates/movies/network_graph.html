@@ -487,9 +487,8 @@ function handleNodeClick(nodeId) {
     
     // For movies, redirect to movie page
     if (node.type === 'movie' && node.tmdb_id) {
-        // Find the movie ID from the node ID
-        const movieId = nodeId.replace('movie_', '');
-        window.open(`/movies/${movieId}/`, '_blank');
+        // Use TMDB id directly (URL patterns expect tmdb_id)
+        window.open(`/movies/${node.tmdb_id}/`, '_blank');
     }
     
     // For users, you could redirect to profile page
