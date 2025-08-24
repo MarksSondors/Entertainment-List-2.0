@@ -190,6 +190,7 @@
 						<li class="legend-item"><span class="legend-color" style="background:#48BB78"></span> Countries</li>
 						<li class="legend-item"><span class="legend-color" style="background:#9F7AEA"></span> Genres</li>
 						<li class="legend-item"><span class="legend-color" style="background:#ED8936"></span> Directors</li>
+						<li class="legend-item"><span class="legend-color" style="background:#FFD700"></span> Predictions</li>
 						<li class="legend-item chaos-only" style="display:none;"><span class="legend-color" style="background:#FFD700"></span> Actors</li>
 						<li class="legend-item chaos-only" style="display:none;"><span class="legend-color" style="background:#00CED1"></span> Crew</li>
 					</ul>
@@ -299,11 +300,12 @@ function updateStats(s){ const list=document.getElementById('stats-list'); if(!s
 	<li><span>Countries</span><span>${s.countries}</span></li>
 	<li><span>Genres</span><span>${s.genres}</span></li>
 	<li><span>Directors</span><span>${s.directors}</span></li>
+	<li><span>Pred Edges</span><span>${s.recommendations||0}</span></li>
 	<li class="chaos-only" style="display:${chaosModeEnabled && s.actors? 'flex':'none'}; justify-content:space-between;"><span>Actors</span><span>${s.actors||0}</span></li>
 	<li class="chaos-only" style="display:${chaosModeEnabled && s.crew? 'flex':'none'}; justify-content:space-between;"><span>Crew</span><span>${s.crew||0}</span></li>`; 
 	document.querySelectorAll('.legend-list .chaos-only').forEach(el=>{ el.style.display = chaosModeEnabled ? 'flex':'none'; }); }
 
-function showNodeTooltip(params){ const id=params.node; const node=currentData.nodes.find(n=>n.id===id); if(!node) return; let html=''; switch(node.type){ case 'user': html=`<strong>${node.label}</strong><br>Type: User<br>Reviews: ${node.review_count}`; break; case 'movie': html=`<strong>${node.label}</strong><br>Type: Movie<br>Rating: ${node.rating}/10<br>Year: ${node.year||'Unknown'}`; break; case 'country': html=`<strong>${node.label}</strong><br>Country Movies: ${node.movie_count}`; break; case 'genre': html=`<strong>${node.label}</strong><br>Genre Movies: ${node.movie_count}`; break; case 'director': html=`<strong>${node.label}</strong><br>Directed Movies: ${node.movie_count}`; break; case 'actor': html=`<strong>${node.label}</strong><br>Type: Actor<br>Movies: ${node.movie_count}`; break; case 'crew': html=`<strong>${node.label}</strong><br>Crew Member<br>Movies: ${node.movie_count}`; break; }
+function showNodeTooltip(params){ const id=params.node; const node=currentData.nodes.find(n=>n.id===id); if(!node) return; let html=''; switch(node.type){ case 'user': html=`<strong>${node.label}</strong><br>Type: User<br>Reviews: ${node.review_count}`; break; case 'movie': html=`<strong>${node.label}</strong><br>Type: Movie<br>Rating: ${node.rating}/10<br>Year: ${node.year||'Unknown'}${node.predicted_score? '<br><span style="color:#FFD700;">Predicted: '+node.predicted_score+'/10</span>':''}`; break; case 'country': html=`<strong>${node.label}</strong><br>Country Movies: ${node.movie_count}`; break; case 'genre': html=`<strong>${node.label}</strong><br>Genre Movies: ${node.movie_count}`; break; case 'director': html=`<strong>${node.label}</strong><br>Directed Movies: ${node.movie_count}`; break; case 'actor': html=`<strong>${node.label}</strong><br>Type: Actor<br>Movies: ${node.movie_count}`; break; case 'crew': html=`<strong>${node.label}</strong><br>Crew Member<br>Movies: ${node.movie_count}`; break; }
 	const t=document.createElement('div'); t.id='node-tooltip'; t.className='node-tooltip'; t.innerHTML=html; document.body.appendChild(t); document.addEventListener('mousemove', positionTooltip); }
 function hideNodeTooltip(){ const t=document.getElementById('node-tooltip'); if(t){ t.remove(); document.removeEventListener('mousemove', positionTooltip);} }
 function positionTooltip(e){ const t=document.getElementById('node-tooltip'); if(t){ t.style.left=(e.pageX+12)+'px'; t.style.top=(e.pageY+12)+'px'; } }
