@@ -1952,7 +1952,7 @@ def network_graph_data(request):
         
         user_movie_preferences[user.id] = set(liked_movies)
     
-    # Calculate user similarities
+    # Calculate user similarities (for similarity edges only)
     user_list = list(user_movie_preferences.keys())
     current_user_similarities = {}
     for i, user1_id in enumerate(user_list):
@@ -1978,6 +1978,23 @@ def network_graph_data(request):
                         if current_user and current_user.id in (user1_id, user2_id):
                             other_id = user2_id if current_user.id == user1_id else user1_id
                             current_user_similarities[other_id] = similarity
+
+    # Always compute similarity mapping relative to current user (lower threshold) for recommendations
+    if current_user and current_user.id in user_movie_preferences:
+        base_movies = user_movie_preferences[current_user.id]
+        for other_id, other_movies in user_movie_preferences.items():
+            if other_id == current_user.id:
+                continue
+            common = base_movies & other_movies
+            if not common:
+                continue
+            similarity = len(common) / max(len(base_movies), len(other_movies)) if max(len(base_movies), len(other_movies)) else 0
+            # Store even if below visual edge threshold (used only for prediction weighting)
+            if similarity > 0:
+                # If we already have a similarity from the visual edge computation keep the higher value
+                prev = current_user_similarities.get(other_id, 0)
+                if similarity > prev:
+                    current_user_similarities[other_id] = similarity
 
     # Personalized recommendation edges (prediction) - movies the current user hasn't rated
     if current_user and current_user.id in user_nodes:
@@ -2024,6 +2041,15 @@ def network_graph_data(request):
         # Keep top-N predictions
         predicted_scores.sort(key=lambda x: x[1], reverse=True)
         top_predictions = predicted_scores[:25]
+
+        # Fallback: if no predictions (e.g., no similar users), use global top movies not rated by user
+        if not top_predictions:
+            unrated_movies = [m for m in well_reviewed_movies if m.id not in rated_movie_ids and m.id in movie_stats]
+            # Sort by average rating descending
+            unrated_movies.sort(key=lambda m: movie_stats[m.id]['avg_rating'], reverse=True)
+            for movie in unrated_movies[:10]:
+                pred = movie_stats[movie.id]['avg_rating']
+                top_predictions.append((movie.id, pred))
         # Attach predicted score to node and create edges with shorter length for higher predictions
         for movie_id, pred in top_predictions:
             # Update movie node with predicted score
