@@ -232,6 +232,7 @@
 <script>
 let network = null; let currentData = {nodes:[], edges:[]}; let physicsUserEnabled = true; // tracks manual toggling
 let chaosModeEnabled = false; // new state
+let autoFreezeTimer = null; // timer to auto-stop spinning
 
 function initNetwork(){
 	const container = document.getElementById('network-visualization');
@@ -241,9 +242,9 @@ function initNetwork(){
 		interaction:{ hover:true, tooltipDelay:150 },
 		physics:{
 			enabled:true,
-			stabilization:{ iterations:150, updateInterval:25, onlyDynamicEdges:false, fit:true },
-			minVelocity:2,  // higher => stops sooner
-			barnesHut:{ gravitationalConstant:-3000, centralGravity:0.35, springLength:110, springConstant:0.045, damping:0.15, avoidOverlap:0.15 }
+			stabilization:{ iterations:160, updateInterval:25, onlyDynamicEdges:false, fit:true },
+			minVelocity:1.2,  // slightly lower so sim can settle & we then freeze
+			barnesHut:{ gravitationalConstant:-2600, centralGravity:0.18, springLength:125, springConstant:0.038, damping:0.32, avoidOverlap:0.18 }
 		}
 	};
 	network = new vis.Network(container, {nodes:[], edges:[]}, options);
@@ -273,6 +274,20 @@ async function loadGraph(){
 	finally { loading.style.display='none'; }
 }
 
+function clearAutoFreeze(){ if(autoFreezeTimer){ clearTimeout(autoFreezeTimer); autoFreezeTimer=null; } }
+
+function scheduleAutoFreeze(delay=6000){
+	clearAutoFreeze();
+	// Automatically pause physics after a delay to prevent endless spinning
+	autoFreezeTimer = setTimeout(()=>{
+		if(!network) return;
+		if(document.getElementById('layout-type').value === 'physics' && physicsUserEnabled){
+			network.setOptions({ physics:false });
+			const btn = document.getElementById('toggle-physics'); if(btn) btn.textContent='Resume Physics';
+		}
+	}, delay);
+}
+
 function updateNetwork(){
 	if(!network) return;
 	const layout=document.getElementById('layout-type').value;
@@ -280,24 +295,27 @@ function updateNetwork(){
 	if(layout==='hierarchical'){
 		opt={ layout:{ hierarchical:{ direction:'UD', levelSeparation:150, nodeSpacing:160 }}, physics:false };
 	} else if(layout==='forceAtlas2Based'){
-		opt={ physics:{ enabled:true, barnesHut:{ gravitationalConstant:-6000, centralGravity:0.32, springLength:115, springConstant:0.042, damping:0.12, avoidOverlap:0.18 }, stabilization:{ iterations:120 }, minVelocity:1.5 }};
+		opt={ physics:{ enabled:true, barnesHut:{ gravitationalConstant:-5500, centralGravity:0.24, springLength:130, springConstant:0.036, damping:0.28, avoidOverlap:0.20 }, stabilization:{ iterations:140 }, minVelocity:1.1 }};
 	} else { // physics layout
-		let base = { gravitationalConstant:-4500, centralGravity:0.33, springLength:115, springConstant:0.043, damping:0.13, avoidOverlap:0.17 };
+		let base = { gravitationalConstant:-4200, centralGravity:0.20, springLength:140, springConstant:0.032, damping:0.35, avoidOverlap:0.20 };
 		if(currentData.stats && currentData.stats.hub_user){
 			// Spread graph more: reduce central gravity & spring constant, increase spring length
-			base.gravitationalConstant = -5200;
-			base.centralGravity = 0.22;
-			base.springLength = 150;
-			base.springConstant = 0.028;
-			base.damping = 0.18;
+			base.gravitationalConstant = -4800;
+			base.centralGravity = 0.16;
+			base.springLength = 165;
+			base.springConstant = 0.026;
+			base.damping = 0.40;
 		}
-		opt={ physics:{ enabled:true, barnesHut: base, stabilization:{ iterations:140 }, minVelocity:1.2 } };
+		opt={ physics:{ enabled:true, barnesHut: base, stabilization:{ iterations:160 }, minVelocity:1.0 } };
 	}
 	network.setOptions(opt);
 	network.setData({ nodes: currentData.nodes, edges: currentData.edges });
 	// For non-physics continuous layouts, pause after stabilization
 	if(layout !== 'physics'){
 		network.once('stabilizationIterationsDone', ()=>{ if(layout !== 'physics' && physicsUserEnabled){ network.setOptions({physics:false}); document.getElementById('toggle-physics').textContent='Resume Physics'; }});
+	} else {
+		// schedule auto freeze for physics layout to avoid perpetual rotation
+		scheduleAutoFreeze();
 	}
 }
 
@@ -339,7 +357,7 @@ chaosBtn.addEventListener('click', ()=>{
 	if(chaosModeEnabled){ chaosBtn.title='Chaos Mode ON'; } else { chaosBtn.title='Chaos Mode OFF'; }
 	loadGraph();
 });
-document.getElementById('layout-type').addEventListener('change', ()=> { if(currentData.nodes.length){ updateNetwork(); } });
+document.getElementById('layout-type').addEventListener('change', ()=> { if(currentData.nodes.length){ updateNetwork(); } else { clearAutoFreeze(); } });
 
 // Toggle physics manually
 document.getElementById('toggle-physics').addEventListener('click', ()=>{
@@ -348,10 +366,12 @@ document.getElementById('toggle-physics').addEventListener('click', ()=>{
 	const current = network.physics.physicsEnabled;
 	if(current){
 		network.setOptions({physics:false});
+		clearAutoFreeze();
 		btn.textContent='Resume Physics';
 	} else {
 		network.setOptions({physics:{ enabled:true }});
 		network.stabilize();
+		scheduleAutoFreeze();
 		btn.textContent='Pause Physics';
 	}
 });

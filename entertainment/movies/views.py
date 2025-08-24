@@ -1999,22 +1999,28 @@ def network_graph_data(request):
                             other_id = user2_id if current_user.id == user1_id else user1_id
                             current_user_similarities[other_id] = similarity
 
-    # Always compute similarity mapping relative to current user (lower threshold) for recommendations
+    # Always compute similarity mapping relative to current user (with shrinkage by overlap count) for recommendations
+    current_user_overlap_counts = {}
     if current_user and current_user.id in user_movie_preferences:
         base_movies = user_movie_preferences[current_user.id]
         for other_id, other_movies in user_movie_preferences.items():
             if other_id == current_user.id:
                 continue
             common = base_movies & other_movies
-            if not common:
+            overlap = len(common)
+            if overlap == 0:
                 continue
-            similarity = len(common) / max(len(base_movies), len(other_movies)) if max(len(base_movies), len(other_movies)) else 0
-            # Store even if below visual edge threshold (used only for prediction weighting)
-            if similarity > 0:
-                # If we already have a similarity from the visual edge computation keep the higher value
+            raw_sim = overlap / max(len(base_movies), len(other_movies)) if max(len(base_movies), len(other_movies)) else 0
+            # Similarity shrinkage: penalize low-overlap pairs
+            # sim' = raw_sim * overlap / (overlap + alpha)
+            alpha = 2  # smoothing constant; higher => more shrink for small overlaps
+            shrunk_sim = raw_sim * (overlap / (overlap + alpha))
+            if shrunk_sim > 0:
                 prev = current_user_similarities.get(other_id, 0)
-                if similarity > prev:
-                    current_user_similarities[other_id] = similarity
+                # Keep larger similarity if previously set from visual edges
+                if shrunk_sim > prev:
+                    current_user_similarities[other_id] = shrunk_sim
+                    current_user_overlap_counts[other_id] = overlap
 
     # Personalized recommendation edges (prediction) - movies the current user hasn't rated
     if current_user and current_user.id in user_nodes:
@@ -2049,18 +2055,33 @@ def network_graph_data(request):
             content_type=movie_content_type
         ).values_list('object_id', flat=True))
 
-        predicted_scores = []  # (movie_id, predicted_score, genre_affinity, country_affinity)
-        # Pre-fetch other users' ratings for efficiency
+        predicted_scores = []  # (movie_id, pred, g_aff, c_aff, d_aff, contributors, confidence, std_err)
         other_user_reviews = Review.objects.filter(
             content_type=movie_content_type,
             user__in=[u for u in active_users if u != current_user]
         ).values('user_id', 'object_id', 'rating')
 
-        # Index ratings by movie
+        # Per-user mean ratings (all ratings for those users in scope)
+        user_rating_sums = defaultdict(float)
+        user_rating_counts = defaultdict(int)
+        for r in other_user_reviews:
+            user_rating_sums[r['user_id']] += r['rating']
+            user_rating_counts[r['user_id']] += 1
+        user_mean_rating = {uid: user_rating_sums[uid]/user_rating_counts[uid] for uid in user_rating_sums if user_rating_counts[uid] > 0}
+
+        # Global mean rating for double-centering baseline
+        all_ratings_qs = Review.objects.filter(content_type=movie_content_type).values_list('rating', flat=True)
+        global_mean = sum(all_ratings_qs)/len(all_ratings_qs) if all_ratings_qs else 6.0
+
+        # Index ratings by movie (only from users with similarity > 0)
         movie_ratings_map = defaultdict(list)
         for r in other_user_reviews:
-            if r['user_id'] in current_user_similarities:  # only consider similar users
+            if r['user_id'] in current_user_similarities and current_user_similarities[r['user_id']] > 0:
                 movie_ratings_map[r['object_id']].append((r['user_id'], r['rating']))
+
+        # Current user mean (baseline component)
+        current_user_all_ratings = list(Review.objects.filter(user=current_user, content_type=movie_content_type).values_list('rating', flat=True))
+        current_user_mean = sum(current_user_all_ratings)/len(current_user_all_ratings) if current_user_all_ratings else 6.0
 
         for movie in well_reviewed_movies:
             if movie.id in rated_movie_ids:
@@ -2087,22 +2108,61 @@ def network_graph_data(request):
             movie_country_affinity = sum(c_aff_list)/len(c_aff_list) if c_aff_list else 0.0
             movie_director_affinity = sum(d_aff_list)/len(d_aff_list) if d_aff_list else 0.0
 
-            num = 0.0
-            denom = 0.0
+            residual_sum = 0.0
+            weight_sum = 0.0
+            sq_weighted_residual_sum = 0.0  # for variance / std error
+            contributors = 0
             for uid, rating in ratings:
-                sim = current_user_similarities.get(uid, 0)
+                sim = current_user_similarities.get(uid, 0.0)
                 if sim <= 0:
                     continue
-                # Weight by similarity and affinities (affinities boost weight)
-                weight = sim * (1 + 0.5*movie_genre_affinity + 0.3*movie_country_affinity + 0.4*movie_director_affinity)
-                num += weight * rating
-                denom += weight
-            if denom == 0:
+                mean_u = user_mean_rating.get(uid)
+                if mean_u is None:
+                    continue
+                # Modest affinity-based weight adjustment (no rating inflation)
+                affinity_factor = 1 + 0.15*movie_genre_affinity + 0.10*movie_country_affinity + 0.12*movie_director_affinity
+                weight = sim * affinity_factor
+                # Double-centering residual: (rating - (user_mean + movie_mean - global_mean))
+                movie_avg_local = movie_stats[movie.id]['avg_rating'] if movie.id in movie_stats else global_mean
+                baseline_um = mean_u + movie_avg_local - global_mean
+                residual = rating - baseline_um
+                # Clip residual to avoid outliers dominating
+                if residual > 2.0: residual = 2.0
+                elif residual < -2.0: residual = -2.0
+                residual_sum += weight * residual
+                weight_sum += weight
+                sq_weighted_residual_sum += (weight * residual) ** 2
+                contributors += 1
+            if contributors == 0 or weight_sum == 0:
                 continue
-            base_pred = num / denom
-            # Final adjustment adds modest boost but capped at 10
-            final_pred = min(10.0, base_pred * (1 + 0.3*movie_genre_affinity + 0.2*movie_country_affinity + 0.25*movie_director_affinity))
-            predicted_scores.append((movie.id, final_pred, movie_genre_affinity, movie_country_affinity, movie_director_affinity))
+            movie_avg = movie_stats[movie.id]['avg_rating'] if movie.id in movie_stats else global_mean
+            # Bayesian shrink for movie_avg toward global mean when few ratings: movie_avg' = (count*movie_avg + m*global) / (count + m)
+            movie_count = movie_stats[movie.id].get('review_count', 0) if movie.id in movie_stats else 0
+            m = 5  # prior strength
+            bayes_movie_avg = ((movie_count * movie_avg) + (m * global_mean)) / (movie_count + m) if movie_count + m > 0 else global_mean
+            # Double-centering baseline using current user mean
+            baseline = (current_user_mean + bayes_movie_avg - global_mean)
+            # Cold start blending: if contributors small, blend baseline more toward bayes_movie_avg
+            if contributors < 3:
+                baseline = 0.7 * bayes_movie_avg + 0.3 * current_user_mean
+            # Shrink residual toward zero (shrink factor decreases as contributors increase)
+            shrink = 1.0 + (2.0 / contributors)
+            adjusted_residual = (residual_sum / weight_sum) / shrink
+            final_pred = baseline + adjusted_residual
+            final_pred = max(1.0, min(10.0, final_pred))
+            # Approximate standard error: sqrt( sum(w^2 * resid^2) ) / (sum w)
+            if weight_sum > 0:
+                std_err = (sq_weighted_residual_sum ** 0.5) / weight_sum
+            else:
+                std_err = 0.0
+            # Confidence based on contributors + std_err
+            if contributors >= 8 and std_err < 0.35:
+                confidence = 'high'
+            elif contributors >= 4 and std_err < 0.55:
+                confidence = 'med'
+            else:
+                confidence = 'low'
+            predicted_scores.append((movie.id, final_pred, movie_genre_affinity, movie_country_affinity, movie_director_affinity, contributors, confidence, round(std_err,3)))
 
         # Keep top-N predictions
         predicted_scores.sort(key=lambda x: x[1], reverse=True)
@@ -2111,32 +2171,34 @@ def network_graph_data(request):
         # Fallback: if no predictions (e.g., no similar users), use global top movies not rated by user
         if not top_predictions:
             unrated_movies = [m for m in well_reviewed_movies if m.id not in rated_movie_ids and m.id in movie_stats]
-            # Sort by average rating descending
             unrated_movies.sort(key=lambda m: movie_stats[m.id]['avg_rating'], reverse=True)
             for movie in unrated_movies[:10]:
-                # Derive affinities for fallback movies
                 g_aff_list = [genre_affinity_map.get(g.id, 0) for g in movie.genres.all()]
                 c_aff_list = [country_affinity_map.get(c.id, 0) for c in movie.countries.all()]
                 d_aff_list = [director_affinity_map.get(d.id, 0) for d in movie.directors]
                 movie_genre_affinity = sum(g_aff_list)/len(g_aff_list) if g_aff_list else 0.0
                 movie_country_affinity = sum(c_aff_list)/len(c_aff_list) if c_aff_list else 0.0
                 movie_director_affinity = sum(d_aff_list)/len(d_aff_list) if d_aff_list else 0.0
-                pred = movie_stats[movie.id]['avg_rating']
-                final_pred = min(10.0, pred * (1 + 0.2*movie_genre_affinity + 0.15*movie_country_affinity + 0.18*movie_director_affinity))
-                top_predictions.append((movie.id, final_pred, movie_genre_affinity, movie_country_affinity, movie_director_affinity))
+                movie_avg = movie_stats[movie.id]['avg_rating']
+                movie_count = movie_stats[movie.id].get('review_count', 0)
+                m = 5
+                bayes_movie_avg = ((movie_count * movie_avg) + (m * global_mean)) / (movie_count + m) if movie_count + m > 0 else global_mean
+                baseline = 0.6 * bayes_movie_avg + 0.4 * current_user_mean
+                final_pred = max(1.0, min(10.0, baseline))
+                top_predictions.append((movie.id, final_pred, movie_genre_affinity, movie_country_affinity, movie_director_affinity, 0, 'low', 0.0))
 
-        # Attach predicted score to node and create edges with shorter length for higher predictions
-        for movie_id, pred, g_aff, c_aff, d_aff in top_predictions:
-            # Update movie node with predicted score
+        # Attach predicted score to node and create edges
+        for movie_id, pred, g_aff, c_aff, d_aff, contributors, confidence, std_err in top_predictions:
             for node in nodes:
                 if node['id'] == movie_nodes[movie_id]:
                     node['predicted_score'] = round(pred, 2)
                     node['genre_affinity'] = round(g_aff, 3)
                     node['country_affinity'] = round(c_aff, 3)
                     node['director_affinity'] = round(d_aff, 3)
+                    node['predicted_contributors'] = contributors
+                    node['predicted_confidence'] = confidence
+                    node['predicted_std_err'] = std_err
                     break
-            # Add prediction edge
-            # Shorter length => closer proximity; length inversely related to predicted score
             length = max(120, 400 - int(pred * 25))
             edges.append({
                 'from': user_nodes[current_user.id],
