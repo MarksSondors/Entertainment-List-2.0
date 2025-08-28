@@ -117,6 +117,14 @@
 .legend-list, .stats-list { list-style:none; padding:0; margin:0; font-size:12px; }
 .legend-item { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
 .legend-color { width:14px; height:14px; border-radius:50%; border:1px solid #000; }
+.legend-line { width:28px; height:0; border-top:3px solid #666; display:inline-block; }
+.legend-line.dashed { border-top-style:dashed; }
+.legend-line.similarity { border-color:#38B2AC; }
+.legend-line.prediction { border-color:#FFD700; }
+.legend-line.user-genre { border-color:#6B46C1; }
+.legend-line.user-country { border-color:#2F855A; }
+.legend-line.actor-aff { border-color:#B794F4; }
+.legend-line.director-aff { border-color:#D69E2E; }
 .stats-list li { display:flex; justify-content:space-between; border-bottom:1px solid var(--border-dark); padding:2px 0; }
 .stats-list li:last-child { border-bottom:none; }
 
@@ -153,7 +161,7 @@
 			</div>
 		</div>
 		<div class="window-body">
-			<p class="muted">Explore relationships between users, movies, genres, countries and directors based on reviews. Adjust filters to reshape the graph.</p>
+			<p class="muted" style="line-height:1.3;">Interactive map of <strong>users</strong>, <strong>movies</strong>, and their <strong>genres / countries / talent</strong>. Hubs pull connected items; dashed lines show similarity & affinity strengths.</p>
 			<div class="control-grid" style="margin-top:10px;">
 				<div class="control-item">
 					<label for="min-reviews">Min Reviews</label>
@@ -173,7 +181,7 @@
 				</div>
 				<div class="control-item">
 					<label for="predictions-limit">Predictions</label>
-					<input type="number" id="predictions-limit" value="25" min="0" max="100" step="5">
+					<input type="number" id="predictions-limit" value="0" min="0" max="100" step="5">
 				</div>
 				<div class="control-item">
 					<label for="layout-type">Layout</label>
@@ -223,8 +231,13 @@
 						<li class="legend-item"><span class="legend-color" style="background:#48BB78"></span> Countries</li>
 						<li class="legend-item"><span class="legend-color" style="background:#9F7AEA"></span> Genres</li>
 						<li class="legend-item"><span class="legend-color" style="background:#ED8936"></span> Directors</li>
-						<li class="legend-item"><span class="legend-color" style="background:#FFD700"></span> Predictions</li>
-						<li class="legend-item"><span class="legend-edge-sample" style="border-color:#38B2AC"></span> Similar Users</li>
+						<li class="legend-item"><span class="legend-color" style="background:#FFD700"></span> Predicted Movie</li>
+						<li class="legend-item"><span class="legend-line prediction"></span> Prediction Edge</li>
+						<li class="legend-item"><span class="legend-line similarity dashed"></span> Similar Users</li>
+						<li class="legend-item"><span class="legend-line user-genre dashed"></span> User→Genre Affinity</li>
+						<li class="legend-item"><span class="legend-line user-country dashed"></span> User→Country Affinity</li>
+						<li class="legend-item"><span class="legend-line actor-aff dashed"></span> Actor Affinity</li>
+						<li class="legend-item"><span class="legend-line director-aff dashed"></span> Director Affinity</li>
 						<li class="legend-item chaos-only" style="display:none;"><span class="legend-color" style="background:#FFD700"></span> Actors</li>
 						<li class="legend-item chaos-only" style="display:none;"><span class="legend-color" style="background:#00CED1"></span> Crew</li>
 					</ul>
@@ -254,6 +267,10 @@
 				<div class="title-bar"><div>Visualization</div><div class="title-bar-controls"></div></div>
 				<div class="window-body" style="padding:8px;">
 					<div id="network-visualization"></div>
+					<div id="predictions-panel" style="margin-top:6px; font-size:11px; display:none;">
+						<strong>Top Predictions</strong>
+						<ol id="predictions-list" style="padding-left:18px; margin:4px 0 0 0; max-height:140px; overflow:auto; line-height:1.25;"></ol>
+					</div>
 					<div id="loading" class="center-box" style="display:none;">Loading network data...</div>
 					<div id="error-message" class="center-box error" style="display:none;"></div>
 				</div>
@@ -326,34 +343,37 @@ function scheduleAutoFreeze(delay=6000){
 
 function updateNetwork(){
 	if(!network) return;
-	const layout=document.getElementById('layout-type').value;
-	let opt={};
-	if(layout==='hierarchical'){
-		opt={ layout:{ hierarchical:{ direction:'UD', levelSeparation:150, nodeSpacing:160 }}, physics:false };
-	} else if(layout==='forceAtlas2Based'){
-		opt={ physics:{ enabled:true, barnesHut:{ gravitationalConstant:-5500, centralGravity:0.24, springLength:130, springConstant:0.036, damping:0.28, avoidOverlap:0.20 }, stabilization:{ iterations:140 }, minVelocity:1.1 }};
-	} else { // physics layout
+	const layout=document.getElementById('layout-type').value; let opt={};
+	if(layout==='hierarchical') opt={ layout:{ hierarchical:{ direction:'UD', levelSeparation:150, nodeSpacing:160 }}, physics:false };
+	else if(layout==='forceAtlas2Based') opt={ physics:{ enabled:true, barnesHut:{ gravitationalConstant:-5500, centralGravity:0.24, springLength:130, springConstant:0.036, damping:0.28, avoidOverlap:0.20 }, stabilization:{ iterations:140 }, minVelocity:1.1 }};
+	else {
 		let base = { gravitationalConstant:-4200, centralGravity:0.20, springLength:140, springConstant:0.032, damping:0.35, avoidOverlap:0.20 };
-		if(currentData.stats && currentData.stats.hub_user){
-			// Spread graph more: reduce central gravity & spring constant, increase spring length
-			base.gravitationalConstant = -4800;
-			base.centralGravity = 0.16;
-			base.springLength = 165;
-			base.springConstant = 0.026;
-			base.damping = 0.40;
-		}
+		if(currentData.stats && currentData.stats.hub_user){ base.gravitationalConstant=-4800; base.centralGravity=0.16; base.springLength=165; base.springConstant=0.026; base.damping=0.40; }
 		opt={ physics:{ enabled:true, barnesHut: base, stabilization:{ iterations:160 }, minVelocity:1.0 } };
 	}
 	network.setOptions(opt);
-	network.setData({ nodes: currentData.nodes, edges: currentData.edges });
-	// For non-physics continuous layouts, pause after stabilization
-	if(layout !== 'physics'){
-		network.once('stabilizationIterationsDone', ()=>{ if(layout !== 'physics' && physicsUserEnabled){ network.setOptions({physics:false}); document.getElementById('toggle-physics').textContent='Resume Physics'; }});
-	} else {
-		// schedule auto freeze for physics layout to avoid perpetual rotation
-		scheduleAutoFreeze();
-	}
+	// style nodes & edges for clarity
+	const styledNodes = currentData.nodes.map(n=>{ const m={...n}; if(n.predicted_score){ m.color={ background:(typeof n.color==='string'? n.color : n.color?.background)||'#F56565', border:'#FFD700'}; m.borderWidth=3; m.shape='dot'; }
+	else if(n.type==='genre' || n.type==='country'){ if(typeof n.color==='string'){ m.color={ background:n.color, border:'#222'}; } m.borderWidth=2; }
+	return m; });
+	const styledEdges = currentData.edges.map(e=>{ const m={...e}; if(e.type==='prediction'){ m.dashes=false; m.color={ color:'#FFD700' }; m.width = (m.width||2)+1; }
+	else if(e.type && e.type.includes('affinity')){ m.dashes=true; m.smooth={ enabled:true, type:'dynamic'}; m.width=Math.min(4,(m.width||2)); }
+	else if(e.type==='similarity'){ m.dashes=true; m.color={ color:'#999'}; }
+	return m; });
+	network.setData({ nodes: styledNodes, edges: styledEdges });
+	if(layout !== 'physics') network.once('stabilizationIterationsDone', ()=>{ if(layout !== 'physics' && physicsUserEnabled){ network.setOptions({physics:false}); document.getElementById('toggle-physics').textContent='Resume Physics'; }});
+	else scheduleAutoFreeze();
+	renderPredictionsList();
 }
+
+function renderPredictionsList(){
+	const panel=document.getElementById('predictions-panel'); const list=document.getElementById('predictions-list'); if(!panel||!list) return;
+	const preds=currentData.nodes.filter(n=> n.predicted_score).sort((a,b)=> b.predicted_score - a.predicted_score).slice(0,25);
+	if(!preds.length){ panel.style.display='none'; list.innerHTML=''; return; }
+	panel.style.display='block';
+	list.innerHTML=preds.map(p=>`<li><span style="color:#FFD700; font-weight:600;">${p.predicted_score}</span> ${p.label} ${p.predicted_confidence? '<span style="opacity:.7;">['+p.predicted_confidence+']</span>':''}</li>`).join('');
+}
+
 
 function updateStats(s){ const list=document.getElementById('stats-list'); if(!s){ list.innerHTML='<li><span>No data</span></li>'; return;} list.innerHTML=`
 	<li><span>Total Nodes</span><span>${s.total_nodes}</span></li>
@@ -406,8 +426,35 @@ function refreshFilterVisuals(){
 	});
 }
 
-function showNodeTooltip(params){ const id=params.node; const node=currentData.nodes.find(n=>n.id===id); if(!node) return; let html=''; switch(node.type){ case 'user': html=`<strong>${node.label}</strong><br>Type: User<br>Reviews: ${node.review_count}`; break; case 'movie': html=`<strong>${node.label}</strong><br>Type: Movie<br>Rating: ${node.rating}/10<br>Year: ${node.year||'Unknown'}${node.predicted_score? '<br><span style=\"color:#FFD700;\">Predicted: '+node.predicted_score+'/10</span>':''}${(node.genre_affinity!==undefined)? '<br><span style=\\"color:#4FD1C5;\\">Genre affinity: '+(node.genre_affinity*100).toFixed(0)+'%</span>':''}${(node.country_affinity!==undefined)? '<br><span style=\\"color:#63B3ED;\\">Country affinity: '+(node.country_affinity*100).toFixed(0)+'%</span>':''}${(node.director_affinity!==undefined)? '<br><span style=\\"color:#ED8936;\\">Director affinity: '+(node.director_affinity*100).toFixed(0)+'%</span>':''}`; break; case 'country': html=`<strong>${node.label}</strong><br>Country Movies: ${node.movie_count}`; break; case 'genre': html=`<strong>${node.label}</strong><br>Genre Movies: ${node.movie_count}`; break; case 'director': html=`<strong>${node.label}</strong><br>Directed Movies: ${node.movie_count}`; break; case 'actor': html=`<strong>${node.label}</strong><br>Type: Actor<br>Movies: ${node.movie_count}`; break; case 'crew': html=`<strong>${node.label}</strong><br>Crew Member<br>Movies: ${node.movie_count}`; break; }
-	const t=document.createElement('div'); t.id='node-tooltip'; t.className='node-tooltip'; t.innerHTML=html; document.body.appendChild(t); document.addEventListener('mousemove', positionTooltip); }
+function showNodeTooltip(params){
+	const id=params.node; const node=currentData.nodes.find(n=>n.id===id); if(!node) return;
+	let lines=[]; const header=`<strong>${node.label}</strong>`;
+	if(node.type==='user'){
+		lines.push('User'); lines.push('Reviews: '+(node.review_count||0));
+	} else if(node.type==='movie') {
+		lines.push('Movie');
+		lines.push('Rating: '+(node.rating!==undefined? node.rating+'/10':'?'));
+		if(node.year) lines.push('Year: '+node.year);
+		if(node.predicted_score){
+			lines.push(`<span style="color:#FFD700;">Pred: ${node.predicted_score}/10</span>`);
+			if(node.content_similarity!==undefined) lines.push('Content sim: '+(node.content_similarity*100).toFixed(0)+'%');
+			if(node.blend_w_cf!==undefined) lines.push('CF weight: '+(node.blend_w_cf*100).toFixed(0)+'%');
+			if(node.predicted_contributors!==undefined) lines.push('Users: '+node.predicted_contributors);
+			if(node.predicted_std_err!==undefined) lines.push('Std err: '+node.predicted_std_err);
+		}
+		if(node.genre_affinity!==undefined) lines.push(`<span style="color:#6B46C1;">Genre: ${(node.genre_affinity*100).toFixed(0)}%</span>`);
+		if(node.country_affinity!==undefined) lines.push(`<span style="color:#2F855A;">Country: ${(node.country_affinity*100).toFixed(0)}%</span>`);
+		if(node.director_affinity!==undefined) lines.push(`<span style="color:#D69E2E;">Director: ${(node.director_affinity*100).toFixed(0)}%</span>`);
+		if(node.keyword_affinity!==undefined) lines.push(`<span style="color:#3182CE;">Keyword: ${(node.keyword_affinity*100).toFixed(0)}%</span>`);
+		if(node.matched_keywords) lines.push('KW: '+node.matched_keywords.slice(0,4).join(', '));
+	} else if(node.type==='country') { lines.push('Country Hub'); lines.push('Movies: '+node.movie_count); }
+	else if(node.type==='genre') { lines.push('Genre Hub'); lines.push('Movies: '+node.movie_count); }
+	else if(node.type==='director') { lines.push('Director'); lines.push('Movies: '+node.movie_count); }
+	else if(node.type==='actor') { lines.push('Actor'); lines.push('Movies: '+node.movie_count); }
+	else if(node.type==='crew') { lines.push('Crew'); lines.push('Movies: '+node.movie_count); }
+	const html = header+'<br>'+lines.join('<br>');
+	const t=document.createElement('div'); t.id='node-tooltip'; t.className='node-tooltip'; t.innerHTML=html; document.body.appendChild(t); document.addEventListener('mousemove', positionTooltip);
+}
 function hideNodeTooltip(){ const t=document.getElementById('node-tooltip'); if(t){ t.remove(); document.removeEventListener('mousemove', positionTooltip);} }
 function positionTooltip(e){ const t=document.getElementById('node-tooltip'); if(t){ t.style.left=(e.pageX+12)+'px'; t.style.top=(e.pageY+12)+'px'; } }
 function handleNodeClick(id){
@@ -462,6 +509,7 @@ document.getElementById('toggle-physics').addEventListener('click', ()=>{
 		btn.textContent='Pause Physics';
 	}
 });
+
 
 document.addEventListener('DOMContentLoaded', ()=>{ initNetwork(); loadGraph(); });
 window.addEventListener('resize', ()=> network && network.redraw());

@@ -1762,7 +1762,9 @@ def network_graph_data(request):
                 'type': 'country',
                 'size': min(20, count * 2),
                 'color': '#48BB78',  # Green for countries
-                'movie_count': count
+                'movie_count': count,
+                # Increase mass so country behaves like a local gravity hub
+                'mass': 8 + count * 0.6
             })
     
     # Add genre nodes if enabled
@@ -1783,7 +1785,9 @@ def network_graph_data(request):
                 'type': 'genre',
                 'size': min(18, count * 1.5),
                 'color': '#9F7AEA',  # Purple for genres
-                'movie_count': count
+                'movie_count': count,
+                # Higher mass for tighter clustering around genre hubs
+                'mass': 10 + count * 0.5
             })
     
     # Add director nodes (for directors with multiple well-reviewed movies) if enabled
@@ -1912,7 +1916,7 @@ def network_graph_data(request):
                     'length': dynamic_length
                 })
     
-    # 2. Movie -> Country edges
+    # 2. Movie -> Country edges (short length => attraction toward country hub)
     if show_countries:
         for movie in well_reviewed_movies:
             if movie.id not in movie_nodes:
@@ -1924,10 +1928,11 @@ def network_graph_data(request):
                         'to': country_nodes[country.id],
                         'type': 'origin',
                         'color': {'color': '#48BB78', 'opacity': 0.4},
-                        'width': 2
+                        'width': 2,
+                        'length': 110  # pull closer
                     })
     
-    # 3. Movie -> Genre edges
+    # 3. Movie -> Genre edges (even shorter for stronger genre clustering)
     if show_genres:
         for movie in well_reviewed_movies:
             if movie.id not in movie_nodes:
@@ -1939,7 +1944,8 @@ def network_graph_data(request):
                         'to': genre_nodes[genre.id],
                         'type': 'genre',
                         'color': {'color': '#9F7AEA', 'opacity': 0.4},
-                        'width': 1.5
+                        'width': 1.5,
+                        'length': 85
                     })
     
     # 4. Movie -> Director edges
@@ -1991,6 +1997,85 @@ def network_graph_data(request):
                         'color': {'color': '#00CED1', 'opacity': 0.35},
                         'width': 1
                     })
+
+    # 4c. Person (actors/directors) affinity to genre & country hubs to form talent regions
+    # We add lightweight dashed edges so they cluster near dominant genres/countries they work in.
+    if (show_genres or show_countries) and (genre_nodes or country_nodes):
+        # Build movie lookup once
+        movie_lookup = {m.id: m for m in well_reviewed_movies}
+        # Helper to add edges (limit for clarity)
+        def _add_affinity_edges(node_map, person_type, max_genres=3, max_countries=2):
+            for person_id, node_id in node_map.items():
+                genre_counter = defaultdict(int)
+                country_counter = defaultdict(int)
+                total_movies = 0
+                # Iterate movies to see where this person participated
+                for mv in well_reviewed_movies:
+                    involved = False
+                    if person_type == 'actor':
+                        # limited cast slice already used; check full slice again
+                        for mp in mv.cast[:8]:
+                            p = getattr(mp, 'person', None)
+                            if p and p.id == person_id:
+                                involved = True
+                                break
+                    elif person_type == 'director':
+                        for d in mv.directors:
+                            if d.id == person_id:
+                                involved = True
+                                break
+                    if not involved:
+                        continue
+                    total_movies += 1
+                    if show_genres:
+                        for g in mv.genres.all():
+                            if g.id in genre_nodes:
+                                genre_counter[g.id] += 1
+                    if show_countries:
+                        for c in mv.countries.all():
+                            if c.id in country_nodes:
+                                country_counter[c.id] += 1
+                if total_movies == 0:
+                    continue
+                # Normalize & select top
+                if show_genres and genre_counter:
+                    genre_items = sorted(genre_counter.items(), key=lambda x: x[1], reverse=True)[:max_genres]
+                    max_g = max(v for _, v in genre_items) or 1
+                    for gid, cnt in genre_items:
+                        strength = cnt / max_g
+                        if strength < 0.2:  # skip very weak ties
+                            continue
+                        edges.append({
+                            'from': node_id,
+                            'to': genre_nodes[gid],
+                            'type': f'{person_type}_genre_affinity',
+                            'color': {'color': '#B794F4' if person_type=='actor' else '#D69E2E', 'opacity': 0.32},
+                            'width': 0.8 + strength * 2.2,
+                            'dashes': True,
+                            'length': int(270 - strength * 140),
+                            'label': f"{int(strength*100)}%"
+                        })
+                if show_countries and country_counter:
+                    country_items = sorted(country_counter.items(), key=lambda x: x[1], reverse=True)[:max_countries]
+                    max_c = max(v for _, v in country_items) or 1
+                    for cid, cnt in country_items:
+                        strength = cnt / max_c
+                        if strength < 0.25:
+                            continue
+                        edges.append({
+                            'from': node_id,
+                            'to': country_nodes[cid],
+                            'type': f'{person_type}_country_affinity',
+                            'color': {'color': '#68D391' if person_type=='actor' else '#ED8936', 'opacity': 0.30},
+                            'width': 0.8 + strength * 2.0,
+                            'dashes': True,
+                            'length': int(280 - strength * 150),
+                            'label': f"{int(strength*100)}%"
+                        })
+        if show_actors and actor_nodes:
+            _add_affinity_edges(actor_nodes, 'actor')
+        if show_directors and director_nodes:
+            _add_affinity_edges(director_nodes, 'director')
     
     # 5. User similarity edges (users who like similar movies)
     user_movie_preferences = defaultdict(set)
@@ -2055,6 +2140,61 @@ def network_graph_data(request):
                 if shrunk_sim > prev:
                     current_user_similarities[other_id] = shrunk_sim
                     current_user_overlap_counts[other_id] = overlap
+
+    # 5b. User -> Genre / Country affinity edges to pull users toward their watched regions
+    if show_genres or show_countries:
+        # Precompute movie id -> object
+        movie_lookup = {m.id: m for m in well_reviewed_movies}
+        # For each user gather counts of genres/countries from liked movies
+        for user in active_users:
+            if user.id not in user_nodes:
+                continue
+            liked_ids = user_movie_preferences.get(user.id, set())
+            if not liked_ids:
+                continue
+            genre_counter = defaultdict(int)
+            country_counter = defaultdict(int)
+            for mid in liked_ids:
+                mv = movie_lookup.get(mid)
+                if not mv:
+                    continue
+                if show_genres:
+                    for g in mv.genres.all():
+                        if g.id in genre_nodes:
+                            genre_counter[g.id] += 1
+                if show_countries:
+                    for c in mv.countries.all():
+                        if c.id in country_nodes:
+                            country_counter[c.id] += 1
+            # Normalize counts to weights (0..1) then map to edge width/length
+            if genre_counter and show_genres:
+                max_g = max(genre_counter.values()) or 1
+                for gid, cnt in genre_counter.items():
+                    strength = cnt / max_g
+                    edges.append({
+                        'from': user_nodes[user.id],
+                        'to': genre_nodes[gid],
+                        'type': 'user_genre_affinity',
+                        'color': {'color': '#6B46C1', 'opacity': 0.35},
+                        'width': 1 + strength * 2.5,
+                        'dashes': True,
+                        'length': int(250 - strength * 120),
+                        'label': f"{int(strength*100)}%"
+                    })
+            if country_counter and show_countries:
+                max_c = max(country_counter.values()) or 1
+                for cid, cnt in country_counter.items():
+                    strength = cnt / max_c
+                    edges.append({
+                        'from': user_nodes[user.id],
+                        'to': country_nodes[cid],
+                        'type': 'user_country_affinity',
+                        'color': {'color': '#2F855A', 'opacity': 0.35},
+                        'width': 1 + strength * 2.5,
+                        'dashes': True,
+                        'length': int(260 - strength * 130),
+                        'label': f"{int(strength*100)}%"
+                    })
 
     # Personalized recommendation edges (prediction) - movies the current user hasn't rated
     if show_predictions and current_user and current_user.id in user_nodes:
