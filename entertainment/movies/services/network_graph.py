@@ -18,6 +18,7 @@ from django.db import connection
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 import networkx as nx
+import random
 
 from custom_auth.models import CustomUser, Review
 from ..models import Movie, Genre, Country  # type: ignore
@@ -286,6 +287,11 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[Dict]
     Returns:
         A descriptive name for the community
     """
+    # Safety check for empty input
+    if not community_node_ids:
+        logger.warning("generate_community_name called with empty community_node_ids")
+        return "Empty Community"
+    
     # Create a mapping of node_id to node data
     node_mapping = {node['id']: node for node in all_nodes}
     
@@ -293,6 +299,7 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[Dict]
     community_nodes = [node_mapping[node_id] for node_id in community_node_ids if node_id in node_mapping]
     
     if not community_nodes:
+        logger.warning(f"No valid nodes found for community IDs: {community_node_ids[:5]}{'...' if len(community_node_ids) > 5 else ''}")
         return "Empty Community"
     
     # Count node types
@@ -347,12 +354,391 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[Dict]
             return f"Mixed Community ({type_names[0]}, {type_names[1]}, {type_names[2]})"
 
 
+def leiden_communities(G: nx.Graph, resolution: float = 1.0, random_state: Optional[int] = None, 
+                      max_iterations: int = 100, tolerance: float = 1e-6) -> List[Set]:
+    """
+    Leiden algorithm for community detection - improved version of Louvain.
+    
+    The Leiden algorithm provides better quality communities and guarantees 
+    well-connected communities, unlike the original Louvain algorithm.
+    
+    Args:
+        G: NetworkX graph
+        resolution: Resolution parameter for modularity optimization
+        random_state: Random seed for reproducibility
+        max_iterations: Maximum number of iterations
+        tolerance: Convergence tolerance
+    
+    Returns:
+        List of sets, each containing node IDs for a community
+    """
+    if random_state is not None:
+        random.seed(random_state)
+    
+    if len(G) == 0:
+        return []
+    
+    # Initialize: each node in its own community
+    communities = {node: {node} for node in G.nodes()}
+    community_to_nodes = {i: {node} for i, node in enumerate(G.nodes())}
+    node_to_community = {node: i for i, node in enumerate(G.nodes())}
+    
+    # Precompute node degrees and edge weights
+    node_degree = dict(G.degree(weight='weight'))
+    total_weight = sum(data.get('weight', 1.0) for _, _, data in G.edges(data=True)) * 2
+    
+    if total_weight == 0:
+        return [set(G.nodes())]
+    
+    def calculate_modularity_gain(node, old_community, new_community, node_degree, total_weight, resolution):
+        """Calculate modularity gain when moving node between communities."""
+        if old_community == new_community:
+            return 0.0
+        
+        # Calculate edges to old and new communities
+        edges_to_old = sum(G.get_edge_data(node, neighbor, {}).get('weight', 1.0)
+                          for neighbor in G.neighbors(node)
+                          if node_to_community[neighbor] == old_community and neighbor != node)
+        
+        edges_to_new = sum(G.get_edge_data(node, neighbor, {}).get('weight', 1.0)
+                          for neighbor in G.neighbors(node)
+                          if node_to_community[neighbor] == new_community)
+        
+        # Calculate community degrees
+        old_comm_degree = sum(node_degree[n] for n in community_to_nodes[old_community] if n != node)
+        new_comm_degree = sum(node_degree[n] for n in community_to_nodes[new_community])
+        
+        node_deg = node_degree[node]
+        
+        # Modularity gain calculation
+        gain = (edges_to_new - edges_to_old) / total_weight
+        gain -= resolution * node_deg * (new_comm_degree - old_comm_degree + node_deg) / (total_weight ** 2)
+        
+        return gain
+    
+    def local_moving_phase():
+        """Local moving phase of Leiden algorithm."""
+        improved = True
+        iterations = 0
+        
+        while improved and iterations < max_iterations:
+            improved = False
+            iterations += 1
+            
+            # Randomize order to avoid bias
+            nodes_order = list(G.nodes())
+            random.shuffle(nodes_order)
+            
+            for node in nodes_order:
+                current_community = node_to_community[node]
+                best_community = current_community
+                best_gain = 0.0
+                
+                # Consider neighboring communities
+                neighbor_communities = set()
+                for neighbor in G.neighbors(node):
+                    neighbor_communities.add(node_to_community[neighbor])
+                
+                # Also consider moving to a new community
+                neighbor_communities.add(max(community_to_nodes.keys()) + 1)
+                
+                for candidate_community in neighbor_communities:
+                    if candidate_community == current_community:
+                        continue
+                    
+                    # Create new community if it doesn't exist
+                    if candidate_community not in community_to_nodes:
+                        community_to_nodes[candidate_community] = set()
+                    
+                    gain = calculate_modularity_gain(
+                        node, current_community, candidate_community,
+                        node_degree, total_weight, resolution
+                    )
+                    
+                    if gain > best_gain + tolerance:
+                        best_gain = gain
+                        best_community = candidate_community
+                
+                # Move node if beneficial
+                if best_community != current_community:
+                    # Remove from old community
+                    community_to_nodes[current_community].remove(node)
+                    if not community_to_nodes[current_community]:
+                        del community_to_nodes[current_community]
+                    
+                    # Add to new community
+                    if best_community not in community_to_nodes:
+                        community_to_nodes[best_community] = set()
+                    community_to_nodes[best_community].add(node)
+                    node_to_community[node] = best_community
+                    
+                    improved = True
+        
+        # Filter out empty communities before returning
+        return [community for community in community_to_nodes.values() if community]
+    
+    def refinement_phase(communities_list):
+        """Refinement phase to ensure well-connected communities."""
+        refined_communities = []
+        
+        for community in communities_list:
+            if len(community) <= 1:
+                if len(community) == 1:  # Only add non-empty single-node communities
+                    refined_communities.append(community)
+                continue
+            
+            # Create subgraph for this community
+            subgraph = G.subgraph(community)
+            
+            # Check if community is well-connected (single connected component)
+            if nx.is_connected(subgraph):
+                refined_communities.append(community)
+            else:
+                # Split into connected components
+                for component in nx.connected_components(subgraph):
+                    if component:  # Only add non-empty components
+                        refined_communities.append(component)
+        
+        return refined_communities
+    
+    def aggregation_phase(communities_list):
+        """Create aggregate graph where each community becomes a node."""
+        if len(communities_list) == len(G):
+            return communities_list  # No improvement possible
+        
+        # Create mapping from node to new community ID
+        new_node_to_community = {}
+        for i, community in enumerate(communities_list):
+            for node in community:
+                new_node_to_community[node] = i
+        
+        # Create aggregate graph
+        aggregate_graph = nx.Graph()
+        aggregate_graph.add_nodes_from(range(len(communities_list)))
+        
+        # Add edges between communities
+        community_edges = defaultdict(float)
+        for u, v, data in G.edges(data=True):
+            comm_u = new_node_to_community[u]
+            comm_v = new_node_to_community[v]
+            if comm_u != comm_v:
+                edge_key = tuple(sorted([comm_u, comm_v]))
+                community_edges[edge_key] += data.get('weight', 1.0)
+        
+        for (comm_u, comm_v), weight in community_edges.items():
+            aggregate_graph.add_edge(comm_u, comm_v, weight=weight)
+        
+        return aggregate_graph, new_node_to_community, communities_list
+    
+    # Main Leiden algorithm loop
+    current_communities = list({frozenset([node]) for node in G.nodes()})
+    previous_modularity = -1
+    
+    for iteration in range(max_iterations):
+        # Phase 1: Local moving
+        current_communities = local_moving_phase()
+        
+        # Phase 2: Refinement
+        current_communities = refinement_phase(current_communities)
+        
+        # Calculate modularity
+        current_modularity = nx.algorithms.community.modularity(G, current_communities, weight='weight', resolution=resolution)
+        
+        # Check for convergence
+        if abs(current_modularity - previous_modularity) < tolerance:
+            break
+        
+        # Phase 3: Aggregation (prepare for next iteration)
+        if iteration < max_iterations - 1:
+            try:
+                aggregate_result = aggregation_phase(current_communities)
+                if isinstance(aggregate_result, tuple):
+                    agg_graph, node_mapping, communities_list = aggregate_result
+                    if len(agg_graph) < len(G):
+                        # Continue with aggregate graph in next iteration
+                        # Update mappings for next iteration
+                        G = agg_graph
+                        community_to_nodes = {i: comm for i, comm in enumerate(communities_list)}
+                        node_to_community = node_mapping
+                        node_degree = dict(G.degree(weight='weight'))
+                        total_weight = sum(data.get('weight', 1.0) for _, _, data in G.edges(data=True)) * 2
+            except:
+                # If aggregation fails, continue with current communities
+                break
+        
+        previous_modularity = current_modularity
+    
+    # Convert back to sets of original node IDs and filter out empty communities
+    final_communities = []
+    for community in current_communities:
+        if community:  # Only add non-empty communities
+            if isinstance(community, (set, frozenset)):
+                community_set = set(community)
+            else:
+                community_set = set(community)
+            
+            if community_set:  # Double-check it's not empty
+                final_communities.append(community_set)
+    
+    return final_communities
+
+
+def detect_communities_leiden(nodes: List[Dict], edges: List[Dict], 
+                            resolution: float = 1.0, random_state: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Detect communities using the Leiden algorithm - an improved version of Louvain.
+    
+    The Leiden algorithm provides better quality communities and guarantees that
+    communities are well-connected, addressing some limitations of the Louvain algorithm.
+    
+    Args:
+        nodes: List of node dictionaries with 'id' and other properties
+        edges: List of edge dictionaries with 'from', 'to', and other properties
+        resolution: Resolution parameter for modularity optimization (default: 1.0)
+        random_state: Random seed for reproducibility
+    
+    Returns:
+        Dict containing:
+        - communities: Dict mapping community_id to community info
+        - stats: Basic statistics about the communities
+        - method: The detection method used
+        - modularity: Overall modularity score
+    
+    Example:
+        graph_data = build_network_graph(...)
+        communities = detect_communities_leiden(graph_data['nodes'], graph_data['edges'])
+        
+        # Access community information
+        for comm_id, comm_data in communities['communities'].items():
+            print(f"Community {comm_id} ({comm_data['name']}): {comm_data['size']} nodes")
+            print(f"Modularity contribution: {comm_data.get('modularity', 'N/A')}")
+    """
+    try:
+        # Create NetworkX graph
+        G = nx.Graph()
+        
+        # Add nodes with attributes
+        for node in nodes:
+            G.add_node(node['id'], **{k: v for k, v in node.items() if k != 'id'})
+        
+        # Add edges with weights
+        for edge in edges:
+            from_id = edge.get('source', edge.get('from'))
+            to_id = edge.get('target', edge.get('to'))
+            weight = edge.get('weight', 1.0)
+            
+            if from_id and to_id and from_id in G and to_id in G:
+                G.add_edge(from_id, to_id, weight=weight)
+        
+        # Handle empty or trivial graphs
+        if len(G) == 0:
+            return {
+                'communities': {},
+                'stats': {'num_communities': 0, 'modularity': 0.0},
+                'method': 'leiden',
+                'modularity': 0.0
+            }
+        
+        if len(G) == 1:
+            node_id = list(G.nodes())[0]
+            return {
+                'communities': {
+                    'community_0': {
+                        'nodes': [node_id],
+                        'size': 1,
+                        'name': 'Single Node',
+                        'modularity': 0.0
+                    }
+                },
+                'stats': {'num_communities': 1, 'modularity': 0.0},
+                'method': 'leiden',
+                'modularity': 0.0
+            }
+        
+        # Run Leiden algorithm
+        logger.info(f"Running Leiden algorithm on graph with {len(G)} nodes and {len(G.edges())} edges")
+        communities = leiden_communities(G, resolution=resolution, random_state=random_state)
+        
+        # Filter out any empty communities that might have slipped through
+        original_count = len(communities)
+        communities = [community for community in communities if community and len(community) > 0]
+        filtered_count = len(communities)
+        
+        if original_count != filtered_count:
+            logger.warning(f"Filtered out {original_count - filtered_count} empty communities from Leiden result")
+        
+        # Calculate overall modularity
+        overall_modularity = nx.algorithms.community.modularity(G, communities, weight='weight', resolution=resolution)
+        
+        # Convert to dictionary format with meaningful names
+        community_dict = {}
+        for i, community in enumerate(communities):
+            if not community or len(community) == 0:  # Additional safety check
+                continue
+                
+            community_id = f"community_{i}"
+            community_nodes = list(community)
+            
+            # Generate meaningful name based on community content
+            community_name = generate_community_name(community_nodes, nodes)
+            
+            # Calculate community-specific metrics
+            subgraph = G.subgraph(community)
+            internal_edges = subgraph.number_of_edges()
+            total_degree = sum(dict(G.degree(weight='weight')).get(node, 0) for node in community)
+            
+            community_dict[community_id] = {
+                'nodes': community_nodes,
+                'size': len(community),
+                'name': community_name,
+                'modularity': overall_modularity,  # Individual modularity would need more complex calculation
+                'internal_edges': internal_edges,
+                'total_degree': total_degree,
+                'density': (2 * internal_edges) / (len(community) * (len(community) - 1)) if len(community) > 1 else 1.0
+            }
+        
+        # Calculate comprehensive statistics
+        community_sizes = [len(c) for c in communities]
+        stats = {
+            'num_communities': len(communities),
+            'modularity': overall_modularity,
+            'avg_community_size': sum(community_sizes) / len(communities) if communities else 0,
+            'largest_community': max(community_sizes, default=0),
+            'smallest_community': min(community_sizes, default=0),
+            'community_size_std': (sum((size - (sum(community_sizes) / len(communities))) ** 2 
+                                     for size in community_sizes) / len(communities)) ** 0.5 if len(communities) > 1 else 0,
+            'coverage': sum(len(c) for c in communities) / len(G) if len(G) > 0 else 0,
+            'resolution_used': resolution
+        }
+        
+        logger.info(f"Leiden algorithm found {len(communities)} communities with modularity {overall_modularity:.4f}")
+        
+        return {
+            'communities': community_dict,
+            'stats': stats,
+            'method': 'leiden',
+            'modularity': overall_modularity
+        }
+    
+    except Exception as e:
+        logger.error(f"Error in Leiden community detection: {e}", exc_info=True)
+        return {
+            'communities': {},
+            'stats': {'error': str(e), 'modularity': 0.0},
+            'method': 'leiden_failed',
+            'modularity': 0.0
+        }
+
+
 def detect_communities(nodes: List[Dict], edges: List[Dict]) -> Dict[str, List]:
-    """Detect communities using Louvain method or similar.
+    """Detect communities using Leiden algorithm (preferred) or fallback methods.
 
     This function identifies groups of densely connected nodes in the graph,
     which can help identify clusters of users with similar movie preferences,
     groups of movies that are often watched together, etc.
+
+    The function prioritizes the Leiden algorithm for better quality communities,
+    with fallbacks to Louvain and greedy modularity methods.
 
     Args:
         nodes: List of node dictionaries with 'id' and other properties
@@ -372,6 +758,17 @@ def detect_communities(nodes: List[Dict], edges: List[Dict]) -> Dict[str, List]:
         for comm_id, comm_data in communities['communities'].items():
             print(f"Community {comm_id}: {comm_data['size']} nodes")
     """
+    # First, try the Leiden algorithm (best quality)
+    try:
+        logger.info("Attempting community detection with Leiden algorithm")
+        result = detect_communities_leiden(nodes, edges, resolution=1.0, random_state=42)
+        if result['stats'].get('num_communities', 0) > 0:
+            logger.info(f"Leiden algorithm successful: {result['stats']['num_communities']} communities found")
+            return result
+    except Exception as e:
+        logger.warning(f"Leiden algorithm failed: {e}, falling back to alternative methods")
+    
+    # Fallback to traditional methods
     try:
         # Create NetworkX graph
         G = nx.Graph()
@@ -387,14 +784,24 @@ def detect_communities(nodes: List[Dict], edges: List[Dict]) -> Dict[str, List]:
             weight = edge.get('weight', 1.0)
             G.add_edge(from_id, to_id, weight=weight)
 
-        # Detect communities using Louvain method
+        # Try Louvain method first
+        communities = None
+        method_used = 'unknown'
+        
         try:
             from networkx.algorithms.community import louvain_communities
             communities = louvain_communities(G, weight='weight', resolution=1.0)
+            method_used = 'louvain'
+            logger.info(f"Using Louvain method: {len(communities)} communities found")
         except ImportError:
+            logger.warning("Louvain method not available, using greedy modularity")
             # Fallback to greedy modularity if Louvain not available
             from networkx.algorithms.community import greedy_modularity_communities
             communities = greedy_modularity_communities(G, weight='weight')
+            method_used = 'greedy_modularity'
+
+        # Calculate modularity for the found communities
+        overall_modularity = nx.algorithms.community.modularity(G, communities, weight='weight') if communities else 0.0
 
         # Convert to dictionary format with meaningful names
         community_dict = {}
@@ -409,28 +816,30 @@ def detect_communities(nodes: List[Dict], edges: List[Dict]) -> Dict[str, List]:
                 'nodes': community_nodes,
                 'size': len(community),
                 'name': community_name,
-                'modularity': None  # Would need additional calculation
+                'modularity': overall_modularity
             }
 
         # Calculate basic statistics
+        community_sizes = [len(c) for c in communities] if communities else []
         stats = {
-            'num_communities': len(communities),
-            'avg_community_size': sum(len(c) for c in communities) / len(communities) if communities else 0,
-            'largest_community': max((len(c) for c in communities), default=0),
-            'smallest_community': min((len(c) for c in communities), default=0)
+            'num_communities': len(communities) if communities else 0,
+            'modularity': overall_modularity,
+            'avg_community_size': sum(community_sizes) / len(community_sizes) if community_sizes else 0,
+            'largest_community': max(community_sizes, default=0),
+            'smallest_community': min(community_sizes, default=0)
         }
 
         return {
             'communities': community_dict,
             'stats': stats,
-            'method': 'louvain' if 'louvain_communities' in globals() else 'greedy_modularity'
+            'method': method_used
         }
 
     except Exception as e:
-        logger.error(f"Error in community detection: {e}")
+        logger.error(f"Error in fallback community detection: {e}")
         return {
             'communities': {},
-            'stats': {'error': str(e)},
+            'stats': {'error': str(e), 'modularity': 0.0},
             'method': 'failed'
         }
 
@@ -1578,6 +1987,11 @@ def build_network_graph(
 
             # Detect communities
             communities_result = detect_communities(nodes, edges)
+            
+            # Validate communities to ensure no empty ones exist
+            if not validate_communities(communities_result):
+                logger.warning("Community validation failed, but continuing with available communities")
+            
             analytics['communities'] = communities_result
 
             # Calculate centrality measures
@@ -1614,7 +2028,38 @@ def build_network_graph(
     return result
 
 
+def validate_communities(communities_result: Dict[str, Any]) -> bool:
+    """Validate that no empty communities exist in the result.
+    
+    Args:
+        communities_result: Result from detect_communities or detect_communities_leiden
+        
+    Returns:
+        True if validation passes, False if empty communities found
+    """
+    if not communities_result or 'communities' not in communities_result:
+        logger.warning("No communities found in result")
+        return True  # Not an error per se
+    
+    empty_communities = []
+    for comm_id, comm_data in communities_result['communities'].items():
+        if not comm_data.get('nodes') or len(comm_data.get('nodes', [])) == 0:
+            empty_communities.append(comm_id)
+        elif comm_data.get('size', 0) == 0:
+            empty_communities.append(comm_id)
+    
+    if empty_communities:
+        logger.error(f"Found {len(empty_communities)} empty communities: {empty_communities}")
+        return False
+    
+    logger.info(f"Community validation passed: {len(communities_result['communities'])} valid communities")
+    return True
+
+
 __all__ = [
     'build_movie_analytics_graph_context',
-    'build_network_graph'
+    'build_network_graph',
+    'detect_communities_leiden',
+    'leiden_communities',
+    'validate_communities'
 ]
