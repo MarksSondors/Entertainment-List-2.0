@@ -16,7 +16,7 @@
 	--button-bg: #c0c0c0;
 	--button-text: #000;
 	--button-hover: #e0e0e0;
-	--shadow-color: rgba(0,0,0,0.25);
+	--shadow-color: rgba(0,0,0,0.3);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -205,15 +205,25 @@
 					</button>
 				</div>
 				<div class="control-item" style="grid-column:1/-1; border-top:1px solid var(--border-dark); padding-top:6px;">
-					<label style="font-weight:bold; font-size:11px;">Show Elements:</label>
-					<div id="filter-pills" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; font-size:11px;">
+					<label style="font-weight:bold; font-size:11px;">Show Node Types:</label>
+					<div id="node-filter-pills" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; font-size:11px;">
+						<label class="ng-filter-label active" data-target="users"><input type="checkbox" class="ng-filter" data-param="users" checked hidden><span class="filter-text">Users</span></label>
+						<label class="ng-filter-label active" data-target="movies"><input type="checkbox" class="ng-filter" data-param="movies" checked hidden><span class="filter-text">Movies</span></label>
 						<label class="ng-filter-label active" data-target="countries"><input type="checkbox" class="ng-filter" data-param="countries" checked hidden><span class="filter-text">Countries</span></label>
 						<label class="ng-filter-label active" data-target="genres"><input type="checkbox" class="ng-filter" data-param="genres" checked hidden><span class="filter-text">Genres</span></label>
 						<label class="ng-filter-label active" data-target="directors"><input type="checkbox" class="ng-filter" data-param="directors" checked hidden><span class="filter-text">Directors</span></label>
-						<label class="ng-filter-label active" data-target="similarity"><input type="checkbox" class="ng-filter" data-param="similarity" checked hidden><span class="filter-text">Similarity</span></label>
-						<label class="ng-filter-label active" data-target="predictions"><input type="checkbox" class="ng-filter" data-param="predictions" checked hidden><span class="filter-text">Predictions</span></label>
 						<label class="ng-filter-label active chaos-only" data-target="actors" style="display:none;"><input type="checkbox" class="ng-filter" data-param="actors" checked hidden><span class="filter-text">Actors</span></label>
 						<label class="ng-filter-label active chaos-only" data-target="crew" style="display:none;"><input type="checkbox" class="ng-filter" data-param="crew" checked hidden><span class="filter-text">Crew</span></label>
+					</div>
+				</div>
+				<div class="control-item" style="grid-column:1/-1; border-top:1px solid var(--border-dark); padding-top:6px; margin-top:6px;">
+					<label style="font-weight:bold; font-size:11px;">Show Edge Types:</label>
+					<div id="edge-filter-pills" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; font-size:11px;">
+						<label class="ng-filter-label active" data-target="reviews"><input type="checkbox" class="ng-filter" data-param="reviews" checked hidden><span class="filter-text">Reviews</span></label>
+						<label class="ng-filter-label active" data-target="similarity"><input type="checkbox" class="ng-filter" data-param="similarity" checked hidden><span class="filter-text">Similarity</span></label>
+						<label class="ng-filter-label active" data-target="predictions"><input type="checkbox" class="ng-filter" data-param="predictions" checked hidden><span class="filter-text">Predictions</span></label>
+						<label class="ng-filter-label active" data-target="relationships"><input type="checkbox" class="ng-filter" data-param="relationships" checked hidden><span class="filter-text">Relationships</span></label>
+						<label class="ng-filter-label active" data-target="affinity"><input type="checkbox" class="ng-filter" data-param="affinity" checked hidden><span class="filter-text">Affinity</span></label>
 					</div>
 				</div>
 			</div>
@@ -247,6 +257,26 @@
 				<div class="title-bar"><div>Graph Stats</div><div class="title-bar-controls"></div></div>
 				<div class="window-body">
 					<ul id="stats-list" class="stats-list"><li><span>Loading...</span><span></span></li></ul>
+				</div>
+			</div>
+			<div class="window panel">
+				<div class="title-bar"><div>Analytics</div><div class="title-bar-controls"></div></div>
+				<div class="window-body">
+					<ul id="analytics-list" class="stats-list">
+						<li><span>Communities:</span><span id="totalCommunities">0</span></li>
+						<li><span>Modularity:</span><span id="modularity">0.00</span></li>
+						<li><span>Avg Centrality:</span><span id="avgCentrality">0.00</span></li>
+					</ul>
+					<div style="margin-top:8px; font-size:11px;">
+						<label style="display:block; margin-bottom:4px;">
+							<input type="checkbox" id="showCommunities">
+							Color by Community
+						</label>
+						<label style="display:block;">
+							<input type="checkbox" id="showCentrality">
+							Size by Centrality
+						</label>
+					</div>
 				</div>
 			</div>
 			<div class="window panel">
@@ -288,14 +318,51 @@ let autoFreezeTimer = null; // timer to auto-stop spinning
 function initNetwork(){
 	const container = document.getElementById('network-visualization');
 	const options = {
-		nodes:{ borderWidth:2, shape:'dot', font:{ color:'#fff', size:12, strokeWidth:2, strokeColor:'#000'} },
-		edges:{ smooth:{ type:'continuous'}, shadow:true },
-		interaction:{ hover:true, tooltipDelay:150 },
+		nodes:{ 
+			borderWidth:2, 
+			shape:'dot', 
+			font:{ color:'#fff', size:12, strokeWidth:2, strokeColor:'#000'},
+			chosen: false  // Disable selection highlighting for performance
+		},
+		edges:{ 
+			smooth:{ type:'continuous', forceDirection:'none', roundness:0.1}, 
+			shadow:false,  // Disable shadows for performance
+			width: 1,  // Thinner edges for performance
+			selectionWidth: 1  // Disable edge selection width changes
+		},
+		interaction:{ 
+			hover:true, 
+			tooltipDelay:200,  // Slightly longer delay to reduce tooltip spam
+			hideEdgesOnDrag: true,  // Hide edges while dragging for performance
+			hideNodesOnDrag: false
+		},
+		layout: {
+			improvedLayout: false,  // Disable improved layout for better performance
+			clusterThreshold: 150  // Enable clustering for large graphs
+		},
 		physics:{
 			enabled:true,
-			stabilization:{ iterations:160, updateInterval:25, onlyDynamicEdges:false, fit:true },
-			minVelocity:1.2,  // slightly lower so sim can settle & we then freeze
-			barnesHut:{ gravitationalConstant:-2600, centralGravity:0.18, springLength:125, springConstant:0.038, damping:0.32, avoidOverlap:0.18 }
+			stabilization:{ 
+				iterations:120,  // Reduced iterations for faster stabilization
+				updateInterval:50,  // Less frequent updates
+				onlyDynamicEdges:false, 
+				fit:true 
+			},
+			minVelocity:1.5,  // Higher threshold to stop physics sooner
+			maxVelocity: 30,  // Limit maximum velocity
+			barnesHut:{ 
+				gravitationalConstant:-2200,  // Reduced for less computation
+				centralGravity:0.15, 
+				springLength:110,  // Shorter springs for tighter layout
+				springConstant:0.04, 
+				damping:0.4,  // Higher damping for faster settling
+				avoidOverlap:0.1  // Reduced overlap checking
+			},
+			adaptiveTimestep: true,  // Enable adaptive timestep for performance
+			timestep: 0.35  // Smaller timestep for stability
+		},
+		configure: {
+			enabled: false  // Disable configuration UI for performance
 		}
 	};
 	network = new vis.Network(container, {nodes:[], edges:[]}, options);
@@ -315,14 +382,27 @@ function initNetwork(){
 async function loadGraph(){
 	const loading=document.getElementById('loading'); const err=document.getElementById('error-message');
 	loading.style.display='flex'; err.style.display='none';
+	
+	// Clear tooltip cache on new data load
+	tooltipCache.clear();
+	
 	try {
 		const qs = new URLSearchParams({ min_reviews:document.getElementById('min-reviews').value, rating_threshold:document.getElementById('rating-threshold').value, max_nodes:document.getElementById('max-nodes').value, predictions_limit: document.getElementById('predictions-limit').value, movie_limit: document.getElementById('movie-limit').value });
 		if(chaosModeEnabled){ qs.append('chaos','1'); }
 		// add filter params
 		document.querySelectorAll('.ng-filter').forEach(cb=>{ qs.append(cb.dataset.param, cb.checked ? '1':'0'); });
+		
+		const loadStart = performance.now();
 		const res = await fetch(`/movies/network-graph/data/?${qs.toString()}`);
 		if(!res.ok) throw new Error('HTTP '+res.status);
-		const data = await res.json(); currentData = data; updateNetwork(); updateStats(data.stats);
+		const data = await res.json(); 
+		const loadTime = performance.now() - loadStart;
+		
+		console.log(`Data loaded in ${loadTime.toFixed(1)}ms - ${data.nodes?.length || 0} nodes, ${data.edges?.length || 0} edges`);
+		
+		currentData = data; 
+		updateNetwork(); 
+		updateStats(data.stats);
 	} catch(e){ console.error(e); err.textContent='Failed to load graph: '+e.message; err.style.display='flex'; }
 	finally { loading.style.display='none'; }
 }
@@ -352,18 +432,259 @@ function updateNetwork(){
 		opt={ physics:{ enabled:true, barnesHut: base, stabilization:{ iterations:160 }, minVelocity:1.0 } };
 	}
 	network.setOptions(opt);
+	
+	// Apply client-side filtering
+	const filteredData = filterGraphData(currentData);
+	
+	// Get analytics control states
+	const showCommunities = document.getElementById('showCommunities')?.checked ?? false;
+	const showCentrality = document.getElementById('showCentrality')?.checked ?? false;
+	
+	// Community colors (predefined palette)
+	const communityColors = [
+		'#4299E1', '#F56565', '#48BB78', '#9F7AEA', '#ED8936', '#FFD700',
+		'#00CED1', '#FF69B4', '#32CD32', '#FF6347', '#DA70D6', '#20B2AA',
+		'#FF4500', '#1E90FF', '#228B22', '#DC143C', '#8A2BE2', '#FF1493'
+	];
+	
+	// Optimize node styling - batch process for performance
+	const nodeCount = filteredData.nodes.length;
+	const isLargeGraph = nodeCount > 100;
+	
+	// Debug: Log node type distribution and sizes
+	const nodeTypesSizes = {};
+	filteredData.nodes.forEach(n => {
+		if (!nodeTypesSizes[n.type]) {
+			nodeTypesSizes[n.type] = [];
+		}
+		nodeTypesSizes[n.type].push(n.size);
+	});
+	console.log('Node type size distribution:', nodeTypesSizes);
+	
 	// style nodes & edges for clarity
-	const styledNodes = currentData.nodes.map(n=>{ const m={...n}; if(n.predicted_score){ m.color={ background:(typeof n.color==='string'? n.color : n.color?.background)||'#F56565', border:'#FFD700'}; m.borderWidth=3; m.shape='dot'; }
-	else if(n.type==='genre' || n.type==='country'){ if(typeof n.color==='string'){ m.color={ background:n.color, border:'#222'}; } m.borderWidth=2; }
-	return m; });
-	const styledEdges = currentData.edges.map(e=>{ const m={...e}; if(e.type==='prediction'){ m.dashes=false; m.color={ color:'#FFD700' }; m.width = (m.width||2)+1; }
-	else if(e.type && e.type.includes('affinity')){ m.dashes=true; m.smooth={ enabled:true, type:'dynamic'}; m.width=Math.min(4,(m.width||2)); }
-	else if(e.type==='similarity'){ m.dashes=true; m.color={ color:'#999'}; }
-	return m; });
+	const styledNodes = filteredData.nodes.map(n=>{ 
+		const m = {
+			id: n.id,
+			label: isLargeGraph && n.label?.length > 15 ? n.label.substring(0, 12) + '...' : n.label,
+			group: n.group,
+			type: n.type,
+			size: n.size || 15  // Preserve original size from backend
+		}; 
+		
+	// Debug: Log different node types to check sizes
+		if (filteredData.nodes.indexOf(n) < 10) {
+			console.log(`Node ${n.label} (${n.type}): backend size=${n.size}, final size=${m.size}, id=${n.id}`);
+		}
+		
+		// Preserve original node colors first (optimized)
+		if(n.color) {
+			m.color = typeof n.color === 'string' ? 
+				{ background: n.color, border: '#222' } : 
+				{...n.color};
+		}
+		
+		// Special styling for predicted nodes
+		if(n.predicted_score){ 
+			m.color = { background: m.color?.background || '#F56565', border:'#FFD700'}; 
+			m.borderWidth = 3; 
+			m.shape = 'dot'; 
+		} else if(n.type==='genre' || n.type==='country'){ 
+			m.borderWidth = 2; 
+		}
+		
+		// Apply community coloring if enabled (optimized)
+		if(showCommunities && n.community !== undefined) {
+			const communityNum = typeof n.community === 'string' ? 
+				parseInt(n.community.replace('community_', '')) || 0 : 
+				(n.community || 0);
+			const communityColor = communityColors[communityNum % communityColors.length];
+			if(m.color) {
+				m.color.background = communityColor;
+			} else {
+				m.color = { background: communityColor, border: '#222' };
+			}
+			m.borderWidth = 2;
+		}
+		
+		// Apply centrality sizing if enabled (this overrides the base size)
+		if(showCentrality && n.centrality?.degree !== undefined) {
+			const centralityScore = n.centrality.degree;
+			const baseSize = n.size || 15;
+			const sizeMultiplier = Math.max(0.5, Math.min(2.0, centralityScore * 5));
+			m.size = Math.round(baseSize * sizeMultiplier);  // Round for performance
+		}
+		
+		// Copy other essential properties
+		if(n.predicted_score) m.predicted_score = n.predicted_score;
+		if(n.metadata) m.metadata = n.metadata;
+		if(n.centrality) m.centrality = n.centrality;
+		if(n.community) m.community = n.community;
+		if(n.community_name) m.community_name = n.community_name;
+		if(n.community_size) m.community_size = n.community_size;
+		
+		// Copy tooltip-specific properties
+		if(n.review_count !== undefined) m.review_count = n.review_count;
+		if(n.rating !== undefined) m.rating = n.rating;
+		if(n.year !== undefined) m.year = n.year;
+		if(n.movie_count !== undefined) m.movie_count = n.movie_count;
+		
+		// Copy prediction-related properties
+		if(n.content_similarity !== undefined) m.content_similarity = n.content_similarity;
+		if(n.blend_w_cf !== undefined) m.blend_w_cf = n.blend_w_cf;
+		if(n.predicted_contributors !== undefined) m.predicted_contributors = n.predicted_contributors;
+		if(n.predicted_std_err !== undefined) m.predicted_std_err = n.predicted_std_err;
+		if(n.predicted_confidence !== undefined) m.predicted_confidence = n.predicted_confidence;
+		
+		// Copy affinity properties
+		if(n.genre_affinity !== undefined) m.genre_affinity = n.genre_affinity;
+		if(n.country_affinity !== undefined) m.country_affinity = n.country_affinity;
+		if(n.director_affinity !== undefined) m.director_affinity = n.director_affinity;
+		if(n.keyword_affinity !== undefined) m.keyword_affinity = n.keyword_affinity;
+		if(n.matched_keywords !== undefined) m.matched_keywords = n.matched_keywords;
+		
+		return m; 
+	});
+	
+	// Optimize edge styling - reduce visual complexity for large graphs
+	const styledEdges = filteredData.edges.map(e=>{ 
+		const m = {
+			from: e.from || e.source,  // Handle both from/to and source/target
+			to: e.to || e.target,
+			type: e.type
+		}; 
+		
+		if(e.type==='prediction'){ 
+			m.dashes = false; 
+			m.color = { color:'#FFD700' }; 
+			m.width = isLargeGraph ? 2 : ((e.width||2)+1);
+		} else if(e.type && e.type.includes('affinity')){ 
+			m.dashes = !isLargeGraph;  // Remove dashes for large graphs
+			if(!isLargeGraph) m.smooth = { enabled:true, type:'dynamic'};
+			m.width = Math.min(3, (e.width||2));
+			m.color = { color: '#999', opacity: isLargeGraph ? 0.3 : 0.6 };
+		} else if(e.type==='similarity'){ 
+			m.dashes = !isLargeGraph;  // Remove dashes for large graphs
+			m.color = { color:'#999', opacity: isLargeGraph ? 0.2 : 0.5 };
+			m.width = isLargeGraph ? 1 : 2;
+		} else {
+			// Default edge styling
+			m.color = e.color || { color: '#848484', opacity: isLargeGraph ? 0.4 : 0.7 };
+			m.width = isLargeGraph ? 1 : (e.width || 2);
+		}
+		
+		// Copy essential properties
+		if(e.weight) m.weight = e.weight;
+		if(e.label && !isLargeGraph) m.label = e.label;  // Hide labels for large graphs
+		if(e.metadata) m.metadata = e.metadata;  // Preserve metadata for tooltips
+		if(e.length) m.length = e.length;  // Preserve edge length
+		
+		return m; 
+	});
+	// Performance optimization: batch update for large graphs
+	const updateStart = performance.now();
+	
+	// Use batch mode for large graphs
+	if(nodeCount > 150) {
+		network.setOptions({
+			physics: { enabled: false }  // Disable physics during large updates
+		});
+	}
+	
 	network.setData({ nodes: styledNodes, edges: styledEdges });
+	
+	// Re-enable physics after update for large graphs
+	if(nodeCount > 150) {
+		setTimeout(() => {
+			if(layout === 'physics') {
+				network.setOptions({
+					physics: { 
+						enabled: true,
+						stabilization: { iterations: Math.max(50, Math.min(100, nodeCount / 2)) }
+					}
+				});
+			}
+		}, 100);
+	}
+	
+	const updateTime = performance.now() - updateStart;
+	if(updateTime > 100) {
+		console.log(`Network update took ${updateTime.toFixed(1)}ms for ${nodeCount} nodes`);
+	}
+	
 	if(layout !== 'physics') network.once('stabilizationIterationsDone', ()=>{ if(layout !== 'physics' && physicsUserEnabled){ network.setOptions({physics:false}); document.getElementById('toggle-physics').textContent='Resume Physics'; }});
-	else scheduleAutoFreeze();
+	else scheduleAutoFreeze(Math.max(3000, Math.min(8000, nodeCount * 50)));  // Scale freeze delay with graph size
 	renderPredictionsList();
+}
+
+// Filter graph data based on visibility toggles
+function filterGraphData(data) {
+    // Get filter states
+    const getFilterState = (param) => {
+        const checkbox = document.querySelector(`.ng-filter[data-param="${param}"]`);
+        return checkbox ? checkbox.checked : true;
+    };
+    
+    const showUsers = getFilterState('users');
+    const showMovies = getFilterState('movies');
+    const showCountries = getFilterState('countries');
+    const showGenres = getFilterState('genres');
+    const showDirectors = getFilterState('directors');
+    const showActors = getFilterState('actors');
+    const showCrew = getFilterState('crew');
+    
+    const showReviews = getFilterState('reviews');
+    const showSimilarity = getFilterState('similarity');
+    const showPredictions = getFilterState('predictions');
+    const showRelationships = getFilterState('relationships');
+    const showAffinity = getFilterState('affinity');
+    
+    // Filter nodes based on type visibility
+    const visibleNodeTypes = [];
+    if (showUsers) visibleNodeTypes.push('user');
+    if (showMovies) visibleNodeTypes.push('movie');
+    if (showCountries) visibleNodeTypes.push('country');
+    if (showGenres) visibleNodeTypes.push('genre');
+    if (showDirectors) visibleNodeTypes.push('director');
+    if (showActors) visibleNodeTypes.push('actor');
+    if (showCrew) visibleNodeTypes.push('crew');
+    
+    const filteredNodes = data.nodes.filter(node => visibleNodeTypes.includes(node.type));
+    
+    // Get IDs of visible nodes for edge filtering
+    const visibleNodeIds = new Set(filteredNodes.map(node => node.id));
+    
+    // Filter edges based on type and connected nodes
+    const filteredEdges = data.edges.filter(edge => {
+        // Check if both connected nodes are visible
+        if (!visibleNodeIds.has(edge.from) || !visibleNodeIds.has(edge.to)) {
+            return false;
+        }
+        
+        // Check edge type visibility
+        const edgeType = edge.type || 'review'; // Default to review if no type specified
+        
+        // Group edge types for filtering
+        if (edgeType === 'review' && !showReviews) return false;
+        if (edgeType === 'similarity' && !showSimilarity) return false;
+        if (edgeType === 'prediction' && !showPredictions) return false;
+        
+        // Relationships: movie connections to countries, genres, directors, actors, crew
+        const relationshipTypes = ['origin', 'genre', 'directed_by', 'acted_in', 'crew'];
+        if (relationshipTypes.includes(edgeType) && !showRelationships) return false;
+        
+        // Affinity: all dashed affinity edges
+        const affinityTypes = ['user_genre_affinity', 'user_country_affinity', 'actor_genre_affinity', 
+                              'actor_country_affinity', 'director_genre_affinity', 'director_country_affinity'];
+        if (affinityTypes.includes(edgeType) && !showAffinity) return false;
+        
+        return true;
+    });
+    
+    return {
+        nodes: filteredNodes,
+        edges: filteredEdges,
+        stats: data.stats // Keep original stats for display
+    };
 }
 
 function renderPredictionsList(){
@@ -375,19 +696,64 @@ function renderPredictionsList(){
 }
 
 
-function updateStats(s){ const list=document.getElementById('stats-list'); if(!s){ list.innerHTML='<li><span>No data</span></li>'; return;} list.innerHTML=`
-	<li><span>Total Nodes</span><span>${s.total_nodes}</span></li>
-	<li><span>Total Edges</span><span>${s.total_edges}</span></li>
-	<li><span>Users</span><span>${s.users}</span></li>
-	<li><span>Movies</span><span>${s.movies}</span></li>
-	<li><span>Countries</span><span>${s.countries}</span></li>
-	<li><span>Genres</span><span>${s.genres}</span></li>
-	<li><span>Directors</span><span>${s.directors}</span></li>
-	<li><span>Pred Edges</span><span>${s.recommendations||0}</span></li>
-	${s.hub_user ? `<li><span>Hub User</span><span>${s.hub_max_reviews} reviews</span></li>`:''}
-	<li class="chaos-only" style="display:${chaosModeEnabled && s.actors? 'flex':'none'}; justify-content:space-between;"><span>Actors</span><span>${s.actors||0}</span></li>
-	<li class="chaos-only" style="display:${chaosModeEnabled && s.crew? 'flex':'none'}; justify-content:space-between;"><span>Crew</span><span>${s.crew||0}</span></li>`; 
-	document.querySelectorAll('.legend-list .chaos-only').forEach(el=>{ el.style.display = chaosModeEnabled ? 'flex':'none'; }); }
+function updateStats(s){ 
+	const list=document.getElementById('stats-list'); 
+	if(!s){ list.innerHTML='<li><span>No data</span></li>'; return;} 
+	
+	// Get filtered data for accurate visible counts
+	const filteredData = currentData ? filterGraphData(currentData) : { nodes: [], edges: [] };
+	
+	// Count visible nodes by type
+	const nodeCounts = {};
+	filteredData.nodes.forEach(node => {
+		nodeCounts[node.type] = (nodeCounts[node.type] || 0) + 1;
+	});
+	
+	list.innerHTML=`
+		<li><span>Visible Nodes</span><span>${filteredData.nodes.length}</span></li>
+		<li><span>Visible Edges</span><span>${filteredData.edges.length}</span></li>
+		<li><span>Users</span><span>${nodeCounts.user || 0}</span></li>
+		<li><span>Movies</span><span>${nodeCounts.movie || 0}</span></li>
+		<li><span>Countries</span><span>${nodeCounts.country || 0}</span></li>
+		<li><span>Genres</span><span>${nodeCounts.genre || 0}</span></li>
+		<li><span>Directors</span><span>${nodeCounts.director || 0}</span></li>
+		<li><span>Pred Edges</span><span>${filteredData.edges.filter(e => e.type === 'prediction').length}</span></li>
+		${s.hub_user ? `<li><span>Hub User</span><span>${s.hub_max_reviews} reviews</span></li>`:''}
+		<li class="chaos-only" style="display:${chaosModeEnabled && (nodeCounts.actor || 0) > 0 ? 'flex':'none'}; justify-content:space-between;"><span>Actors</span><span>${nodeCounts.actor || 0}</span></li>
+		<li class="chaos-only" style="display:${chaosModeEnabled && (nodeCounts.crew || 0) > 0 ? 'flex':'none'}; justify-content:space-between;"><span>Crew</span><span>${nodeCounts.crew || 0}</span></li>
+		<li style="border-top: 1px solid var(--border-dark); margin-top: 0.5rem; padding-top: 0.5rem;"><span>Total (All)</span><span>${s.total_nodes}</span></li>`; 
+	document.querySelectorAll('.legend-list .chaos-only').forEach(el=>{ el.style.display = chaosModeEnabled ? 'flex':'none'; }); 
+
+	// Update analytics if available
+	updateAnalytics(currentData.analytics);
+}
+
+function updateAnalytics(analytics) {
+	if (!analytics) {
+		// Set default values if no analytics
+		const totalCommunitiesEl = document.getElementById('totalCommunities');
+		const modularityEl = document.getElementById('modularity');
+		const avgCentralityEl = document.getElementById('avgCentrality');
+		
+		if (totalCommunitiesEl) totalCommunitiesEl.textContent = '0';
+		if (modularityEl) modularityEl.textContent = '0.000';
+		if (avgCentralityEl) avgCentralityEl.textContent = '0.000';
+		return;
+	}
+	
+	const totalCommunitiesEl = document.getElementById('totalCommunities');
+	const modularityEl = document.getElementById('modularity');
+	const avgCentralityEl = document.getElementById('avgCentrality');
+	
+	// Extract data from nested analytics structure
+	const numCommunities = analytics.communities?.stats?.num_communities || 0;
+	const modularity = analytics.centrality?.modularity || 0;
+	const avgCentrality = analytics.centrality?.avg_centrality || 0;
+	
+	if (totalCommunitiesEl) totalCommunitiesEl.textContent = numCommunities;
+	if (modularityEl) modularityEl.textContent = modularity.toFixed(3);
+	if (avgCentralityEl) avgCentralityEl.textContent = avgCentrality.toFixed(3);
+}
 
 function refreshFilterVisuals(){
 	document.querySelectorAll('.ng-filter-label').forEach(lbl=>{
@@ -426,8 +792,35 @@ function refreshFilterVisuals(){
 	});
 }
 
+let tooltipCache = new Map();  // Cache tooltips to reduce computation
+let tooltipTimeout = null;  // Debounce tooltip updates
+
 function showNodeTooltip(params){
-	const id=params.node; const node=currentData.nodes.find(n=>n.id===id); if(!node) return;
+	const id=params.node; 
+	
+	// Clear any pending tooltip
+	if(tooltipTimeout) {
+		clearTimeout(tooltipTimeout);
+	}
+	
+	// Use cached tooltip if available
+	if(tooltipCache.has(id)) {
+		displayTooltip(tooltipCache.get(id));
+		return;
+	}
+	
+	// Debounce tooltip creation for performance
+	tooltipTimeout = setTimeout(() => {
+		const node=currentData.nodes.find(n=>n.id===id); 
+		if(!node) return;
+		
+		const tooltipHtml = generateTooltipHtml(node);
+		tooltipCache.set(id, tooltipHtml);
+		displayTooltip(tooltipHtml);
+	}, 50);
+}
+
+function generateTooltipHtml(node) {
 	let lines=[]; const header=`<strong>${node.label}</strong>`;
 	if(node.type==='user'){
 		lines.push('User'); lines.push('Reviews: '+(node.review_count||0));
@@ -452,10 +845,49 @@ function showNodeTooltip(params){
 	else if(node.type==='director') { lines.push('Director'); lines.push('Movies: '+node.movie_count); }
 	else if(node.type==='actor') { lines.push('Actor'); lines.push('Movies: '+node.movie_count); }
 	else if(node.type==='crew') { lines.push('Crew'); lines.push('Movies: '+node.movie_count); }
-	const html = header+'<br>'+lines.join('<br>');
-	const t=document.createElement('div'); t.id='node-tooltip'; t.className='node-tooltip'; t.innerHTML=html; document.body.appendChild(t); document.addEventListener('mousemove', positionTooltip);
+	
+	// Add analytics information (optimized)
+	if(node.community !== undefined) {
+		const communityName = node.community_name || `Community ${node.community.replace('community_', '')}`;
+		lines.push(`<span style="color:#9F7AEA;">Community: ${communityName}</span>`);
+		if(node.community_size !== undefined) {
+			lines.push(`<span style="color:#9F7AEA;">Comm. Size: ${node.community_size}</span>`);
+		}
+	}
+	if(node.centrality) {
+		lines.push('<span style="color:#48BB78; font-weight:bold;">Centrality:</span>');
+		if(node.centrality.degree !== undefined) lines.push(`Degree: ${node.centrality.degree.toFixed(3)}`);
+		// Limit centrality display for performance
+		if(lines.length < 12) {  // Don't show all centrality measures if tooltip is getting too long
+			if(node.centrality.betweenness !== undefined) lines.push(`Betweenness: ${node.centrality.betweenness.toFixed(3)}`);
+			if(node.centrality.closeness !== undefined) lines.push(`Closeness: ${node.centrality.closeness.toFixed(3)}`);
+		}
+	}
+	
+	return header+'<br>'+lines.join('<br>');
 }
-function hideNodeTooltip(){ const t=document.getElementById('node-tooltip'); if(t){ t.remove(); document.removeEventListener('mousemove', positionTooltip);} }
+
+function displayTooltip(html) {
+	hideNodeTooltip();  // Remove existing tooltip
+	const t=document.createElement('div'); 
+	t.id='node-tooltip'; 
+	t.className='node-tooltip'; 
+	t.innerHTML=html; 
+	document.body.appendChild(t); 
+	document.addEventListener('mousemove', positionTooltip);
+}
+
+function hideNodeTooltip(){ 
+	if(tooltipTimeout) {
+		clearTimeout(tooltipTimeout);
+		tooltipTimeout = null;
+	}
+	const t=document.getElementById('node-tooltip'); 
+	if(t){ 
+		t.remove(); 
+		document.removeEventListener('mousemove', positionTooltip);
+	} 
+}
 function positionTooltip(e){ const t=document.getElementById('node-tooltip'); if(t){ t.style.left=(e.pageX+12)+'px'; t.style.top=(e.pageY+12)+'px'; } }
 function handleNodeClick(id){
 	const node=currentData.nodes.find(n=>n.id===id);
@@ -487,9 +919,26 @@ document.querySelectorAll('.ng-filter').forEach(cb=>{
 	cb.addEventListener('change', ()=>{
 		if(filterChangeTimer) clearTimeout(filterChangeTimer);
 		refreshFilterVisuals();
-		filterChangeTimer = setTimeout(()=>{ loadGraph(); }, 250);
+		// For client-side filtering, update immediately for node/edge type filters
+		const param = cb.dataset.param;
+		if(['users', 'movies', 'reviews', 'relationships', 'affinity'].includes(param) && currentData) {
+			updateNetwork();
+			updateStats(currentData.stats);
+		} else {
+			// For backend parameters, reload from server
+			filterChangeTimer = setTimeout(()=>{ loadGraph(); }, 250);
+		}
 	});
 });
+
+// Analytics controls
+document.getElementById('showCommunities')?.addEventListener('change', ()=>{
+	if(currentData) updateNetwork();
+});
+document.getElementById('showCentrality')?.addEventListener('change', ()=>{
+	if(currentData) updateNetwork();
+});
+
 // initial visual state
 refreshFilterVisuals();
 

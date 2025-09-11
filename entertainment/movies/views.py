@@ -52,10 +52,7 @@ def movie_page(request, movie_id):
             'keywords',
             'production_companies'
         ).get(tmdb_id=movie_id)
-    except Movie.DoesNotExist:
-        # Import the fast movie creation function
-        from .tasks import create_movie_fast
-        
+    except Movie.DoesNotExist:        
         # Create movie with basic information immediately
         movie_db = create_movie_fast(
             movie_id=movie_id,
@@ -1355,10 +1352,16 @@ def network_graph_data(request):
     rating_threshold = float(request.GET.get('rating_threshold', 5.0))
     max_nodes = int(request.GET.get('max_nodes', 150))
     chaos_mode = request.GET.get('chaos') in ['1', 'true', 'True']
+    show_users = _get_flag('users', True)
+    show_movies = _get_flag('movies', True)
     show_countries = _get_flag('countries', True)
     show_genres = _get_flag('genres', True)
     show_directors = _get_flag('directors', True)
     show_predictions = _get_flag('predictions', True)
+    show_reviews = _get_flag('reviews', True)
+    show_similarity = _get_flag('similarity', True)
+    show_relationships = _get_flag('relationships', True)
+    show_affinity = _get_flag('affinity', True)
     try:
         predictions_limit = int(request.GET.get('predictions_limit', 25))
     except ValueError:
@@ -1369,7 +1372,6 @@ def network_graph_data(request):
     except ValueError:
         movie_limit = max_nodes // 2
     movie_limit = max(1, min(300, movie_limit))
-    show_similarity = _get_flag('similarity', True)
     show_actors = chaos_mode and _get_flag('actors', True)
     show_crew = chaos_mode and _get_flag('crew', True)
 
@@ -1389,4 +1391,13 @@ def network_graph_data(request):
         show_actors=show_actors,
         show_crew=show_crew,
     )
+    
+    # Convert edges from source/target to from/to for vis.js
+    if 'edges' in data:
+        for edge in data['edges']:
+            if 'source' in edge:
+                edge['from'] = edge.pop('source')
+            if 'target' in edge:
+                edge['to'] = edge.pop('target')
+    
     return Response(data)
