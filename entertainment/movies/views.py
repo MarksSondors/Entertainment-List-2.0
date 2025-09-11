@@ -1374,6 +1374,11 @@ def network_graph_data(request):
     movie_limit = max(1, min(300, movie_limit))
     show_actors = chaos_mode and _get_flag('actors', True)
     show_crew = chaos_mode and _get_flag('crew', True)
+    
+    # Get layout strategy parameter
+    layout_strategy = request.GET.get('layout_strategy', 'enhanced')
+    if layout_strategy not in ['enhanced', 'sectored', 'force_directed']:
+        layout_strategy = 'enhanced'
 
     data = build_network_graph(
         request.user if request.user.is_authenticated else None,
@@ -1390,6 +1395,7 @@ def network_graph_data(request):
         show_similarity=show_similarity,
         show_actors=show_actors,
         show_crew=show_crew,
+        layout_strategy=layout_strategy,
     )
     
     # Convert edges from source/target to from/to for vis.js

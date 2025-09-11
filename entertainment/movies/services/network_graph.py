@@ -12,7 +12,8 @@ import logging
 from collections import defaultdict
 from itertools import groupby
 from typing import Dict, List, Set, Tuple, Optional, Any
-from math import sqrt
+from math import sqrt, cos, sin, radians
+import random
 from django.db.models import Avg, Count, Q, F, Case, When, FloatField
 from django.db import connection
 from django.contrib.contenttypes.models import ContentType
@@ -1356,6 +1357,7 @@ def build_network_graph(
     show_similarity: bool,
     show_actors: bool,
     show_crew: bool,
+    layout_strategy: str = 'enhanced'
 ):
     """Full network graph computation (parity with original view)."""
     import math
@@ -2021,11 +2023,219 @@ def build_network_graph(
             logger.error(f"Error running analytics: {e}")
             analytics['error'] = str(e)
 
+    # Apply layout enhancements based on strategy
+    if layout_strategy == 'sectored':
+        # Apply strategic initial positioning
+        positions = calculate_initial_positions(nodes, edges)
+        for node in nodes:
+            node_id = node['id']
+            if node_id in positions:
+                x, y = positions[node_id]
+                node.update({'x': x, 'y': y})
+    
+    # Always enhance layout with repulsion forces and constraints
+    enhanced_result = enhance_graph_layout(nodes, edges)
+    nodes, edges = enhanced_result['nodes'], enhanced_result['edges']
+    
+    # Apply smart edge length calculations
+    edges = calculate_smart_edge_lengths(nodes, edges)
+
     result = {'nodes': nodes, 'edges': edges, 'stats': stats}
+    
+    # Add layout configuration to result
+    if 'layout_config' in enhanced_result:
+        result['layout_config'] = enhanced_result['layout_config']
+    
     if analytics:
         result['analytics'] = analytics
 
     return result
+
+
+def calculate_initial_positions(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Tuple[float, float]]:
+    """Calculate strategic initial positions to reduce center clustering."""
+    positions = {}
+    
+    # Group nodes by type
+    node_types = defaultdict(list)
+    for node in nodes:
+        node_types[node['type']].append(node)
+    
+    # Create rings/sectors for different node types
+    type_angles = {
+        'user': 0,      # Top
+        'movie': 90,    # Right
+        'genre': 180,   # Bottom
+        'country': 270, # Left
+        'director': 45, # Top-right
+        'actor': 135,   # Bottom-right
+        'crew': 225     # Bottom-left
+    }
+    
+    type_radii = {
+        'user': 200,
+        'movie': 150,
+        'genre': 300,
+        'country': 280,
+        'director': 180,
+        'actor': 220,
+        'crew': 240
+    }
+    
+    for node_type, nodes_of_type in node_types.items():
+        if node_type not in type_angles:
+            continue
+            
+        base_angle = type_angles[node_type]
+        base_radius = type_radii[node_type]
+        
+        # Distribute nodes in an arc around their sector
+        angle_spread = 60  # degrees
+        for i, node in enumerate(nodes_of_type):
+            if len(nodes_of_type) == 1:
+                angle = base_angle
+            else:
+                angle_offset = (i / (len(nodes_of_type) - 1) - 0.5) * angle_spread
+                angle = base_angle + angle_offset
+            
+            # Vary radius based on node importance/size
+            radius_variation = (node.get('size', 15) - 15) * 2
+            radius = base_radius + radius_variation
+            
+            x = radius * cos(radians(angle))
+            y = radius * sin(radians(angle))
+            positions[node['id']] = (x, y)
+    
+    return positions
+
+
+def enhance_graph_layout(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Any]:
+    """Add layout hints to reduce center clustering."""
+    
+    # Calculate node connections
+    node_connections = defaultdict(int)
+    for edge in edges:
+        source_id = edge.get('source', edge.get('from'))
+        target_id = edge.get('target', edge.get('to'))
+        if source_id:
+            node_connections[source_id] += 1
+        if target_id:
+            node_connections[target_id] += 1
+    
+    # Add layout properties to nodes
+    enhanced_nodes = []
+    for node in nodes:
+        node_id = node['id']
+        connections = node_connections[node_id]
+        
+        # Create a copy of the node to avoid modifying the original
+        enhanced_node = node.copy()
+        
+        # Add physics properties
+        enhanced_node.update({
+            'mass': max(1, node.get('size', 15) / 10),  # Larger nodes have more mass
+            'charge': -30 * (1 + connections * 0.1),   # More connected = more repulsive
+            'gravity': 0.1 if connections > 5 else 0.3, # Hubs have less gravity pull
+            'degree': connections
+        })
+        
+        # Set constraints for very important nodes
+        if connections > 20:  # Major hubs
+            enhanced_node['fixed'] = True
+            # Spread major hubs around the perimeter
+            angle = random.uniform(0, 360)
+            radius = random.uniform(300, 500)
+            enhanced_node['fx'] = radius * cos(radians(angle))
+            enhanced_node['fy'] = radius * sin(radians(angle))
+        
+        enhanced_nodes.append(enhanced_node)
+    
+    # Enhance edge properties
+    enhanced_edges = []
+    for edge in edges:
+        enhanced_edge = edge.copy()
+        edge_type = edge.get('type', 'default')
+        
+        # Different edge types have different ideal lengths
+        length_by_type = {
+            'review': 80,
+            'similarity': 120,
+            'genre': 60,
+            'origin': 70,
+            'directed_by': 50,
+            'acted_in': 40,
+            'crew': 45,
+            'prediction': 100,
+            'user_genre_affinity': 150,
+            'user_country_affinity': 160,
+        }
+        
+        enhanced_edge['length'] = length_by_type.get(edge_type, 80)
+        enhanced_edge['strength'] = edge.get('weight', 1.0) * 0.5  # Reduce pull strength
+        
+        enhanced_edges.append(enhanced_edge)
+    
+    return {
+        'nodes': enhanced_nodes,
+        'edges': enhanced_edges,
+        'layout_config': {
+            'repulsion': 1000,
+            'spring_length': 100,
+            'spring_constant': 0.04,
+            'damping': 0.09,
+            'max_velocity': 20,
+            'theta': 0.5,  # Barnes-Hut approximation parameter
+            'gravity': 0.1,
+            'central_gravity': 0.005,
+            'avoid_overlap': 0.5
+        }
+    }
+
+
+def calculate_smart_edge_lengths(nodes: List[Dict], edges: List[Dict]) -> List[Dict]:
+    """Calculate edge lengths based on node types and graph density."""
+    
+    # Build node lookup
+    node_lookup = {node['id']: node for node in nodes}
+    
+    # Calculate graph density
+    num_nodes = len(nodes)
+    num_edges = len(edges)
+    density = (2 * num_edges) / (num_nodes * (num_nodes - 1)) if num_nodes > 1 else 0
+    
+    # Base length increases with density to spread out dense graphs
+    base_length = 80 + (density * 200)
+    
+    enhanced_edges = []
+    for edge in edges:
+        enhanced_edge = edge.copy()
+        source_node = node_lookup.get(edge.get('source', edge.get('from')))
+        target_node = node_lookup.get(edge.get('target', edge.get('to')))
+        
+        if not source_node or not target_node:
+            enhanced_edges.append(enhanced_edge)
+            continue
+        
+        # Same type connections are shorter
+        if source_node['type'] == target_node['type']:
+            enhanced_edge['length'] = base_length * 0.7
+        else:
+            enhanced_edge['length'] = base_length
+        
+        # High-degree nodes need longer edges to spread out
+        source_connections = source_node.get('degree', 1)
+        target_connections = target_node.get('degree', 1)
+        connection_factor = 1 + (max(source_connections, target_connections) * 0.02)
+        
+        enhanced_edge['length'] = enhanced_edge.get('length', base_length) * connection_factor
+        
+        # Prediction and similarity edges should be longer
+        if enhanced_edge.get('type') in ['prediction', 'similarity']:
+            enhanced_edge['length'] *= 1.5
+        
+        enhanced_edges.append(enhanced_edge)
+    
+    return enhanced_edges
 
 
 def validate_communities(communities_result: Dict[str, Any]) -> bool:
@@ -2061,5 +2271,8 @@ __all__ = [
     'build_network_graph',
     'detect_communities_leiden',
     'leiden_communities',
-    'validate_communities'
+    'validate_communities',
+    'calculate_initial_positions',
+    'enhance_graph_layout',
+    'calculate_smart_edge_lengths'
 ]

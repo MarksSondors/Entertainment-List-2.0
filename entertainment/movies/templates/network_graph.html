@@ -185,7 +185,8 @@
 				</div>
 				<div class="control-item">
 					<label for="layout-type">Layout</label>
-					<select id="layout-type">
+					<select id="layout-type" title="Enhanced layout reduces center clustering and spreads nodes more evenly">
+						<option value="enhanced" selected>Enhanced (Anti-Cluster)</option>
 						<option value="forceAtlas2Based">Force Atlas</option>
 						<option value="hierarchical">Hierarchical</option>
 						<option value="physics">Physics</option>
@@ -310,6 +311,7 @@
 </div>
 
 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script src="{% static 'js/graph-layout-config.js' %}"></script>
 <script>
 let network = null; let currentData = {nodes:[], edges:[]}; let physicsUserEnabled = true; // tracks manual toggling
 let chaosModeEnabled = false; // new state
@@ -317,7 +319,9 @@ let autoFreezeTimer = null; // timer to auto-stop spinning
 
 function initNetwork(){
 	const container = document.getElementById('network-visualization');
-	const options = {
+	
+	// Get enhanced layout configuration
+	const baseOptions = {
 		nodes:{ 
 			borderWidth:2, 
 			shape:'dot', 
@@ -335,36 +339,48 @@ function initNetwork(){
 			tooltipDelay:200,  // Slightly longer delay to reduce tooltip spam
 			hideEdgesOnDrag: true,  // Hide edges while dragging for performance
 			hideNodesOnDrag: false
-		},
-		layout: {
-			improvedLayout: false,  // Disable improved layout for better performance
-			clusterThreshold: 150  // Enable clustering for large graphs
-		},
-		physics:{
-			enabled:true,
-			stabilization:{ 
-				iterations:120,  // Reduced iterations for faster stabilization
-				updateInterval:50,  // Less frequent updates
-				onlyDynamicEdges:false, 
-				fit:true 
-			},
-			minVelocity:1.5,  // Higher threshold to stop physics sooner
-			maxVelocity: 30,  // Limit maximum velocity
-			barnesHut:{ 
-				gravitationalConstant:-2200,  // Reduced for less computation
-				centralGravity:0.15, 
-				springLength:110,  // Shorter springs for tighter layout
-				springConstant:0.04, 
-				damping:0.4,  // Higher damping for faster settling
-				avoidOverlap:0.1  // Reduced overlap checking
-			},
-			adaptiveTimestep: true,  // Enable adaptive timestep for performance
-			timestep: 0.35  // Smaller timestep for stability
-		},
-		configure: {
-			enabled: false  // Disable configuration UI for performance
 		}
 	};
+	
+	// Enhanced physics configuration to reduce center clustering
+	const enhancedPhysics = {
+		enabled: true,
+		stabilization: {
+			enabled: true,
+			iterations: 800,
+			updateInterval: 25,
+			onlyDynamicEdges: false,
+			fit: true
+		},
+		forceAtlas2Based: {
+			theta: 0.5,
+			gravitationalConstant: -50,
+			centralGravity: 0.005,  // Reduced central gravity to spread nodes
+			springConstant: 0.18,
+			springLength: 120,      // Longer springs to reduce clustering
+			damping: 0.4,
+			avoidOverlap: 0.5       // Increased overlap avoidance
+		},
+		maxVelocity: 30,
+		minVelocity: 0.1,
+		solver: 'forceAtlas2Based',
+		timestep: 0.35,
+		adaptiveTimestep: true
+	};
+	
+	const options = {
+		...baseOptions,
+		layout: {
+			improvedLayout: true,
+			clusterThreshold: 150,
+			randomSeed: 42
+		},
+		physics: enhancedPhysics,
+		configure: {
+			enabled: false
+		}
+	};
+	
 	network = new vis.Network(container, {nodes:[], edges:[]}, options);
 	// After stabilization, freeze unless user explicitly wants continuous physics or selected 'physics' layout
 	network.once('stabilizationIterationsDone', ()=>{
@@ -387,7 +403,14 @@ async function loadGraph(){
 	tooltipCache.clear();
 	
 	try {
-		const qs = new URLSearchParams({ min_reviews:document.getElementById('min-reviews').value, rating_threshold:document.getElementById('rating-threshold').value, max_nodes:document.getElementById('max-nodes').value, predictions_limit: document.getElementById('predictions-limit').value, movie_limit: document.getElementById('movie-limit').value });
+		const qs = new URLSearchParams({ 
+			min_reviews: document.getElementById('min-reviews').value, 
+			rating_threshold: document.getElementById('rating-threshold').value, 
+			max_nodes: document.getElementById('max-nodes').value, 
+			predictions_limit: document.getElementById('predictions-limit').value, 
+			movie_limit: document.getElementById('movie-limit').value,
+			layout_strategy: 'enhanced'  // Always use enhanced backend layout
+		});
 		if(chaosModeEnabled){ qs.append('chaos','1'); }
 		// add filter params
 		document.querySelectorAll('.ng-filter').forEach(cb=>{ qs.append(cb.dataset.param, cb.checked ? '1':'0'); });
@@ -423,14 +446,137 @@ function scheduleAutoFreeze(delay=6000){
 
 function updateNetwork(){
 	if(!network) return;
-	const layout=document.getElementById('layout-type').value; let opt={};
-	if(layout==='hierarchical') opt={ layout:{ hierarchical:{ direction:'UD', levelSeparation:150, nodeSpacing:160 }}, physics:false };
-	else if(layout==='forceAtlas2Based') opt={ physics:{ enabled:true, barnesHut:{ gravitationalConstant:-5500, centralGravity:0.24, springLength:130, springConstant:0.036, damping:0.28, avoidOverlap:0.20 }, stabilization:{ iterations:140 }, minVelocity:1.1 }};
-	else {
-		let base = { gravitationalConstant:-4200, centralGravity:0.20, springLength:140, springConstant:0.032, damping:0.35, avoidOverlap:0.20 };
-		if(currentData.stats && currentData.stats.hub_user){ base.gravitationalConstant=-4800; base.centralGravity=0.16; base.springLength=165; base.springConstant=0.026; base.damping=0.40; }
-		opt={ physics:{ enabled:true, barnesHut: base, stabilization:{ iterations:160 }, minVelocity:1.0 } };
+	const layout = document.getElementById('layout-type').value;
+	
+	// Use enhanced layout configuration function
+	const enhancedGraphData = {
+		nodes: currentData.nodes || [],
+		edges: currentData.edges || []
+	};
+	
+	let opt = {};
+	
+	if(layout === 'hierarchical') {
+		opt = { 
+			layout: { 
+				hierarchical: { 
+					direction: 'UD', 
+					levelSeparation: 150, 
+					nodeSpacing: 160,
+					blockShifting: true,
+					edgeMinimization: true,
+					parentCentralization: true
+				}
+			}, 
+			physics: false 
+		};
+	} else if(layout === 'enhanced') {
+		// Enhanced anti-clustering layout - our new default
+		const nodeCount = enhancedGraphData.nodes.length;
+		const edgeCount = enhancedGraphData.edges.length;
+		const density = nodeCount > 1 ? (2 * edgeCount) / (nodeCount * (nodeCount - 1)) : 0;
+		
+		// Use forceAtlas2Based with enhanced parameters for better spreading
+		opt = { 
+			physics: { 
+				enabled: true,
+				solver: 'forceAtlas2Based',
+				forceAtlas2Based: {
+					theta: 0.5,
+					gravitationalConstant: Math.min(-50, -50 - (density * 200)), // Stronger repulsion for dense graphs
+					centralGravity: Math.max(0.001, 0.005 - (density * 0.02)), // Much less central pull
+					springLength: Math.max(120, 120 + (density * 150)), // Longer springs for denser graphs
+					springConstant: Math.max(0.05, 0.18 - (density * 0.1)), // Weaker springs for dense graphs
+					damping: 0.4,
+					avoidOverlap: Math.min(0.9, 0.5 + (density * 0.4)) // Scale overlap avoidance
+				},
+				stabilization: { 
+					iterations: Math.min(1200, nodeCount * 4), // More iterations for better results
+					updateInterval: 25
+				}, 
+				minVelocity: 0.1,
+				maxVelocity: 25, // Slightly lower max velocity for stability
+				timestep: 0.35,
+				adaptiveTimestep: true
+			}
+		};
+		
+		// Additional tweaks for hub nodes
+		if(currentData.stats && currentData.stats.hub_user) {
+			opt.physics.forceAtlas2Based.gravitationalConstant *= 1.5;
+			opt.physics.forceAtlas2Based.centralGravity *= 0.3;
+			opt.physics.forceAtlas2Based.springLength *= 1.3;
+		}
+	} else if(layout === 'forceAtlas2Based') {
+		// Use enhanced forceAtlas2Based configuration
+		const nodeCount = enhancedGraphData.nodes.length;
+		const edgeCount = enhancedGraphData.edges.length;
+		const density = nodeCount > 1 ? (2 * edgeCount) / (nodeCount * (nodeCount - 1)) : 0;
+		
+		opt = { 
+			physics: { 
+				enabled: true,
+				solver: 'forceAtlas2Based',
+				forceAtlas2Based: {
+					theta: 0.5,
+					gravitationalConstant: -50 - (density * 100), // Scale with density
+					centralGravity: Math.max(0.001, 0.005 - (density * 0.01)), // Reduce for dense graphs
+					springLength: 120 + (density * 80), // Longer springs for denser graphs
+					springConstant: 0.18,
+					damping: 0.4,
+					avoidOverlap: Math.min(0.8, 0.5 + (density * 0.3)) // More overlap avoidance for dense graphs
+				},
+				stabilization: { 
+					iterations: Math.min(1000, nodeCount * 3),
+					updateInterval: 25
+				}, 
+				minVelocity: 0.1,
+				maxVelocity: 30,
+				timestep: 0.35,
+				adaptiveTimestep: true
+			}
+		};
+	} else {
+		// Enhanced default physics with anti-clustering improvements
+		const nodeCount = enhancedGraphData.nodes.length;
+		const edgeCount = enhancedGraphData.edges.length;
+		const density = nodeCount > 1 ? (2 * edgeCount) / (nodeCount * (nodeCount - 1)) : 0;
+		
+		// Base configuration optimized for spreading
+		let base = { 
+			gravitationalConstant: -80 - (density * 150), // Stronger repulsion for dense graphs
+			centralGravity: Math.max(0.001, 0.01 - (density * 0.02)), // Less central pull
+			springLength: 140 + (density * 100), // Longer springs
+			springConstant: Math.max(0.01, 0.04 - (density * 0.02)), // Weaker springs
+			damping: 0.4,
+			avoidOverlap: Math.min(0.8, 0.3 + (density * 0.4)) // Scale overlap avoidance
+		};
+		
+		// Adjust for hub users (high-degree nodes)
+		if(currentData.stats && currentData.stats.hub_user) {
+			base.gravitationalConstant *= 1.5; // Even stronger repulsion
+			base.centralGravity *= 0.5; // Much less central gravity
+			base.springLength *= 1.2; // Longer springs
+			base.avoidOverlap = Math.min(0.9, base.avoidOverlap * 1.3);
+		}
+		
+		opt = { 
+			physics: { 
+				enabled: true,
+				solver: 'barnesHut',
+				barnesHut: base,
+				stabilization: { 
+					iterations: Math.min(800, nodeCount * 2),
+					updateInterval: 25
+				}, 
+				minVelocity: 0.1,
+				maxVelocity: 30,
+				timestep: 0.35,
+				adaptiveTimestep: true
+			}
+		};
 	}
+	
 	network.setOptions(opt);
 	
 	// Apply client-side filtering
@@ -471,9 +617,29 @@ function updateNetwork(){
 			size: n.size || 15  // Preserve original size from backend
 		}; 
 		
+		// Apply backend layout properties for enhanced positioning
+		if(n.mass !== undefined) m.mass = n.mass;
+		if(n.fixed !== undefined) m.fixed = n.fixed;
+		if(n.fx !== undefined) m.x = n.fx;
+		if(n.fy !== undefined) m.y = n.fy;
+		if(n.x !== undefined && n.fx === undefined) m.x = n.x;
+		if(n.y !== undefined && n.fy === undefined) m.y = n.y;
+		
+		// Apply physics properties for repulsion forces
+		if(n.charge !== undefined) {
+			// vis.js doesn't have direct charge, but we can use mass to simulate
+			m.mass = Math.max(1, Math.abs(n.charge) / 30);
+		}
+		
+		// Apply degree-based spacing for high-connectivity nodes
+		if(n.degree !== undefined && n.degree > 10) {
+			// Increase mass for high-degree nodes to create natural spacing
+			m.mass = Math.max(m.mass || 1, 1 + (n.degree * 0.1));
+		}
+		
 	// Debug: Log different node types to check sizes
 		if (filteredData.nodes.indexOf(n) < 10) {
-			console.log(`Node ${n.label} (${n.type}): backend size=${n.size}, final size=${m.size}, id=${n.id}`);
+			console.log(`Node ${n.label} (${n.type}): backend size=${n.size}, final size=${m.size}, id=${n.id}, mass=${m.mass}, fixed=${m.fixed}`);
 		}
 		
 		// Preserve original node colors first (optimized)
@@ -553,30 +719,51 @@ function updateNetwork(){
 			type: e.type
 		}; 
 		
+		// Apply backend-calculated edge lengths for better spacing
+		if(e.length !== undefined) {
+			m.length = e.length;
+		}
+		
+		// Apply backend strength values for physics simulation
+		if(e.strength !== undefined) {
+			// vis.js uses spring properties for edge strength
+			m.spring = {
+				length: m.length || 80,
+				constant: e.strength
+			};
+		}
+		
 		if(e.type==='prediction'){ 
 			m.dashes = false; 
 			m.color = { color:'#FFD700' }; 
 			m.width = isLargeGraph ? 2 : ((e.width||2)+1);
+			// Prediction edges should be longer to reduce clustering
+			if(!m.length) m.length = 100;
 		} else if(e.type && e.type.includes('affinity')){ 
 			m.dashes = !isLargeGraph;  // Remove dashes for large graphs
 			if(!isLargeGraph) m.smooth = { enabled:true, type:'dynamic'};
 			m.width = Math.min(3, (e.width||2));
 			m.color = { color: '#999', opacity: isLargeGraph ? 0.3 : 0.6 };
+			// Affinity edges should be longer as specified in backend
+			if(!m.length) m.length = e.type.includes('user_genre') ? 150 : 160;
 		} else if(e.type==='similarity'){ 
 			m.dashes = !isLargeGraph;  // Remove dashes for large graphs
 			m.color = { color:'#999', opacity: isLargeGraph ? 0.2 : 0.5 };
 			m.width = isLargeGraph ? 1 : 2;
+			// Similarity edges should be longer to prevent clustering
+			if(!m.length) m.length = 120;
 		} else {
 			// Default edge styling
 			m.color = e.color || { color: '#848484', opacity: isLargeGraph ? 0.4 : 0.7 };
 			m.width = isLargeGraph ? 1 : (e.width || 2);
+			// Apply default length if not set
+			if(!m.length) m.length = 80;
 		}
 		
 		// Copy essential properties
 		if(e.weight) m.weight = e.weight;
 		if(e.label && !isLargeGraph) m.label = e.label;  // Hide labels for large graphs
 		if(e.metadata) m.metadata = e.metadata;  // Preserve metadata for tooltips
-		if(e.length) m.length = e.length;  // Preserve edge length
 		
 		return m; 
 	});
