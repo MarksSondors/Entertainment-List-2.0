@@ -8,13 +8,264 @@ The heavy computation is moved here to slim down view functions and allow
 future reuse / unit testing.
 """
 
+import logging
 from collections import defaultdict
 from itertools import groupby
-from django.db.models import Avg, Count, Q
+from typing import Dict, List, Set, Tuple, Optional, Any
+from math import sqrt
+from django.db.models import Avg, Count, Q, F, Case, When, FloatField
+from django.db import connection
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
+import networkx as nx
 
 from custom_auth.models import CustomUser, Review
 from ..models import Movie, Genre, Country  # type: ignore
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Constants
+CACHE_TIMEOUT = 3600  # 1 hour
+MIN_SIMILARITY_THRESHOLD = 0.2
+MAX_NODES_DEFAULT = 1000
+MOVIE_LIMIT_DEFAULT = 500
+SIMILARITY_BATCH_SIZE = 50
+
+# Utility functions
+def _get_cache_key(prefix: str, *args) -> str:
+    """Generate a cache key from prefix and arguments."""
+    return f"network_graph_{prefix}_{'_'.join(str(arg) for arg in args)}"
+
+def _safe_divide(numerator: float, denominator: float, default: float = 0.0) -> float:
+    """Safe division that returns default value if denominator is zero."""
+    return numerator / denominator if denominator != 0 else default
+
+def _clamp(value: float, min_val: float, max_val: float) -> float:
+    """Clamp a value between min and max."""
+    return max(min_val, min(value, max_val))
+
+def _batch_process(items: List[Any], batch_size: int = 100):
+    """Process items in batches to reduce memory usage."""
+    for i in range(0, len(items), batch_size):
+        yield items[i:i + batch_size]
+
+# Advanced Similarity Algorithms
+def cosine_similarity(vec1: Dict[str, float], vec2: Dict[str, float]) -> float:
+    """Calculate cosine similarity between two vectors."""
+    if not vec1 or not vec2:
+        return 0.0
+
+    # Get intersection of keys
+    common_keys = set(vec1.keys()) & set(vec2.keys())
+    if not common_keys:
+        return 0.0
+
+    # Calculate dot product
+    dot_product = sum(vec1[k] * vec2[k] for k in common_keys)
+
+    # Calculate magnitudes
+    norm1 = sqrt(sum(v * v for v in vec1.values()))
+    norm2 = sqrt(sum(v * v for v in vec2.values()))
+
+    return dot_product / (norm1 * norm2) if norm1 and norm2 else 0.0
+
+def pearson_correlation(ratings1: Dict[int, float], ratings2: Dict[int, float]) -> float:
+    """Calculate Pearson correlation coefficient between two rating dictionaries."""
+    if not ratings1 or not ratings2:
+        return 0.0
+
+    # Find common items
+    common_items = set(ratings1.keys()) & set(ratings2.keys())
+    if len(common_items) < 2:
+        return 0.0
+
+    # Calculate means
+    mean1 = sum(ratings1[item] for item in common_items) / len(common_items)
+    mean2 = sum(ratings2[item] for item in common_items) / len(common_items)
+
+    # Calculate correlation
+    numerator = sum((ratings1[item] - mean1) * (ratings2[item] - mean2) for item in common_items)
+    sum_sq1 = sum((ratings1[item] - mean1) ** 2 for item in common_items)
+    sum_sq2 = sum((ratings2[item] - mean2) ** 2 for item in common_items)
+
+    denominator = sqrt(sum_sq1 * sum_sq2)
+    return numerator / denominator if denominator else 0.0
+
+def jaccard_similarity(set1: Set[int], set2: Set[int]) -> float:
+    """Calculate Jaccard similarity between two sets."""
+    if not set1 or not set2:
+        return 0.0
+
+    intersection = len(set1 & set2)
+    union = len(set1 | set2)
+
+    return intersection / union if union else 0.0
+
+def adjusted_cosine_similarity(ratings1: Dict[int, float], ratings2: Dict[int, float],
+                              item_means: Dict[int, float]) -> float:
+    """Calculate adjusted cosine similarity (subtracting item means)."""
+    if not ratings1 or not ratings2:
+        return 0.0
+
+    common_items = set(ratings1.keys()) & set(ratings2.keys())
+    if len(common_items) < 2:
+        return 0.0
+
+    # Calculate adjusted ratings
+    adj_ratings1 = {item: ratings1[item] - item_means.get(item, 0) for item in common_items}
+    adj_ratings2 = {item: ratings2[item] - item_means.get(item, 0) for item in common_items}
+
+    return cosine_similarity(adj_ratings1, adj_ratings2)
+
+# Database Optimization Functions
+def get_movie_stats_optimized(movie_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    """Get movie statistics using optimized raw SQL query."""
+    if not movie_ids:
+        return {}
+
+    movie_ct_id = _movie_ct().id
+
+    with connection.cursor() as cursor:
+        cursor.execute(f"""
+            SELECT
+                object_id,
+                AVG(rating) as avg_rating,
+                COUNT(*) as review_count,
+                STDDEV(rating) as rating_stddev
+            FROM custom_auth_review
+            WHERE content_type_id = %s AND object_id IN ({','.join(['%s'] * len(movie_ids))})
+            GROUP BY object_id
+        """, [movie_ct_id] + movie_ids)
+
+        results = cursor.fetchall()
+
+    return {
+        row[0]: {
+            'avg_rating': float(row[1]) if row[1] else 0.0,
+            'review_count': row[2],
+            'rating_stddev': float(row[3]) if row[3] else 0.0
+        }
+        for row in results
+    }
+
+def get_user_rating_matrix_optimized(user_ids: List[int]) -> Dict[int, Dict[int, float]]:
+    """Get user-movie rating matrix using optimized query."""
+    if not user_ids:
+        return {}
+
+    movie_ct_id = _movie_ct().id
+
+    with connection.cursor() as cursor:
+        cursor.execute(f"""
+            SELECT user_id, object_id, rating
+            FROM custom_auth_review
+            WHERE content_type_id = %s AND user_id IN ({','.join(['%s'] * len(user_ids))})
+            ORDER BY user_id, object_id
+        """, [movie_ct_id] + user_ids)
+
+        results = cursor.fetchall()
+
+    # Build rating matrix
+    rating_matrix = defaultdict(dict)
+    for user_id, movie_id, rating in results:
+        rating_matrix[user_id][movie_id] = float(rating)
+
+    return dict(rating_matrix)
+
+def get_item_means_optimized(movie_ids: List[int]) -> Dict[int, float]:
+    """Get average rating for each movie using optimized query."""
+    if not movie_ids:
+        return {}
+
+    movie_ct_id = _movie_ct().id
+
+    with connection.cursor() as cursor:
+        cursor.execute(f"""
+            SELECT object_id, AVG(rating) as avg_rating
+            FROM custom_auth_review
+            WHERE content_type_id = %s AND object_id IN ({','.join(['%s'] * len(movie_ids))})
+            GROUP BY object_id
+        """, [movie_ct_id] + movie_ids)
+
+        results = cursor.fetchall()
+
+    return {row[0]: float(row[1]) for row in results}
+
+def get_user_similarity_matrix(rating_matrix: Dict[int, Dict[int, float]],
+                              similarity_method: str = 'cosine',
+                              item_means: Optional[Dict[int, float]] = None) -> Dict[Tuple[int, int], float]:
+    """Calculate similarity matrix between all users using specified method."""
+    user_ids = list(rating_matrix.keys())
+    similarity_matrix = {}
+
+    # Process in batches to avoid memory issues
+    for i in range(len(user_ids)):
+        for j in range(i + 1, min(i + SIMILARITY_BATCH_SIZE + 1, len(user_ids))):
+            user1, user2 = user_ids[i], user_ids[j]
+
+            if similarity_method == 'cosine':
+                similarity = cosine_similarity(rating_matrix[user1], rating_matrix[user2])
+            elif similarity_method == 'pearson':
+                similarity = pearson_correlation(rating_matrix[user1], rating_matrix[user2])
+            elif similarity_method == 'adjusted_cosine':
+                if item_means is None:
+                    item_means = get_item_means_optimized(list(set(rating_matrix[user1].keys()) | set(rating_matrix[user2].keys())))
+                similarity = adjusted_cosine_similarity(rating_matrix[user1], rating_matrix[user2], item_means)
+            elif similarity_method == 'jaccard':
+                # Convert to sets of rated movies
+                set1 = set(rating_matrix[user1].keys())
+                set2 = set(rating_matrix[user2].keys())
+                similarity = jaccard_similarity(set1, set2)
+            else:
+                similarity = cosine_similarity(rating_matrix[user1], rating_matrix[user2])
+
+            if abs(similarity) >= MIN_SIMILARITY_THRESHOLD:
+                similarity_matrix[(user1, user2)] = similarity
+
+    return similarity_matrix
+
+def get_collaborative_filtering_predictions(user_id: int,
+                                          rating_matrix: Dict[int, Dict[int, float]],
+                                          similarity_matrix: Dict[Tuple[int, int], float],
+                                          target_movies: List[int],
+                                          k: int = 10) -> Dict[int, float]:
+    """Generate collaborative filtering predictions for a user."""
+    if user_id not in rating_matrix:
+        return {}
+
+    user_ratings = rating_matrix[user_id]
+    predictions = {}
+
+    for movie_id in target_movies:
+        if movie_id in user_ratings:
+            continue  # User already rated this movie
+
+        # Find similar users who rated this movie
+        similar_users = []
+        for (u1, u2), similarity in similarity_matrix.items():
+            if u1 == user_id and u2 in rating_matrix and movie_id in rating_matrix[u2]:
+                similar_users.append((u2, similarity))
+            elif u2 == user_id and u1 in rating_matrix and movie_id in rating_matrix[u1]:
+                similar_users.append((u1, similarity))
+
+        if not similar_users:
+            continue
+
+        # Sort by similarity and take top k
+        similar_users.sort(key=lambda x: abs(x[1]), reverse=True)
+        similar_users = similar_users[:k]
+
+        # Calculate weighted average
+        numerator = sum(similarity * rating_matrix[other_user][movie_id]
+                       for other_user, similarity in similar_users)
+        denominator = sum(abs(similarity) for _, similarity in similar_users)
+
+        if denominator > 0:
+            prediction = numerator / denominator
+            predictions[movie_id] = _clamp(prediction, 1.0, 10.0)
+
+    return predictions
 
 # Cache the ContentType lookup (expensive if repeated) at import time
 _MOVIE_CT = None
@@ -25,269 +276,659 @@ def _movie_ct():  # lazy to avoid issues during migrations
     return _MOVIE_CT
 
 
+def generate_community_name(community_node_ids: List[int], all_nodes: List[Dict]) -> str:
+    """Generate a meaningful name for a community based on its content.
+    
+    Args:
+        community_node_ids: List of node IDs in the community
+        all_nodes: List of all node dictionaries
+    
+    Returns:
+        A descriptive name for the community
+    """
+    # Create a mapping of node_id to node data
+    node_mapping = {node['id']: node for node in all_nodes}
+    
+    # Get the actual node data for this community
+    community_nodes = [node_mapping[node_id] for node_id in community_node_ids if node_id in node_mapping]
+    
+    if not community_nodes:
+        return "Empty Community"
+    
+    # Count node types
+    type_counts = {}
+    genre_counts = {}
+    country_counts = {}
+    
+    for node in community_nodes:
+        node_type = node.get('type', 'unknown')
+        type_counts[node_type] = type_counts.get(node_type, 0) + 1
+        
+        # Extract genre and country info if available
+        if node_type == 'genre':
+            genre_name = node.get('label', 'Unknown Genre')
+            genre_counts[genre_name] = genre_counts.get(genre_name, 0) + 1
+        elif node_type == 'country':
+            country_name = node.get('label', 'Unknown Country')
+            country_counts[country_name] = country_counts.get(country_name, 0) + 1
+    
+    # Determine the dominant characteristics
+    total_nodes = len(community_nodes)
+    dominant_type = max(type_counts.items(), key=lambda x: x[1])
+    
+    # Generate name based on community composition
+    if dominant_type[1] / total_nodes >= 0.5:  # If one type dominates (>50%)
+        if dominant_type[0] == 'genre' and genre_counts:
+            top_genre = max(genre_counts.items(), key=lambda x: x[1])[0]
+            return f"{top_genre} Hub"
+        elif dominant_type[0] == 'country' and country_counts:
+            top_country = max(country_counts.items(), key=lambda x: x[1])[0]
+            return f"{top_country} Cinema"
+        elif dominant_type[0] == 'user':
+            return f"User Community ({total_nodes} members)"
+        elif dominant_type[0] == 'movie':
+            return f"Movie Cluster ({total_nodes} films)"
+        elif dominant_type[0] == 'director':
+            return f"Director Network ({total_nodes} directors)"
+        elif dominant_type[0] == 'actor':
+            return f"Actor Circle ({total_nodes} actors)"
+        else:
+            return f"{dominant_type[0].title()} Group"
+    else:
+        # Mixed community - describe by composition
+        type_list = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+        type_names = [f"{count} {type_name}{'s' if count > 1 else ''}" for type_name, count in type_list]
+        
+        if len(type_names) == 1:
+            return f"Mixed Community ({type_names[0]})"
+        elif len(type_names) == 2:
+            return f"Mixed Community ({type_names[0]}, {type_names[1]})"
+        else:
+            return f"Mixed Community ({type_names[0]}, {type_names[1]}, {type_names[2]})"
+
+
+def detect_communities(nodes: List[Dict], edges: List[Dict]) -> Dict[str, List]:
+    """Detect communities using Louvain method or similar.
+
+    This function identifies groups of densely connected nodes in the graph,
+    which can help identify clusters of users with similar movie preferences,
+    groups of movies that are often watched together, etc.
+
+    Args:
+        nodes: List of node dictionaries with 'id' and other properties
+        edges: List of edge dictionaries with 'from', 'to', and other properties
+
+    Returns:
+        Dict containing:
+        - communities: Dict mapping community_id to community info
+        - stats: Basic statistics about the communities
+        - method: The detection method used
+
+    Example:
+        graph_data = build_network_graph(...)
+        communities = detect_communities(graph_data['nodes'], graph_data['edges'])
+
+        # Access community information
+        for comm_id, comm_data in communities['communities'].items():
+            print(f"Community {comm_id}: {comm_data['size']} nodes")
+    """
+    try:
+        # Create NetworkX graph
+        G = nx.Graph()
+
+        # Add nodes
+        for node in nodes:
+            G.add_node(node['id'], **{k: v for k, v in node.items() if k != 'id'})
+
+        # Add edges
+        for edge in edges:
+            from_id = edge.get('source', edge.get('from'))
+            to_id = edge.get('target', edge.get('to'))
+            weight = edge.get('weight', 1.0)
+            G.add_edge(from_id, to_id, weight=weight)
+
+        # Detect communities using Louvain method
+        try:
+            from networkx.algorithms.community import louvain_communities
+            communities = louvain_communities(G, weight='weight', resolution=1.0)
+        except ImportError:
+            # Fallback to greedy modularity if Louvain not available
+            from networkx.algorithms.community import greedy_modularity_communities
+            communities = greedy_modularity_communities(G, weight='weight')
+
+        # Convert to dictionary format with meaningful names
+        community_dict = {}
+        for i, community in enumerate(communities):
+            community_id = f"community_{i}"
+            community_nodes = list(community)
+            
+            # Generate meaningful name based on community content
+            community_name = generate_community_name(community_nodes, nodes)
+            
+            community_dict[community_id] = {
+                'nodes': community_nodes,
+                'size': len(community),
+                'name': community_name,
+                'modularity': None  # Would need additional calculation
+            }
+
+        # Calculate basic statistics
+        stats = {
+            'num_communities': len(communities),
+            'avg_community_size': sum(len(c) for c in communities) / len(communities) if communities else 0,
+            'largest_community': max((len(c) for c in communities), default=0),
+            'smallest_community': min((len(c) for c in communities), default=0)
+        }
+
+        return {
+            'communities': community_dict,
+            'stats': stats,
+            'method': 'louvain' if 'louvain_communities' in globals() else 'greedy_modularity'
+        }
+
+    except Exception as e:
+        logger.error(f"Error in community detection: {e}")
+        return {
+            'communities': {},
+            'stats': {'error': str(e)},
+            'method': 'failed'
+        }
+
+
+def calculate_centrality_measures(nodes: List[Dict], edges: List[Dict]) -> Dict:
+    """Calculate various centrality measures for the graph.
+
+    Centrality measures help identify the most important or influential nodes in the network:
+    - Degree Centrality: Number of direct connections (popularity)
+    - Betweenness Centrality: How often a node lies on shortest paths (bridge/broker)
+    - Closeness Centrality: Average distance to all other nodes (accessibility)
+    - Eigenvector Centrality: Connected to other important nodes (influence)
+    - PageRank: Similar to eigenvector centrality with damping
+
+    Args:
+        nodes: List of node dictionaries with 'id' and other properties
+        edges: List of edge dictionaries with 'from', 'to', and other properties
+
+    Returns:
+        Dict containing:
+        - centrality_measures: Dict mapping node_id to centrality scores
+        - stats: Summary statistics for the graph
+        - method: The calculation method used
+
+    Example:
+        graph_data = build_network_graph(...)
+        centrality = calculate_centrality_measures(graph_data['nodes'], graph_data['edges'])
+
+        # Find most central users
+        user_centrality = {node_id: measures for node_id, measures in centrality['centrality_measures'].items()
+                          if node_id.startswith('user_')}
+
+        # Sort by betweenness centrality (most influential connectors)
+        sorted_users = sorted(user_centrality.items(),
+                            key=lambda x: x[1]['betweenness_centrality'], reverse=True)
+    """
+    try:
+        # Create NetworkX graph
+        G = nx.Graph()
+
+        # Add nodes
+        for node in nodes:
+            G.add_node(node['id'], **{k: v for k, v in node.items() if k != 'id'})
+
+        # Add edges
+        for edge in edges:
+            from_id = edge.get('source', edge.get('from'))
+            to_id = edge.get('target', edge.get('to'))
+            weight = edge.get('weight', 1.0)
+            G.add_edge(from_id, to_id, weight=weight)
+
+        # Calculate centrality measures
+        centrality_measures = {}
+
+        # Degree centrality (normalized)
+        degree_centrality = nx.degree_centrality(G)
+
+        # Betweenness centrality (can be expensive for large graphs)
+        try:
+            betweenness_centrality = nx.betweenness_centrality(G, weight='weight', normalized=True)
+        except:
+            # Fallback without weights if too slow
+            betweenness_centrality = nx.betweenness_centrality(G, normalized=True)
+
+        # Closeness centrality
+        try:
+            closeness_centrality = nx.closeness_centrality(G)
+        except:
+            closeness_centrality = {}
+
+        # Eigenvector centrality
+        try:
+            eigenvector_centrality = nx.eigenvector_centrality(G, weight='weight', max_iter=1000)
+        except:
+            try:
+                # Fallback without weights
+                eigenvector_centrality = nx.eigenvector_centrality(G, max_iter=1000)
+            except:
+                eigenvector_centrality = {}
+
+        # PageRank (good alternative to eigenvector)
+        try:
+            pagerank = nx.pagerank(G, weight='weight', max_iter=1000)
+        except:
+            pagerank = {}
+
+        # Combine all measures
+        for node_id in G.nodes():
+            centrality_measures[node_id] = {
+                'degree_centrality': degree_centrality.get(node_id, 0),
+                'betweenness_centrality': betweenness_centrality.get(node_id, 0),
+                'closeness_centrality': closeness_centrality.get(node_id, 0),
+                'eigenvector_centrality': eigenvector_centrality.get(node_id, 0),
+                'pagerank': pagerank.get(node_id, 0),
+                'degree': G.degree(node_id)
+            }
+
+        # Calculate summary statistics
+        if centrality_measures:
+            degree_values = [m['degree_centrality'] for m in centrality_measures.values()]
+            betweenness_values = [m['betweenness_centrality'] for m in centrality_measures.values()]
+
+            stats = {
+                'avg_degree_centrality': sum(degree_values) / len(degree_values),
+                'max_degree_centrality': max(degree_values),
+                'avg_betweenness_centrality': sum(betweenness_values) / len(betweenness_values),
+                'max_betweenness_centrality': max(betweenness_values),
+                'graph_density': nx.density(G),
+                'num_nodes': len(G.nodes()),
+                'num_edges': len(G.edges())
+            }
+        else:
+            stats = {}
+
+        return {
+            'centrality_measures': centrality_measures,
+            'stats': stats,
+            'method': 'networkx'
+        }
+
+    except Exception as e:
+        logger.error(f"Error calculating centrality measures: {e}")
+        return {
+            'centrality_measures': {},
+            'stats': {'error': str(e)},
+            'method': 'failed'
+        }
+
+
 def build_movie_analytics_graph_context():
     """Replicates the prior logic inside movie_analytics_graph view.
 
     Returns:
         dict: template context with graph_data, stats, country_stats (top 10)
     """
-    movie_ct = _movie_ct()
+    try:
+        logger.info("Building movie analytics graph context")
+        movie_ct = _movie_ct()
 
-    # Prefetch related objects needed for building graph
-    movies = (
-        Movie.objects.select_related()
-        .prefetch_related('countries', 'genres', 'production_companies')
-        .all()
-    )
+        # Check cache first
+        cache_key = _get_cache_key("analytics_context")
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            logger.info("Returning cached analytics context")
+            return cached_result
 
-    # Materialize reviews once (avoid per-movie .filter calls) and group in-memory
-    reviews_qs = (
-        Review.objects.select_related('user')
-        .filter(content_type=movie_ct)
-        .only('id', 'object_id', 'rating', 'review_text', 'date_added', 'user__id', 'user__username')
-    )
-    reviews_list = list(reviews_qs)
+        # Prefetch related objects needed for building graph - SINGLE QUERY
+        movies = list(
+            Movie.objects.select_related()
+            .prefetch_related('countries', 'genres', 'production_companies')
+            .all()
+        )
 
-    # Users that actually reviewed movies (distinct over review.user_id)
-    user_ids = sorted({r.user_id for r in reviews_list})
-    users = CustomUser.objects.filter(id__in=user_ids)
+        if not movies:
+            logger.warning("No movies found in database")
+            return {'graph_data': {'nodes': [], 'edges': []}, 'stats': {}, 'country_stats': []}
 
-    # Build mapping movie_id -> list of reviews (already in memory)
-    reviews_by_movie = defaultdict(list)
-    for rv in reviews_list:
-        reviews_by_movie[rv.object_id].append(rv)
-    # Build mapping user_id -> review count (movie specific)
-    user_review_counts = defaultdict(int)
-    for rv in reviews_list:
-        user_review_counts[rv.user_id] += 1
+        # Materialize reviews once (avoid per-movie .filter calls) and group in-memory
+        reviews_qs = (
+            Review.objects.select_related('user')
+            .filter(content_type=movie_ct)
+            .only('id', 'object_id', 'rating', 'review_text', 'date_added', 'user__id', 'user__username')
+        )
+        reviews_list = list(reviews_qs)
 
-    nodes = []
-    edges = []
-    node_id_counter = 0
-    node_mapping = {}
+        logger.info(f"Processing {len(movies)} movies and {len(reviews_list)} reviews")
 
-    # Users
-    for user in users:  # all users already constrained to those with movie reviews
-        user_id = f"user_{user.id}"
-        node_mapping[user_id] = node_id_counter
-        nodes.append({
-            'id': node_id_counter,
-            'label': user.username,
-            'type': 'user',
-            'group': 'users',
-            'size': 20,
-            'color': '#FF6B6B',
-            'metadata': {
-                'username': user.username,
-                'review_count': user_review_counts.get(user.id, 0)
-            }
-        })
-        node_id_counter += 1
+        # Users that actually reviewed movies (distinct over review.user_id)
+        user_ids = sorted({r.user_id for r in reviews_list})
+        users = list(CustomUser.objects.filter(id__in=user_ids))
 
-    # Movies
-    for movie in movies:
-        movie_id = f"movie_{movie.id}"
-        node_mapping[movie_id] = node_id_counter
-        movie_reviews = reviews_by_movie.get(movie.id, [])
-        if movie_reviews:
-            avg_rating = sum(r.rating for r in movie_reviews) / len(movie_reviews)
-        else:
-            avg_rating = 0
-        nodes.append({
-            'id': node_id_counter,
-            'label': movie.title,
-            'type': 'movie',
-            'group': 'movies',
-            'size': max(15, min(30, len(movie_reviews) * 3)),
-            'color': '#4ECDC4',
-            'metadata': {
-                'title': movie.title,
-                'release_date': movie.release_date.strftime('%Y') if movie.release_date else 'Unknown',
-                'rating': round(avg_rating, 1),
-                'review_count': len(movie_reviews),
-                'runtime': movie.runtime,
-                'countries': [c.name for c in movie.countries.all()],
-                'genres': [g.name for g in movie.genres.all()]
-            }
-        })
-        node_id_counter += 1
+        # Build mapping movie_id -> list of reviews (already in memory)
+        reviews_by_movie = defaultdict(list)
+        for rv in reviews_list:
+            reviews_by_movie[rv.object_id].append(rv)
+        # Build mapping user_id -> review count (movie specific)
+        user_review_counts = defaultdict(int)
+        for rv in reviews_list:
+            user_review_counts[rv.user_id] += 1
 
-    # Countries
-    countries = Country.objects.filter(movie__in=movies).distinct()
-    for country in countries:
-        cid = f"country_{country.id}"
-        node_mapping[cid] = node_id_counter
-        country_movies = movies.filter(countries=country)
-        nodes.append({
-            'id': node_id_counter,
-            'label': country.name,
-            'type': 'country',
-            'group': 'countries',
-            'size': max(10, min(25, len(country_movies) * 2)),
-            'color': '#95E1D3',
-            'metadata': {
-                'name': country.name,
-                'iso_code': country.iso_3166_1,
-                'movie_count': len(country_movies)
-            }
-        })
-        node_id_counter += 1
+        # PRE-COMPUTE all movie relationships to avoid repeated .all() calls
+        movie_countries = defaultdict(list)
+        movie_genres = defaultdict(list)
+        country_movies = defaultdict(list)
+        genre_movies = defaultdict(list)
 
-    # Genres
-    genres = Genre.objects.filter(movie__in=movies).distinct()
-    for genre in genres:
-        gid = f"genre_{genre.id}"
-        node_mapping[gid] = node_id_counter
-        genre_movies = movies.filter(genres=genre)
-        nodes.append({
-            'id': node_id_counter,
-            'label': genre.name,
-            'type': 'genre',
-            'group': 'genres',
-            'size': max(10, min(25, len(genre_movies) * 1.5)),
-            'color': '#F38BA8',
-            'metadata': {
-                'name': genre.name,
-                'movie_count': len(genre_movies)
-            }
-        })
-        node_id_counter += 1
+        for movie in movies:
+            movie_id = movie.id
+            countries = list(movie.countries.all())
+            genres = list(movie.genres.all())
 
-    # Review edges (user -> movie)
-    for review in reviews_list:
-        uid = f"user_{review.user.id}"
-        mid = f"movie_{review.object_id}"
-        if uid in node_mapping and mid in node_mapping:
-            if review.rating >= 8:
-                edge_color = '#2ECC71'
-            elif review.rating >= 6:
-                edge_color = '#F39C12'
-            else:
-                edge_color = '#E74C3C'
-            edges.append({
-                'source': node_mapping[uid],
-                'target': node_mapping[mid],
-                'type': 'review',
-                'weight': review.rating / 10,
-                'color': edge_color,
+            movie_countries[movie_id] = countries
+            movie_genres[movie_id] = genres
+
+            for country in countries:
+                country_movies[country.id].append(movie)
+            for genre in genres:
+                genre_movies[genre.id].append(movie)
+
+        nodes = []
+        edges = []
+        node_id_counter = 0
+        node_mapping = {}
+
+        # Users
+        for user in users:  # all users already constrained to those with movie reviews
+            user_id = f"user_{user.id}"
+            node_mapping[user_id] = node_id_counter
+            user_review_count = user_review_counts.get(user.id, 0)
+            # Scale user size based on review count (base: 25, range: 20-35)
+            user_size = max(20, min(35, 25 + user_review_count * 0.5))
+            nodes.append({
+                'id': node_id_counter,
+                'label': user.username,
+                'type': 'user',
+                'group': 'users',
+                'size': user_size,
+                'color': '#FF6B6B',
                 'metadata': {
-                    'rating': review.rating,
-                    'review_text': review.review_text[:100] if review.review_text else None,
-                    'date': review.date_added.strftime('%Y-%m-%d')
+                    'username': user.username,
+                    'review_count': user_review_count
                 }
             })
+            node_id_counter += 1
 
-    # Movie -> country
-    for movie in movies:
-        mid = f"movie_{movie.id}"
-        for country in movie.countries.all():
-            cid = f"country_{country.id}"
-            if mid in node_mapping and cid in node_mapping:
+        # Movies
+        for movie in movies:
+            movie_id = f"movie_{movie.id}"
+            node_mapping[movie_id] = node_id_counter
+            movie_reviews = reviews_by_movie.get(movie.id, [])
+            if movie_reviews:
+                avg_rating = sum(r.rating for r in movie_reviews) / len(movie_reviews)
+            else:
+                avg_rating = 0
+            # Scale movie size based on review count (base: 18, range: 15-40)
+            movie_size = max(15, min(40, 18 + len(movie_reviews) * 2))
+            nodes.append({
+                'id': node_id_counter,
+                'label': movie.title,
+                'type': 'movie',
+                'group': 'movies',
+                'size': movie_size,
+                'color': '#4ECDC4',
+                'metadata': {
+                    'title': movie.title,
+                    'release_date': movie.release_date.strftime('%Y') if movie.release_date else 'Unknown',
+                    'rating': round(avg_rating, 1),
+                    'review_count': len(movie_reviews),
+                    'runtime': movie.runtime,
+                    'countries': [c.name for c in movie_countries[movie.id]],
+                    'genres': [g.name for g in movie_genres[movie.id]]
+                }
+            })
+            node_id_counter += 1
+
+        # Countries - use pre-computed data
+        countries = list(country_movies.keys())
+        for country_id in countries:
+            country = country_movies[country_id][0].countries.filter(id=country_id).first()  # Get country object
+            if not country:
+                continue
+            cid = f"country_{country_id}"
+            node_mapping[cid] = node_id_counter
+            country_movie_list = country_movies[country_id]
+            # Country nodes smaller but scaled by movie count (base: 13, range: 12-20)
+            country_size = max(8, min(20, 9 + len(country_movie_list) * 0.8))
+            nodes.append({
+                'id': node_id_counter,
+                'label': country.name,
+                'type': 'country',
+                'group': 'countries',
+                'size': country_size,
+                'color': '#95E1D3',
+                'metadata': {
+                    'name': country.name,
+                    'iso_code': country.iso_3166_1,
+                    'movie_count': len(country_movie_list)
+                }
+            })
+            node_id_counter += 1
+
+        # Genres - use pre-computed data
+        genres = list(genre_movies.keys())
+        for genre_id in genres:
+            genre = genre_movies[genre_id][0].genres.filter(id=genre_id).first()  # Get genre object
+            if not genre:
+                continue
+            gid = f"genre_{genre_id}"
+            node_mapping[gid] = node_id_counter
+            genre_movie_list = genre_movies[genre_id]
+            # Genre nodes medium size (base: 14, range: 12-22)
+            genre_size = max(12, min(22, 14 + len(genre_movie_list) * 0.6))
+            nodes.append({
+                'id': node_id_counter,
+                'label': genre.name,
+                'type': 'genre',
+                'group': 'genres',
+                'size': genre_size,
+                'color': '#F38BA8',
+                'metadata': {
+                    'name': genre.name,
+                    'movie_count': len(genre_movie_list)
+                }
+            })
+            node_id_counter += 1
+
+        # Review edges (user -> movie)
+        for review in reviews_list:
+            uid = f"user_{review.user.id}"
+            mid = f"movie_{review.object_id}"
+            if uid in node_mapping and mid in node_mapping:
+                if review.rating >= 8:
+                    edge_color = '#2ECC71'
+                elif review.rating >= 6:
+                    edge_color = '#F39C12'
+                else:
+                    edge_color = '#E74C3C'
                 edges.append({
-                    'source': node_mapping[mid],
-                    'target': node_mapping[cid],
-                    'type': 'origin',
-                    'weight': 0.5,
-                    'color': '#BDC3C7'
+                    'source': node_mapping[uid],
+                    'target': node_mapping[mid],
+                    'type': 'review',
+                    'weight': review.rating / 10,
+                    'color': edge_color,
+                    'metadata': {
+                        'rating': review.rating,
+                        'review_text': review.review_text[:100] if review.review_text else None,
+                        'date': review.date_added.strftime('%Y-%m-%d')
+                    }
                 })
 
-    # Movie -> genre
-    for movie in movies:
-        mid = f"movie_{movie.id}"
-        for genre in movie.genres.all():
-            gid = f"genre_{genre.id}"
-            if mid in node_mapping and gid in node_mapping:
+        # Movie -> country - use pre-computed data
+        for movie in movies:
+            mid = f"movie_{movie.id}"
+            for country in movie_countries[movie.id]:
+                cid = f"country_{country.id}"
+                if mid in node_mapping and cid in node_mapping:
+                    edges.append({
+                        'source': node_mapping[mid],
+                        'target': node_mapping[cid],
+                        'type': 'origin',
+                        'weight': 0.5,
+                        'color': '#BDC3C7'
+                    })
+
+        # Movie -> genre - use pre-computed data
+        for movie in movies:
+            mid = f"movie_{movie.id}"
+            for genre in movie_genres[movie.id]:
+                gid = f"genre_{genre.id}"
+                if mid in node_mapping and gid in node_mapping:
+                    edges.append({
+                        'source': node_mapping[mid],
+                        'target': node_mapping[gid],
+                        'type': 'genre',
+                        'weight': 0.3,
+                        'color': '#9B59B6'
+                    })
+
+        # User similarity edges - OPTIMIZED VERSION
+        user_ratings = defaultdict(dict)
+        for review in reviews_list:
+            user_ratings[review.user.id][review.object_id] = review.rating
+
+        user_list = list(user_ratings.keys())
+        # Pre-compute all pairwise similarities more efficiently
+        similarity_candidates = []
+        for i, u1 in enumerate(user_list):
+            for u2 in user_list[i+1:]:
+                common = set(user_ratings[u1]) & set(user_ratings[u2])
+                if len(common) >= 3:
+                    diffs = [abs(user_ratings[u1][m] - user_ratings[u2][m]) for m in common]
+                    avg_diff = sum(diffs) / len(diffs)
+                    similarity = 1 - (avg_diff / 10)
+                    if similarity > 0.7:
+                        similarity_candidates.append((u1, u2, similarity))
+
+        # Add similarity edges
+        for u1, u2, similarity in similarity_candidates:
+            n1 = f"user_{u1}"
+            n2 = f"user_{u2}"
+            if n1 in node_mapping and n2 in node_mapping:
                 edges.append({
-                    'source': node_mapping[mid],
-                    'target': node_mapping[gid],
-                    'type': 'genre',
-                    'weight': 0.3,
-                    'color': '#9B59B6'
+                    'source': node_mapping[n1],
+                    'target': node_mapping[n2],
+                    'type': 'similarity',
+                    'weight': similarity,
+                    'color': '#FFD93D',
+                    'metadata': {
+                        'similarity': round(similarity, 2),
+                        'common_movies': len(set(user_ratings[u1]) & set(user_ratings[u2]))
+                    }
                 })
 
-    # User similarity edges
-    user_ratings = defaultdict(dict)
-    for review in reviews:
-        user_ratings[review.user.id][review.object_id] = review.rating
+        # Precompute movie review counts (already grouped) & global avg
+        total_reviews = len(reviews_list)
+        global_avg = round(sum(r.rating for r in reviews_list) / total_reviews, 2) if total_reviews else 0
+        most_reviewed_movie = None
+        max_movie_reviews = -1
+        for m in movies:
+            cnt = len(reviews_by_movie.get(m.id, []))
+            if cnt > max_movie_reviews:
+                max_movie_reviews = cnt
+                most_reviewed_movie = m
+        most_active_user = None
+        max_user_reviews = -1
+        for u in users:
+            cnt = user_review_counts.get(u.id, 0)
+            if cnt > max_user_reviews:
+                max_user_reviews = cnt
+                most_active_user = u
+        stats = {
+            'total_movies': len(movies),
+            'total_users': len(users),
+            'total_reviews': total_reviews,
+            'total_countries': len(countries),
+            'total_genres': len(genres),
+            'avg_rating': global_avg,
+            'most_reviewed_movie': (most_reviewed_movie, max_movie_reviews) if most_reviewed_movie else (None, 0),
+            'most_active_user': (most_active_user, max_user_reviews) if most_active_user else (None, 0),
+        }
 
-    user_list = list(user_ratings.keys())
-    for i, u1 in enumerate(user_list):
-        for u2 in user_list[i+1:]:
-            common = set(user_ratings[u1]) & set(user_ratings[u2])
-            if len(common) >= 3:
-                diffs = [abs(user_ratings[u1][m] - user_ratings[u2][m]) for m in common]
-                avg_diff = sum(diffs) / len(diffs)
-                similarity = 1 - (avg_diff / 10)
-                if similarity > 0.7:
-                    n1 = f"user_{u1}"
-                    n2 = f"user_{u2}"
-                    if n1 in node_mapping and n2 in node_mapping:
-                        edges.append({
-                            'source': node_mapping[n1],
-                            'target': node_mapping[n2],
-                            'type': 'similarity',
-                            'weight': similarity,
-                            'color': '#FFD93D',
-                            'metadata': {
-                                'similarity': round(similarity, 2),
-                                'common_movies': len(common)
-                            }
-                        })
+        # Country stats - use pre-computed data
+        country_stats = []
+        for country_id in countries:
+            country = country_movies[country_id][0].countries.filter(id=country_id).first()
+            if not country:
+                continue
+            country_movie_list = country_movies[country_id]
+            # Collect reviews belonging to movies from this country via pre-grouped mapping
+            relevant_reviews = []
+            for mv in country_movie_list:
+                relevant_reviews.extend(reviews_by_movie.get(mv.id, []))
+            if relevant_reviews:
+                avg_rating = sum(r.rating for r in relevant_reviews) / len(relevant_reviews)
+            else:
+                avg_rating = 0
+            country_stats.append({
+                'name': country.name,
+                'movie_count': len(country_movie_list),
+                'avg_rating': round(avg_rating, 2)
+            })
+        country_stats.sort(key=lambda x: x['movie_count'], reverse=True)
 
-    # Precompute movie review counts (already grouped) & global avg
-    total_reviews = len(reviews_list)
-    global_avg = round(sum(r.rating for r in reviews_list) / total_reviews, 2) if total_reviews else 0
-    most_reviewed_movie = None
-    max_movie_reviews = -1
-    for m in movies:
-        cnt = len(reviews_by_movie.get(m.id, []))
-        if cnt > max_movie_reviews:
-            max_movie_reviews = cnt
-            most_reviewed_movie = m
-    most_active_user = None
-    max_user_reviews = -1
-    for u in users:
-        cnt = user_review_counts.get(u.id, 0)
-        if cnt > max_user_reviews:
-            max_user_reviews = cnt
-            most_active_user = u
-    stats = {
-        'total_movies': len(movies),
-        'total_users': len(users),
-        'total_reviews': total_reviews,
-        'total_countries': len(countries),
-        'total_genres': len(genres),
-        'avg_rating': global_avg,
-        'most_reviewed_movie': (most_reviewed_movie, max_movie_reviews) if most_reviewed_movie else (None, 0),
-        'most_active_user': (most_active_user, max_user_reviews) if most_active_user else (None, 0),
-    }
+        result = {
+            'graph_data': {
+                'nodes': nodes,
+                'edges': edges
+            },
+            'stats': stats,
+            'country_stats': country_stats[:10]
+        }
 
-    country_stats = []
-    for country in countries:
-        country_movies = movies.filter(countries=country)
-        # Collect reviews belonging to movies from this country via pre-grouped mapping
-        relevant_reviews = []
-        for mv in country_movies:
-            relevant_reviews.extend(reviews_by_movie.get(mv.id, []))
-        if relevant_reviews:
-            avg_rating = sum(r.rating for r in relevant_reviews) / len(relevant_reviews)
-        else:
-            avg_rating = 0
-        country_stats.append({
-            'name': country.name,
-            'movie_count': len(country_movies),
-            'avg_rating': round(avg_rating, 2)
-        })
-    country_stats.sort(key=lambda x: x['movie_count'], reverse=True)
+        # Add advanced analytics if we have enough nodes
+        if len(nodes) >= 5:
+            try:
+                logger.info("Running community detection and centrality analysis for analytics context")
 
-    return {
-        'graph_data': {
-            'nodes': nodes,
-            'edges': edges
-        },
-        'stats': stats,
-        'country_stats': country_stats[:10]
-    }
+                # Detect communities
+                communities_result = detect_communities(nodes, edges)
+                result['communities'] = communities_result
+
+                # Calculate centrality measures
+                centrality_result = calculate_centrality_measures(nodes, edges)
+                result['centrality'] = centrality_result
+
+                # Add community and centrality data to nodes
+                for node in nodes:
+                    node_id = node['id']
+
+                    # Add community information
+                    if communities_result['communities']:
+                        for comm_id, comm_data in communities_result['communities'].items():
+                            if node_id in comm_data['nodes']:
+                                node['community'] = comm_id
+                                node['community_size'] = comm_data['size']
+                                break
+
+                    # Add centrality measures
+                    if node_id in centrality_result['centrality_measures']:
+                        node['centrality'] = centrality_result['centrality_measures'][node_id]
+
+                logger.info(f"Analytics completed for context: {communities_result['stats']['num_communities']} communities detected")
+
+            except Exception as e:
+                logger.error(f"Error running analytics in context: {e}")
+                result['analytics_error'] = str(e)
+
+        # Cache the result
+        cache.set(cache_key, result, CACHE_TIMEOUT)
+        logger.info(f"Analytics context built successfully with {len(nodes)} nodes and {len(edges)} edges")
+        return result
+    except Exception as e:
+        logger.error(f"Error building analytics context: {str(e)}", exc_info=True)
+        return {
+            'graph_data': {'nodes': [], 'edges': []},
+            'stats': {'error': str(e)},
+            'country_stats': []
+        }
 
 
 def build_network_graph(
@@ -337,35 +978,30 @@ def build_network_graph(
         ).values('user_id', 'object_id', 'rating')
     )
     well_reviewed_movie_ids = {r['object_id'] for r in good_reviews}
-    all_movie_reviews = Review.objects.filter(content_type=movie_content_type).values('object_id', 'rating', 'user_id')
 
-    # Aggregate movie stats in one DB round trip
-    aggregated = (
-        Review.objects.filter(content_type=movie_content_type, object_id__in=well_reviewed_movie_ids)
-        .values('object_id')
-        .annotate(avg_rating=Avg('rating'), review_count=Count('id'))
-    )
-    movie_stats = {a['object_id']: {'avg_rating': a['avg_rating'], 'review_count': a['review_count']} for a in aggregated}
+    # Use optimized raw SQL for movie stats
+    movie_stats = get_movie_stats_optimized(list(well_reviewed_movie_ids))
+
     well_reviewed_movies = list(
         Movie.objects.filter(id__in=movie_stats.keys())
         .prefetch_related('genres', 'countries', 'keywords')
     )[:movie_limit]
+
     if not well_reviewed_movies:
         # Fallback: sample movies referenced in any review (limit) with aggregated stats
         fallback_movie_cap = min(movie_limit, max_nodes // 2)
+        all_movie_reviews = Review.objects.filter(content_type=movie_content_type).values('object_id', 'rating', 'user_id')
         fallback_ids = list({r['object_id'] for r in all_movie_reviews})[:fallback_movie_cap]
-        aggregated_fb = (
-            Review.objects.filter(content_type=movie_content_type, object_id__in=fallback_ids)
-            .values('object_id')
-            .annotate(avg_rating=Avg('rating'), review_count=Count('id'))
-        )
-        movie_stats.update({a['object_id']: {'avg_rating': a['avg_rating'], 'review_count': a['review_count']} for a in aggregated_fb})
+
+        fallback_stats = get_movie_stats_optimized(fallback_ids)
+        movie_stats.update(fallback_stats)
+
         well_reviewed_movies = list(
-            Movie.objects.filter(id__in=[a['object_id'] for a in aggregated_fb])
+            Movie.objects.filter(id__in=fallback_stats.keys())
             .prefetch_related('genres', 'countries', 'keywords')
         )
 
-    # User nodes
+    # User nodes with proper sizes
     user_nodes = {}
     user_review_counts = {}
     for user in list(active_users)[:max_nodes//3]:
@@ -377,42 +1013,94 @@ def build_network_graph(
             # fallback if annotation missing
             user_movie_reviews = Review.objects.filter(user=user, content_type=movie_content_type).count()
         user_review_counts[user.id] = user_movie_reviews
+        # Scale user size based on review count (base: 20, range: 15-25)
+        user_size = max(15, min(25, 20 + user_movie_reviews * 0.3))
         nodes.append({
             'id': node_id,
             'label': user.username,
             'type': 'user',
-            'size': min(30, user_movie_reviews * 2),
+            'size': user_size,
             'color': '#4299E1',
             'review_count': user_movie_reviews
         })
 
-    # Movie nodes
+    # Movie nodes with proper sizes
     movie_nodes = {}
     for movie in well_reviewed_movies:
         node_id = f"movie_{movie.id}"
         movie_nodes[movie.id] = node_id
         node_ids.add(node_id)
         stats_m = movie_stats[movie.id]
+        review_count = stats_m.get('review_count', 0)
+        # Scale movie size based on review count (base: 15, range: 10-30)
+        movie_size = max(10, min(30, 15 + review_count * 1.5))
         nodes.append({
             'id': node_id,
             'label': movie.title,
             'type': 'movie',
-            'size': min(25, stats_m['review_count'] * 3),
+            'size': movie_size,
             'color': '#F56565',
             'rating': round(stats_m['avg_rating'], 1),
             'year': movie.release_date.year if movie.release_date else None,
             'tmdb_id': movie.tmdb_id
         })
 
-    # Country nodes
+    # PRE-COMPUTE all movie relationships to avoid repeated database calls
+    movie_genres = defaultdict(list)
+    movie_countries = defaultdict(list)
+    movie_directors = []
+    movie_cast = []
+    movie_crew = []
+
+    # Build efficient lookup dictionaries
+    genre_counts = defaultdict(int)
+    country_counts = defaultdict(int)
+    director_counts = defaultdict(int)
+    actor_counts = defaultdict(int)
+    crew_counts = defaultdict(int)
+
+    for movie in well_reviewed_movies:
+        movie_id = movie.id
+        genres = list(movie.genres.all())
+        countries = list(movie.countries.all())
+
+        movie_genres[movie_id] = genres
+        movie_countries[movie_id] = countries
+
+        for genre in genres:
+            genre_counts[genre] += 1
+        for country in countries:
+            country_counts[country] += 1
+
+        # Handle directors, cast, crew if needed
+        if show_directors or show_actors or show_crew:
+            if hasattr(movie, 'directors'):
+                directors = list(movie.directors)
+                movie_directors.append((movie_id, directors))
+                for director in directors:
+                    director_counts[director] += 1
+
+            if chaos_mode and (show_actors or show_crew):
+                if hasattr(movie, 'cast'):
+                    cast = list(movie.cast)[:8]
+                    movie_cast.append((movie_id, cast))
+                    for mp in cast:
+                        person = getattr(mp, 'person', None)
+                        if person:
+                            actor_counts[person] += 1
+
+                if hasattr(movie, 'crew'):
+                    crew = [mp for mp in movie.crew[:8] if getattr(mp, 'role', '') != 'Director']
+                    movie_crew.append((movie_id, crew))
+                    for mp in crew:
+                        person = getattr(mp, 'person', None)
+                        if person:
+                            crew_counts[person] += 1
+
+    # Country nodes - use pre-computed data
     country_nodes = {}
     if show_countries:
-        country_counts = defaultdict(int)
-        for movie in well_reviewed_movies:
-            for country in movie.countries.all():
-                country_counts[country] += 1
-        popular_countries = {c: ct for c, ct in country_counts.items() if ct >= 2}
-        for country, count in popular_countries.items():
+        for country, count in country_counts.items():
             node_id = f"country_{country.id}"
             country_nodes[country.id] = node_id
             node_ids.add(node_id)
@@ -420,21 +1108,15 @@ def build_network_graph(
                 'id': node_id,
                 'label': country.name,
                 'type': 'country',
-                'size': min(20, count * 2),
+                'size': max(15, min(30, 18 + count * 1.2)),
                 'color': '#48BB78',
-                'movie_count': count,
-                'mass': 8 + count * 0.6
+                'movie_count': count
             })
 
-    # Genre nodes
+    # Genre nodes - use pre-computed data
     genre_nodes = {}
     if show_genres:
-        genre_counts = defaultdict(int)
-        for movie in well_reviewed_movies:
-            for genre in movie.genres.all():
-                genre_counts[genre] += 1
-        popular_genres = {g: ct for g, ct in genre_counts.items() if ct >= 3}
-        for genre, count in popular_genres.items():
+        for genre, count in genre_counts.items():
             node_id = f"genre_{genre.id}"
             genre_nodes[genre.id] = node_id
             node_ids.add(node_id)
@@ -442,48 +1124,33 @@ def build_network_graph(
                 'id': node_id,
                 'label': genre.name,
                 'type': 'genre',
-                'size': min(18, count * 1.5),
+                'size': max(16, min(28, 20 + count * 1.0)),
                 'color': '#9F7AEA',
-                'movie_count': count,
-                'mass': 10 + count * 0.5
+                'movie_count': count
             })
 
-    # Director nodes
+    # Director nodes - use pre-computed data
     director_nodes = {}
-    director_counts = defaultdict(int)
     if show_directors:
-        for movie in well_reviewed_movies:
-            for director in movie.directors:
-                director_counts[director] += 1
-        popular_directors = {d: ct for d, ct in director_counts.items() if ct >= 2}
-        for director, count in popular_directors.items():
+        for director, count in director_counts.items():
             node_id = f"director_{director.id}"
             director_nodes[director.id] = node_id
             node_ids.add(node_id)
+            # Director nodes smaller (base: 13, range: 10-18)
+            director_size = max(12, min(18, 13 + count * 0.5))
             nodes.append({
                 'id': node_id,
                 'label': director.name,
                 'type': 'director',
-                'size': min(16, count * 2),
+                'size': director_size,
                 'color': '#ED8936',
                 'movie_count': count
             })
 
-    # Chaos mode actors/crew
+    # Chaos mode actors/crew - use pre-computed data
     actor_nodes = {}
     crew_nodes = {}
-    actor_counts = defaultdict(int)
-    crew_counts = defaultdict(int)
     if chaos_mode and (show_actors or show_crew):
-        for movie in well_reviewed_movies:
-            for mp in movie.cast[:8]:
-                person = getattr(mp, 'person', None)
-                if person:
-                    actor_counts[person] += 1
-            for mp in [mp for mp in movie.crew[:8] if getattr(mp, 'role', '') != 'Director']:
-                person = getattr(mp, 'person', None)
-                if person:
-                    crew_counts[person] += 1
         max_actor_nodes = max_nodes // 2
         max_crew_nodes = max_nodes // 3
         sorted_actors = sorted(actor_counts.items(), key=lambda x: x[1], reverse=True)[:max_actor_nodes]
@@ -494,11 +1161,13 @@ def build_network_graph(
                     continue
                 node_id = f"actor_{person.id}"
                 actor_nodes[person.id] = node_id
+                # Actor nodes smaller (base: 9, range: 8-12)
+                actor_size = max(8, min(12, 9 + count * 0.3))
                 nodes.append({
                     'id': node_id,
                     'label': person.name,
                     'type': 'actor',
-                    'size': min(18, 6 + count * 2),
+                    'size': actor_size,
                     'color': '#FFD700',
                     'movie_count': count
                 })
@@ -508,11 +1177,13 @@ def build_network_graph(
                     continue
                 node_id = f"crew_{person.id}"
                 crew_nodes[person.id] = node_id
+                # Crew nodes smallest (base: 9, range: 8-14)
+                crew_size = max(8, min(14, 9 + count * 0.4))
                 nodes.append({
                     'id': node_id,
                     'label': person.name,
                     'type': 'crew',
-                    'size': min(16, 6 + count * 1.5),
+                    'size': crew_size,
                     'color': '#00CED1',
                     'movie_count': count
                 })
@@ -544,131 +1215,140 @@ def build_network_graph(
                     dynamic_length += 80
                 rating_val = review_dict['rating']
                 edges.append({
-                    'from': user_nodes[uid],
-                    'to': movie_nodes[movie_id],
+                    'source': user_nodes[uid],
+                    'target': movie_nodes[movie_id],
                     'type': 'review',
                     'weight': rating_val / 10.0,
                     'color': {'color': '#4299E1', 'opacity': 0.6},
-                    'width': max(1, rating_val / 2),
-                    'label': f"{rating_val}/10",
-                    'length': dynamic_length
+                    'width': 2,
+                    'label': f"{rating_val}/10"
                 })
 
-    # Movie -> Country
+    # Movie -> Country - use pre-computed data
     if show_countries:
         for movie in well_reviewed_movies:
             if movie.id not in movie_nodes:
                 continue
-            for country in movie.countries.all():
+            for country in movie_countries[movie.id]:
                 if country.id in country_nodes:
                     edges.append({
-                        'from': movie_nodes[movie.id],
-                        'to': country_nodes[country.id],
+                        'source': movie_nodes[movie.id],
+                        'target': country_nodes[country.id],
                         'type': 'origin',
                         'color': {'color': '#48BB78', 'opacity': 0.4},
                         'width': 2,
                         'length': 110
                     })
 
-    # Movie -> Genre
+    # Movie -> Genre - use pre-computed data
     if show_genres:
         for movie in well_reviewed_movies:
             if movie.id not in movie_nodes:
                 continue
-            for genre in movie.genres.all():
+            for genre in movie_genres[movie.id]:
                 if genre.id in genre_nodes:
                     edges.append({
-                        'from': movie_nodes[movie.id],
-                        'to': genre_nodes[genre.id],
+                        'source': movie_nodes[movie.id],
+                        'target': genre_nodes[genre.id],
                         'type': 'genre',
                         'color': {'color': '#9F7AEA', 'opacity': 0.4},
                         'width': 1.5,
                         'length': 85
                     })
 
-    # Movie -> Director
+    # Movie -> Director - use pre-computed data
     if show_directors:
-        for movie in well_reviewed_movies:
-            if movie.id not in movie_nodes:
+        for movie_id, directors in movie_directors:
+            if movie_id not in movie_nodes:
                 continue
-            for director in movie.directors:
+            for director in directors:
                 if director.id in director_nodes:
                     edges.append({
-                        'from': movie_nodes[movie.id],
-                        'to': director_nodes[director.id],
+                        'source': movie_nodes[movie_id],
+                        'target': director_nodes[director.id],
                         'type': 'directed_by',
                         'color': {'color': '#ED8936', 'opacity': 0.5},
                         'width': 2
                     })
 
-    # Chaos Movie -> Actor / Crew
+    # Chaos Movie -> Actor / Crew - use pre-computed data
     if chaos_mode:
         if show_actors:
-            for movie in well_reviewed_movies:
-                if movie.id not in movie_nodes:
+            for movie_id, cast in movie_cast:
+                if movie_id not in movie_nodes:
                     continue
-                for mp in movie.cast[:8]:
+                for mp in cast:
                     person = getattr(mp, 'person', None)
                     if not person or person.id not in actor_nodes:
                         continue
                     edges.append({
-                        'from': movie_nodes[movie.id],
-                        'to': actor_nodes[person.id],
+                        'source': movie_nodes[movie_id],
+                        'target': actor_nodes[person.id],
                         'type': 'acted_in',
                         'color': {'color': '#FFD700', 'opacity': 0.35},
                         'width': 1
                     })
         if show_crew:
-            for movie in well_reviewed_movies:
-                if movie.id not in movie_nodes:
+            for movie_id, crew in movie_crew:
+                if movie_id not in movie_nodes:
                     continue
-                for mp in movie.crew[:8]:
+                for mp in crew:
                     if getattr(mp, 'role', '') == 'Director':
                         continue
                     person = getattr(mp, 'person', None)
                     if not person or person.id not in crew_nodes:
                         continue
                     edges.append({
-                        'from': movie_nodes[movie.id],
-                        'to': crew_nodes[person.id],
+                        'source': movie_nodes[movie_id],
+                        'target': crew_nodes[person.id],
                         'type': 'crew',
                         'color': {'color': '#00CED1', 'opacity': 0.35},
                         'width': 1
                     })
 
-    # Affinity edges for people to genre/country
+    # Affinity edges for people to genre/country - OPTIMIZED VERSION
     if (show_genres or show_countries) and (genre_nodes or country_nodes):
-        def _add_affinity_edges(node_map, person_type, max_genres=3, max_countries=2):
+        # Pre-compute person -> movie mappings for O(1) lookups
+        person_movies = defaultdict(set)
+
+        # Build director -> movies mapping
+        for movie_id, directors in movie_directors:
+            for director in directors:
+                person_movies[director.id].add(movie_id)
+
+        # Build actor -> movies mapping
+        for movie_id, cast in movie_cast:
+            for mp in cast:
+                person = getattr(mp, 'person', None)
+                if person:
+                    person_movies[person.id].add(movie_id)
+
+        def _add_affinity_edges_optimized(node_map, person_type, max_genres=3, max_countries=2):
             for person_id, node_id in node_map.items():
+                if person_id not in person_movies:
+                    continue
+
                 genre_counter = defaultdict(int)
                 country_counter = defaultdict(int)
-                total_movies = 0
-                for mv in well_reviewed_movies:
-                    involved = False
-                    if person_type == 'actor':
-                        for mp in mv.cast[:8]:
-                            p = getattr(mp, 'person', None)
-                            if p and p.id == person_id:
-                                involved = True
-                                break
-                    elif person_type == 'director':
-                        for d in mv.directors:
-                            if d.id == person_id:
-                                involved = True
-                                break
-                    if not involved:
+                person_movie_ids = person_movies[person_id]
+
+                for movie_id in person_movie_ids:
+                    if movie_id not in movie_genres or movie_id not in movie_countries:
                         continue
-                    total_movies += 1
+
                     if show_genres:
-                        for g in mv.genres.all():
-                            if g.id in genre_nodes:
-                                genre_counter[g.id] += 1
+                        for genre in movie_genres[movie_id]:
+                            if genre.id in genre_nodes:
+                                genre_counter[genre.id] += 1
                     if show_countries:
-                        for c in mv.countries.all():
-                            if c.id in country_nodes:
-                                country_counter[c.id] += 1
+                        for country in movie_countries[movie_id]:
+                            if country.id in country_nodes:
+                                country_counter[country.id] += 1
+
+                total_movies = len(person_movie_ids)
                 if total_movies == 0:
                     continue
+
                 if show_genres and genre_counter:
                     genre_items = sorted(genre_counter.items(), key=lambda x: x[1], reverse=True)[:max_genres]
                     max_g = max(v for _, v in genre_items) or 1
@@ -677,8 +1357,8 @@ def build_network_graph(
                         if strength < 0.2:
                             continue
                         edges.append({
-                            'from': node_id,
-                            'to': genre_nodes[gid],
+                            'source': node_id,
+                            'target': genre_nodes[gid],
                             'type': f'{person_type}_genre_affinity',
                             'color': {'color': '#B794F4' if person_type=='actor' else '#D69E2E', 'opacity': 0.32},
                             'width': 0.8 + strength * 2.2,
@@ -686,6 +1366,7 @@ def build_network_graph(
                             'length': int(270 - strength * 140),
                             'label': f"{int(strength*100)}%"
                         })
+
                 if show_countries and country_counter:
                     country_items = sorted(country_counter.items(), key=lambda x: x[1], reverse=True)[:max_countries]
                     max_c = max(v for _, v in country_items) or 1
@@ -694,8 +1375,8 @@ def build_network_graph(
                         if strength < 0.25:
                             continue
                         edges.append({
-                            'from': node_id,
-                            'to': country_nodes[cid],
+                            'source': node_id,
+                            'target': country_nodes[cid],
                             'type': f'{person_type}_country_affinity',
                             'color': {'color': '#68D391' if person_type=='actor' else '#ED8936', 'opacity': 0.30},
                             'width': 0.8 + strength * 2.0,
@@ -703,39 +1384,53 @@ def build_network_graph(
                             'length': int(280 - strength * 150),
                             'label': f"{int(strength*100)}%"
                         })
-        if show_actors and actor_nodes:
-            _add_affinity_edges(actor_nodes, 'actor')
-        if show_directors and director_nodes:
-            _add_affinity_edges(director_nodes, 'director')
 
-    # User similarity & preferences
+        if show_actors and actor_nodes:
+            _add_affinity_edges_optimized(actor_nodes, 'actor')
+        if show_directors and director_nodes:
+            _add_affinity_edges_optimized(director_nodes, 'director')
+
+    # User similarity & preferences - ADVANCED ALGORITHMS
     # Build user -> liked movie set from grouped reviews (fast, no extra queries)
     user_movie_preferences = {uid: {r['object_id'] for r in rs} for uid, rs in good_reviews_by_user.items() if uid in user_nodes}
 
+    # Get optimized rating matrix for advanced similarity calculations
+    active_user_ids = list(user_nodes.keys())
+    rating_matrix = get_user_rating_matrix_optimized(active_user_ids)
+
     user_list = list(user_movie_preferences.keys())
     current_user_similarities = {}
+
     if show_similarity or show_predictions:
-        for i, user1_id in enumerate(user_list):
-            for user2_id in user_list[i+1:]:
-                if user1_id in user_nodes and user2_id in user_nodes:
-                    common_movies = user_movie_preferences[user1_id] & user_movie_preferences[user2_id]
-                    if len(common_movies) >= 1:
-                        similarity = len(common_movies) / max(len(user_movie_preferences[user1_id]), len(user_movie_preferences[user2_id]))
-                        if similarity >= 0.2:
-                            if show_similarity:
-                                edges.append({
-                                    'from': user_nodes[user1_id],
-                                    'to': user_nodes[user2_id],
-                                    'type': 'similarity',
-                                    'weight': similarity,
-                                    'color': {'color': '#38B2AC', 'opacity': 0.5},
-                                    'width': max(1, similarity * 4),
-                                    'label': f"{int(similarity*100)}% similar",
-                                    'dashes': True
-                                })
-                            if current_user and current_user.id in (user1_id, user2_id):
-                                other_id = user2_id if current_user.id == user1_id else user1_id
-                                current_user_similarities[other_id] = similarity
+        # Use advanced similarity algorithms
+        logger.info(f"Calculating similarities for {len(user_list)} users using advanced algorithms")
+
+        # Calculate similarity matrix using cosine similarity (can be changed to other methods)
+        similarity_matrix = get_user_similarity_matrix(
+            rating_matrix,
+            similarity_method='cosine',  # Options: 'cosine', 'pearson', 'adjusted_cosine', 'jaccard'
+            item_means=None  # Will be calculated if needed for adjusted_cosine
+        )
+
+        # Create similarity edges
+        for (user1_id, user2_id), similarity in similarity_matrix.items():
+            if user1_id in user_nodes and user2_id in user_nodes:
+                if show_similarity:
+                    edges.append({
+                        'source': user_nodes[user1_id],
+                        'target': user_nodes[user2_id],
+                        'type': 'similarity',
+                        'weight': similarity,
+                        'color': {'color': '#38B2AC', 'opacity': 0.5},
+                        'width': max(1, abs(similarity) * 4),
+                        'label': f"{int(abs(similarity)*100)}% similar",
+                        'dashes': True
+                    })
+
+                # Track similarities for current user
+                if current_user and current_user.id in (user1_id, user2_id):
+                    other_id = user2_id if current_user.id == user1_id else user1_id
+                    current_user_similarities[other_id] = similarity
 
     current_user_overlap_counts = {}
     if current_user and current_user.id in user_movie_preferences:
@@ -756,24 +1451,22 @@ def build_network_graph(
                     current_user_similarities[other_id] = shrunk_sim
                     current_user_overlap_counts[other_id] = overlap
 
-    # User -> genre / country affinity edges
+    # User -> genre / country affinity edges - OPTIMIZED VERSION
     if show_genres or show_countries:
-        movie_lookup = {m.id: m for m in well_reviewed_movies}
         for uid, liked_ids in user_movie_preferences.items():
             if uid not in user_nodes or not liked_ids:
                 continue
             genre_counter = defaultdict(int)
             country_counter = defaultdict(int)
             for mid in liked_ids:
-                mv = movie_lookup.get(mid)
-                if not mv:
+                if mid not in movie_genres or mid not in movie_countries:
                     continue
                 if show_genres:
-                    for g in mv.genres.all():
+                    for g in movie_genres[mid]:
                         if g.id in genre_nodes:
                             genre_counter[g.id] += 1
                 if show_countries:
-                    for c in mv.countries.all():
+                    for c in movie_countries[mid]:
                         if c.id in country_nodes:
                             country_counter[c.id] += 1
             if genre_counter and show_genres:
@@ -781,8 +1474,8 @@ def build_network_graph(
                 for gid, cnt in genre_counter.items():
                     strength = cnt / max_g
                     edges.append({
-                        'from': user_nodes[uid],
-                        'to': genre_nodes[gid],
+                        'source': user_nodes[uid],
+                        'target': genre_nodes[gid],
                         'type': 'user_genre_affinity',
                         'color': {'color': '#6B46C1', 'opacity': 0.35},
                         'width': 1 + strength * 2.5,
@@ -795,8 +1488,8 @@ def build_network_graph(
                 for cid, cnt in country_counter.items():
                     strength = cnt / max_c
                     edges.append({
-                        'from': user_nodes[uid],
-                        'to': country_nodes[cid],
+                        'source': user_nodes[uid],
+                        'target': country_nodes[cid],
                         'type': 'user_country_affinity',
                         'color': {'color': '#2F855A', 'opacity': 0.35},
                         'width': 1 + strength * 2.5,
@@ -805,254 +1498,64 @@ def build_network_graph(
                         'label': f"{int(strength*100)}%"
                     })
 
-    # Predictions
+    # Predictions - OPTIMIZED COLLABORATIVE FILTERING
     if show_predictions and current_user and current_user.id in user_nodes:
-        user_reviews_qs = Review.objects.filter(user=current_user, content_type=movie_content_type)
-        rated_ids_for_affinity = list(user_reviews_qs.values_list('object_id', flat=True))
-        user_review_movies = {m.id: m for m in Movie.objects.filter(id__in=rated_ids_for_affinity).prefetch_related('genres','countries','keywords')}
-        genre_pref = defaultdict(lambda: {'sum':0.0,'count':0})
-        country_pref = defaultdict(lambda: {'sum':0.0,'count':0})
-        director_pref = defaultdict(lambda: {'sum':0.0,'count':0})
-        keyword_pref = defaultdict(lambda: {'sum':0.0,'count':0})
-        for r in user_reviews_qs:
-            mv = user_review_movies.get(r.object_id)
-            if not mv:
-                continue
-            for g in mv.genres.all():
-                genre_pref[g.id]['sum'] += r.rating
-                genre_pref[g.id]['count'] += 1
-            for c in mv.countries.all():
-                country_pref[c.id]['sum'] += r.rating
-                country_pref[c.id]['count'] += 1
-            for d in mv.directors:
-                director_pref[d.id]['sum'] += r.rating
-                director_pref[d.id]['count'] += 1
-            for kw in mv.keywords.all():
-                keyword_pref[kw.id]['sum'] += r.rating
-                keyword_pref[kw.id]['count'] += 1
-        genre_affinity_map = {gid: (vals['sum']/vals['count'])/10.0 for gid, vals in genre_pref.items() if vals['count']>0}
-        country_affinity_map = {cid: (vals['sum']/vals['count'])/10.0 for cid, vals in country_pref.items() if vals['count']>0}
-        director_affinity_map = {did: (vals['sum']/vals['count'])/10.0 for did, vals in director_pref.items() if vals['count']>0}
-        keyword_affinity_map = {kid: (vals['sum']/vals['count'])/10.0 for kid, vals in keyword_pref.items() if vals['count']>0}
-        rated_movie_ids = set(Review.objects.filter(
-            user=current_user,
-            content_type=movie_content_type
-        ).values_list('object_id', flat=True))
-        predicted_scores = []
-        other_user_reviews = Review.objects.filter(
-            content_type=movie_content_type,
-            user__in=[u for u in active_users if u != current_user]
-        ).values('user_id', 'object_id', 'rating')
-        user_rating_sums = defaultdict(float)
-        user_rating_counts = defaultdict(int)
-        for r in other_user_reviews:
-            user_rating_sums[r['user_id']] += r['rating']
-            user_rating_counts[r['user_id']] += 1
-        user_mean_rating = {uid: user_rating_sums[uid]/user_rating_counts[uid] for uid in user_rating_sums if user_rating_counts[uid] > 0}
-        all_ratings_qs = Review.objects.filter(content_type=movie_content_type).values_list('rating', flat=True)
-        global_mean = sum(all_ratings_qs)/len(all_ratings_qs) if all_ratings_qs else 6.0
-        movie_ratings_map = defaultdict(list)
-        for r in other_user_reviews:
-            if r['user_id'] in current_user_similarities and current_user_similarities[r['user_id']] > 0:
-                movie_ratings_map[r['object_id']].append((r['user_id'], r['rating']))
-        current_user_all_ratings = list(Review.objects.filter(user=current_user, content_type=movie_content_type).values_list('rating', flat=True))
-        current_user_mean = sum(current_user_all_ratings)/len(current_user_all_ratings) if current_user_all_ratings else 6.0
-        for movie in well_reviewed_movies:
-            if movie.id in rated_movie_ids or movie.id not in movie_nodes:
-                continue
-            ratings = movie_ratings_map.get(movie.id, [])
-            g_aff_list = [genre_affinity_map.get(g.id, 0) for g in movie.genres.all()]
-            c_aff_list = [country_affinity_map.get(c.id, 0) for c in movie.countries.all()]
-            d_aff_list = [director_affinity_map.get(d.id, 0) for d in movie.directors]
-            kw_aff_list = []
-            matched_keyword_names = []
-            for kw in movie.keywords.all():
-                if kw.id in keyword_affinity_map:
-                    kw_aff_list.append(keyword_affinity_map[kw.id])
-                    if len(matched_keyword_names) < 5:
-                        matched_keyword_names.append(kw.name)
-            movie_genre_affinity = sum(g_aff_list)/len(g_aff_list) if g_aff_list else 0.0
-            movie_country_affinity = sum(c_aff_list)/len(c_aff_list) if c_aff_list else 0.0
-            movie_director_affinity = sum(d_aff_list)/len(d_aff_list) if d_aff_list else 0.0
-            movie_keyword_affinity = sum(kw_aff_list)/len(kw_aff_list) if kw_aff_list else 0.0
-            if ratings:
-                residual_sum = 0.0
-                weight_sum = 0.0
-                sq_weighted_residual_sum = 0.0
-                contributors = 0
-                for uid, rating in ratings:
-                    sim = current_user_similarities.get(uid, 0.0)
-                    if sim <= 0:
-                        continue
-                    mean_u = user_mean_rating.get(uid)
-                    if mean_u is None:
-                        continue
-                    affinity_factor = 1 + 0.15*movie_genre_affinity + 0.10*movie_country_affinity + 0.12*movie_director_affinity + 0.08*movie_keyword_affinity
-                    weight = sim * affinity_factor
-                    movie_avg_local = movie_stats[movie.id]['avg_rating'] if movie.id in movie_stats else global_mean
-                    baseline_um = mean_u + movie_avg_local - global_mean
-                    residual = rating - baseline_um
-                    if residual > 2.0: residual = 2.0
-                    elif residual < -2.0: residual = -2.0
-                    residual_sum += weight * residual
-                    weight_sum += weight
-                    sq_weighted_residual_sum += (weight * residual) ** 2
-                    contributors += 1
-                if contributors > 0 and weight_sum > 0:
-                    movie_avg = movie_stats[movie.id]['avg_rating'] if movie.id in movie_stats else global_mean
-                    movie_count = movie_stats[movie.id].get('review_count', 0) if movie.id in movie_stats else 0
-                    m = 5
-                    bayes_movie_avg = ((movie_count * movie_avg) + (m * global_mean)) / (movie_count + m) if movie_count + m > 0 else global_mean
-                    baseline = (current_user_mean + bayes_movie_avg - global_mean)
-                    if contributors < 3:
-                        baseline = 0.7 * bayes_movie_avg + 0.3 * current_user_mean
-                    shrink = 1.0 + (2.0 / contributors)
-                    adjusted_residual = (residual_sum / weight_sum) / shrink
-                    cf_pred = baseline + adjusted_residual
-                    cf_pred = max(1.0, min(10.0, cf_pred))
-                    std_err = (sq_weighted_residual_sum ** 0.5) / weight_sum if weight_sum > 0 else 0.0
-                    if contributors >= 8 and std_err < 0.35:
-                        confidence = 'high'
-                    elif contributors >= 4 and std_err < 0.55:
-                        confidence = 'med'
-                    else:
-                        confidence = 'low'
-                    predicted_scores.append((movie.id, cf_pred, movie_genre_affinity, movie_country_affinity, movie_director_affinity, movie_keyword_affinity, contributors, confidence, round(std_err,3), matched_keyword_names))
+        logger.info("Generating collaborative filtering predictions")
 
-        # Content vectors + blending
-        import math as _math
-        total_movies_for_features = len(well_reviewed_movies) or 1
-        genre_freq = defaultdict(int)
-        country_freq = defaultdict(int)
-        director_freq = defaultdict(int)
-        keyword_freq = defaultdict(int)
-        for mv in well_reviewed_movies:
-            for g in mv.genres.all():
-                genre_freq[g.id] += 1
-            for c in mv.countries.all():
-                country_freq[c.id] += 1
-            for d in mv.directors:
-                director_freq[d.id] += 1
-            for kw in mv.keywords.all():
-                keyword_freq[kw.id] += 1
-        def _idf(freq):
-            return _math.log((1 + total_movies_for_features) / (1 + freq)) + 1.0
-        movie_vectors = {}
-        for mv in well_reviewed_movies:
-            vec = {}
-            for g in mv.genres.all():
-                vec[f"g{g.id}"] = _idf(genre_freq[g.id])
-            for c in mv.countries.all():
-                vec[f"c{c.id}"] = _idf(country_freq[c.id])
-            for d in mv.directors:
-                vec[f"d{d.id}"] = _idf(director_freq[d.id])
-            for kw in mv.keywords.all():
-                vec[f"k{kw.id}"] = _idf(keyword_freq[kw.id])
-            norm = _math.sqrt(sum(v*v for v in vec.values())) or 1.0
-            for k in list(vec.keys()):
-                vec[k] /= norm
-            movie_vectors[mv.id] = vec
-        user_vec = {}
-        if current_user_all_ratings := list(Review.objects.filter(user=current_user, content_type=movie_content_type).values_list('rating', flat=True)):
-            mean_r = sum(current_user_all_ratings)/len(current_user_all_ratings)
-            var = sum((r - mean_r)**2 for r in current_user_all_ratings) / max(1, len(current_user_all_ratings)-1)
-            user_rating_std = _math.sqrt(var) if var > 0 else 1.0
-        else:
-            user_rating_std = 1.0
-        rated_movies_qs = Review.objects.filter(user=current_user, content_type=movie_content_type).values('object_id','rating')
-        current_user_mean = sum(current_user_all_ratings)/len(current_user_all_ratings) if current_user_all_ratings else 6.0
-        for r in rated_movies_qs:
-            mv_id = r['object_id']
-            mv_vec = movie_vectors.get(mv_id)
-            if not mv_vec:
-                continue
-            delta = r['rating'] - current_user_mean
-            weight = 1.0 + (delta / 2.5)
-            if weight < 0.2:
-                weight = 0.2
-            for k, v in mv_vec.items():
-                user_vec[k] = user_vec.get(k, 0.0) + weight * v
-        if user_vec:
-            norm_u = _math.sqrt(sum(v*v for v in user_vec.values())) or 1.0
-            for k in list(user_vec.keys()):
-                user_vec[k] /= norm_u
-        def _content_sim(mv_id):
-            if not user_vec:
-                return 0.0
-            mv_vec = movie_vectors.get(mv_id)
-            if not mv_vec:
-                return 0.0
-            if len(user_vec) < len(mv_vec):
-                return sum(user_vec.get(k,0.0)*mv_vec.get(k,0.0) for k in user_vec.keys())
-            return sum(user_vec.get(k,0.0)*mv_vec.get(k,0.0) for k in mv_vec.keys())
-        cf_map = {p[0]: p for p in predicted_scores}
-        content_sim_map = {}
-        blend_w_cf_map = {}
-        updated_predictions = []
-        for mv in well_reviewed_movies:
-            if mv.id in rated_movie_ids:
-                continue
-            mv_vec = movie_vectors.get(mv.id)
-            if not mv_vec:
-                continue
-            sim = _content_sim(mv.id)
-            content_score = current_user_mean + sim * user_rating_std
-            content_score = max(1.0, min(10.0, content_score))
-            if mv.id in cf_map:
-                _, cf_pred, g_aff, c_aff, d_aff, kw_aff, contributors, confidence, std_err, kw_names = cf_map[mv.id]
-                movie_count = movie_stats[mv.id].get('review_count', 0) if mv.id in movie_stats else 0
-                evidence_user = contributors / (contributors + 2.0) if contributors > 0 else 0.0
-                evidence_item = movie_count / (movie_count + 5.0) if movie_count > 0 else 0.0
-                w_cf = min(1.0, max(0.0, 0.6*evidence_user + 0.4*evidence_item))
-                blended = w_cf * cf_pred + (1 - w_cf) * content_score
-                content_sim_map[mv.id] = round(sim,4)
-                blend_w_cf_map[mv.id] = round(w_cf,3)
-                updated_predictions.append((mv.id, blended, g_aff, c_aff, d_aff, kw_aff, contributors, confidence, std_err, kw_names))
+        # Get unrated movies for current user
+        rated_movie_ids = set(rating_matrix.get(current_user.id, {}).keys())
+        unrated_movies = [m.id for m in well_reviewed_movies if m.id not in rated_movie_ids and m.id in movie_nodes]
+
+        if unrated_movies and similarity_matrix:
+            # Generate predictions using collaborative filtering
+            predictions = get_collaborative_filtering_predictions(
+                current_user.id,
+                rating_matrix,
+                similarity_matrix,
+                unrated_movies,
+                k=10  # Use top 10 similar users
+            )
+
+            # Sort predictions by score
+            sorted_predictions = sorted(predictions.items(), key=lambda x: x[1], reverse=True)
+            if predictions_limit == 0:
+                top_predictions = []
+            elif predictions_limit is None:
+                top_predictions = sorted_predictions
             else:
-                g_aff_list = [genre_affinity_map.get(g.id, 0) for g in mv.genres.all()]
-                c_aff_list = [country_affinity_map.get(c.id, 0) for c in mv.countries.all()]
-                d_aff_list = [director_affinity_map.get(d.id, 0) for d in mv.directors]
-                kw_aff_list = [keyword_affinity_map.get(k.id, 0) for k in mv.keywords.all()]
-                g_aff = sum(g_aff_list)/len(g_aff_list) if g_aff_list else 0.0
-                c_aff = sum(c_aff_list)/len(c_aff_list) if c_aff_list else 0.0
-                d_aff = sum(d_aff_list)/len(d_aff_list) if d_aff_list else 0.0
-                kw_aff = sum(kw_aff_list)/len(kw_aff_list) if kw_aff_list else 0.0
-                content_sim_map[mv.id] = round(sim,4)
-                blend_w_cf_map[mv.id] = 0.0
-                updated_predictions.append((mv.id, content_score, g_aff, c_aff, d_aff, kw_aff, 0, 'low', 0.0, []))
-        predicted_scores = updated_predictions
-        predicted_scores.sort(key=lambda x: x[1], reverse=True)
-        top_predictions = predicted_scores[:predictions_limit] if predictions_limit else []
-        for movie_id, pred, g_aff, c_aff, d_aff, kw_aff, contributors, confidence, std_err, kw_names in top_predictions:
-            for node in nodes:
-                if node['id'] == movie_nodes[movie_id]:
-                    node['predicted_score'] = round(pred, 2)
-                    node['genre_affinity'] = round(g_aff, 3)
-                    node['country_affinity'] = round(c_aff, 3)
-                    node['director_affinity'] = round(d_aff, 3)
-                    node['keyword_affinity'] = round(kw_aff, 3)
-                    node['predicted_contributors'] = contributors
-                    node['predicted_confidence'] = confidence
-                    node['predicted_std_err'] = std_err
-                    cs = content_sim_map.get(movie_id)
-                    if cs is not None:
-                        node['content_similarity'] = cs
-                    bw = blend_w_cf_map.get(movie_id)
-                    if bw is not None:
-                        node['blend_w_cf'] = bw
-                    if kw_names:
-                        node['matched_keywords'] = kw_names
-                    break
-            length = max(120, 400 - int(pred * 25))
-            edges.append({
-                'from': user_nodes[current_user.id],
-                'to': movie_nodes[movie_id],
-                'type': 'prediction',
-                'color': {'color': '#FFD700', 'opacity': 0.6},
-                'width': max(1, pred / 3),
-                'label': f"Pred {pred:.1f}",
-                'length': length
-            })
+                top_predictions = sorted_predictions[:predictions_limit]
+
+            # Add prediction edges and update movie nodes
+            for movie_id, predicted_score in top_predictions:
+                if movie_id in movie_nodes:
+                    # Update movie node with prediction data
+                    for node in nodes:
+                        if node['id'] == movie_nodes[movie_id]:
+                            node['predicted_score'] = round(predicted_score, 2)
+                            node['predicted_contributors'] = len([u for u in rating_matrix.keys()
+                                                                if u != current_user.id and movie_id in rating_matrix.get(u, {})])
+                            node['predicted_confidence'] = 'high' if node['predicted_contributors'] >= 5 else 'medium'
+                            break
+
+                    # Add prediction edge with enhanced styling
+                    length = max(120, 400 - int(predicted_score * 25))
+                    confidence_color = '#FFD700'  # Gold for high confidence
+                    if node['predicted_confidence'] == 'low':
+                        confidence_color = '#FFA500'  # Orange for low confidence
+                    elif node['predicted_confidence'] == 'medium':
+                        confidence_color = '#32CD32'  # Green for medium confidence
+
+                    edges.append({
+                        'source': user_nodes[current_user.id],
+                        'target': movie_nodes[movie_id],
+                        'type': 'prediction',
+                        'color': {'color': '#FF6B6B', 'opacity': 0.6},
+                        'width': 2,
+                        'label': f"{predicted_score:.1f}",
+                        'length': 150
+                    })
+
+            logger.info(f"Generated {len(top_predictions)} predictions for user {current_user.id}")
 
     stats = {
         'total_nodes': len(nodes),
@@ -1067,7 +1570,48 @@ def build_network_graph(
         'recommendations': len([e for e in edges if e.get('type') == 'prediction']),
     }
 
-    return {'nodes': nodes, 'edges': edges, 'stats': stats}
+    # Add advanced analytics if we have enough nodes
+    analytics = {}
+    if len(nodes) >= 5:  # Only run analytics on reasonably sized graphs
+        try:
+            logger.info("Running community detection and centrality analysis")
+
+            # Detect communities
+            communities_result = detect_communities(nodes, edges)
+            analytics['communities'] = communities_result
+
+            # Calculate centrality measures
+            centrality_result = calculate_centrality_measures(nodes, edges)
+            analytics['centrality'] = centrality_result
+
+            # Add community and centrality data to nodes
+            for node in nodes:
+                node_id = node['id']
+
+                # Add community information
+                if communities_result['communities']:
+                    for comm_id, comm_data in communities_result['communities'].items():
+                        if node_id in comm_data['nodes']:
+                            node['community'] = comm_id
+                            node['community_size'] = comm_data['size']
+                            node['community_name'] = comm_data.get('name', f'Community {comm_id.split("_")[-1]}')
+                            break
+
+                # Add centrality measures
+                if node_id in centrality_result['centrality_measures']:
+                    node['centrality'] = centrality_result['centrality_measures'][node_id]
+
+            logger.info(f"Analytics completed: {communities_result['stats']['num_communities']} communities detected")
+
+        except Exception as e:
+            logger.error(f"Error running analytics: {e}")
+            analytics['error'] = str(e)
+
+    result = {'nodes': nodes, 'edges': edges, 'stats': stats}
+    if analytics:
+        result['analytics'] = analytics
+
+    return result
 
 
 __all__ = [
