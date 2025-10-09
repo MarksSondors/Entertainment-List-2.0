@@ -15,3 +15,4 @@ psycopg2-binary>=2.9.10
 django-debug-toolbar>=4.4.6
 django-silk>=5.1.0
 networkx>=3.2.1
+psutil>=5.9.0

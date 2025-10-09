@@ -358,228 +358,269 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[Dict]
 def leiden_communities(G: nx.Graph, resolution: float = 1.0, random_state: Optional[int] = None, 
                       max_iterations: int = 100, tolerance: float = 1e-6) -> List[Set]:
     """
-    Leiden algorithm for community detection - improved version of Louvain.
+    Leiden Algorithm for Community Detection
     
-    The Leiden algorithm provides better quality communities and guarantees 
-    well-connected communities, unlike the original Louvain algorithm.
+    An improved version of the Louvain algorithm that guarantees well-connected communities.
+    
+    The algorithm works in three phases:
+    1. Move nodes to optimize modularity (like Louvain)
+    2. Refine communities by splitting disconnected parts
+    3. Aggregate the graph for next iteration
     
     Args:
-        G: NetworkX graph
-        resolution: Resolution parameter for modularity optimization
-        random_state: Random seed for reproducibility
-        max_iterations: Maximum number of iterations
-        tolerance: Convergence tolerance
+        G: NetworkX graph to analyze
+        resolution: Controls community size (higher = smaller communities)
+        random_state: Seed for reproducible results
+        max_iterations: Stop after this many iterations
+        tolerance: Convergence threshold for modularity improvement
     
     Returns:
-        List of sets, each containing node IDs for a community
+        List of sets, where each set contains node IDs belonging to one community
     """
+    # Set random seed for reproducibility
     if random_state is not None:
         random.seed(random_state)
     
+    # Handle edge cases
     if len(G) == 0:
         return []
     
-    # Initialize: each node in its own community
-    communities = {node: {node} for node in G.nodes()}
-    community_to_nodes = {i: {node} for i, node in enumerate(G.nodes())}
-    node_to_community = {node: i for i, node in enumerate(G.nodes())}
-    
-    # Precompute node degrees and edge weights
-    node_degree = dict(G.degree(weight='weight'))
-    total_weight = sum(data.get('weight', 1.0) for _, _, data in G.edges(data=True)) * 2
-    
-    if total_weight == 0:
+    if len(G) == 1:
         return [set(G.nodes())]
     
-    def calculate_modularity_gain(node, old_community, new_community, node_degree, total_weight, resolution):
-        """Calculate modularity gain when moving node between communities."""
-        if old_community == new_community:
+    # ========================================
+    # INITIALIZATION
+    # ========================================
+    # Start with each node in its own community
+    node_to_community = {node: idx for idx, node in enumerate(G.nodes())}
+    community_to_nodes = {idx: {node} for idx, node in enumerate(G.nodes())}
+    
+    # Pre-calculate graph metrics (these don't change during iterations)
+    node_degrees = dict(G.degree(weight='weight'))
+    total_edge_weight = sum(data.get('weight', 1.0) for _, _, data in G.edges(data=True)) * 2
+    
+    if total_edge_weight == 0:
+        return [set(G.nodes())]
+    
+    # ========================================
+    # HELPER FUNCTIONS
+    # ========================================
+    
+    def compute_modularity_gain(node_id, from_community, to_community):
+        """
+        Calculate how much modularity improves if we move a node between communities.
+        
+        Modularity measures how well the graph is divided into communities.
+        Higher modularity = better community structure.
+        
+        Args:
+            node_id: The node we're considering moving
+            from_community: Current community ID
+            to_community: Candidate community ID
+        
+        Returns:
+            Float representing modularity gain (positive = good move)
+        """
+        if from_community == to_community:
             return 0.0
         
-        # Calculate edges to old and new communities
-        edges_to_old = sum(G.get_edge_data(node, neighbor, {}).get('weight', 1.0)
-                          for neighbor in G.neighbors(node)
-                          if node_to_community[neighbor] == old_community and neighbor != node)
+        # Count edges from this node to each community
+        edges_to_old_community = 0.0
+        edges_to_new_community = 0.0
         
-        edges_to_new = sum(G.get_edge_data(node, neighbor, {}).get('weight', 1.0)
-                          for neighbor in G.neighbors(node)
-                          if node_to_community[neighbor] == new_community)
+        for neighbor in G.neighbors(node_id):
+            edge_weight = G.get_edge_data(node_id, neighbor, {}).get('weight', 1.0)
+            neighbor_community = node_to_community[neighbor]
+            
+            if neighbor_community == from_community and neighbor != node_id:
+                edges_to_old_community += edge_weight
+            elif neighbor_community == to_community:
+                edges_to_new_community += edge_weight
         
-        # Calculate community degrees
-        old_comm_degree = sum(node_degree[n] for n in community_to_nodes[old_community] if n != node)
-        new_comm_degree = sum(node_degree[n] for n in community_to_nodes[new_community])
+        # Calculate total degree of each community (excluding this node from old community)
+        old_community_degree = sum(
+            node_degrees[n] for n in community_to_nodes[from_community] if n != node_id
+        )
+        new_community_degree = sum(
+            node_degrees[n] for n in community_to_nodes[to_community]
+        )
         
-        node_deg = node_degree[node]
+        node_degree = node_degrees[node_id]
         
-        # Modularity gain calculation
-        gain = (edges_to_new - edges_to_old) / total_weight
-        gain -= resolution * node_deg * (new_comm_degree - old_comm_degree + node_deg) / (total_weight ** 2)
+        # Modularity gain formula
+        # Part 1: Change in edge density within communities
+        edge_gain = (edges_to_new_community - edges_to_old_community) / total_edge_weight
         
-        return gain
+        # Part 2: Expected change (null model correction)
+        degree_penalty = resolution * node_degree * (
+            new_community_degree - old_community_degree + node_degree
+        ) / (total_edge_weight ** 2)
+        
+        return edge_gain - degree_penalty
     
-    def local_moving_phase():
-        """Local moving phase of Leiden algorithm."""
-        improved = True
-        iterations = 0
+    def phase1_move_nodes():
+        """
+        Phase 1: Local Moving
         
-        while improved and iterations < max_iterations:
-            improved = False
+        Try moving each node to neighboring communities to improve modularity.
+        Keep iterating until no beneficial moves are found.
+        
+        Returns:
+            List of communities (each community is a set of nodes)
+        """
+        iterations = 0
+        nodes_moved = True
+        moves_this_iteration = 0
+        
+        while nodes_moved and iterations < max_iterations:
+            nodes_moved = False
+            moves_this_iteration = 0
             iterations += 1
             
-            # Randomize order to avoid bias
-            nodes_order = list(G.nodes())
-            random.shuffle(nodes_order)
+            # Process nodes in random order to avoid bias
+            node_list = list(G.nodes())
+            random.shuffle(node_list)
             
-            for node in nodes_order:
-                current_community = node_to_community[node]
+            for node_id in node_list:
+                current_community = node_to_community[node_id]
+                
+                # Find all neighboring communities
+                candidate_communities = set()
+                for neighbor in G.neighbors(node_id):
+                    candidate_communities.add(node_to_community[neighbor])
+                
+                # Try moving to best neighboring community
                 best_community = current_community
                 best_gain = 0.0
                 
-                # Consider neighboring communities
-                neighbor_communities = set()
-                for neighbor in G.neighbors(node):
-                    neighbor_communities.add(node_to_community[neighbor])
-                
-                # Also consider moving to a new community
-                neighbor_communities.add(max(community_to_nodes.keys()) + 1)
-                
-                for candidate_community in neighbor_communities:
-                    if candidate_community == current_community:
+                for candidate in candidate_communities:
+                    if candidate == current_community:
                         continue
                     
-                    # Create new community if it doesn't exist
-                    if candidate_community not in community_to_nodes:
-                        community_to_nodes[candidate_community] = set()
-                    
-                    gain = calculate_modularity_gain(
-                        node, current_community, candidate_community,
-                        node_degree, total_weight, resolution
-                    )
+                    gain = compute_modularity_gain(node_id, current_community, candidate)
                     
                     if gain > best_gain + tolerance:
                         best_gain = gain
-                        best_community = candidate_community
+                        best_community = candidate
                 
-                # Move node if beneficial
+                # Execute the move if beneficial
                 if best_community != current_community:
                     # Remove from old community
-                    community_to_nodes[current_community].remove(node)
+                    community_to_nodes[current_community].discard(node_id)
                     if not community_to_nodes[current_community]:
                         del community_to_nodes[current_community]
                     
                     # Add to new community
-                    if best_community not in community_to_nodes:
-                        community_to_nodes[best_community] = set()
-                    community_to_nodes[best_community].add(node)
-                    node_to_community[node] = best_community
+                    community_to_nodes[best_community].add(node_id)
+                    node_to_community[node_id] = best_community
                     
-                    improved = True
+                    nodes_moved = True
+                    moves_this_iteration += 1
+            
+            # Early exit if very few moves were made
+            if moves_this_iteration < len(G.nodes()) * 0.01:  # Less than 1% of nodes moved
+                logger.debug(f"Phase 1 early exit: only {moves_this_iteration} moves in iteration {iterations}")
+                break
         
-        # Filter out empty communities before returning
-        return [community for community in community_to_nodes.values() if community]
+        # Return non-empty communities
+        return [comm_nodes for comm_nodes in community_to_nodes.values() if comm_nodes]
     
-    def refinement_phase(communities_list):
-        """Refinement phase to ensure well-connected communities."""
-        refined_communities = []
+    def phase2_refine_communities(communities_list):
+        """
+        Phase 2: Refinement
+        
+        Ensure all communities are well-connected (no disconnected sub-parts).
+        This is what makes Leiden better than Louvain.
+        
+        Args:
+            communities_list: List of communities to refine
+        
+        Returns:
+            List of refined communities (potentially more communities than input)
+        """
+        refined = []
         
         for community in communities_list:
+            # Single nodes are already well-connected
             if len(community) <= 1:
-                if len(community) == 1:  # Only add non-empty single-node communities
-                    refined_communities.append(community)
+                if community:  # Only add non-empty
+                    refined.append(community)
                 continue
             
-            # Create subgraph for this community
+            # Check if community is a single connected component
             subgraph = G.subgraph(community)
             
-            # Check if community is well-connected (single connected component)
             if nx.is_connected(subgraph):
-                refined_communities.append(community)
+                # Community is well-connected, keep it
+                refined.append(community)
             else:
-                # Split into connected components
-                for component in nx.connected_components(subgraph):
-                    if component:  # Only add non-empty components
-                        refined_communities.append(component)
+                # Community is disconnected, split it
+                for connected_part in nx.connected_components(subgraph):
+                    if connected_part:  # Only add non-empty
+                        refined.append(connected_part)
         
-        return refined_communities
+        return refined
     
-    def aggregation_phase(communities_list):
-        """Create aggregate graph where each community becomes a node."""
-        if len(communities_list) == len(G):
-            return communities_list  # No improvement possible
-        
-        # Create mapping from node to new community ID
-        new_node_to_community = {}
-        for i, community in enumerate(communities_list):
-            for node in community:
-                new_node_to_community[node] = i
-        
-        # Create aggregate graph
-        aggregate_graph = nx.Graph()
-        aggregate_graph.add_nodes_from(range(len(communities_list)))
-        
-        # Add edges between communities
-        community_edges = defaultdict(float)
-        for u, v, data in G.edges(data=True):
-            comm_u = new_node_to_community[u]
-            comm_v = new_node_to_community[v]
-            if comm_u != comm_v:
-                edge_key = tuple(sorted([comm_u, comm_v]))
-                community_edges[edge_key] += data.get('weight', 1.0)
-        
-        for (comm_u, comm_v), weight in community_edges.items():
-            aggregate_graph.add_edge(comm_u, comm_v, weight=weight)
-        
-        return aggregate_graph, new_node_to_community, communities_list
+    # ========================================
+    # MAIN ALGORITHM
+    # ========================================
     
-    # Main Leiden algorithm loop
-    current_communities = list({frozenset([node]) for node in G.nodes()})
-    previous_modularity = -1
+    previous_modularity = -1.0
+    communities = [{node} for node in G.nodes()]  # Start: each node is its own community
+    no_improvement_count = 0  # Track iterations without improvement
     
     for iteration in range(max_iterations):
-        # Phase 1: Local moving
-        current_communities = local_moving_phase()
+        # Phase 1: Move nodes to improve modularity
+        communities = phase1_move_nodes()
         
-        # Phase 2: Refinement
-        current_communities = refinement_phase(current_communities)
+        # Phase 2: Split any disconnected communities
+        communities = phase2_refine_communities(communities)
         
-        # Calculate modularity
-        current_modularity = nx.algorithms.community.modularity(G, current_communities, weight='weight', resolution=resolution)
+        # Rebuild mappings for next iteration
+        community_to_nodes.clear()
+        node_to_community.clear()
+        for idx, community in enumerate(communities):
+            community_to_nodes[idx] = set(community)
+            for node in community:
+                node_to_community[node] = idx
         
-        # Check for convergence
-        if abs(current_modularity - previous_modularity) < tolerance:
-            break
+        # Calculate current modularity score
+        current_modularity = nx.algorithms.community.modularity(
+            G, communities, weight='weight', resolution=resolution
+        )
         
-        # Phase 3: Aggregation (prepare for next iteration)
-        if iteration < max_iterations - 1:
-            try:
-                aggregate_result = aggregation_phase(current_communities)
-                if isinstance(aggregate_result, tuple):
-                    agg_graph, node_mapping, communities_list = aggregate_result
-                    if len(agg_graph) < len(G):
-                        # Continue with aggregate graph in next iteration
-                        # Update mappings for next iteration
-                        G = agg_graph
-                        community_to_nodes = {i: comm for i, comm in enumerate(communities_list)}
-                        node_to_community = node_mapping
-                        node_degree = dict(G.degree(weight='weight'))
-                        total_weight = sum(data.get('weight', 1.0) for _, _, data in G.edges(data=True)) * 2
-            except:
-                # If aggregation fails, continue with current communities
+        logger.debug(f"Leiden iteration {iteration}: {len(communities)} communities, modularity={current_modularity:.4f}")
+        
+        # Check for convergence with multiple criteria
+        modularity_improvement = current_modularity - previous_modularity
+        
+        # Converged if modularity improvement is negligible
+        if abs(modularity_improvement) < tolerance:
+            no_improvement_count += 1
+            if no_improvement_count >= 3:  # Require 3 iterations of no improvement
+                logger.info(f"Leiden converged after {iteration + 1} iterations (no improvement)")
                 break
+        else:
+            no_improvement_count = 0
+        
+        # Also stop if modularity is decreasing (shouldn't happen but safety check)
+        if modularity_improvement < -tolerance:
+            logger.info(f"Leiden stopped after {iteration + 1} iterations (modularity decreased)")
+            break
         
         previous_modularity = current_modularity
     
-    # Convert back to sets of original node IDs and filter out empty communities
+    # ========================================
+    # FINALIZATION
+    # ========================================
+    
+    # Convert to list of sets and filter empty communities
     final_communities = []
-    for community in current_communities:
-        if community:  # Only add non-empty communities
-            if isinstance(community, (set, frozenset)):
-                community_set = set(community)
-            else:
-                community_set = set(community)
-            
-            if community_set:  # Double-check it's not empty
-                final_communities.append(community_set)
+    for community in communities:
+        if community:
+            final_communities.append(set(community) if not isinstance(community, set) else community)
+    
+    logger.info(f"Leiden completed: {len(final_communities)} communities with modularity {previous_modularity:.4f}")
     
     return final_communities
 
@@ -1356,10 +1397,9 @@ def build_network_graph(
     movie_limit: int,
     show_similarity: bool,
     show_actors: bool,
-    show_crew: bool,
-    layout_strategy: str = 'enhanced'
+    show_crew: bool
 ):
-    """Full network graph computation (parity with original view)."""
+    """Full network graph computation using MultiGravity Force Atlas layout."""
     import math
 
     nodes = []
@@ -1426,13 +1466,25 @@ def build_network_graph(
         user_review_counts[user.id] = user_movie_reviews
         # Scale user size based on review count (base: 20, range: 15-25)
         user_size = max(15, min(25, 20 + user_movie_reviews * 0.3))
+        
+        # Get profile picture URL if available
+        profile_picture_url = None
+        if hasattr(user, 'get_profile_picture'):
+            profile_picture_url = user.get_profile_picture()
+        elif hasattr(user, 'profile_picture') and user.profile_picture:
+            try:
+                profile_picture_url = user.profile_picture.url
+            except:
+                profile_picture_url = None
+        
         nodes.append({
             'id': node_id,
             'label': user.username,
             'type': 'user',
             'size': user_size,
             'color': '#4299E1',
-            'review_count': user_movie_reviews
+            'review_count': user_movie_reviews,
+            'profile_picture': profile_picture_url
         })
 
     # Movie nodes with proper sizes
@@ -2023,17 +2075,7 @@ def build_network_graph(
             logger.error(f"Error running analytics: {e}")
             analytics['error'] = str(e)
 
-    # Apply layout enhancements based on strategy
-    if layout_strategy == 'sectored':
-        # Apply strategic initial positioning
-        positions = calculate_initial_positions(nodes, edges)
-        for node in nodes:
-            node_id = node['id']
-            if node_id in positions:
-                x, y = positions[node_id]
-                node.update({'x': x, 'y': y})
-    
-    # Always enhance layout with repulsion forces and constraints
+    # Apply MultiGravity Force Atlas layout (only layout supported)
     enhanced_result = enhance_graph_layout(nodes, edges)
     nodes, edges = enhanced_result['nodes'], enhanced_result['edges']
     
@@ -2052,68 +2094,17 @@ def build_network_graph(
     return result
 
 
-def calculate_initial_positions(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Tuple[float, float]]:
-    """Calculate strategic initial positions to reduce center clustering."""
-    positions = {}
+def calculate_multigravity_forces(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Any]:
+    """Calculate MultiGravity Force Atlas layout configuration.
     
-    # Group nodes by type
-    node_types = defaultdict(list)
-    for node in nodes:
-        node_types[node['type']].append(node)
-    
-    # Create rings/sectors for different node types
-    type_angles = {
-        'user': 0,      # Top
-        'movie': 90,    # Right
-        'genre': 180,   # Bottom
-        'country': 270, # Left
-        'director': 45, # Top-right
-        'actor': 135,   # Bottom-right
-        'crew': 225     # Bottom-left
-    }
-    
-    type_radii = {
-        'user': 200,
-        'movie': 150,
-        'genre': 300,
-        'country': 280,
-        'director': 180,
-        'actor': 220,
-        'crew': 240
-    }
-    
-    for node_type, nodes_of_type in node_types.items():
-        if node_type not in type_angles:
-            continue
-            
-        base_angle = type_angles[node_type]
-        base_radius = type_radii[node_type]
-        
-        # Distribute nodes in an arc around their sector
-        angle_spread = 60  # degrees
-        for i, node in enumerate(nodes_of_type):
-            if len(nodes_of_type) == 1:
-                angle = base_angle
-            else:
-                angle_offset = (i / (len(nodes_of_type) - 1) - 0.5) * angle_spread
-                angle = base_angle + angle_offset
-            
-            # Vary radius based on node importance/size
-            radius_variation = (node.get('size', 15) - 15) * 2
-            radius = base_radius + radius_variation
-            
-            x = radius * cos(radians(angle))
-            y = radius * sin(radians(angle))
-            positions[node['id']] = (x, y)
-    
-    return positions
-
-
-def enhance_graph_layout(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Any]:
-    """Add layout hints to reduce center clustering."""
-    
-    # Calculate node connections
+    MultiGravity Force Atlas uses different gravitational forces for different node types,
+    allowing for better separation and clustering of related nodes while preventing
+    center clustering common in traditional Force Atlas algorithms.
+    """
+    # Calculate node connections for degree-based properties
     node_connections = defaultdict(int)
+    node_types = defaultdict(list)
+    
     for edge in edges:
         source_id = edge.get('source', edge.get('from'))
         target_id = edge.get('target', edge.get('to'))
@@ -2122,74 +2113,181 @@ def enhance_graph_layout(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Any]
         if target_id:
             node_connections[target_id] += 1
     
-    # Add layout properties to nodes
+    # Group nodes by type for type-specific calculations
+    for node in nodes:
+        node_types[node['type']].append(node)
+    
+    # Calculate graph metrics for adaptive parameters
+    num_nodes = len(nodes)
+    num_edges = len(edges)
+    density = (2 * num_edges) / (num_nodes * (num_nodes - 1)) if num_nodes > 1 else 0
+    
+    # MultiGravity configuration - different gravity centers for each node type
+    gravity_centers = {
+        'user': {'x': -400, 'y': -300, 'strength': 0.8},      # Top-left quadrant
+        'movie': {'x': 400, 'y': -300, 'strength': 1.0},      # Top-right quadrant
+        'genre': {'x': -400, 'y': 400, 'strength': 0.6},      # Bottom-left quadrant
+        'country': {'x': 400, 'y': 400, 'strength': 0.6},     # Bottom-right quadrant
+        'director': {'x': 0, 'y': -400, 'strength': 0.7},     # Top center
+        'actor': {'x': -200, 'y': 0, 'strength': 0.5},        # Left center
+        'crew': {'x': 200, 'y': 0, 'strength': 0.5}           # Right center
+    }
+    
+    # Process nodes with MultiGravity properties
     enhanced_nodes = []
     for node in nodes:
         node_id = node['id']
+        node_type = node['type']
         connections = node_connections[node_id]
         
-        # Create a copy of the node to avoid modifying the original
         enhanced_node = node.copy()
         
-        # Add physics properties
+        # Base mass calculation
+        base_mass = max(1.0, node.get('size', 15) / 10)
+        
+        # Type-specific mass adjustments for MultiGravity
+        mass_multipliers = {
+            'user': 1.2,      # Users have more mass for stability
+            'movie': 1.0,     # Movies are the base mass
+            'genre': 0.8,     # Genres are lighter, more mobile
+            'country': 0.8,   # Countries are lighter
+            'director': 1.1,  # Directors have good mass
+            'actor': 0.7,     # Actors are lighter
+            'crew': 0.6       # Crew are lightest
+        }
+        
+        mass = base_mass * mass_multipliers.get(node_type, 1.0)
+        
+        # Repulsion force based on degree and type
+        repulsion_base = -50 - (connections * 5)  # More connected = more repulsive
+        type_repulsion_multipliers = {
+            'user': 1.3,      # Users repel more (prevent clustering)
+            'movie': 1.0,     # Movies have base repulsion
+            'genre': 1.2,     # Genres need stronger repulsion to stay separated
+            'country': 1.2,   # Countries need stronger repulsion to stay separated
+            'director': 1.1,  # Directors have good repulsion
+            'actor': 0.9,     # Actors can be somewhat close
+            'crew': 0.9       # Crew can be somewhat close
+        }
+        
+        repulsion = repulsion_base * type_repulsion_multipliers.get(node_type, 1.0)
+        
+        # MultiGravity center assignment
+        gravity_config = gravity_centers.get(node_type, gravity_centers['movie'])
+        
+        # Enhanced node properties for MultiGravity Force Atlas
         enhanced_node.update({
-            'mass': max(1, node.get('size', 15) / 10),  # Larger nodes have more mass
-            'charge': -30 * (1 + connections * 0.1),   # More connected = more repulsive
-            'gravity': 0.1 if connections > 5 else 0.3, # Hubs have less gravity pull
-            'degree': connections
+            'mass': mass,
+            'repulsion': repulsion,
+            'gravity_center_x': gravity_config['x'],
+            'gravity_center_y': gravity_config['y'],
+            'gravity_strength': gravity_config['strength'] * (1.0 - density * 0.5),  # Reduce gravity in dense graphs
+            'degree': connections,
+            'node_type': node_type,
+            
+            # Anti-hub measures for highly connected nodes
+            'central_gravity': 0.001 if connections > 15 else 0.005,
+            'damping_factor': 0.5 + min(0.3, connections * 0.01),  # More damping for hubs
+            
+            # Initial positioning hints (will be used by frontend)
+            'preferred_x': gravity_config['x'] + random.uniform(-50, 50),
+            'preferred_y': gravity_config['y'] + random.uniform(-50, 50)
         })
         
-        # Set constraints for very important nodes
-        if connections > 20:  # Major hubs
-            enhanced_node['fixed'] = True
-            # Spread major hubs around the perimeter
-            angle = random.uniform(0, 360)
-            radius = random.uniform(300, 500)
-            enhanced_node['fx'] = radius * cos(radians(angle))
-            enhanced_node['fy'] = radius * sin(radians(angle))
+        # Special handling for super-hubs (>30 connections)
+        if connections > 30:
+            enhanced_node.update({
+                'repulsion': repulsion * 1.5,  # Extra repulsion
+                'gravity_strength': gravity_config['strength'] * 0.3,  # Much less gravity
+                'mass': mass * 1.3,  # More mass for stability
+                'is_super_hub': True
+            })
         
         enhanced_nodes.append(enhanced_node)
     
-    # Enhance edge properties
+    # Process edges with type-specific lengths and strengths
     enhanced_edges = []
     for edge in edges:
         enhanced_edge = edge.copy()
         edge_type = edge.get('type', 'default')
         
-        # Different edge types have different ideal lengths
-        length_by_type = {
-            'review': 80,
-            'similarity': 120,
-            'genre': 60,
-            'origin': 70,
-            'directed_by': 50,
-            'acted_in': 40,
-            'crew': 45,
-            'prediction': 100,
-            'user_genre_affinity': 150,
-            'user_country_affinity': 160,
+        # MultiGravity edge length configuration
+        edge_lengths = {
+            'prediction': 120,           # Prediction edges longer
+            'similarity': 100,           # User similarity medium
+            'user_genre_affinity': 180,  # Affinity edges longer
+            'user_country_affinity': 190,
+            'actor_genre_affinity': 160,
+            'director_genre_affinity': 160,
+            'review': 80,               # Review edges shorter
+            'origin': 130,              # Movie-country connections - increased to spread countries
+            'genre': 125,               # Movie-genre connections - increased to spread genres
+            'directed_by': 95,          # Movie-director connections
+            'acted_in': 100,            # Movie-actor connections
+            'crew': 105,                # Movie-crew connections
+            'default': 90
         }
         
-        enhanced_edge['length'] = length_by_type.get(edge_type, 80)
-        enhanced_edge['strength'] = edge.get('weight', 1.0) * 0.5  # Reduce pull strength
+        # Edge strength affects spring constant
+        edge_strengths = {
+            'prediction': 0.3,      # Weaker springs for predictions
+            'similarity': 0.6,      # Medium strength for similarity
+            'affinity': 0.4,        # Weaker for affinity edges
+            'review': 0.8,          # Strong for review connections
+            'default': 0.5
+        }
+        
+        # Determine strength category
+        strength_category = 'default'
+        if 'affinity' in edge_type:
+            strength_category = 'affinity'
+        elif edge_type in edge_strengths:
+            strength_category = edge_type
+        
+        enhanced_edge.update({
+            'length': edge_lengths.get(edge_type, 90),
+            'strength': edge_strengths.get(strength_category, 0.5),
+            'edge_type': edge_type
+        })
         
         enhanced_edges.append(enhanced_edge)
+    
+    # MultiGravity Force Atlas configuration
+    config = {
+        'algorithm': 'multigravity_force_atlas',
+        'gravity_centers': gravity_centers,
+        'base_repulsion': -80 - (density * 100),  # Stronger repulsion for dense graphs
+        'spring_constant': max(0.05, 0.15 - (density * 0.08)),
+        'damping': 0.45,
+        'theta': 0.4,  # Barnes-Hut approximation parameter
+        'gravity_falloff': 2.0,  # How quickly gravity falls off with distance
+        'max_velocity': 25,
+        'min_velocity': 0.05,
+        'timestep': 0.35,
+        'stabilization_iterations': min(1500, num_nodes * 5),
+        'avoid_overlap': min(0.9, 0.4 + (density * 0.5)),
+        
+        # MultiGravity specific parameters
+        'gravity_balance': 0.7,  # Balance between type gravity and central gravity
+        'type_separation_force': 2.0,  # Strong force to separate different node types (increased from 1.2)
+        'hub_anti_clustering': 1.5,  # Extra measures against hub clustering
+        
+        # Adaptive parameters based on graph size and density
+        'adaptive_gravity': True,
+        'density_compensation': density,
+        'size_compensation': min(2.0, num_nodes / 100)
+    }
     
     return {
         'nodes': enhanced_nodes,
         'edges': enhanced_edges,
-        'layout_config': {
-            'repulsion': 1000,
-            'spring_length': 100,
-            'spring_constant': 0.04,
-            'damping': 0.09,
-            'max_velocity': 20,
-            'theta': 0.5,  # Barnes-Hut approximation parameter
-            'gravity': 0.1,
-            'central_gravity': 0.005,
-            'avoid_overlap': 0.5
-        }
+        'layout_config': config
     }
+
+
+def enhance_graph_layout(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Any]:
+    """Apply MultiGravity Force Atlas layout - this is now the only layout algorithm."""
+    return calculate_multigravity_forces(nodes, edges)
 
 
 def calculate_smart_edge_lengths(nodes: List[Dict], edges: List[Dict]) -> List[Dict]:
@@ -2272,7 +2370,7 @@ __all__ = [
     'detect_communities_leiden',
     'leiden_communities',
     'validate_communities',
-    'calculate_initial_positions',
+    'calculate_multigravity_forces',
     'enhance_graph_layout',
     'calculate_smart_edge_lengths'
 ]
