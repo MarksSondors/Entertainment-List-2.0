@@ -1320,15 +1320,6 @@ def current_community_pick(request):
     
     return Response(data)
 
-
-@login_required
-def movie_analytics_graph(request):
-    """Render analytics graph using extracted service."""
-    from .services.network_graph import build_movie_analytics_graph_context
-    context = build_movie_analytics_graph_context()
-    return render(request, 'movies/analytics_graph.html', context)
-
-
 @login_required
 def network_graph_page(request):
     """Render the network graph page"""
@@ -1371,15 +1362,12 @@ def network_graph_data(request):
         movie_limit = int(request.GET.get('movie_limit', max_nodes // 2))
     except ValueError:
         movie_limit = max_nodes // 2
-    movie_limit = max(1, min(300, movie_limit))
+    # No upper limit on movie_limit - let users control it
+    movie_limit = max(1, movie_limit)
     show_actors = chaos_mode and _get_flag('actors', True)
     show_crew = chaos_mode and _get_flag('crew', True)
-    
-    # Get layout strategy parameter
-    layout_strategy = request.GET.get('layout_strategy', 'enhanced')
-    if layout_strategy not in ['enhanced', 'sectored', 'force_directed']:
-        layout_strategy = 'enhanced'
 
+    # Build network graph using MultiGravity Force Atlas (only layout supported)
     data = build_network_graph(
         request.user if request.user.is_authenticated else None,
         min_reviews=min_reviews,
@@ -1394,8 +1382,7 @@ def network_graph_data(request):
         movie_limit=movie_limit,
         show_similarity=show_similarity,
         show_actors=show_actors,
-        show_crew=show_crew,
-        layout_strategy=layout_strategy,
+        show_crew=show_crew
     )
     
     # Convert edges from source/target to from/to for vis.js
