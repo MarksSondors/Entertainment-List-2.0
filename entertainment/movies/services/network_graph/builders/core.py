@@ -20,7 +20,7 @@ from ..queries import (
     get_item_means_optimized,
 )
 from ..algorithms import (
-    get_collaborative_filtering_predictions,
+    generate_recommendations,
     cosine_similarity,
 )
 from ..layout import (
@@ -465,28 +465,70 @@ def build_network_graph_refactored(
     #                     })
     
     # ========== STEP 8: PREDICTIONS ==========
+    print(f"PREDICTION DEBUG: show_predictions={show_predictions}, current_user={current_user}, predictions_limit={predictions_limit}")
+    if current_user:
+        print(f"PREDICTION DEBUG: Current user ID: {current_user.id}, in user_nodes: {current_user.id in user_nodes}")
     if show_predictions and current_user and current_user.id in user_nodes:
-        logger.debug("Step 8: Generating predictions")
+        print(f"PREDICTION DEBUG: Generating predictions for user {current_user.id}")
         try:
             user_ids_for_cf = list(user_nodes.keys())
             rating_matrix = get_user_rating_matrix_optimized(user_ids_for_cf)
             item_means = get_item_means_optimized(list(movie_nodes.keys()))
             
-            predictions = get_collaborative_filtering_predictions(
-                user_id=current_user.id,
-                rating_matrix=rating_matrix,
-                item_means=item_means,
-                top_n=predictions_limit
-            )
+            print(f"PREDICTION DEBUG: user_ids_for_cf={user_ids_for_cf}")
+            print(f"PREDICTION DEBUG: rating_matrix has {len(rating_matrix)} users")
+            print(f"PREDICTION DEBUG: item_means has {len(item_means)} movies")
+            
+            # Use item means for predictions - simpler and more reliable
+            # Find movies user hasn't rated yet
+            user_rated_movies = set(rating_matrix.get(current_user.id, {}).keys())
+            all_movies = set(item_means.keys())
+            unrated_movies = all_movies - user_rated_movies
+            
+            # Create predictions using item means (average ratings)
+            predictions = [
+                {
+                    'movie_id': movie_id,
+                    'predicted_rating': round(mean_rating, 1),
+                    'contributors': len(rating_matrix),
+                    'confidence': 'medium'
+                }
+                for movie_id, mean_rating in item_means.items()
+                if movie_id in unrated_movies
+            ]
+            
+            # Sort by rating and take top N
+            predictions.sort(key=lambda x: x['predicted_rating'], reverse=True)
+            predictions = predictions[:predictions_limit]
+            
+            print(f"PREDICTION DEBUG: Generated {len(predictions)} predictions using item means")
+            if predictions:
+                print(f"PREDICTION DEBUG: First prediction: {predictions[0]}")
             
             for pred in predictions[:predictions_limit]:
                 movie_id = pred['movie_id']
-                if movie_id not in movie_nodes:
-                    # Add predicted movie as node
+                print(f"PREDICTION DEBUG: Processing prediction for movie {movie_id}, in movie_nodes: {movie_id in movie_nodes}")
+                
+                # Determine the target node ID (existing movie or new prediction node)
+                if movie_id in movie_nodes:
+                    # Movie already exists in graph - add prediction data to existing node
+                    target_node_id = movie_nodes[movie_id]
+                    print(f"PREDICTION DEBUG: Using existing movie node {target_node_id}")
+                    
+                    # Find and update the existing node with prediction data
+                    for node in nodes:
+                        if node['id'] == target_node_id:
+                            node['predicted_score'] = pred['predicted_rating']
+                            node['predicted_confidence'] = pred.get('confidence', 'unknown')
+                            print(f"PREDICTION DEBUG: Updated node {target_node_id} with prediction data")
+                            break
+                else:
+                    # Movie not in graph - add as new prediction node
                     try:
                         movie = Movie.objects.get(id=movie_id)
                         pred_node_id = f"prediction_{movie_id}"
                         node_ids.add(pred_node_id)
+                        target_node_id = pred_node_id
                         
                         # Collect keywords for predictions too
                         pred_keywords = [
@@ -501,23 +543,32 @@ def build_network_graph_refactored(
                             'size': 18,
                             'color': '#FFD700',
                             'predicted_score': pred['predicted_rating'],
+                            'predicted_confidence': pred.get('confidence', 'unknown'),
                             'year': movie.release_date.year if movie.release_date else None,
                             'tmdb_id': movie.tmdb_id,
                             'keywords': pred_keywords  # For semantic community naming
                         })
-                        
-                        # Add prediction edge
-                        edges.append({
-                            'source': user_nodes[current_user.id],
-                            'target': pred_node_id,
-                            'type': 'prediction',
-                            'weight': pred['predicted_rating'] / 10.0,
-                            'predicted_rating': pred['predicted_rating']
-                        })
+                        print(f"PREDICTION DEBUG: Added new prediction node {pred_node_id}")
                     except Movie.DoesNotExist:
-                        pass
+                        print(f"PREDICTION DEBUG: Movie {movie_id} does not exist, skipping")
+                        continue
+                
+                # Add prediction edge (whether to existing or new node)
+                edges.append({
+                    'source': user_nodes[current_user.id],
+                    'target': target_node_id,
+                    'type': 'prediction',
+                    'weight': pred['predicted_rating'] / 10.0,
+                    'predicted_rating': pred['predicted_rating']
+                })
+                print(f"PREDICTION DEBUG: Added prediction edge from user to {target_node_id}")
+            pred_count = len([n for n in nodes if 'predicted_score' in n])
+            print(f"PREDICTION DEBUG: Added {pred_count} prediction nodes")
         except Exception as e:
-            logger.warning(f"Failed to generate predictions: {e}")
+            print(f"PREDICTION DEBUG ERROR: Failed to generate predictions: {e}")
+            import traceback
+            traceback.print_exc()
+            logger.error(f"Failed to generate predictions: {e}", exc_info=True)
     
     # ========== STEP 9: ENHANCE LAYOUT ==========
     logger.debug("Step 9: Enhancing layout with MultiGravity Force Atlas")

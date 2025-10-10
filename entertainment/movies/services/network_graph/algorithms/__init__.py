@@ -22,6 +22,7 @@ from .centrality import (
 
 from .collaborative_filtering import (
     get_collaborative_filtering_predictions,
+    generate_recommendations,
 )
 
 __all__ = [
@@ -44,4 +45,5 @@ __all__ = [
     
     # Collaborative Filtering
     'get_collaborative_filtering_predictions',
+    'generate_recommendations',
 ]
