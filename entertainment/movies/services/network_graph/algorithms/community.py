@@ -137,7 +137,11 @@ def calculate_community_quality_metrics(community: Set, G: nx.Graph, all_communi
     }
 
 
-def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeDict]) -> str:
+def generate_community_name(
+    community_node_ids: List[int], 
+    all_nodes: List[NodeDict],
+    all_edges: List[EdgeDict] = None
+) -> str:
     """Generate a meaningful, semantic name for a community based on rich metadata.
     
     Uses keywords, ratings, release dates, genres, countries, and people to create
@@ -146,6 +150,7 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
     Args:
         community_node_ids: List of node IDs in the community
         all_nodes: List of all node dictionaries
+        all_edges: Optional list of all edge dictionaries (for director-movie tracking)
     
     Returns:
         A descriptive name for the community
@@ -173,9 +178,11 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
     collection_ids: Dict[int, List[str]] = {}  # collection_id -> movie titles
     movie_connectivity: Dict[str, int] = {}  # movie_id -> number of connected people
     director_names: List[str] = []
+    director_to_movies: Dict[str, List[str]] = {}  # director_id -> movie titles
     actor_names: List[str] = []
     movie_titles: List[str] = []
     movie_id_to_title: Dict[str, str] = {}  # Track movie IDs to titles
+    movie_to_directors: Dict[str, List[str]] = {}  # movie_id -> director names
     
     # Collect movie-specific semantic data
     movie_ratings: List[float] = []
@@ -240,6 +247,67 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
                         keyword_counts[kw_name] = keyword_counts.get(kw_name, 0) + 1
                     if kw_name:
                         keyword_counts[kw_name] = keyword_counts.get(kw_name, 0) + 1
+    
+    # ========== TRACK DIRECTOR-MOVIE CONNECTIONS ==========
+    # Analyze edges to find which directors worked on which movies in this community
+    if all_edges:
+        community_node_set = set(community_node_ids)
+        for edge in all_edges:
+            source = edge.get('source', edge.get('from'))
+            target = edge.get('target', edge.get('to'))
+            edge_type = edge.get('type', '')
+            
+            # Check if this is a director-movie edge within the community
+            if edge_type == 'directed_by' and source in community_node_set and target in community_node_set:
+                # Find which is the movie and which is the director
+                source_node = node_mapping.get(source)
+                target_node = node_mapping.get(target)
+                
+                if source_node and target_node:
+                    if source_node.get('type') == 'movie' and target_node.get('type') == 'director':
+                        movie_id = source
+                        director_id = target
+                        director_name = target_node.get('label', 'Unknown')
+                        movie_title = source_node.get('label', 'Unknown')
+                    elif source_node.get('type') == 'director' and target_node.get('type') == 'movie':
+                        movie_id = target
+                        director_id = source
+                        director_name = source_node.get('label', 'Unknown')
+                        movie_title = target_node.get('label', 'Unknown')
+                    else:
+                        continue
+                    
+                    # Track director -> movies mapping
+                    if director_id not in director_to_movies:
+                        director_to_movies[director_id] = []
+                    director_to_movies[director_id].append(movie_title)
+                    
+                    # Track movie -> directors mapping
+                    if movie_id not in movie_to_directors:
+                        movie_to_directors[movie_id] = []
+                    movie_to_directors[movie_id].append(director_name)
+    
+    # Get movie count for later checks
+    movie_count = type_counts.get('movie', 0)
+    
+    # Check if all movies are from a single director
+    dominant_director_name = None
+    all_movies_same_director = False
+    if director_to_movies and movie_count > 0:
+        # Find director with most movies
+        director_with_most_movies = max(director_to_movies.items(), key=lambda x: len(x[1]))
+        director_id, directed_movies = director_with_most_movies
+        
+        # Check if this director directed ALL movies in the community
+        if len(directed_movies) == movie_count and movie_count >= 2:
+            all_movies_same_director = True
+            # Get director name from the first directed movie's director list
+            if directed_movies:
+                # Find this director's name
+                for d_id, d_name in [(nid, node_mapping[nid].get('label')) for nid in community_node_ids if node_mapping.get(nid, {}).get('type') == 'director']:
+                    if d_id == director_id:
+                        dominant_director_name = d_name
+                        break
     
     # ========== ANALYZE MOVIE CONNECTIVITY ==========
     # For actor/crew-heavy communities, find movies with most people
@@ -393,7 +461,41 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
         size_descriptor = "Mega"
     
     # Generate name based on community composition
-    # PRIORITY 1: If dominated by a movie collection, use collection name
+    # PRIORITY 1: Complete collection (100% of movies from one collection)
+    if dominant_collection_name and collection_movie_percentage >= 0.99:
+        # All movies are from the same collection - this is a complete collection community
+        name_parts = []
+        if quality_descriptor and len(movie_ratings) >= 3:
+            name_parts.append(quality_descriptor)
+        name_parts.append(dominant_collection_name)
+        
+        movie_count = type_counts.get('movie', 0)
+        
+        # Determine suffix based on composition
+        if movie_count < total_nodes * 0.3:
+            # Movies are minority - it's the universe (cast/crew dominant)
+            return f"🎬 {' '.join(name_parts)} Universe"
+        else:
+            # Movies are significant - it's the collection
+            return f"🎬 {' '.join(name_parts)} Collection"
+    
+    # PRIORITY 2: Single director (all movies directed by same person)
+    if all_movies_same_director and dominant_director_name and movie_count >= 2:
+        # All movies in the community are from the same director
+        name_parts = []
+        if quality_descriptor and len(movie_ratings) >= 3:
+            name_parts.append(quality_descriptor)
+        name_parts.append(f"{dominant_director_name}'s")
+        
+        # Determine suffix based on composition
+        if movie_count >= 5:
+            return f"🎥 {' '.join(name_parts)} Filmography"
+        elif movie_count >= 3:
+            return f"🎥 {' '.join(name_parts)} Works"
+        else:
+            return f"🎥 {' '.join(name_parts)} Films"
+    
+    # PRIORITY 3: Partial collection (50%+ of movies from one collection)
     if dominant_collection_name:
         # Use collection name as the primary identifier
         name_parts = []
@@ -406,7 +508,7 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
         # Determine suffix based on composition
         # If collection represents 80%+ of all movies, it's the core of the community
         if collection_movie_percentage >= 0.8:
-            # Pure collection community
+            # Nearly complete collection
             return f"🎬 {' '.join(name_parts)} Collection"
         elif movie_count < total_nodes * 0.3:
             # Movies are minority but from same collection - it's the universe (cast/crew dominant)
@@ -415,7 +517,7 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
             # Collection is significant but mixed with other movies
             return f"🎬 {' '.join(name_parts)} Series"
     
-    # PRIORITY 2: Very homogeneous community (80%+)
+    # PRIORITY 4: Very homogeneous community (80%+)
     if dominant_percentage >= 80:
         if dominant_type[0] == 'genre' and genre_counts:
             top_genre = max(genre_counts.items(), key=lambda x: x[1])[0]
@@ -895,74 +997,139 @@ def detect_communities_leiden(
             if from_id and to_id and from_id in G and to_id in G:
                 G.add_edge(from_id, to_id, weight=weight)
         
-        # Add virtual edges between movies in the same collection
-        # This encourages movies from the same collection to be in the same community
-        collection_groups = defaultdict(list)
+        # ========== COLLECTION-FIRST APPROACH ==========
+        # First, identify all movie collections and create initial communities for them
+        # Collections are NEVER split - they form the core of communities
+        collection_to_movies = defaultdict(list)
+        movie_to_collection = {}
+        
         for node in nodes:
-            collection_id = node.get('collection_id')
-            if collection_id is not None and node.get('type') == 'movie':
-                collection_groups[collection_id].append(node['id'])
+            if node.get('type') == 'movie':
+                collection_id = node.get('collection_id')
+                if collection_id is not None:
+                    collection_to_movies[collection_id].append(node['id'])
+                    movie_to_collection[node['id']] = collection_id
         
-        collection_edges_added = 0
-        for collection_id, movie_ids in collection_groups.items():
-            if len(movie_ids) > 1:  # Only if collection has multiple movies
-                # Add strong virtual edges between all movies in this collection
-                for i, movie_id_1 in enumerate(movie_ids):
-                    for movie_id_2 in movie_ids[i+1:]:
-                        if movie_id_1 in G and movie_id_2 in G:
-                            # Use high weight (5.0) to strongly encourage same community
-                            # If edge already exists, increase its weight
-                            if G.has_edge(movie_id_1, movie_id_2):
-                                G[movie_id_1][movie_id_2]['weight'] += 5.0
-                            else:
-                                G.add_edge(movie_id_1, movie_id_2, weight=5.0)
-                            collection_edges_added += 1
+        # Create initial collection-based communities
+        initial_communities = []
+        collection_community_map = {}  # collection_id -> community_index
         
-        if collection_edges_added > 0:
-            logger.info(f"Added {collection_edges_added} virtual edges for {len(collection_groups)} movie collections")
+        for collection_id, movie_ids in collection_to_movies.items():
+            if len(movie_ids) >= 2:  # Only collections with 2+ movies
+                community_index = len(initial_communities)
+                initial_communities.append(set(movie_ids))
+                collection_community_map[collection_id] = community_index
+                logger.info(f"Created collection community with {len(movie_ids)} movies from collection {collection_id}")
+        
+        # Now run community detection only on nodes NOT in collections
+        # This ensures collection movies stay together
+        nodes_in_collections = set()
+        for movie_ids in collection_to_movies.values():
+            if len(movie_ids) >= 2:
+                nodes_in_collections.update(movie_ids)
+        
+        # Create subgraph excluding collection movies
+        non_collection_nodes = [n for n in G.nodes() if n not in nodes_in_collections]
+        
+        if len(non_collection_nodes) > 1:
+            logger.info(f"Running community detection on {len(non_collection_nodes)} non-collection nodes")
+            G_non_collection = G.subgraph(non_collection_nodes).copy()
+            
+            # Run Leiden/Louvain on non-collection nodes
+            try:
+                non_collection_communities = leiden_communities(G_non_collection, resolution=resolution, random_state=random_state)
+            except Exception as e:
+                logger.error(f"Error in Leiden: {e}, falling back to Louvain")
+                from networkx.algorithms.community import louvain_communities
+                non_collection_communities = louvain_communities(G_non_collection, weight='weight', resolution=resolution, seed=random_state)
+            
+            # Add non-collection communities to initial communities
+            for community in non_collection_communities:
+                if len(community) >= 2:
+                    initial_communities.append(set(community))
+        
+        # Now expand collection communities to include connected non-movie nodes
+        # (directors, actors, genres, countries that are connected to collection movies)
+        for collection_id, movie_ids in collection_to_movies.items():
+            if len(movie_ids) >= 2 and collection_id in collection_community_map:
+                community_index = collection_community_map[collection_id]
+                collection_community = initial_communities[community_index]
+                
+                # Add all nodes connected to these movies
+                for movie_id in movie_ids:
+                    if movie_id in G:
+                        for neighbor in G.neighbors(movie_id):
+                            # Only add if not a movie (movies stay in their original communities)
+                            neighbor_type = next((n.get('type') for n in nodes if n['id'] == neighbor), None)
+                            if neighbor_type != 'movie':
+                                collection_community.add(neighbor)
+        
+        # Assign remaining nodes to their closest community based on connections
+        all_assigned_nodes = set()
+        for community in initial_communities:
+            all_assigned_nodes.update(community)
+        
+        unassigned_nodes = set(G.nodes()) - all_assigned_nodes
+        
+        for node in unassigned_nodes:
+            # Find community with strongest connection
+            best_community = None
+            best_weight = 0
+            
+            for i, community in enumerate(initial_communities):
+                total_weight = 0
+                for neighbor in G.neighbors(node):
+                    if neighbor in community:
+                        total_weight += G[node][neighbor].get('weight', 1.0)
+                
+                if total_weight > best_weight:
+                    best_weight = total_weight
+                    best_community = i
+            
+            if best_community is not None:
+                initial_communities[best_community].add(node)
+            else:
+                # Create singleton community
+                initial_communities.append({node})
+        
+        # Filter out single-member communities
+        communities = [c for c in initial_communities if len(c) >= 2]
+        
+        logger.info(f"Final: {len(communities)} communities ({len([c for c in collection_to_movies.values() if len(c) >= 2])} collection-based)")
+        
+        # Calculate modularity
+        try:
+            overall_modularity = nx.algorithms.community.modularity(G, communities, weight='weight', resolution=resolution)
+        except:
+            overall_modularity = 0.0
         
         # Handle empty or trivial graphs
-        if len(G) == 0:
-            return CommunitiesResult(
-                communities={},
-                stats={'num_communities': 0, 'modularity': 0.0},
-                method='leiden',
-                modularity=0.0
-            )
-        
-        if len(G) == 1:
-            node_id = list(G.nodes())[0]
-            return CommunitiesResult(
-                communities={
-                    'community_0': {
-                        'nodes': [node_id],
-                        'size': 1,
-                        'name': 'Single Node',
-                        'modularity': 0.0,
-                        'internal_edges': 0,
-                        'total_degree': 0.0,
-                        'density': 1.0
-                    }
-                },
-                stats={'num_communities': 1, 'modularity': 0.0},
-                method='leiden',
-                modularity=0.0
-            )
-        
-        # Run Leiden algorithm
-        logger.info(f"Running Leiden algorithm on graph with {len(G)} nodes and {len(G.edges())} edges")
-        communities = leiden_communities(G, resolution=resolution, random_state=random_state)
-        
-        # Filter out empty and single-member communities (communities must have at least 2 members)
-        original_count = len(communities)
-        communities = [community for community in communities if community and len(community) >= 2]
-        filtered_count = len(communities)
-        
-        if original_count != filtered_count:
-            logger.info(f"Filtered out {original_count - filtered_count} single-member or empty communities (kept {filtered_count} valid communities)")
-        
-        # Calculate overall modularity
-        overall_modularity = nx.algorithms.community.modularity(G, communities, weight='weight', resolution=resolution)
+        if len(communities) == 0:
+            if len(G) == 0:
+                return CommunitiesResult(
+                    communities={},
+                    stats={'num_communities': 0, 'modularity': 0.0},
+                    method='leiden-collection-first',
+                    modularity=0.0
+                )
+            elif len(G) == 1:
+                node_id = list(G.nodes())[0]
+                return CommunitiesResult(
+                    communities={
+                        'community_0': {
+                            'nodes': [node_id],
+                            'size': 1,
+                            'name': 'Single Node',
+                            'modularity': 0.0,
+                            'internal_edges': 0,
+                            'total_degree': 0.0,
+                            'density': 1.0
+                        }
+                    },
+                    stats={'num_communities': 1, 'modularity': 0.0},
+                    method='leiden-collection-first',
+                    modularity=0.0
+                )
         
         # Convert to dictionary format
         community_dict = {}
@@ -975,7 +1142,7 @@ def detect_communities_leiden(
             community_nodes = list(community)
             
             # Generate meaningful name
-            community_name = generate_community_name(community_nodes, nodes)
+            community_name = generate_community_name(community_nodes, nodes, edges)
             
             # Calculate community metrics
             subgraph = G.subgraph(community)
@@ -1084,7 +1251,7 @@ def detect_communities(nodes: List[NodeDict], edges: List[EdgeDict]) -> Communit
         for i, community in enumerate(communities):
             community_id = f"community_{i}"
             community_nodes = list(community)
-            community_name = generate_community_name(community_nodes, nodes)
+            community_name = generate_community_name(community_nodes, nodes, edges)
             
             community_dict[community_id] = {
                 'nodes': community_nodes,
