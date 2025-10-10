@@ -196,6 +196,9 @@ def build_network_graph_refactored(
             for kw in movie.keywords.all()[:10]  # Limit to top 10 keywords
         ]
         
+        # Get collection ID if movie belongs to one
+        collection_id = movie.collection_id if movie.collection else None
+        
         nodes.append({
             'id': node_id,
             'label': movie.title,
@@ -206,7 +209,8 @@ def build_network_graph_refactored(
             'rating': round(avg_rating, 1) if avg_rating else None,
             'year': movie.release_date.year if movie.release_date else None,
             'tmdb_id': movie.tmdb_id,
-            'keywords': movie_keywords  # For semantic community naming
+            'keywords': movie_keywords,  # For semantic community naming
+            'collection_id': collection_id  # For community detection
         })
     
     # ========== STEP 5: BUILD GENRE/COUNTRY/DIRECTOR NODES ==========
@@ -298,7 +302,7 @@ def build_network_graph_refactored(
     director_nodes = {}
     if show_directors:
         for person, count in director_counts.items():
-            if count >= 2:  # Only directors with 2+ movies
+            if count >= 1:  # Show all directors
                 node_id = f"director_{person.id}"
                 director_nodes[person.id] = node_id
                 node_ids.add(node_id)
@@ -314,7 +318,7 @@ def build_network_graph_refactored(
     actor_nodes = {}
     if show_actors:
         for person, count in actor_counts.items():
-            if count >= 3:  # Only actors with 3+ movies
+            if count >= 1:  # Show all actors
                 node_id = f"actor_{person.id}"
                 actor_nodes[person.id] = node_id
                 node_ids.add(node_id)
@@ -329,7 +333,7 @@ def build_network_graph_refactored(
     crew_nodes = {}
     if show_crew:
         for person, count in crew_counts.items():
-            if count >= 2:
+            if count >= 1:  # Show all crew members
                 node_id = f"crew_{person.id}"
                 crew_nodes[person.id] = node_id
                 node_ids.add(node_id)
@@ -393,57 +397,70 @@ def build_network_graph_refactored(
                         edges.append({
                             'source': movie_nodes[movie_id],
                             'target': director_nodes[director.id],
-                            'type': 'directed_by'
+                            'type': 'directed_by',
+                            'weight': 1.5  # Directors are strong connections
                         })
     
-    # Movie-Actor edges - Create edges for ALL actors that have nodes
+    # Movie-Actor edges - Create edges for ALL actors that have nodes (deduplicated)
     if show_actors and chaos_mode:
+        added_actor_edges = set()  # Track (movie_id, person_id) pairs
         for movie in well_reviewed_movies:
             if movie.id in movie_nodes and hasattr(movie, 'cast'):
                 for mp in movie.cast:
                     person = getattr(mp, 'person', None)
                     if person and person.id in actor_nodes:
-                        edges.append({
-                            'source': movie_nodes[movie.id],
-                            'target': actor_nodes[person.id],
-                            'type': 'acted_in'
-                        })
+                        edge_key = (movie.id, person.id)
+                        if edge_key not in added_actor_edges:
+                            edges.append({
+                                'source': movie_nodes[movie.id],
+                                'target': actor_nodes[person.id],
+                                'type': 'acted_in',
+                                'weight': 1.0  # Actors are medium connections
+                            })
+                            added_actor_edges.add(edge_key)
     
-    # Movie-Crew edges - Create edges for ALL crew that have nodes
+    # Movie-Crew edges - Create edges for ALL crew that have nodes (deduplicated)
     if show_crew and chaos_mode:
+        added_crew_edges = set()  # Track (movie_id, person_id) pairs
         for movie in well_reviewed_movies:
             if movie.id in movie_nodes and hasattr(movie, 'crew'):
                 for mp in movie.crew:
                     person = getattr(mp, 'person', None)
                     # Skip directors (they have their own edges)
                     if person and person.id in crew_nodes and getattr(mp, 'role', '') != 'Director':
-                        edges.append({
-                            'source': movie_nodes[movie.id],
-                            'target': crew_nodes[person.id],
-                            'type': 'crew'
-                        })
+                        edge_key = (movie.id, person.id)
+                        if edge_key not in added_crew_edges:
+                            edges.append({
+                                'source': movie_nodes[movie.id],
+                                'target': crew_nodes[person.id],
+                                'type': 'crew',
+                                'weight': 0.3  # Crew are weak connections (prevents spurious communities)
+                            })
+                            added_crew_edges.add(edge_key)
     
-    # ========== STEP 7: SIMILARITY EDGES ==========
-    if show_similarity and len(user_nodes) > 1:
-        logger.debug("Step 7: Computing similarity edges")
-        user_ids_list = list(user_nodes.keys())
-        rating_matrix = get_user_rating_matrix_optimized(user_ids_list)
-        
-        for i, user_id_1 in enumerate(user_ids_list):
-            for user_id_2 in user_ids_list[i+1:]:
-                if user_id_1 in rating_matrix and user_id_2 in rating_matrix:
-                    similarity = cosine_similarity(
-                        rating_matrix[user_id_1],
-                        rating_matrix[user_id_2]
-                    )
-                    if similarity > 0.3:  # Only show strong similarities
-                        edges.append({
-                            'source': user_nodes[user_id_1],
-                            'target': user_nodes[user_id_2],
-                            'type': 'similarity',
-                            'weight': similarity,
-                            'similarity_score': round(similarity, 2)
-                        })
+    # ========== STEP 7: SIMILARITY EDGES (DISABLED) ==========
+    # User-to-user similarity edges removed as they clutter the graph without adding value
+    # Users are already connected through shared movie ratings
+    # if show_similarity and len(user_nodes) > 1:
+    #     logger.debug("Step 7: Computing similarity edges")
+    #     user_ids_list = list(user_nodes.keys())
+    #     rating_matrix = get_user_rating_matrix_optimized(user_ids_list)
+    #     
+    #     for i, user_id_1 in enumerate(user_ids_list):
+    #         for user_id_2 in user_ids_list[i+1:]:
+    #             if user_id_1 in rating_matrix and user_id_2 in rating_matrix:
+    #                 similarity = cosine_similarity(
+    #                     rating_matrix[user_id_1],
+    #                     rating_matrix[user_id_2]
+    #                 )
+    #                 if similarity > 0.3:  # Only show strong similarities
+    #                     edges.append({
+    #                         'source': user_nodes[user_id_1],
+    #                         'target': user_nodes[user_id_2],
+    #                         'type': 'similarity',
+    #                         'weight': similarity,
+    #                         'similarity_score': round(similarity, 2)
+    #                     })
     
     # ========== STEP 8: PREDICTIONS ==========
     if show_predictions and current_user and current_user.id in user_nodes:

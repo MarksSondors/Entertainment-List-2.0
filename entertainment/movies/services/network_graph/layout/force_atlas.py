@@ -11,6 +11,7 @@ from collections import defaultdict
 from typing import Dict, List, Any
 
 from ..types import NodeDict, EdgeDict
+from ..algorithms.community import apply_community_edge_properties
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def calculate_multigravity_forces(nodes: List[NodeDict], edges: List[EdgeDict]) 
     num_communities = len(communities)
     if num_communities > 0:
         # Calculate positions in a circle to spread communities apart
-        radius = 300 + (num_communities * 20)  # Larger radius for more communities
+        radius = 600 + (num_communities * 50)  # Larger radius for more spread (was 300 + 20)
         
         community_positions = {}
         for idx, (comm_id, _) in enumerate(communities.items()):
@@ -72,11 +73,11 @@ def calculate_multigravity_forces(nodes: List[NodeDict], edges: List[EdgeDict]) 
             if community_id and community_id in community_positions:
                 pos = community_positions[community_id]
                 # Add some randomness to prevent exact overlap
-                jitter_x = random.uniform(-50, 50)
-                jitter_y = random.uniform(-50, 50)
+                jitter_x = random.uniform(-80, 80)  # Increased jitter (was -50, 50)
+                jitter_y = random.uniform(-80, 80)
                 
                 # High-degree nodes get pushed further from center within their community
-                degree_push = min(degree * 10, 100) if degree > 5 else 0
+                degree_push = min(degree * 15, 150) if degree > 5 else 0  # Increased push (was *10, 100)
                 push_angle = random.uniform(0, 2 * math.pi)
                 
                 enhanced_node['x'] = pos['x'] + jitter_x + (degree_push * math.cos(push_angle))
@@ -85,6 +86,9 @@ def calculate_multigravity_forces(nodes: List[NodeDict], edges: List[EdgeDict]) 
             enhanced_nodes.append(enhanced_node)
     else:
         enhanced_nodes = nodes
+    
+    # Apply community-based edge properties (shorter/stronger within communities)
+    enhanced_edges = apply_community_edge_properties(edges, enhanced_nodes)
     
     # Standard Force Atlas configuration - simple and clean
     config: Dict[str, Any] = {
@@ -104,7 +108,7 @@ def calculate_multigravity_forces(nodes: List[NodeDict], edges: List[EdgeDict]) 
     
     return {
         'nodes': enhanced_nodes,
-        'edges': edges,
+        'edges': enhanced_edges,
         'layout_config': config
     }
 
