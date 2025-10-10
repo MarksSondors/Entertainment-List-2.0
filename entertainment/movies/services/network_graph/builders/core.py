@@ -373,7 +373,8 @@ def build_network_graph_refactored(
                         edges.append({
                             'source': movie_nodes[movie.id],
                             'target': genre_nodes[genre.id],
-                            'type': 'has_genre'
+                            'type': 'has_genre',
+                            'weight': 0.1  # Very weak - genres connect many unrelated movies
                         })
     
     # Movie-Country edges
@@ -385,7 +386,8 @@ def build_network_graph_refactored(
                         edges.append({
                             'source': movie_nodes[movie.id],
                             'target': country_nodes[country.id],
-                            'type': 'from_country'
+                            'type': 'from_country',
+                            'weight': 0.1  # Very weak - countries connect many unrelated movies
                         })
     
     # Movie-Director edges
