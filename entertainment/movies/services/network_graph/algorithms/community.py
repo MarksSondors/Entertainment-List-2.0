@@ -6,6 +6,7 @@ methods for identifying clusters of densely connected nodes in the graph.
 
 import logging
 import random
+from collections import defaultdict
 from typing import List, Set, Dict, Any, Optional
 
 import networkx as nx
@@ -19,6 +20,121 @@ from ..constants import (
 from ..types import NodeDict, EdgeDict, CommunitiesResult
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_community_quality_metrics(community: Set, G: nx.Graph, all_communities: List[Set]) -> Dict[str, float]:
+    """Calculate quality metrics for a community.
+    
+    Metrics:
+    - Conductance: Ratio of edges leaving community to total edges touching community (lower is better)
+    - Clustering Coefficient: Average clustering of nodes in community (higher is better)
+    - Separability: Ratio of internal edges to external edges (higher is better)
+    - Quality Score: Combined metric scaled 0-100 (higher is better)
+    
+    Args:
+        community: Set of node IDs in the community
+        G: Full NetworkX graph
+        all_communities: List of all communities for context
+    
+    Returns:
+        Dict with conductance, clustering_coefficient, separability, quality_score
+    """
+    if len(community) <= 1:
+        # Single-node communities have perfect internal structure
+        return {
+            'conductance': 0.0,
+            'clustering_coefficient': 1.0,
+            'separability': 10.0,  # Perfect isolation (no external edges)
+            'quality_score': 100.0
+        }
+    
+    # Create node-to-community mapping
+    node_to_comm = {}
+    for i, comm in enumerate(all_communities):
+        for node in comm:
+            node_to_comm[node] = i
+    
+    current_comm_idx = None
+    for i, comm in enumerate(all_communities):
+        if community == comm:
+            current_comm_idx = i
+            break
+    
+    # Count internal and external edges
+    internal_edges = 0
+    external_edges = 0
+    total_edges_touching = 0
+    
+    for node in community:
+        for neighbor in G.neighbors(node):
+            edge_weight = G.get_edge_data(node, neighbor, {}).get('weight', 1.0)
+            
+            if neighbor in community:
+                # Internal edge (count once per edge, not twice)
+                if node < neighbor:  # Avoid double-counting
+                    internal_edges += edge_weight
+            else:
+                # External edge
+                external_edges += edge_weight
+            
+            total_edges_touching += edge_weight
+    
+    # ========== CONDUCTANCE ==========
+    # Ratio of edges leaving community to total edges touching it
+    # Lower is better (well-separated communities have low conductance)
+    if total_edges_touching > 0:
+        conductance = external_edges / total_edges_touching
+    else:
+        conductance = 0.0
+    
+    # ========== CLUSTERING COEFFICIENT ==========
+    # Average clustering coefficient of nodes in community
+    subgraph = G.subgraph(community)
+    try:
+        clustering_values = nx.clustering(subgraph, weight='weight').values()
+        clustering_coefficient = sum(clustering_values) / len(clustering_values) if clustering_values else 0.0
+    except:
+        clustering_coefficient = 0.0
+    
+    # ========== SEPARABILITY ==========
+    # Ratio of internal edges to external edges
+    # Higher is better (well-separated communities have high separability)
+    if external_edges > 0:
+        separability = internal_edges / external_edges
+    else:
+        # Perfect isolation: no external edges
+        # Use a high but finite number instead of infinity
+        separability = 10.0 if internal_edges > 0 else 1.0
+    
+    # ========== QUALITY SCORE ==========
+    # Combined metric scaled 0-100
+    # Components:
+    # - Low conductance is good (invert it)
+    # - High clustering is good
+    # - High separability is good
+    
+    # Normalize conductance (0-1) → invert for score (1-0)
+    conductance_score = 1.0 - min(conductance, 1.0)
+    
+    # Clustering is already 0-1
+    clustering_score = clustering_coefficient
+    
+    # Normalize separability (0-10 range, cap at 10)
+    separability_score = min(separability / 10.0, 1.0)
+    
+    # Weighted combination (40% conductance, 30% clustering, 30% separability)
+    quality_score = (
+        conductance_score * 0.40 +
+        clustering_score * 0.30 +
+        separability_score * 0.30
+    ) * 100.0
+    
+    return {
+        'conductance': round(conductance, 4),
+        'clustering_coefficient': round(clustering_coefficient, 4),
+        'separability': round(separability, 2),
+        'quality_score': round(quality_score, 1)
+    }
 
 
 def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeDict]) -> str:
@@ -54,9 +170,12 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
     genre_counts: Dict[str, int] = {}
     country_counts: Dict[str, int] = {}
     keyword_counts: Dict[str, int] = {}
+    collection_ids: Dict[int, List[str]] = {}  # collection_id -> movie titles
+    movie_connectivity: Dict[str, int] = {}  # movie_id -> number of connected people
     director_names: List[str] = []
     actor_names: List[str] = []
     movie_titles: List[str] = []
+    movie_id_to_title: Dict[str, str] = {}  # Track movie IDs to titles
     
     # Collect movie-specific semantic data
     movie_ratings: List[float] = []
@@ -78,8 +197,23 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
         elif node_type == 'actor' and len(actor_names) < 3:
             actor_names.append(node.get('label', 'Unknown'))
         elif node_type == 'movie':
+            movie_id = node.get('id', '')
+            movie_title = node.get('label', 'Unknown')
+            
+            # Track movie ID to title mapping
+            if movie_id:
+                movie_id_to_title[movie_id] = movie_title
+                movie_connectivity[movie_id] = 0  # Initialize connectivity counter
+            
             if len(movie_titles) < 3:
-                movie_titles.append(node.get('label', 'Unknown'))
+                movie_titles.append(movie_title)
+            
+            # Track movie collections
+            collection_id = node.get('collection_id')
+            if collection_id is not None:
+                if collection_id not in collection_ids:
+                    collection_ids[collection_id] = []
+                collection_ids[collection_id].append(movie_title)
             
             # Collect semantic metadata from movies
             rating = node.get('rating') or node.get('avg_rating')
@@ -106,6 +240,25 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
                         keyword_counts[kw_name] = keyword_counts.get(kw_name, 0) + 1
                     if kw_name:
                         keyword_counts[kw_name] = keyword_counts.get(kw_name, 0) + 1
+    
+    # ========== ANALYZE MOVIE CONNECTIVITY ==========
+    # For actor/crew-heavy communities, find movies with most people
+    # This helps identify "hub" movies that connect the community
+    actor_count = type_counts.get('actor', 0)
+    director_count = type_counts.get('director', 0)
+    crew_count = type_counts.get('crew', 0)
+    movie_count = type_counts.get('movie', 0)
+    people_count = actor_count + director_count + crew_count
+    
+    most_connected_movie = None
+    most_connected_movie_title = None
+    
+    # If lots of people but few movies, the movies are "hubs"
+    if people_count > 10 and movie_count > 0 and movie_count <= 5:
+        # Estimate connectivity: people / movies ratio
+        # The movie(s) are likely the central connection point
+        if movie_titles:
+            most_connected_movie_title = movie_titles[0]  # Use first movie as representative
     
     # ========== SEMANTIC ANALYSIS ==========
     # Analyze temporal patterns
@@ -192,10 +345,39 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
                 theme_descriptor = "Action-Packed"
                 break
     
-    # Determine the dominant characteristics
+    # Determine the total nodes and dominant characteristics (needed for collection check)
     total_nodes = len(community_nodes)
     dominant_type = max(type_counts.items(), key=lambda x: x[1])
     dominant_percentage = (dominant_type[1] / total_nodes) * 100
+    
+    # Check if community is dominated by a movie collection
+    dominant_collection = None
+    dominant_collection_name = None
+    collection_movie_percentage = 0.0
+    
+    if collection_ids:
+        # Find the collection with the most movies in this community
+        largest_collection = max(collection_ids.items(), key=lambda x: len(x[1]))
+        collection_id, collection_movies = largest_collection
+        
+        # Calculate what percentage of ALL movies in the community belong to this collection
+        movie_count_in_community = type_counts.get('movie', 0)
+        if movie_count_in_community > 0:
+            collection_movie_percentage = len(collection_movies) / movie_count_in_community
+        
+        # Collection is dominant if:
+        # - Has 2+ movies AND represents 50%+ of all movies in the community
+        # - OR has 3+ movies (always significant)
+        if (len(collection_movies) >= 2 and collection_movie_percentage >= 0.5) or len(collection_movies) >= 3:
+            dominant_collection = collection_id
+            # Fetch collection name from database
+            try:
+                from movies.models import Collection
+                collection_obj = Collection.objects.filter(id=collection_id).first()
+                if collection_obj:
+                    dominant_collection_name = collection_obj.name
+            except Exception as e:
+                logger.warning(f"Failed to fetch collection name for ID {collection_id}: {e}")
     
     # Size categories for more descriptive names
     size_descriptor = ""
@@ -211,7 +393,30 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
         size_descriptor = "Mega"
     
     # Generate name based on community composition
-    if dominant_percentage >= 80:  # Very homogeneous community (80%+)
+    # PRIORITY 1: If dominated by a movie collection, use collection name
+    if dominant_collection_name:
+        # Use collection name as the primary identifier
+        name_parts = []
+        if quality_descriptor and len(movie_ratings) >= 3:
+            name_parts.append(quality_descriptor)
+        name_parts.append(dominant_collection_name)
+        
+        movie_count = type_counts.get('movie', 0)
+        
+        # Determine suffix based on composition
+        # If collection represents 80%+ of all movies, it's the core of the community
+        if collection_movie_percentage >= 0.8:
+            # Pure collection community
+            return f"🎬 {' '.join(name_parts)} Collection"
+        elif movie_count < total_nodes * 0.3:
+            # Movies are minority but from same collection - it's the universe (cast/crew dominant)
+            return f"🎬 {' '.join(name_parts)} Universe"
+        else:
+            # Collection is significant but mixed with other movies
+            return f"🎬 {' '.join(name_parts)} Series"
+    
+    # PRIORITY 2: Very homogeneous community (80%+)
+    if dominant_percentage >= 80:
         if dominant_type[0] == 'genre' and genre_counts:
             top_genre = max(genre_counts.items(), key=lambda x: x[1])[0]
             
@@ -251,11 +456,41 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
             return f"🎥 {size_descriptor} Director Network ({total_nodes} directors)"
             
         elif dominant_type[0] == 'actor':
-            if actor_names:
+            # For actor-dominated communities, check if there's a central movie
+            # that connects most of the actors (hub movie pattern)
+            if most_connected_movie_title and people_count > 10 and movie_count <= 3:
+                # This is likely a movie + its cast/crew
+                movie_name = most_connected_movie_title
+                # Truncate long movie names
+                if len(movie_name) > 30:
+                    movie_name = movie_name[:27] + "..."
+                return f"🎬 {movie_name} Production ({total_nodes} nodes)"
+            
+            # For actor-dominated communities, try to use genre/theme if available
+            # to avoid generic "Actor-Centric" names
+            if genre_counts and len(movie_titles) >= 2:
+                top_genre = max(genre_counts.items(), key=lambda x: x[1])[0]
+                name_parts = []
+                if decade_descriptor:
+                    name_parts.append(decade_descriptor)
+                if quality_descriptor:
+                    name_parts.append(quality_descriptor)
+                name_parts.append(top_genre)
+                return f"🎬 {' '.join(name_parts)} Ensemble ({total_nodes} nodes)"
+            elif actor_names:
                 lead_actor = actor_names[0]
                 if decade_descriptor and len(movie_years) >= 2:
                     return f"⭐ {lead_actor}'s {decade_descriptor} Era ({total_nodes} nodes)"
                 return f"⭐ {lead_actor}'s Circle ({total_nodes} connections)"
+            elif movie_titles:
+                # Use movie-based naming if we have movies
+                name_parts = []
+                if decade_descriptor:
+                    name_parts.append(decade_descriptor)
+                if theme_descriptor:
+                    name_parts.append(theme_descriptor)
+                if name_parts:
+                    return f"🎬 {' '.join(name_parts)} Cast Network ({total_nodes} nodes)"
             return f"⭐ {size_descriptor} Actor Ensemble ({total_nodes} actors)"
             
         elif dominant_type[0] == 'movie':
@@ -310,9 +545,33 @@ def generate_community_name(community_node_ids: List[int], all_nodes: List[NodeD
             return f"🎥 Director-Led Collaborative ({total_nodes} nodes)"
             
         elif dominant_type[0] == 'actor':
-            if decade_descriptor and len(movie_years) >= 3:
-                return f"⭐ {decade_descriptor} Actor-Centric Network ({total_nodes} nodes)"
-            return f"⭐ Actor-Centric Network ({total_nodes} nodes)"
+            # Check if there's a central movie connecting the actors
+            if most_connected_movie_title and people_count > 8 and movie_count <= 3:
+                movie_name = most_connected_movie_title
+                if len(movie_name) > 30:
+                    movie_name = movie_name[:27] + "..."
+                return f"🎬 {movie_name} Cast ({total_nodes} nodes)"
+            
+            # Try to use genre/theme for more meaningful names
+            if genre_counts and len(movie_titles) >= 2:
+                top_genre = max(genre_counts.items(), key=lambda x: x[1])[0]
+                prefix_parts = []
+                if decade_descriptor and len(movie_years) >= 3:
+                    prefix_parts.append(decade_descriptor)
+                if quality_descriptor and len(movie_ratings) >= 2:
+                    prefix_parts.append(quality_descriptor)
+                prefix = ' '.join(prefix_parts) + ' ' if prefix_parts else ''
+                return f"🎬 {prefix}{top_genre} Cast ({total_nodes} nodes)"
+            elif theme_descriptor and len(movie_titles) >= 2:
+                prefix = f"{decade_descriptor} " if decade_descriptor else ""
+                return f"🎬 {prefix}{theme_descriptor} Cast Network ({total_nodes} nodes)"
+            elif decade_descriptor and len(movie_years) >= 3:
+                return f"⭐ {decade_descriptor} Actor Network ({total_nodes} nodes)"
+            else:
+                # Last resort - use movie titles if available
+                if len(movie_titles) >= 2:
+                    return f"🎬 Mixed Cast Network ({total_nodes} nodes)"
+                return f"⭐ Actor Network ({total_nodes} nodes)"
             
         elif dominant_type[0] == 'movie':
             # Use keyword themes for movie clusters
@@ -525,10 +784,8 @@ def leiden_communities(
         refined = []
         
         for community in communities_list:
-            # Single nodes are already well-connected
+            # Skip single-node communities - they're not meaningful clusters
             if len(community) <= 1:
-                if community:
-                    refined.append(community)
                 continue
             
             # Check if community is a single connected component
@@ -540,7 +797,8 @@ def leiden_communities(
             else:
                 # Community is disconnected, split it
                 for connected_part in nx.connected_components(subgraph):
-                    if connected_part:
+                    # Only keep parts with at least 2 nodes
+                    if connected_part and len(connected_part) >= 2:
                         refined.append(connected_part)
         
         return refined
@@ -637,6 +895,32 @@ def detect_communities_leiden(
             if from_id and to_id and from_id in G and to_id in G:
                 G.add_edge(from_id, to_id, weight=weight)
         
+        # Add virtual edges between movies in the same collection
+        # This encourages movies from the same collection to be in the same community
+        collection_groups = defaultdict(list)
+        for node in nodes:
+            collection_id = node.get('collection_id')
+            if collection_id is not None and node.get('type') == 'movie':
+                collection_groups[collection_id].append(node['id'])
+        
+        collection_edges_added = 0
+        for collection_id, movie_ids in collection_groups.items():
+            if len(movie_ids) > 1:  # Only if collection has multiple movies
+                # Add strong virtual edges between all movies in this collection
+                for i, movie_id_1 in enumerate(movie_ids):
+                    for movie_id_2 in movie_ids[i+1:]:
+                        if movie_id_1 in G and movie_id_2 in G:
+                            # Use high weight (5.0) to strongly encourage same community
+                            # If edge already exists, increase its weight
+                            if G.has_edge(movie_id_1, movie_id_2):
+                                G[movie_id_1][movie_id_2]['weight'] += 5.0
+                            else:
+                                G.add_edge(movie_id_1, movie_id_2, weight=5.0)
+                            collection_edges_added += 1
+        
+        if collection_edges_added > 0:
+            logger.info(f"Added {collection_edges_added} virtual edges for {len(collection_groups)} movie collections")
+        
         # Handle empty or trivial graphs
         if len(G) == 0:
             return CommunitiesResult(
@@ -669,13 +953,13 @@ def detect_communities_leiden(
         logger.info(f"Running Leiden algorithm on graph with {len(G)} nodes and {len(G.edges())} edges")
         communities = leiden_communities(G, resolution=resolution, random_state=random_state)
         
-        # Filter out empty communities
+        # Filter out empty and single-member communities (communities must have at least 2 members)
         original_count = len(communities)
-        communities = [community for community in communities if community and len(community) > 0]
+        communities = [community for community in communities if community and len(community) >= 2]
         filtered_count = len(communities)
         
         if original_count != filtered_count:
-            logger.warning(f"Filtered out {original_count - filtered_count} empty communities")
+            logger.info(f"Filtered out {original_count - filtered_count} single-member or empty communities (kept {filtered_count} valid communities)")
         
         # Calculate overall modularity
         overall_modularity = nx.algorithms.community.modularity(G, communities, weight='weight', resolution=resolution)
@@ -683,7 +967,8 @@ def detect_communities_leiden(
         # Convert to dictionary format
         community_dict = {}
         for i, community in enumerate(communities):
-            if not community or len(community) == 0:
+            # Skip empty or single-member communities
+            if not community or len(community) < 2:
                 continue
                 
             community_id = f"community_{i}"
@@ -697,6 +982,9 @@ def detect_communities_leiden(
             internal_edges = subgraph.number_of_edges()
             total_degree = sum(dict(G.degree(weight='weight')).get(node, 0) for node in community)
             
+            # Calculate quality metrics
+            quality_metrics = calculate_community_quality_metrics(community, G, communities)
+            
             community_dict[community_id] = {
                 'nodes': community_nodes,
                 'size': len(community),
@@ -704,7 +992,12 @@ def detect_communities_leiden(
                 'modularity': overall_modularity,
                 'internal_edges': internal_edges,
                 'total_degree': total_degree,
-                'density': (2 * internal_edges) / (len(community) * (len(community) - 1)) if len(community) > 1 else 1.0
+                'density': (2 * internal_edges) / (len(community) * (len(community) - 1)) if len(community) > 1 else 1.0,
+                # Quality metrics
+                'conductance': quality_metrics['conductance'],
+                'clustering_coefficient': quality_metrics['clustering_coefficient'],
+                'separability': quality_metrics['separability'],
+                'quality_score': quality_metrics['quality_score']
             }
         
         # Calculate statistics
@@ -850,3 +1143,72 @@ def validate_communities(communities_result: CommunitiesResult) -> bool:
     
     logger.info(f"Validation passed: {len(communities_result['communities'])} valid communities")
     return True
+
+
+def apply_community_edge_properties(edges: List[EdgeDict], nodes: List[NodeDict]) -> List[EdgeDict]:
+    """Apply community-aware physics properties to edges.
+    
+    Edges within the same community get:
+    - Shorter spring length (nodes stick closer)
+    - Stronger spring constant (tighter cohesion)
+    
+    Edges between communities get:
+    - Longer spring length (communities spread apart)
+    - Weaker spring constant (looser connection)
+    
+    Args:
+        edges: List of edge dictionaries
+        nodes: List of node dictionaries (to get community assignments)
+    
+    Returns:
+        List of edges with enhanced spring properties
+    """
+    # Build node_id -> community_id mapping
+    node_to_community = {}
+    for node in nodes:
+        if 'id' in node and 'community' in node:
+            node_to_community[node['id']] = node['community']
+    
+    if not node_to_community:
+        logger.debug("No community assignments found, skipping edge property enhancement")
+        return edges
+    
+    enhanced_edges = []
+    intra_community_count = 0
+    inter_community_count = 0
+    
+    for edge in edges:
+        enhanced_edge = edge.copy()
+        
+        source_id = edge.get('source', edge.get('from'))
+        target_id = edge.get('target', edge.get('to'))
+        
+        source_comm = node_to_community.get(source_id)
+        target_comm = node_to_community.get(target_id)
+        
+        # Only apply if both nodes have community assignments
+        if source_comm is not None and target_comm is not None:
+            if source_comm == target_comm:
+                # ========== INTRA-COMMUNITY EDGE ==========
+                # Shorter length and stronger spring for tight clusters
+                base_length = enhanced_edge.get('length', 90)
+                enhanced_edge['length'] = base_length * 0.4  # 60% shorter (36 default)
+                enhanced_edge['strength'] = enhanced_edge.get('strength', 0.08) * 2.5  # 2.5x stronger
+                intra_community_count += 1
+            else:
+                # ========== INTER-COMMUNITY EDGE ==========
+                # Longer length and weaker spring to spread communities apart
+                base_length = enhanced_edge.get('length', 90)
+                enhanced_edge['length'] = base_length * 2.5  # 150% longer (225 default)
+                enhanced_edge['strength'] = enhanced_edge.get('strength', 0.08) * 0.3  # 70% weaker
+                inter_community_count += 1
+        
+        enhanced_edges.append(enhanced_edge)
+    
+    logger.info(
+        f"Applied community edge properties: "
+        f"{intra_community_count} intra-community (shorter/stronger), "
+        f"{inter_community_count} inter-community (longer/weaker)"
+    )
+    
+    return enhanced_edges

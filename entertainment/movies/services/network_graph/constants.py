@@ -119,7 +119,7 @@ LAYOUT_PARAMS = {
     'damping': 0.45,
     'theta': 0.4,  # Barnes-Hut approximation
     'gravity_falloff': 2.0,
-    'max_velocity': 25,
+    'max_velocity': 1,
     'min_velocity': 0.05,
     'timestep': 0.35,
     'gravity_balance': 0.7,
