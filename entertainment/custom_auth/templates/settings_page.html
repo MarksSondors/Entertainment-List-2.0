@@ -1,4 +1,5 @@
 {% extends 'components/base.html' %}
+{% load static %}
 
 {% block title %}User Settings | Entertainment List{% endblock %}
 
@@ -15,6 +16,15 @@
                         <button aria-label="Close"></button>
                     </div>                </div>
                 <div class="window-body">
+            <!-- Django Messages -->
+            {% if messages %}
+                {% for message in messages %}
+                <div class="sunken-panel" style="padding: 10px; margin-bottom: 15px; {% if 'success' in message.tags %}background-color: #d4edda; border-color: #c3e6cb;{% elif 'error' in message.tags %}background-color: #f8d7da; border-color: #f5c6cb;{% elif 'warning' in message.tags %}background-color: #fff3cd; border-color: #ffeaa7;{% endif %}">
+                    <strong {% if 'broadcast-success-message' in message.tags %}class="broadcast-success-message"{% endif %}>{{ message }}</strong>
+                </div>
+                {% endfor %}
+            {% endif %}
+            
             <form method="post">
                 {% csrf_token %}
                 
@@ -42,6 +52,92 @@
                         </div>
                         <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
                             Display plot details on media pages
+                        </small>
+                    </div>
+                </div>
+
+                <div class="field-row-stacked" style="margin-bottom: 15px;" id="notifications">
+                    <h4>Push Notification Preferences 🔔</h4>
+                    <div class="sunken-panel" style="padding: 10px;">
+                        <div class="field-row" style="margin-bottom: 10px; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <strong>Push Notification Status:</strong> 
+                                <span id="subscription-status" style="font-weight: bold;">Checking...</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="subscribe-btn" class="btn" disabled>Subscribe</button>
+                                <button type="button" id="unsubscribe-btn" class="btn" disabled style="display: none;">Unsubscribe</button>
+                                {% if request.user.is_staff %}
+                                <button type="button" id="test-notification-btn" class="btn" disabled style="display: none;">Send Test</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div id="permission-status" style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;"></div>
+                        <div id="notification-message" style="display: none; padding: 8px; margin-bottom: 10px; border-radius: 4px; font-size: 11px;"></div>
+                        <small style="display: block; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
+                            Enable push notifications to receive updates about your watchlist and recommendations. The preferences below control which types of notifications you'll receive.
+                        </small>
+
+                        <hr style="margin: 15px 0; border: 0; border-top: 1px solid var(--border-dark);">
+
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="new_releases" name="new_releases" {% if notification_prefs.new_releases %}checked{% endif %}>
+                            <label for="new_releases">New Releases</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
+                            Notify when tracked items get new releases
+                        </small>
+                        
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="watchlist_updates" name="watchlist_updates" {% if notification_prefs.watchlist_updates %}checked{% endif %}>
+                            <label for="watchlist_updates">Watchlist Updates</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
+                            Updates about items in your watchlist
+                        </small>
+                        
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="recommendations" name="recommendations" {% if notification_prefs.recommendations %}checked{% endif %}>
+                            <label for="recommendations">Recommendations</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
+                            Personalized recommendations based on your taste
+                        </small>
+                        
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="movie_of_week" name="movie_of_week" {% if notification_prefs.movie_of_week %}checked{% endif %}>
+                            <label for="movie_of_week">Movie of the Week</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
+                            Reminders about the current community movie pick
+                        </small>
+                        
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="system_notifications" name="system_notifications" {% if notification_prefs.system_notifications %}checked{% endif %}>
+                            <label for="system_notifications">System Notifications</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
+                            Important system announcements and updates
+                        </small>
+
+                        <hr style="margin: 15px 0; border: 0; border-top: 1px solid var(--border-dark);">
+
+                        <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="quiet_hours_enabled" name="quiet_hours_enabled" {% if notification_prefs.quiet_hours_enabled %}checked{% endif %}>
+                            <label for="quiet_hours_enabled">Enable Quiet Hours</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 10px; font-size: 12px; color: var(--text-muted);">
+                            Don't send notifications during specific hours
+                        </small>
+
+                        <div class="field-row" style="margin-left: 20px; margin-bottom: 10px; align-items: center; gap: 10px;">
+                            <label for="quiet_hours_start">From:</label>
+                            <input type="time" id="quiet_hours_start" name="quiet_hours_start" value="{{ notification_prefs.quiet_hours_start|time:'H:i' }}" style="width: auto;">
+                            <label for="quiet_hours_end" style="margin-left: 10px;">To:</label>
+                            <input type="time" id="quiet_hours_end" name="quiet_hours_end" value="{{ notification_prefs.quiet_hours_end|time:'H:i' }}" style="width: auto;">
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
+                            Example: 22:00 to 08:00 for overnight quiet hours
                         </small>
                     </div>
                 </div>
@@ -76,6 +172,46 @@
                     </div>
                 </div>
             </div>
+
+            <!-- System Broadcast Section - Admin Only -->
+            {% if request.user.is_staff %}
+            <div class="field-row-stacked" style="margin-bottom: 15px;">
+                <h4>📢 System Broadcast (Admin Only)</h4>
+                <div class="sunken-panel" style="padding: 10px;">
+                    <form method="post" id="broadcast-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="send_broadcast" value="true">
+                        
+                        <div class="field-row-stacked" style="margin-bottom: 10px;">
+                            <label for="broadcast_title">Notification Title:</label>
+                            <input type="text" id="broadcast_title" name="broadcast_title" maxlength="100" placeholder="e.g., System Update Available" style="width: 100%;" required>
+                        </div>
+                        
+                        <div class="field-row-stacked" style="margin-bottom: 10px;">
+                            <label for="broadcast_message">Message:</label>
+                            <textarea id="broadcast_message" name="broadcast_message" rows="4" placeholder="Enter your system announcement message..." style="width: 100%;" required></textarea>
+                        </div>
+                        
+                        <div class="field-row-stacked" style="margin-bottom: 10px;">
+                            <label for="broadcast_url">Link (optional):</label>
+                            <input type="text" id="broadcast_url" name="broadcast_url" placeholder="/path/to/page or https://..." style="width: 100%;">
+                        </div>
+                        
+                        <small style="display: block; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
+                            This will send a push notification to all users who have system notifications enabled.
+                        </small>
+                        
+                        <div class="field-row button-row">
+                            <button type="submit" class="btn" id="broadcast-submit-btn">
+                                Send Broadcast to All Users
+                            </button>
+                        </div>
+                        
+                        <div id="broadcast-message-status" style="display: none; padding: 8px; margin-top: 10px; border-radius: 4px; font-size: 11px;"></div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
         </div>
         <div class="status-bar">
             <div class="status-bar-field">User: {{ request.user.username }}</div>
@@ -236,7 +372,7 @@
         outline: 1px dotted var(--text-color);
         outline-offset: -3px;
     }    /* Form styling */
-    input[type="text"], input[type="checkbox"] {
+    input[type="text"], input[type="time"], input[type="checkbox"] {
         background-color: var(--window-bg);
         color: var(--text-color);
         border: 1px inset var(--border-light);
@@ -244,7 +380,7 @@
         font-size: 11px;
     }
 
-    input[type="text"] {
+    input[type="text"], input[type="time"] {
         padding: 2px 4px;
         box-sizing: border-box;
     }
@@ -318,6 +454,8 @@
             width: auto;
             min-width: auto;
             flex-shrink: 0;
+            font-size: 10px;
+            padding: 4px 8px;
         }
         
         .field-row {
@@ -328,9 +466,24 @@
         .field-row[style*="justify-content: flex-end"] {
             justify-content: flex-start !important;
         }
+
+        /* Make notification buttons stack on mobile */
+        .field-row[style*="justify-content: space-between"] {
+            flex-direction: column;
+            align-items: flex-start !important;
+        }
+
+        .field-row[style*="justify-content: space-between"] > div {
+            width: 100%;
+        }
+
+        .field-row[style*="justify-content: space-between"] > div[style*="display: flex"] {
+            flex-wrap: wrap;
+        }
     }
 </style>
 
+<script src="{% static 'js/push-notifications.js' %}"></script>
 <script>
     // Add a confirmation message when settings are saved
     document.addEventListener('DOMContentLoaded', function() {
@@ -342,7 +495,236 @@
                 console.log('Settings form submitted');
             });
         }
+
+        // Initialize push notification functionality
+        initializePushNotifications();
     });
+
+    // Push Notification Management
+    async function initializePushNotifications() {
+        const subscribeBtn = document.getElementById('subscribe-btn');
+        const unsubscribeBtn = document.getElementById('unsubscribe-btn');
+        const testNotificationBtn = document.getElementById('test-notification-btn');
+        const subscriptionStatus = document.getElementById('subscription-status');
+        const permissionStatus = document.getElementById('permission-status');
+
+        // Check if push notifications are supported
+        if (!window.pushNotificationManager.isSupported) {
+            subscriptionStatus.textContent = '❌ Not Supported';
+            subscriptionStatus.style.color = 'red';
+            permissionStatus.textContent = 'Your browser does not support push notifications';
+            subscribeBtn.disabled = true;
+            return;
+        }
+
+        // Initialize the push notification manager
+        try {
+            await window.pushNotificationManager.initialize();
+            await updatePushSubscriptionStatus();
+        } catch (error) {
+            console.error('Error initializing push notifications:', error);
+            subscriptionStatus.textContent = '❌ Error';
+            subscriptionStatus.style.color = 'red';
+            permissionStatus.textContent = 'Failed to initialize: ' + error.message;
+        }
+
+        // Subscribe button click
+        subscribeBtn.addEventListener('click', async () => {
+            try {
+                subscribeBtn.disabled = true;
+                subscribeBtn.textContent = 'Subscribing...';
+                
+                await window.pushNotificationManager.subscribe();
+                await updatePushSubscriptionStatus();
+                
+                // Clear the notification alert dismissal flag
+                localStorage.removeItem('notificationAlertDismissed');
+                
+                showNotificationMessage('✅ Successfully subscribed to push notifications!', 'success');
+            } catch (error) {
+                console.error('Subscription error:', error);
+                showNotificationMessage('❌ Failed to subscribe: ' + error.message, 'error');
+                subscribeBtn.disabled = false;
+                subscribeBtn.textContent = 'Subscribe';
+            }
+        });
+
+        // Unsubscribe button click
+        unsubscribeBtn.addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to unsubscribe from push notifications?')) {
+                return;
+            }
+
+            try {
+                unsubscribeBtn.disabled = true;
+                unsubscribeBtn.textContent = 'Unsubscribing...';
+                
+                await window.pushNotificationManager.unsubscribe();
+                await updatePushSubscriptionStatus();
+                
+                showNotificationMessage('✅ Successfully unsubscribed from push notifications', 'success');
+            } catch (error) {
+                console.error('Unsubscription error:', error);
+                showNotificationMessage('❌ Failed to unsubscribe: ' + error.message, 'error');
+                unsubscribeBtn.disabled = false;
+                unsubscribeBtn.textContent = 'Unsubscribe';
+            }
+        });
+
+        // Test notification button click (only for admin users)
+        if (testNotificationBtn) {
+            testNotificationBtn.addEventListener('click', async () => {
+                try {
+                    testNotificationBtn.disabled = true;
+                    testNotificationBtn.textContent = 'Sending...';
+                    
+                    console.log('Sending test notification request...');
+                    
+                    // Send test notification via backend
+                    const response = await fetch('/api/notifications/test/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCsrfToken(),
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ type: 'movie' })
+                    });
+                    
+                    console.log('Response status:', response.status);
+                    const data = await response.json();
+                    console.log('Response data:', data);
+                    
+                    if (response.ok) {
+                        const successCount = data.result?.success || 0;
+                        const failedCount = data.result?.failed || 0;
+                        
+                        if (successCount > 0) {
+                            showNotificationMessage(`✅ Test sent to ${successCount} device(s)! Check your notifications.`, 'success');
+                        } else if (failedCount > 0) {
+                            showNotificationMessage(`⚠️ Failed to send to ${failedCount} device(s).`, 'error');
+                        } else {
+                            showNotificationMessage('⚠️ No active subscriptions found.', 'error');
+                        }
+                    } else {
+                        const errorMsg = data.detail || data.error || 'Unknown error';
+                        showNotificationMessage('❌ Failed: ' + errorMsg, 'error');
+                    }
+                } catch (error) {
+                    console.error('Test notification error:', error);
+                    showNotificationMessage('❌ Error: ' + error.message, 'error');
+                } finally {
+                    testNotificationBtn.disabled = false;
+                    testNotificationBtn.textContent = 'Send Test';
+                }
+            });
+        }
+    }
+
+    function showNotificationMessage(message, type) {
+        const messageEl = document.getElementById('notification-message');
+        messageEl.textContent = message;
+        messageEl.style.display = 'block';
+        
+        // Style based on type
+        if (type === 'success') {
+            messageEl.style.backgroundColor = '#d4edda';
+            messageEl.style.color = '#155724';
+            messageEl.style.border = '1px solid #c3e6cb';
+        } else if (type === 'error') {
+            messageEl.style.backgroundColor = '#f8d7da';
+            messageEl.style.color = '#721c24';
+            messageEl.style.border = '1px solid #f5c6cb';
+        } else {
+            messageEl.style.backgroundColor = '#d1ecf1';
+            messageEl.style.color = '#0c5460';
+            messageEl.style.border = '1px solid #bee5eb';
+        }
+        
+        // Hide after 5 seconds
+        setTimeout(() => {
+            messageEl.style.display = 'none';
+        }, 5000);
+    }
+
+    function getCsrfToken() {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    async function updatePushSubscriptionStatus() {
+        const subscribeBtn = document.getElementById('subscribe-btn');
+        const unsubscribeBtn = document.getElementById('unsubscribe-btn');
+        const testNotificationBtn = document.getElementById('test-notification-btn');
+        const subscriptionStatus = document.getElementById('subscription-status');
+        const permissionStatus = document.getElementById('permission-status');
+
+        try {
+            const isSubscribed = await window.pushNotificationManager.isSubscribed();
+            const permission = Notification.permission;
+
+            // Update status text and color
+            if (isSubscribed) {
+                subscriptionStatus.textContent = '✅ Active';
+                subscriptionStatus.style.color = 'green';
+                subscribeBtn.style.display = 'none';
+                unsubscribeBtn.style.display = 'inline-block';
+                unsubscribeBtn.disabled = false;
+                unsubscribeBtn.textContent = 'Unsubscribe';
+                if (testNotificationBtn) {
+                    testNotificationBtn.style.display = 'inline-block';
+                    testNotificationBtn.disabled = false;
+                    testNotificationBtn.textContent = 'Send Test';
+                }
+            } else {
+                subscriptionStatus.textContent = '⚠️ Not Subscribed';
+                subscriptionStatus.style.color = 'orange';
+                subscribeBtn.style.display = 'inline-block';
+                unsubscribeBtn.style.display = 'none';
+                if (testNotificationBtn) {
+                    testNotificationBtn.style.display = 'none';
+                }
+                
+                if (permission === 'denied') {
+                    subscribeBtn.disabled = true;
+                    subscribeBtn.textContent = 'Permission Denied';
+                    subscriptionStatus.textContent = '❌ Blocked';
+                    subscriptionStatus.style.color = 'red';
+                } else {
+                    subscribeBtn.disabled = false;
+                    subscribeBtn.textContent = 'Subscribe';
+                }
+            }
+
+            // Update permission status message
+            if (permission === 'granted') {
+                permissionStatus.textContent = isSubscribed ? 
+                    'You are receiving push notifications' : 
+                    'Permission granted - click Subscribe to enable';
+            } else if (permission === 'denied') {
+                permissionStatus.textContent = 'Permission denied - please enable notifications in your browser settings';
+            } else {
+                permissionStatus.textContent = 'Click Subscribe to enable push notifications';
+            }
+
+        } catch (error) {
+            console.error('Error checking subscription status:', error);
+            subscriptionStatus.textContent = '❓ Unknown';
+            subscriptionStatus.style.color = 'gray';
+            permissionStatus.textContent = 'Error checking status';
+        }
+    }
     
     // Copy API key to clipboard functionality
     document.getElementById('copy-api-key').addEventListener('click', function() {
@@ -365,5 +747,73 @@
             alert('API key copied to clipboard!');
         }
     });
+
+    // Broadcast form handler (admin only)
+    const broadcastForm = document.getElementById('broadcast-form');
+    if (broadcastForm) {
+        broadcastForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('broadcast-submit-btn');
+            const statusDiv = document.getElementById('broadcast-message-status');
+            const originalBtnText = submitBtn.textContent;
+            
+            // Confirm before sending
+            if (!confirm('Are you sure you want to send this notification to ALL users?')) {
+                return;
+            }
+            
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+            statusDiv.style.display = 'none';
+            
+            try {
+                const formData = new FormData(broadcastForm);
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+                
+                const text = await response.text();
+                
+                if (response.ok) {
+                    // Parse response to get success count
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(text, 'text/html');
+                    const successMsg = doc.querySelector('.broadcast-success-message');
+                    
+                    if (successMsg) {
+                        statusDiv.textContent = successMsg.textContent;
+                        statusDiv.style.backgroundColor = '#d4edda';
+                        statusDiv.style.color = '#155724';
+                        statusDiv.style.border = '1px solid #c3e6cb';
+                    } else {
+                        statusDiv.textContent = '✅ Broadcast sent successfully!';
+                        statusDiv.style.backgroundColor = '#d4edda';
+                        statusDiv.style.color = '#155724';
+                        statusDiv.style.border = '1px solid #c3e6cb';
+                    }
+                    statusDiv.style.display = 'block';
+                    
+                    // Clear form
+                    broadcastForm.reset();
+                } else {
+                    throw new Error('Failed to send broadcast');
+                }
+            } catch (error) {
+                console.error('Broadcast error:', error);
+                statusDiv.textContent = '❌ Failed to send broadcast. Please try again.';
+                statusDiv.style.backgroundColor = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #f5c6cb';
+                statusDiv.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalBtnText;
+            }
+        });
+    }
 </script>
 {% endblock %}
