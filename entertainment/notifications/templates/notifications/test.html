@@ -1,0 +1,347 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Push Notifications Test - Entertainment List</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .card {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        .preferences {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        h1 { color: #333; }
+        h2 { color: #555; margin-top: 30px; }
+        .emoji { font-size: 24px; }
+    </style>
+</head>
+<body>
+    <h1>🔔 Push Notifications Test Panel</h1>
+    <p>Test and manage push notifications for Entertainment List.</p>
+
+    <div class="card">
+        <h2>📱 Subscription Management</h2>
+        <div id="subscription-status" class="status info">
+            Checking subscription status...
+        </div>
+        <div id="permission-status" class="status info">
+            Checking notification permission...
+        </div>
+        
+        <button id="subscribe-btn" disabled>Subscribe to Notifications</button>
+        <button id="unsubscribe-btn" disabled>Unsubscribe</button>
+        <button id="test-notification-btn">Test Local Notification</button>
+    </div>
+
+    <div class="card">
+        <h2>🎯 Send Test Notifications</h2>
+        <p>Send actual push notifications from server (requires backend):</p>
+        
+        <button onclick="sendTestNotification('movie')">🎬 Movie Notification</button>
+        <button onclick="sendTestNotification('tvshow')">📺 TV Show Notification</button>
+        <button onclick="sendTestNotification('book')">📚 Book Notification</button>
+        <button onclick="sendTestNotification('music')">🎵 Music Notification</button>
+        
+        <div id="send-status"></div>
+    </div>
+
+    <div class="card">
+        <h2>⚙️ Notification Preferences</h2>
+        <div class="preferences">
+            <label>
+                <input type="checkbox" id="pref-new-releases" checked>
+                New Releases
+            </label>
+            <label>
+                <input type="checkbox" id="pref-watchlist" checked>
+                Watchlist Updates
+            </label>
+            <label>
+                <input type="checkbox" id="pref-recommendations" checked>
+                Recommendations
+            </label>
+            <label>
+                <input type="checkbox" id="pref-reviews" checked>
+                Review Replies
+            </label>
+            <label>
+                <input type="checkbox" id="pref-system" checked>
+                System Notifications
+            </label>
+        </div>
+        
+        <h3>Quiet Hours</h3>
+        <label>
+            <input type="checkbox" id="quiet-hours-enabled">
+            Enable Quiet Hours
+        </label>
+        <div style="margin-top: 10px;">
+            <label>
+                Start: <input type="time" id="quiet-start" value="22:00">
+            </label>
+            <label>
+                End: <input type="time" id="quiet-end" value="08:00">
+            </label>
+        </div>
+        
+        <button onclick="savePreferences()" style="margin-top: 15px;">💾 Save Preferences</button>
+        <div id="pref-status"></div>
+    </div>
+
+    <div class="card">
+        <h2>ℹ️ Browser Support</h2>
+        <ul id="browser-support"></ul>
+    </div>
+
+    <script src="{% static 'js/push-notifications.js' %}"></script>
+    <script>
+        // UI Elements
+        const subscribeBtn = document.getElementById('subscribe-btn');
+        const unsubscribeBtn = document.getElementById('unsubscribe-btn');
+        const testNotificationBtn = document.getElementById('test-notification-btn');
+        const subscriptionStatus = document.getElementById('subscription-status');
+        const permissionStatus = document.getElementById('permission-status');
+        const browserSupport = document.getElementById('browser-support');
+
+        // Initialize
+        async function init() {
+            // Check browser support
+            const features = [
+                ['Service Worker', 'serviceWorker' in navigator],
+                ['Push Manager', 'PushManager' in window],
+                ['Notifications', 'Notification' in window],
+            ];
+            
+            browserSupport.innerHTML = features.map(([name, supported]) => 
+                `<li>${supported ? '✅' : '❌'} ${name}</li>`
+            ).join('');
+
+            if (!window.pushNotificationManager.isSupported) {
+                subscriptionStatus.textContent = '❌ Push notifications not supported in this browser';
+                subscriptionStatus.className = 'status error';
+                return;
+            }
+
+            // Initialize notification manager
+            await window.pushNotificationManager.initialize();
+            
+            // Update UI
+            await updateStatus();
+            
+            // Load preferences
+            await loadPreferences();
+        }
+
+        // Update subscription status
+        async function updateStatus() {
+            const isSubscribed = await window.pushNotificationManager.isSubscribed();
+            const permission = Notification.permission;
+            
+            subscriptionStatus.textContent = isSubscribed 
+                ? '✅ Subscribed to push notifications' 
+                : '⚠️ Not subscribed';
+            subscriptionStatus.className = `status ${isSubscribed ? 'success' : 'info'}`;
+            
+            permissionStatus.textContent = `Permission: ${permission}`;
+            permissionStatus.className = `status ${permission === 'granted' ? 'success' : permission === 'denied' ? 'error' : 'info'}`;
+            
+            subscribeBtn.disabled = isSubscribed || permission === 'denied';
+            unsubscribeBtn.disabled = !isSubscribed;
+            subscribeBtn.textContent = permission === 'denied' 
+                ? 'Permission Denied (Check Browser Settings)' 
+                : 'Subscribe to Notifications';
+        }
+
+        // Subscribe
+        subscribeBtn.addEventListener('click', async () => {
+            try {
+                await window.pushNotificationManager.subscribe();
+                await updateStatus();
+                alert('✅ Successfully subscribed to push notifications!');
+            } catch (error) {
+                alert('❌ Failed to subscribe: ' + error.message);
+                console.error(error);
+            }
+        });
+
+        // Unsubscribe
+        unsubscribeBtn.addEventListener('click', async () => {
+            try {
+                await window.pushNotificationManager.unsubscribe();
+                await updateStatus();
+                alert('✅ Successfully unsubscribed from push notifications');
+            } catch (error) {
+                alert('❌ Failed to unsubscribe: ' + error.message);
+                console.error(error);
+            }
+        });
+
+        // Test notification (local)
+        testNotificationBtn.addEventListener('click', async () => {
+            try {
+                await window.pushNotificationManager.showTestNotification();
+            } catch (error) {
+                alert('❌ Failed to show test notification: ' + error.message);
+                console.error(error);
+            }
+        });
+
+        // Send test notification from server
+        async function sendTestNotification(type) {
+            const sendStatus = document.getElementById('send-status');
+            sendStatus.textContent = 'Sending...';
+            sendStatus.className = 'status info';
+            
+            // You'll need to implement this endpoint in your backend
+            try {
+                const response = await fetch('/api/notifications/test/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify({ type: type })
+                });
+                
+                if (response.ok) {
+                    sendStatus.textContent = '✅ Test notification sent! Check your device.';
+                    sendStatus.className = 'status success';
+                } else {
+                    sendStatus.textContent = '❌ Failed to send notification';
+                    sendStatus.className = 'status error';
+                }
+            } catch (error) {
+                sendStatus.textContent = '❌ Error: ' + error.message;
+                sendStatus.className = 'status error';
+            }
+        }
+
+        // Load preferences
+        async function loadPreferences() {
+            try {
+                const response = await fetch('/api/notifications/preferences/me/');
+                if (response.ok) {
+                    const prefs = await response.json();
+                    document.getElementById('pref-new-releases').checked = prefs.new_releases;
+                    document.getElementById('pref-watchlist').checked = prefs.watchlist_updates;
+                    document.getElementById('pref-recommendations').checked = prefs.recommendations;
+                    document.getElementById('pref-reviews').checked = prefs.review_replies;
+                    document.getElementById('pref-system').checked = prefs.system_notifications;
+                    document.getElementById('quiet-hours-enabled').checked = prefs.quiet_hours_enabled;
+                    
+                    if (prefs.quiet_hours_start) {
+                        document.getElementById('quiet-start').value = prefs.quiet_hours_start.substring(0, 5);
+                    }
+                    if (prefs.quiet_hours_end) {
+                        document.getElementById('quiet-end').value = prefs.quiet_hours_end.substring(0, 5);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load preferences:', error);
+            }
+        }
+
+        // Save preferences
+        async function savePreferences() {
+            const prefStatus = document.getElementById('pref-status');
+            
+            const data = {
+                new_releases: document.getElementById('pref-new-releases').checked,
+                watchlist_updates: document.getElementById('pref-watchlist').checked,
+                recommendations: document.getElementById('pref-recommendations').checked,
+                review_replies: document.getElementById('pref-reviews').checked,
+                system_notifications: document.getElementById('pref-system').checked,
+                quiet_hours_enabled: document.getElementById('quiet-hours-enabled').checked,
+                quiet_hours_start: document.getElementById('quiet-start').value + ':00',
+                quiet_hours_end: document.getElementById('quiet-end').value + ':00',
+            };
+            
+            try {
+                const response = await fetch('/api/notifications/preferences/update_preferences/', {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    prefStatus.textContent = '✅ Preferences saved!';
+                    prefStatus.className = 'status success';
+                } else {
+                    prefStatus.textContent = '❌ Failed to save preferences';
+                    prefStatus.className = 'status error';
+                }
+            } catch (error) {
+                prefStatus.textContent = '❌ Error: ' + error.message;
+                prefStatus.className = 'status error';
+            }
+        }
+
+        // Get CSRF token
+        function getCsrfToken() {
+            const name = 'csrftoken';
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

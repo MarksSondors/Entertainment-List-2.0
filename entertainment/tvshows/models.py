@@ -38,7 +38,7 @@ class TVShow(Media):
     
     def get_absolute_url(self):
         """Get the absolute URL for the TV show page."""
-        return f"/tvshows/{self.id}/"
+        return f"/tvshows/{self.tmdb_id}/"
     
     def get_media_persons(self, role=None):
         """Get all MediaPerson objects related to this TV show."""

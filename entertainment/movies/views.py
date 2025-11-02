@@ -478,7 +478,8 @@ class MovieReviewView(APIView):
         if date_added == today_date:
             date_added = timezone.now()
         elif date_added < today_date:
-            date_added = date_added
+            # Convert date to timezone-aware datetime at start of day
+            date_added = timezone.make_aware(timezone.datetime.combine(date_added, timezone.datetime.min.time()))
         else:
             return Response({"error": "Date added cannot be in the future"}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -551,12 +552,13 @@ class MovieReviewView(APIView):
         date_added = timezone.datetime.strptime(date_added, '%Y-%m-%d').date() if date_added else today_date
 
         if date_added == today_date:
-            if review.date_added == today_date:
+            if review.date_added.date() == today_date:
                 date_added = review.date_added
             else:
                 date_added = timezone.now()
         elif date_added < today_date:
-            date_added = date_added
+            # Convert date to timezone-aware datetime at start of day
+            date_added = timezone.make_aware(timezone.datetime.combine(date_added, timezone.datetime.min.time()))
         else:
             return Response({"error": "Date added cannot be in the future"}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -1117,7 +1119,8 @@ def movie_week_discussion(request, pick_id):
                     try:
                         from datetime import datetime
                         date_obj = datetime.strptime(review_date, '%Y-%m-%d')
-                        review.date_watched = date_obj
+                        # Make the datetime timezone-aware
+                        review.date_watched = timezone.make_aware(date_obj)
                         review.save()
                     except (ValueError, TypeError):
                         # If date parsing fails, just continue - it's not critical

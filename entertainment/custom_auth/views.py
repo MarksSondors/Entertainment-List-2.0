@@ -47,12 +47,22 @@ def discover_page(request):
     popular_tv_shows
     """
     from movies.views import get_current_community_pick_data
+    from notifications.models import PushSubscription
     
     # Get the current community movie pick data
     community_pick_data = get_current_community_pick_data()
     
+    # Check if user has enabled push notifications
+    has_push_subscription = False
+    if request.user.is_authenticated:
+        has_push_subscription = PushSubscription.objects.filter(
+            user=request.user,
+            is_active=True
+        ).exists()
+    
     context = {
-        'community_pick': community_pick_data
+        'community_pick': community_pick_data,
+        'has_push_subscription': has_push_subscription,
     }
     
     return render(request, 'discover_page.html', context)
@@ -1484,6 +1494,105 @@ def people_detail(request, person_id):
     return render(request, 'people_page.html', context)
 
 @login_required
+def get_person_tmdb_filmography(request, person_id):
+    """
+    API endpoint to fetch a person's filmography from TMDB
+    Returns both movie and TV show credits
+    """
+    person = get_object_or_404(Person, pk=person_id)
+    
+    if not person.tmdb_id:
+        return JsonResponse({'error': 'This person does not have a TMDB ID'}, status=400)
+    
+    try:
+        from api.services.movies import MoviesService
+        from api.services.tvshows import TVShowsService
+        
+        movies_service = MoviesService()
+        tvshows_service = TVShowsService()
+        
+        # Fetch movie and TV credits from TMDB
+        movie_credits_data = movies_service.get_person_movie_credits(person.tmdb_id)
+        tv_credits_data = tvshows_service.get_person_tv_credits(person.tmdb_id)
+        
+        # Process movie credits
+        movies = []
+        if movie_credits_data and 'cast' in movie_credits_data:
+            for movie in movie_credits_data['cast']:
+                movies.append({
+                    'id': movie.get('id'),
+                    'title': movie.get('title', 'Unknown'),
+                    'original_title': movie.get('original_title', ''),
+                    'release_date': movie.get('release_date', ''),
+                    'character': movie.get('character', ''),
+                    'poster_path': f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None,
+                    'vote_average': movie.get('vote_average', 0),
+                    'role_type': 'Acting',
+                    'in_database': Movie.objects.filter(tmdb_id=movie.get('id')).exists()
+                })
+        
+        if movie_credits_data and 'crew' in movie_credits_data:
+            for movie in movie_credits_data['crew']:
+                movies.append({
+                    'id': movie.get('id'),
+                    'title': movie.get('title', 'Unknown'),
+                    'original_title': movie.get('original_title', ''),
+                    'release_date': movie.get('release_date', ''),
+                    'job': movie.get('job', ''),
+                    'department': movie.get('department', ''),
+                    'poster_path': f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None,
+                    'vote_average': movie.get('vote_average', 0),
+                    'role_type': 'Crew',
+                    'in_database': Movie.objects.filter(tmdb_id=movie.get('id')).exists()
+                })
+        
+        # Process TV credits
+        tv_shows = []
+        if tv_credits_data and 'cast' in tv_credits_data:
+            for show in tv_credits_data['cast']:
+                tv_shows.append({
+                    'id': show.get('id'),
+                    'title': show.get('name', 'Unknown'),
+                    'original_title': show.get('original_name', ''),
+                    'first_air_date': show.get('first_air_date', ''),
+                    'character': show.get('character', ''),
+                    'episode_count': show.get('episode_count', 0),
+                    'poster_path': f"https://image.tmdb.org/t/p/w500{show['poster_path']}" if show.get('poster_path') else None,
+                    'vote_average': show.get('vote_average', 0),
+                    'role_type': 'Acting',
+                    'in_database': TVShow.objects.filter(tmdb_id=show.get('id')).exists()
+                })
+        
+        if tv_credits_data and 'crew' in tv_credits_data:
+            for show in tv_credits_data['crew']:
+                tv_shows.append({
+                    'id': show.get('id'),
+                    'title': show.get('name', 'Unknown'),
+                    'original_title': show.get('original_name', ''),
+                    'first_air_date': show.get('first_air_date', ''),
+                    'job': show.get('job', ''),
+                    'department': show.get('department', ''),
+                    'episode_count': show.get('episode_count', 0),
+                    'poster_path': f"https://image.tmdb.org/t/p/w500{show['poster_path']}" if show.get('poster_path') else None,
+                    'vote_average': show.get('vote_average', 0),
+                    'role_type': 'Crew',
+                    'in_database': TVShow.objects.filter(tmdb_id=show.get('id')).exists()
+                })
+        
+        # Sort by date (most recent first)
+        movies.sort(key=lambda x: x.get('release_date', ''), reverse=True)
+        tv_shows.sort(key=lambda x: x.get('first_air_date', ''), reverse=True)
+        
+        return JsonResponse({
+            'movies': movies,
+            'tv_shows': tv_shows
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching TMDB filmography for person {person_id}: {str(e)}")
+        return JsonResponse({'error': f'Failed to fetch filmography: {str(e)}'}, status=500)
+
+@login_required
 def country_detail(request, country_id):
     """
     View for displaying all movies and TV shows from a specific country
@@ -2691,17 +2800,69 @@ def movie_statistics(request):
 
 @login_required
 def settings_page(request):
-    """View to display and update user settings"""
+    """
+    View to display and update user settings.
+    
+    Handles:
+    - Content display preferences (keywords, reviews, plot)
+    - API key generation and management
+    - Push notification preferences (types, quiet hours)
+    """
     try:
         user_settings = request.user.settings
     except:
         user_settings = UserSettings.objects.create(user=request.user)
+    
+    # Get or create notification preferences
+    from notifications.models import NotificationPreference
+    notification_prefs, created = NotificationPreference.objects.get_or_create(
+        user=request.user
+    )
     
     if request.user.api_key is None:
         request.user.generate_api_key()  # Use the method on the user model
         request.user.save()  # Make sure to save the user
         
     if request.method == 'POST':
+        # Check if admin is sending a broadcast notification
+        if 'send_broadcast' in request.POST and request.user.is_staff:
+            title = request.POST.get('broadcast_title', '').strip()
+            message = request.POST.get('broadcast_message', '').strip()
+            url = request.POST.get('broadcast_url', '').strip() or '/'
+            
+            if title and message:
+                from notifications.utils import send_notification_to_all_users
+                result = send_notification_to_all_users(
+                    title=title,
+                    body=message,
+                    notification_type='system',
+                    url=url
+                )
+                
+                from django.contrib import messages
+                success_count = result.get('success', 0)
+                failed_count = result.get('failed', 0)
+                queued_count = result.get('queued', 0)
+                
+                if success_count > 0 or queued_count > 0:
+                    msg_parts = []
+                    if success_count > 0:
+                        msg_parts.append(f"✅ Sent to {success_count} user(s)")
+                    if queued_count > 0:
+                        msg_parts.append(f"⏰ Queued for {queued_count} user(s) in quiet hours")
+                    if failed_count > 0:
+                        msg_parts.append(f"❌ {failed_count} failed")
+                    
+                    messages.success(
+                        request, 
+                        " | ".join(msg_parts),
+                        extra_tags='broadcast-success-message'
+                    )
+                else:
+                    messages.warning(request, "⚠️ No users received the broadcast.")
+                
+                return redirect('settings_page')
+        
         # Check if user wants to regenerate API key
         if 'regenerate_api_key' in request.POST:
             request.user.generate_api_key()  # Generate a new key
@@ -2710,11 +2871,43 @@ def settings_page(request):
             messages.success(request, "New API key generated successfully!")
             return redirect('settings_page')
         
-        # Process other settings form data
+        # Process content display settings
         user_settings.show_keywords = 'show_keywords' in request.POST
         user_settings.show_review_text = 'show_review_text' in request.POST
         user_settings.show_plot = 'show_plot' in request.POST
         user_settings.save()
+        
+        # Process notification preferences
+        notification_prefs.new_releases = 'new_releases' in request.POST
+        notification_prefs.watchlist_updates = 'watchlist_updates' in request.POST
+        notification_prefs.recommendations = 'recommendations' in request.POST
+        notification_prefs.movie_of_week = 'movie_of_week' in request.POST
+        notification_prefs.system_notifications = 'system_notifications' in request.POST
+        notification_prefs.quiet_hours_enabled = 'quiet_hours_enabled' in request.POST
+        
+        # Handle quiet hours times
+        quiet_start = request.POST.get('quiet_hours_start')
+        quiet_end = request.POST.get('quiet_hours_end')
+        
+        if quiet_start:
+            from datetime import datetime
+            try:
+                notification_prefs.quiet_hours_start = datetime.strptime(quiet_start, '%H:%M').time()
+            except ValueError:
+                notification_prefs.quiet_hours_start = None
+        else:
+            notification_prefs.quiet_hours_start = None
+            
+        if quiet_end:
+            from datetime import datetime
+            try:
+                notification_prefs.quiet_hours_end = datetime.strptime(quiet_end, '%H:%M').time()
+            except ValueError:
+                notification_prefs.quiet_hours_end = None
+        else:
+            notification_prefs.quiet_hours_end = None
+        
+        notification_prefs.save()
         
         # Add a success message if django messages is configured
         from django.contrib import messages
@@ -2722,7 +2915,8 @@ def settings_page(request):
         return redirect('settings_page')
         
     return render(request, 'settings_page.html', {
-        'user_settings': user_settings
+        'user_settings': user_settings,
+        'notification_prefs': notification_prefs,
     })
 
 @login_required

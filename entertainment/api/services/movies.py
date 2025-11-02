@@ -86,6 +86,10 @@ class MoviesService(BaseService):
     def get_person_details(self, person_id):
         return self._get(f'person/{person_id}')
     
+    def get_person_movie_credits(self, person_id):
+        """Get all movie credits for a person"""
+        return self._get(f'person/{person_id}/movie_credits')
+    
     def get_movie_details_with_imdb_id(self, imdb_id):
         # First, search for the movie using the IMDb ID
         # Use the find endpoint with the IMDB ID

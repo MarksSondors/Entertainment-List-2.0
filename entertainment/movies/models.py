@@ -55,6 +55,10 @@ class Movie(Media):
     def __str__(self):
         return self.title
     
+    def get_absolute_url(self):
+        """Get the absolute URL for the movie page."""
+        return f"/movies/{self.tmdb_id}/"
+    
     def minutes_to_hours(self):
         hours = self.runtime // 60
         minutes = self.runtime % 60
