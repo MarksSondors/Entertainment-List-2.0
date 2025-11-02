@@ -64,6 +64,7 @@ self.addEventListener('push', (event) => {
     vibrate: [200, 100, 200],
     tag: 'default',
     requireInteraction: false,
+    silent: false,
   };
 
   // Parse notification data if available
@@ -78,7 +79,9 @@ self.addEventListener('push', (event) => {
         vibrate: data.vibrate || notificationData.vibrate,
         tag: data.tag || notificationData.tag,
         requireInteraction: data.requireInteraction || false,
+        silent: data.silent || false,
         data: data.url ? { url: data.url } : {},
+        // iOS has limited support for action buttons, include them but they may not display
         actions: data.actions || [],
       };
     } catch (e) {

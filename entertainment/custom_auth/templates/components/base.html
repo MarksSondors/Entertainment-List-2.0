@@ -5,15 +5,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">    <title>{% block title %}Entertainment List{% endblock %}</title>    <!-- Web App Manifest -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>{% block title %}Entertainment List{% endblock %}</title>
+    
+    <!-- Web App Manifest -->
     <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}">
     <meta name="theme-color" content="#008080">
     
     <!-- PWA Meta Tags -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="EntList">
+    
+    <!-- iOS Icons -->
+    <link rel="apple-touch-icon" href="{% static 'favicon/apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}">
+    
+    <!-- Microsoft -->
     <meta name="msapplication-TileImage" content="{% static 'favicon/web-app-manifest-192x192.png' %}">
     <meta name="msapplication-TileColor" content="#008080">
     <meta name="application-name" content="Entertainment List">
