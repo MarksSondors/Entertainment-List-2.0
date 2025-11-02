@@ -130,3 +130,7 @@ class TVShowsService(BaseService):
     def get_episode_group_details(self, group_id):
         """Get details for a specific episode group"""
         return self._get(f'tv/episode_group/{group_id}')
+    
+    def get_person_tv_credits(self, person_id):
+        """Get all TV credits for a person"""
+        return self._get(f'person/{person_id}/tv_credits')

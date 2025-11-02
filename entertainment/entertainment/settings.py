@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'tvshows',
     'music',
     'games',
+    'notifications',  # Push notifications
 ]
 
 # Add debug apps only in DEBUG mode
@@ -113,6 +114,9 @@ if DEBUG:
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
 }
 
 SPECTACULAR_SETTINGS = {
@@ -303,3 +307,8 @@ Q_CLUSTER = {
         'db': 0,
     }
 }
+# Web Push Notifications (VAPID) Configuration
+# Generate keys using: python manage.py generate_vapid_keys
+WEBPUSH_VAPID_PUBLIC_KEY = config('WEBPUSH_VAPID_PUBLIC_KEY', default='')
+WEBPUSH_VAPID_PRIVATE_KEY = config('WEBPUSH_VAPID_PRIVATE_KEY', default='')
+WEBPUSH_VAPID_ADMIN_EMAIL = config('WEBPUSH_VAPID_ADMIN_EMAIL', default='admin@entertainment-list.com')

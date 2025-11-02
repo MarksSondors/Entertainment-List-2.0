@@ -886,8 +886,9 @@ def leiden_communities(
         refined = []
         
         for community in communities_list:
-            # Skip single-node communities - they're not meaningful clusters
+            # Keep single-node communities - they're isolated nodes
             if len(community) <= 1:
+                refined.append(community)
                 continue
             
             # Check if community is a single connected component
@@ -899,8 +900,8 @@ def leiden_communities(
             else:
                 # Community is disconnected, split it
                 for connected_part in nx.connected_components(subgraph):
-                    # Only keep parts with at least 2 nodes
-                    if connected_part and len(connected_part) >= 2:
+                    # Keep all parts, including single nodes from the split
+                    if connected_part:
                         refined.append(connected_part)
         
         return refined
@@ -1048,6 +1049,11 @@ def detect_communities_leiden(
                 if len(community) >= 2:
                     initial_communities.append(set(community))
         
+        # Track which nodes have been assigned to avoid duplicates
+        assigned_nodes = set()
+        for community in initial_communities:
+            assigned_nodes.update(community)
+        
         # Now expand collection communities to include connected non-movie nodes
         # (directors, actors, genres, countries that are connected to collection movies)
         for collection_id, movie_ids in collection_to_movies.items():
@@ -1055,19 +1061,21 @@ def detect_communities_leiden(
                 community_index = collection_community_map[collection_id]
                 collection_community = initial_communities[community_index]
                 
-                # Add all nodes connected to these movies
+                # Add all nodes connected to these movies (only if not already assigned)
                 for movie_id in movie_ids:
                     if movie_id in G:
                         for neighbor in G.neighbors(movie_id):
-                            # Only add if not a movie (movies stay in their original communities)
-                            neighbor_type = next((n.get('type') for n in nodes if n['id'] == neighbor), None)
-                            if neighbor_type != 'movie':
-                                collection_community.add(neighbor)
+                            # Only add if:
+                            # 1. Not a movie (movies stay in their original communities)
+                            # 2. Not already assigned to another community
+                            if neighbor not in assigned_nodes:
+                                neighbor_type = next((n.get('type') for n in nodes if n['id'] == neighbor), None)
+                                if neighbor_type != 'movie':
+                                    collection_community.add(neighbor)
+                                    assigned_nodes.add(neighbor)
         
         # Assign remaining nodes to their closest community based on connections
-        all_assigned_nodes = set()
-        for community in initial_communities:
-            all_assigned_nodes.update(community)
+        all_assigned_nodes = assigned_nodes.copy()  # Use the tracked assigned nodes
         
         unassigned_nodes = set(G.nodes()) - all_assigned_nodes
         
@@ -1092,15 +1100,67 @@ def detect_communities_leiden(
                 # Create singleton community
                 initial_communities.append({node})
         
-        # Filter out single-member communities
-        communities = [c for c in initial_communities if len(c) >= 2]
+        # Keep ALL communities (including single-node ones) for valid partition
+        # We'll filter for display purposes later
+        communities = [c for c in initial_communities if c]  # Only filter empty sets
         
         logger.info(f"Final: {len(communities)} communities ({len([c for c in collection_to_movies.values() if len(c) >= 2])} collection-based)")
         
-        # Calculate modularity
+        # Validate partition: ensure all nodes are included exactly once
+        all_community_nodes = []
+        for community in communities:
+            all_community_nodes.extend(list(community))
+        
+        all_graph_nodes = set(G.nodes())
+        
+        # Check for duplicate nodes across communities
+        seen_nodes = set()
+        duplicate_nodes = set()
+        for node in all_community_nodes:
+            if node in seen_nodes:
+                duplicate_nodes.add(node)
+            seen_nodes.add(node)
+        
+        if duplicate_nodes:
+            logger.error(f"Partition validation: Found {len(duplicate_nodes)} duplicate nodes across communities: {list(duplicate_nodes)[:10]}")
+            # Fix duplicates: keep node in first community it appears in, remove from others
+            fixed_communities = []
+            assigned = set()
+            for community in communities:
+                fixed_community = set()
+                for node in community:
+                    if node not in assigned:
+                        fixed_community.add(node)
+                        assigned.add(node)
+                if fixed_community:  # Only add non-empty communities
+                    fixed_communities.append(fixed_community)
+            communities = fixed_communities
+            logger.info(f"Fixed duplicates. Now have {len(communities)} communities with {len(assigned)} unique nodes.")
+        
+        # Check for missing nodes
+        all_community_nodes_set = set()
+        for community in communities:
+            all_community_nodes_set.update(community)
+        
+        missing_nodes = all_graph_nodes - all_community_nodes_set
+        
+        if missing_nodes:
+            logger.warning(f"Partition validation: {len(missing_nodes)} nodes missing from communities. Adding them as singletons.")
+            for node in missing_nodes:
+                communities.append({node})
+        
+        # Final validation
+        final_node_count = sum(len(c) for c in communities)
+        if final_node_count != len(all_graph_nodes):
+            logger.error(f"Partition validation FAILED: Graph has {len(all_graph_nodes)} nodes, communities have {final_node_count} total nodes.")
+        else:
+            logger.info(f"Partition validation PASSED: All {len(all_graph_nodes)} nodes are in exactly one community.")
+        
+        # Calculate modularity (requires complete partition - all nodes must be included)
         try:
             overall_modularity = nx.algorithms.community.modularity(G, communities, weight='weight', resolution=resolution)
-        except:
+        except Exception as e:
+            logger.error(f"Modularity calculation failed: {e}")
             overall_modularity = 0.0
         
         # Handle empty or trivial graphs
@@ -1132,13 +1192,18 @@ def detect_communities_leiden(
                 )
         
         # Convert to dictionary format
+        # Only include communities with 2+ nodes for display purposes
+        # (single-node communities exist for partition validity but aren't meaningful clusters)
         community_dict = {}
+        display_index = 0  # Separate index for displayed communities
+        
         for i, community in enumerate(communities):
-            # Skip empty or single-member communities
+            # Skip empty or single-member communities for display
             if not community or len(community) < 2:
                 continue
                 
-            community_id = f"community_{i}"
+            community_id = f"community_{display_index}"
+            display_index += 1
             community_nodes = list(community)
             
             # Generate meaningful name

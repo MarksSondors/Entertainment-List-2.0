@@ -36,6 +36,7 @@ urlpatterns = [    # discover page
     # People
     path('people/<int:person_id>/', views.people_detail, name='person_detail'),
     path('people/', views.browse_by_people, name='browse_by_people'),
+    path('api/people/<int:person_id>/tmdb-filmography/', views.get_person_tmdb_filmography, name='person_tmdb_filmography'),
 
     # reviews
     path('reviews/recent/', views.recent_reviews, name='recent_reviews'),

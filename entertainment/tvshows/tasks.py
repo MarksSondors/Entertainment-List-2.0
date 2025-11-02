@@ -10,6 +10,104 @@ from .models import TVShow, Season, Episode, EpisodeGroup, EpisodeSubGroup, Keyw
 
 logger = logging.getLogger(__name__)
 
+
+def check_new_episodes_today():
+    """
+    Scheduled task to check for new episodes airing today and notify users.
+    Should be run daily (e.g., at 9 AM).
+    """
+    from django.utils import timezone
+    from django.contrib.contenttypes.models import ContentType
+    from custom_auth.models import Watchlist
+    from collections import defaultdict
+    from notifications.utils import send_notification_to_user
+    
+    logger.info("Starting daily new episode check")
+    
+    check_date = timezone.now().date()
+    
+    # Get all episodes airing today
+    episodes_today = Episode.objects.filter(
+        air_date=check_date
+    ).select_related('season', 'season__show').order_by('season__show', 'season__season_number', 'episode_number')
+    
+    if not episodes_today.exists():
+        logger.info(f'No episodes found for {check_date}')
+        return {'notified_users': 0, 'episodes_count': 0}
+    
+    logger.info(f'Found {episodes_today.count()} episode(s) airing today')
+    
+    # Group episodes by show
+    episodes_by_show = defaultdict(list)
+    for episode in episodes_today:
+        episodes_by_show[episode.season.show].append(episode)
+    
+    # Get ContentType for TVShow
+    tvshow_content_type = ContentType.objects.get_for_model(TVShow)
+    
+    # Track notification stats
+    total_notifications = 0
+    total_users = set()
+    
+    # For each show with episodes today
+    for show, episodes in episodes_by_show.items():
+        logger.info(f'Processing: {show.title} ({len(episodes)} episode(s))')
+        
+        # Get all users who have this show in their watchlist
+        watchlist_users = Watchlist.objects.filter(
+            content_type=tvshow_content_type,
+            object_id=show.id
+        ).select_related('user')
+        
+        if not watchlist_users.exists():
+            logger.info(f'  No users watching {show.title}')
+            continue
+        
+        logger.info(f'  Notifying {watchlist_users.count()} user(s) about {show.title}')
+        
+        # Create notification message
+        if len(episodes) == 1:
+            episode = episodes[0]
+            title = f"📺 New Episode: {show.title}"
+            body = f"S{episode.season.season_number:02d}E{episode.episode_number:02d} - {episode.title} is now available!"
+        else:
+            title = f"📺 New Episodes: {show.title}"
+            episode_list = ", ".join([
+                f"S{ep.season.season_number:02d}E{ep.episode_number:02d}"
+                for ep in episodes
+            ])
+            body = f"{len(episodes)} new episodes are now available: {episode_list}"
+        
+        url = show.get_absolute_url()
+        
+        # Send notification to each user
+        for watchlist_item in watchlist_users:
+            result = send_notification_to_user(
+                user_id=watchlist_item.user.id,
+                title=title,
+                body=body,
+                notification_type='new_release',
+                url=url,
+                icon=show.poster or '/static/favicon/web-app-manifest-192x192.png',
+                content_type=tvshow_content_type,
+                object_id=show.id,
+            )
+            
+            if result.get('success', 0) > 0 or result.get('queued'):
+                total_notifications += 1
+                total_users.add(watchlist_item.user.id)
+    
+    result = {
+        'notified_users': len(total_users),
+        'notifications_sent': total_notifications,
+        'shows_with_episodes': len(episodes_by_show),
+        'total_episodes': episodes_today.count()
+    }
+    
+    logger.info(f'Episode notification complete: {result}')
+    return result
+
+
 def create_tvshow_async(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
     """
     Queue TV show creation as an async task using Django Q

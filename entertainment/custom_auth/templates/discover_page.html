@@ -20,6 +20,66 @@
     
     <!-- Default Content (when not searching) -->    
     <div class="default-content" id="defaultContent">
+        <!-- Notification Alert for users without push notifications -->
+        {% if user.is_authenticated and not has_push_subscription %}
+        <div class="window notification-alert" style="margin: 12px 10px;">
+            <div class="title-bar">
+                <div class="title-bar-text">Enable Notifications</div>
+                <div class="title-bar-controls">
+                    <button aria-label="Minimize"></button>
+                    <button aria-label="Maximize"></button>
+                    <button id="dismissNotificationAlert" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="window-body" style="padding: 12px;">
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
+                    <!-- Rover the Dog Icon -->
+                    <div style="flex-shrink: 0;">
+                        <img src="{% static 'images/rover_the_dog.gif' %}" alt="Notification" style="width: 64px; height: 64px; image-rendering: pixelated;">
+                    </div>
+                    
+                    <div style="flex: 1; min-width: 180px;">
+                        <p style="margin: 0 0 8px 0; font-size: 12px; line-height: 1.4;">
+                            Get alerts for new releases, community picks, and personalized recommendations.
+                        </p>
+                        <button id="enableNotificationsBtn" class="retro-btn" style="font-size: 12px; padding: 4px 12px;">
+                            Enable Notifications
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const enableBtn = document.getElementById('enableNotificationsBtn');
+                const dismissBtn = document.getElementById('dismissNotificationAlert');
+                const alert = document.querySelector('.notification-alert');
+                
+                // Check if alert was dismissed
+                if (localStorage.getItem('notificationAlertDismissed') === 'true') {
+                    alert.style.display = 'none';
+                }
+                
+                enableBtn.addEventListener('click', function() {
+                    window.location.href = '/settings/#notifications';
+                });
+                
+                dismissBtn.addEventListener('click', function() {
+                    alert.style.opacity = '0';
+                    alert.style.transform = 'translateY(-10px)';
+                    setTimeout(() => {
+                        alert.style.display = 'none';
+                        localStorage.setItem('notificationAlertDismissed', 'true');
+                    }, 200);
+                });
+                
+                // Add transition to alert
+                alert.style.transition = 'all 0.2s ease';
+            });
+        </script>
+        {% endif %}
+        
         <div class="discover-section">
             <!-- Community Movie of the Week -->
             {% include "components/community_movie_week.html" %}
