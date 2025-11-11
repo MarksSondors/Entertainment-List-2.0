@@ -105,6 +105,14 @@
                         </small>
                         
                         <div class="field-row" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="new_reviews" name="new_reviews" {% if notification_prefs.new_reviews %}checked{% endif %}>
+                            <label for="new_reviews">New Reviews</label>
+                        </div>
+                        <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
+                            Get notified when users post reviews on movies, shows, books, or games
+                        </small>
+                        
+                        <div class="field-row" style="margin-bottom: 10px;">
                             <input type="checkbox" id="movie_of_week" name="movie_of_week" {% if notification_prefs.movie_of_week %}checked{% endif %}>
                             <label for="movie_of_week">Movie of the Week</label>
                         </div>

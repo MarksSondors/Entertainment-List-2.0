@@ -1,0 +1,691 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}Statistics | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="statistics-page-container">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">📊 Your Statistics</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        
+        <div class="window-body">
+            <!-- Content Type Selector -->
+            <div class="content-type-selector">
+                <div class="horizontal-tabs">
+                    <button class="horizontal-tab-btn active" id="movies_tab" data-content="movies">
+                        📽️ Movie Statistics
+                    </button>
+                    
+                    <button class="horizontal-tab-btn" id="tvshows_tab" data-content="tvshows">
+                        📺 TV Show Statistics
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Content Display Area -->
+            <div class="content-display">
+                <!-- Movies Content -->
+                <div id="movies-content" class="content-section active">
+                    <div class="stats-container">
+                        <div class="window stat-card">
+                            <div class="title-bar">
+                                <div class="title-bar-text">🎬 Time Spent Watching Movies</div>
+                            </div>
+                            <div class="window-body">
+                                <div class="stat-display">
+                                    <div class="stat-main">{{ movie_time_spent }}</div>
+                                    <div class="stat-subtitle">{{ movie_total_count }} movie{{ movie_total_count|pluralize }} watched</div>
+                                    <div class="stat-subtitle" style="margin-top: 10px; color: var(--text-color); font-weight: bold; font-size: 16px;">{{ movie_last_7_days }} in the last 7 days</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if shortest_movie or longest_movie %}
+                        <div class="window stat-card" style="margin-top: 20px;">
+                            <div class="title-bar">
+                                <div class="title-bar-text">⚡🕐 Movie Runtime Extremes</div>
+                            </div>
+                            <div class="window-body">
+                                <div class="runtime-extremes-container">
+                                    {% if shortest_movie %}
+                                    <div class="runtime-stat">
+                                        <div class="runtime-stat-header">⚡ Shortest</div>
+                                        <div class="runtime-stat-title">{{ shortest_movie.title }}</div>
+                                        <div class="runtime-stat-time">{{ shortest_movie.minutes_to_hours }}</div>
+                                        {% if shortest_movie.release_date %}
+                                        <div class="runtime-stat-year">{{ shortest_movie.release_date.year }}</div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if longest_movie %}
+                                    <div class="runtime-stat">
+                                        <div class="runtime-stat-header">🕐 Longest</div>
+                                        <div class="runtime-stat-title">{{ longest_movie.title }}</div>
+                                        <div class="runtime-stat-time">{{ longest_movie.minutes_to_hours }}</div>
+                                        {% if longest_movie.release_date %}
+                                        <div class="runtime-stat-year">{{ longest_movie.release_date.year }}</div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if monthly_breakdown %}
+                        <div class="window stat-card" style="margin-top: 20px;">
+                            <div class="title-bar">
+                                <div class="title-bar-text">📅 Monthly Activity - {{ selected_year }}</div>
+                                <div class="title-bar-controls">
+                                    <select id="year-select" class="year-dropdown-header">
+                                        {% for year in available_years %}
+                                        <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="window-body">
+                                <div class="monthly-chart-container">
+                                    {% for month_data in monthly_breakdown %}
+                                    <div class="month-bar-container">
+                                        <div class="month-bar-wrapper">
+                                            <div class="month-bar" data-count="{{ month_data.count }}" style="height: {% if month_data.count > 0 %}{{ month_data.count }}0{% else %}5{% endif %}%;">
+                                                <div class="month-count-label">{{ month_data.count }}</div>
+                                            </div>
+                                        </div>
+                                        <div class="month-name">{{ month_data.month }}</div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- TV Shows Content -->
+                <div id="tvshows-content" class="content-section">
+                    <div class="stats-container">
+                        <div class="window stat-card">
+                            <div class="title-bar">
+                                <div class="title-bar-text">📺 Time Spent Watching TV Shows</div>
+                            </div>
+                            <div class="window-body">
+                                <div class="stat-display">
+                                    <div class="stat-main">{{ tvshow_time_spent }}</div>
+                                    <div class="stat-subtitle">{{ tvshow_episodes_watched }} episode{{ tvshow_episodes_watched|pluralize }} watched from {{ tvshow_total_count }} TV show{{ tvshow_total_count|pluralize }}</div>
+                                    <div class="stat-subtitle" style="margin-top: 10px; color: var(--text-color); font-weight: bold; font-size: 16px;">{{ tvshow_last_7_days }} in the last 7 days</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-bar-field">Statistics</div>
+            <div class="status-bar-field">{{ user.username }}</div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Theme-adaptive CSS variables matching genre_detail page */
+    :root {
+        --bg-color: #c0c0c0;
+        --text-color: #000;
+        --text-muted: #666;
+        --border-dark: #808080;
+        --border-light: #dfdfdf;
+        --window-bg: #c0c0c0;
+        --button-bg: #c0c0c0;
+        --button-text: #000;
+        --button-hover: #e0e0e0;
+        --progress-bg: #fff;
+        --progress-bar: #008080;
+        --shadow-color: rgba(0,0,0,0.25);
+        --poster-border: #a0a0a0;
+        --explorer-bg: #ffffff;
+        --folder-hover: #d0d1d5;
+        --folder-active: #000080;
+        --folder-active-text: #ffffff;
+        --input-bg: #ffffff;
+        --alert-bg: #e1e1e1;
+        --tab-active: #ffffff;
+        --tab-inactive: #e0e0e0;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-color: #383838;
+            --text-color: #ffffff;
+            --text-muted: #b0b0b0;
+            --border-dark: #2a2a2a;
+            --border-light: #505050;
+            --window-bg: #404040;
+            --button-bg: #505050;
+            --button-text: #ffffff;
+            --button-hover: #606060;
+            --progress-bg: #2a2a2a;
+            --progress-bar: #00a0a0;
+            --shadow-color: rgba(0,0,0,0.5);
+            --poster-border: #606060;
+            --explorer-bg: #2a2a2a;
+            --folder-hover: #404040;
+            --folder-active: #0060ff;
+            --folder-active-text: #ffffff;
+            --input-bg: #2a2a2a;
+            --alert-bg: #404040;
+            --tab-active: #2a2a2a;
+            --tab-inactive: #383838;
+        }
+    }
+
+    /* Page container - mobile-first approach */
+    .statistics-page-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 10px;
+        position: relative;
+    }
+
+    @media (min-width: 768px) {
+        .statistics-page-container {
+            padding: 20px;
+        }
+    }
+
+    /* Window styling matching other pages */
+    .window {
+        border: 2px outset var(--bg-color);
+        background-color: var(--bg-color);
+        font-family: 'MS Sans Serif', sans-serif;
+        box-shadow: 2px 2px 4px var(--shadow-color);
+    }
+
+    .title-bar {
+        background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+        color: white;
+        padding: 2px;
+        font-size: 11px;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .title-bar {
+            background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+        }
+    }
+
+    .title-bar-controls {
+        display: flex;
+    }
+
+    .title-bar-controls button {
+        width: 16px;
+        height: 14px;
+        border: 1px outset var(--button-bg);
+        background: var(--button-bg);
+        color: var(--button-text);
+        margin-left: 2px;
+        font-size: 8px;
+        cursor: pointer;
+    }
+
+    .title-bar-controls button:active {
+        border: 1px inset var(--button-bg);
+    }
+
+    .window-body {
+        padding: 8px;
+        background-color: var(--window-bg);
+        color: var(--text-color);
+    }
+
+    .status-bar {
+        background-color: var(--bg-color);
+        border-top: 1px solid var(--border-dark);
+        padding: 2px;
+        font-size: 11px;
+        display: flex;
+        justify-content: space-between;
+        color: var(--text-color);
+    }
+
+    .status-bar-field {
+        padding: 1px 4px;
+        border: 1px inset var(--bg-color);
+        font-size: 8px;
+        margin-left: 4px;
+    }
+
+    /* Content Type Selector - Full Width Horizontal */
+    .content-type-selector {
+        margin-bottom: 12px;
+        border-bottom: 1px solid var(--border-dark);
+    }
+
+    .horizontal-tabs {
+        display: flex;
+        width: 100%;
+    }
+
+    .horizontal-tab-btn {
+        flex: 1;
+        padding: 12px 16px !important;
+        font-size: 13px !important;
+        font-weight: bold;
+        border: 1px outset var(--button-bg) !important;
+        background: var(--tab-inactive) !important;
+        color: var(--button-text) !important;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.1s ease;
+        text-align: center;
+        border-radius: 0;
+        margin: 0;
+    }
+
+    .horizontal-tab-btn:first-child {
+        border-right: none !important;
+    }
+
+    .horizontal-tab-btn:hover {
+        background: var(--button-hover) !important;
+    }
+
+    .horizontal-tab-btn.active {
+        background: var(--tab-active) !important;
+        border: 1px inset var(--button-bg) !important;
+        box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3);
+    }
+
+    @media (max-width: 480px) {
+        .horizontal-tab-btn {
+            padding: 10px 8px !important;
+            font-size: 11px !important;
+        }
+    }
+
+    /* Content sections */
+    .content-display {
+        min-height: 300px;
+    }
+
+    .content-section {
+        display: none;
+    }
+
+    .content-section.active {
+        display: block;
+    }
+
+    .placeholder-message {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 200px;
+    }
+
+    .placeholder-message .sunken-panel {
+        background-color: var(--alert-bg);
+        color: var(--text-color);
+        padding: 16px;
+        text-align: center;
+        font-size: 12px;
+        border: 2px inset var(--bg-color);
+    }
+
+    /* Statistics display styles */
+    .stats-container {
+        padding: 20px;
+    }
+
+    .stat-card {
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    .stat-display {
+        text-align: center;
+        padding: 20px;
+    }
+
+    .stat-main {
+        font-size: 24px;
+        font-weight: bold;
+        color: var(--text-color);
+        margin-bottom: 10px;
+        line-height: 1.4;
+    }
+
+    .stat-subtitle {
+        font-size: 12px;
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    @media (max-width: 480px) {
+        .stats-container {
+            padding: 10px;
+        }
+        
+        .stat-main {
+            font-size: 20px;
+        }
+        
+        .stat-subtitle {
+            font-size: 11px;
+        }
+    }
+
+    /* Runtime extremes mobile-optimized layout */
+    .runtime-extremes-container {
+        display: flex;
+        flex-direction: row;
+        gap: 8px;
+    }
+
+    @media (min-width: 480px) {
+        .runtime-extremes-container {
+            gap: 20px;
+        }
+    }
+
+    .runtime-stat {
+        flex: 1;
+        text-align: center;
+        padding: 8px;
+        border: 1px inset var(--bg-color);
+        background-color: var(--explorer-bg);
+    }
+
+    @media (max-width: 479px) {
+        .runtime-stat {
+            padding: 6px;
+        }
+    }
+
+    .runtime-stat-header {
+        font-weight: bold;
+        color: var(--text-color);
+        font-size: 11px;
+        margin-bottom: 4px;
+    }
+
+    .runtime-stat-title {
+        font-size: 14px;
+        font-weight: bold;
+        color: var(--text-color);
+        margin-bottom: 3px;
+        line-height: 1.2;
+    }
+
+    @media (max-width: 479px) {
+        .runtime-stat-title {
+            font-size: 13px;
+        }
+    }
+
+    .runtime-stat-time {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 2px;
+    }
+
+    .runtime-stat-year {
+        font-size: 10px;
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    /* Monthly Activity Breakdown */
+    .year-dropdown-header {
+        background-color: var(--button-bg);
+        color: var(--button-text);
+        border: 1px outset var(--bg-color);
+        padding: 1px 4px;
+        font-size: 9px;
+        font-family: 'MS Sans Serif', sans-serif;
+        margin-right: 2px;
+    }
+
+    .year-dropdown-header:focus {
+        outline: none;
+        border: 1px inset var(--bg-color);
+    }
+
+    .monthly-chart-container {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 3px;
+        align-items: end;
+        height: 100px;
+        padding: 8px;
+        background-color: var(--explorer-bg);
+        border: 1px inset var(--bg-color);
+        box-sizing: border-box;
+    }
+
+    @media (max-width: 768px) {
+        .monthly-chart-container {
+            height: 80px;
+            gap: 2px;
+            padding: 6px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .monthly-chart-container {
+            height: 60px;
+            gap: 1px;
+            padding: 4px;
+        }
+    }
+
+    .monthly-chart-container .month-bar-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100%;
+        justify-content: flex-end;
+    }
+
+    .monthly-chart-container .month-bar-wrapper {
+        flex: 1;
+        display: flex;
+        align-items: flex-end;
+        width: 100%;
+        min-height: 40px;
+    }
+
+    @media (max-width: 768px) {
+        .monthly-chart-container .month-bar-wrapper {
+            min-height: 30px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .monthly-chart-container .month-bar-wrapper {
+            min-height: 20px;
+        }
+    }
+
+    .monthly-chart-container .month-bar {
+        width: 100%;
+        background: linear-gradient(180deg, #008080 0%, #006666 100%);
+        border: 1px outset var(--bg-color);
+        position: relative;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        min-height: 3px;
+        box-sizing: border-box;
+    }
+
+    @media (max-width: 480px) {
+        .monthly-chart-container .month-bar {
+            border-width: 0.5px;
+            min-height: 2px;
+        }
+    }
+
+    .monthly-chart-container .month-bar:hover {
+        background: linear-gradient(180deg, #00a0a0 0%, #008080 100%);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .monthly-chart-container .month-bar {
+            background: linear-gradient(180deg, #00a0a0 0%, #008080 100%);
+        }
+        
+        .monthly-chart-container .month-bar:hover {
+            background: linear-gradient(180deg, #00c0c0 0%, #00a0a0 100%);
+        }
+    }
+
+    .monthly-chart-container .month-count-label {
+        color: white;
+        font-size: 7px;
+        font-weight: bold;
+        text-shadow: 1px 1px 1px rgba(0,0,0,0.8);
+        padding: 1px;
+        display: none;
+        line-height: 1;
+    }
+
+    @media (max-width: 480px) {
+        .monthly-chart-container .month-count-label {
+            font-size: 6px;
+            display: none !important;
+        }
+    }
+
+    .monthly-chart-container .month-bar[data-count]:not([data-count="0"]) .month-count-label {
+        display: block;
+    }
+
+    .monthly-chart-container .month-name {
+        font-size: 7px;
+        font-weight: bold;
+        color: var(--text-color);
+        margin-top: 2px;
+        text-align: center;
+        line-height: 1;
+    }
+
+    @media (max-width: 480px) {
+        .monthly-chart-container .month-name {
+            font-size: 6px;
+            margin-top: 1px;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Tab switching functionality
+        const moviesTab = document.getElementById('movies_tab');
+        const tvshowsTab = document.getElementById('tvshows_tab');
+        const moviesContent = document.getElementById('movies-content');
+        const tvshowsContent = document.getElementById('tvshows-content');
+        
+        if (moviesTab && tvshowsTab && moviesContent && tvshowsContent) {
+            function switchToContent(contentType) {
+                // Hide all content sections
+                moviesContent.classList.remove('active');
+                tvshowsContent.classList.remove('active');
+                
+                // Remove active class from all tabs
+                moviesTab.classList.remove('active');
+                tvshowsTab.classList.remove('active');
+                
+                // Show selected content and activate corresponding tab
+                if (contentType === 'movies') {
+                    moviesContent.classList.add('active');
+                    moviesTab.classList.add('active');
+                } else if (contentType === 'tvshows') {
+                    tvshowsContent.classList.add('active');
+                    tvshowsTab.classList.add('active');
+                }
+            }
+            
+            // Initialize default state - show movies by default
+            switchToContent('movies');
+            
+            moviesTab.addEventListener('click', function(e) {
+                e.preventDefault();
+                switchToContent('movies');
+            });
+            
+            tvshowsTab.addEventListener('click', function(e) {
+                e.preventDefault();
+                switchToContent('tvshows');
+            });
+        }
+        
+        // Year selection functionality
+        const yearSelect = document.getElementById('year-select');
+        if (yearSelect) {
+            yearSelect.addEventListener('change', function() {
+                const selectedYear = this.value;
+                const currentUrl = new URL(window.location);
+                currentUrl.searchParams.set('year', selectedYear);
+                window.location.href = currentUrl.toString();
+            });
+        }
+        
+        // Initialize monthly activity chart
+        initializeMonthlyChart();
+    });
+    
+    function initializeMonthlyChart() {
+        const monthBars = document.querySelectorAll('.monthly-chart-container .month-bar');
+        if (monthBars.length === 0) return;
+        
+        // Find the maximum count to scale the bars
+        let maxCount = 0;
+        monthBars.forEach(bar => {
+            const count = parseInt(bar.getAttribute('data-count')) || 0;
+            maxCount = Math.max(maxCount, count);
+        });
+        
+        // Set minimum height for better visualization
+        if (maxCount === 0) maxCount = 1;
+        
+        // Scale each bar based on its count relative to max
+        monthBars.forEach(bar => {
+            const count = parseInt(bar.getAttribute('data-count')) || 0;
+            let heightPercentage;
+            
+            if (count === 0) {
+                heightPercentage = 5; // Minimum height for empty months
+            } else {
+                // Scale from 20% to 100% based on count
+                heightPercentage = Math.max(20, (count / maxCount) * 100);
+            }
+            
+            bar.style.height = heightPercentage + '%';
+            
+            // Add tooltip functionality
+            bar.title = count === 0 ? 'No movies watched' : 
+                       count === 1 ? '1 movie watched' : 
+                       count + ' movies watched';
+        });
+    });
+</script>
+{% endblock %}

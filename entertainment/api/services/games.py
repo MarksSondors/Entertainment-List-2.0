@@ -157,11 +157,11 @@ class GamesService(BaseService):
         """Search for games by name"""
         igdb_query = f"""
             search "{query}";
-            fields name, summary, cover.url, first_release_date, rating, rating_count,
+         fields name, summary, cover.url, cover.image_id, first_release_date, rating, rating_count,
                    aggregated_rating, aggregated_rating_count, storyline, status, category,
                    genres.name, platforms.name, involved_companies.company.name,
                    involved_companies.developer, involved_companies.publisher,
-                   screenshots.url, artworks.url, collection.name, franchise.name;
+             screenshots.url, screenshots.image_id, artworks.url, collection.name, franchise.name;
             limit {limit};
             offset {offset};
         """
@@ -170,14 +170,18 @@ class GamesService(BaseService):
     def get_game_details(self, game_id):
         """Get detailed information about a specific game"""
         igdb_query = f"""
-            fields name, summary, cover.url, first_release_date, rating, rating_count,
+            fields name, summary, cover.url, cover.image_id, first_release_date, rating, rating_count,
                    aggregated_rating, aggregated_rating_count, storyline, status, category,
-                   genres.name, platforms.name, involved_companies.company.name,
+                   genres.id, genres.name,
+                   platforms.id, platforms.name, platforms.abbreviation, platforms.alternative_name, platforms.generation, platforms.platform_logo.url,
+                   involved_companies.company.id, involved_companies.company.name, involved_companies.company.logo.url,
                    involved_companies.developer, involved_companies.publisher,
-                   screenshots.url, artworks.url, collection.name, franchise.name,
+                   screenshots.url, screenshots.image_id, artworks.url,
+                   collection.id, collection.name, franchise.id, franchise.name, franchises.id, franchises.name,
+                   parent_game,
                    dlcs.name, dlcs.id, expansions.name, expansions.id,
                    similar_games.name, similar_games.id, similar_games.cover.url,
-                   keywords.name, websites.url, websites.category,
+                   keywords.id, keywords.name, websites.url, websites.category,
                    external_games.uid, external_games.category;
             where id = {game_id};
         """
@@ -282,7 +286,7 @@ class GamesService(BaseService):
             game_ids_str = str(game_ids)
             
         igdb_query = f"""
-            fields game, url, width, height;
+            fields game, url, width, height, image_id;
             where game = ({game_ids_str});
         """
         return self._post('covers', igdb_query.strip())
@@ -290,7 +294,7 @@ class GamesService(BaseService):
     def get_game_screenshots(self, game_id):
         """Get screenshots for a specific game"""
         igdb_query = f"""
-            fields game, url, width, height;
+            fields game, url, width, height, image_id;
             where game = {game_id};
         """
         return self._post('screenshots', igdb_query.strip())
@@ -305,8 +309,17 @@ class GamesService(BaseService):
         """
         return self._post('games', igdb_query.strip())
     
-    def get_game_series(self, limit=100, offset=0):
-        """Get game franchises/series"""
+    def get_game_collections(self, limit=100, offset=0):
+        """Get game collections (IGDB 'collections' endpoint)"""
+        igdb_query = f"""
+            fields name, games.name, games.id;
+            limit {limit};
+            offset {offset};
+        """
+        return self._post('collections', igdb_query.strip())
+    
+    def get_game_franchises(self, limit=100, offset=0):
+        """Get game franchises (IGDB 'franchises' endpoint)"""
         igdb_query = f"""
             fields name, games.name, games.id;
             limit {limit};
