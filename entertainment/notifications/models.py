@@ -43,6 +43,7 @@ class NotificationLog(models.Model):
         ('new_release', 'New Release'),
         ('watchlist_update', 'Watchlist Update'),
         ('recommendation', 'Recommendation'),
+        ('new_review', 'New Review'),
         ('system', 'System Notification'),
     ]
     
@@ -86,6 +87,7 @@ class NotificationPreference(models.Model):
     new_releases = models.BooleanField(default=True, help_text="Notify when tracked items get new releases")
     watchlist_updates = models.BooleanField(default=True, help_text="Updates about watchlist items")
     recommendations = models.BooleanField(default=True, help_text="Personalized recommendations")
+    new_reviews = models.BooleanField(default=True, help_text="Notify when users post reviews")
     movie_of_week = models.BooleanField(default=True, help_text="Community Movie of the Week reminders")
     system_notifications = models.BooleanField(default=True, help_text="System announcements")
     

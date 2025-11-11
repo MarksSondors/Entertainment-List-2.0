@@ -45,8 +45,7 @@ urlpatterns = [    # discover page
     path('activity/recent/', views.recent_activity, name='recent_activity'),
 
     # statistics
-    path('statistics/movies/', views.movie_statistics, name='movie_statistics'),
-
+    path('statistics/', views.statistics_page, name='statistics_page'),
     # release calendar
     path('calendar/', views.release_calendar, name='release_calendar'),
 

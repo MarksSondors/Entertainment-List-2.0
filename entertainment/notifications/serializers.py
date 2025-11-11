@@ -37,6 +37,6 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
         model = NotificationPreference
         fields = [
             'new_releases', 'watchlist_updates', 'recommendations', 
-            'movie_of_week', 'system_notifications',
+            'new_reviews', 'movie_of_week', 'system_notifications',
             'quiet_hours_enabled', 'quiet_hours_start', 'quiet_hours_end'
         ]

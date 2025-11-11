@@ -421,6 +421,191 @@ body::before {
     box-shadow: 4px 4px 8px var(--shadow-color);
 }
 
+#tmdbFilmographyModal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--modal-bg);
+    color: var(--text-color);
+    border: 2px outset var(--border-dark);
+    z-index: 1000;
+    width: 90%;
+    max-width: 1200px;
+    max-height: 90vh;
+    box-shadow: 4px 4px 8px var(--shadow-color);
+    flex-direction: column;
+}
+
+#tmdbFilmographyModal.visible {
+    display: flex;
+}
+
+.tmdb-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--overlay-bg);
+    z-index: 999;
+}
+
+.tmdb-modal-overlay.visible {
+    display: block;
+}
+
+.tmdb-tabs {
+    display: flex;
+    background-color: var(--bg-color);
+    border-bottom: 2px solid var(--border-dark);
+}
+
+.tmdb-tab {
+    padding: 8px 16px;
+    background-color: var(--button-bg);
+    border: 1px outset var(--border-dark);
+    border-bottom: none;
+    cursor: pointer;
+    font-weight: bold;
+    margin-right: 2px;
+    color: var(--text-color);
+}
+
+.tmdb-tab.active {
+    background-color: var(--window-content-bg);
+    border: 1px inset var(--border-dark);
+    border-bottom: 2px solid var(--window-content-bg);
+    position: relative;
+    z-index: 1;
+}
+
+.tmdb-tab:hover:not(.active) {
+    background-color: var(--button-hover);
+}
+
+.tmdb-tab-content {
+    display: none;
+    padding: 10px;
+    overflow-y: auto;
+    flex-grow: 1;
+    background-color: var(--window-content-bg);
+}
+
+.tmdb-tab-content.active {
+    display: block;
+}
+
+.tmdb-credits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.tmdb-credit-card {
+    border: 1px outset var(--border-dark);
+    background-color: var(--window-bg);
+    padding: 5px;
+    cursor: pointer;
+    transition: all 0.1s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.tmdb-credit-card:hover {
+    border: 1px inset var(--border-dark);
+}
+
+.tmdb-credit-card.in-database {
+    border: 2px solid #4CAF50;
+}
+
+.tmdb-credit-poster {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+    background-color: var(--button-bg);
+}
+
+.tmdb-credit-poster.no-poster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    color: var(--text-muted);
+}
+
+.tmdb-credit-info {
+    padding: 5px 0;
+}
+
+.tmdb-credit-title {
+    font-weight: bold;
+    font-size: 12px;
+    margin-bottom: 3px;
+}
+
+.tmdb-credit-details {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.tmdb-credit-role {
+    font-size: 10px;
+    font-style: italic;
+    margin-top: 3px;
+}
+
+.tmdb-loading {
+    text-align: center;
+    padding: 40px;
+    font-size: 16px;
+}
+
+.tmdb-error {
+    text-align: center;
+    padding: 40px;
+    color: #F44336;
+    font-size: 14px;
+}
+
+.tmdb-add-button {
+    width: 100%;
+    padding: 5px;
+    margin-top: 5px;
+    background-color: #4CAF50;
+    color: white;
+    border: 1px outset #4CAF50;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.tmdb-add-button:hover {
+    background-color: #45a049;
+}
+
+.tmdb-add-button:active {
+    border: 1px inset #4CAF50;
+}
+
+.tmdb-add-button:disabled {
+    background-color: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+}
+
+.tmdb-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    background-color: #4CAF50;
+    color: white;
+    font-size: 9px;
+    border-radius: 3px;
+    margin-top: 3px;
+}
+
 .title-bar {
     background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
     color: white;
@@ -595,6 +780,14 @@ body::before {
                         </a>
                     </p>
                     {% endif %}
+                    
+                    {% if person.tmdb_id %}
+                    <p>
+                        <button onclick="showTMDBFilmography()" style="padding: 5px 10px; cursor: pointer;">
+                            🎬 View All TMDB Credits
+                        </button>
+                    </p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -617,6 +810,27 @@ body::before {
         <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
              alt="{{ person.name }} Profile" 
              style="max-width: 100%; max-height: 80vh;">
+    </div>
+</div>
+
+<!-- TMDB Filmography Modal -->
+<div class="tmdb-modal-overlay" id="tmdbModalOverlay" onclick="closeTMDBFilmography()"></div>
+<div id="tmdbFilmographyModal">
+    <div class="title-bar">
+        <div class="title-bar-text">TMDB Credits - {{ person.name }}</div>
+        <div class="title-bar-controls">
+            <button aria-label="Close" onclick="closeTMDBFilmography()"></button>
+        </div>
+    </div>
+    <div class="tmdb-tabs">
+        <div class="tmdb-tab active" onclick="switchTMDBTab('movies')">Movies</div>
+        <div class="tmdb-tab" onclick="switchTMDBTab('tv')">TV Shows</div>
+    </div>
+    <div class="tmdb-tab-content active" id="tmdbMoviesContent">
+        <div class="tmdb-loading">Loading movies...</div>
+    </div>
+    <div class="tmdb-tab-content" id="tmdbTVContent">
+        <div class="tmdb-loading">Loading TV shows...</div>
     </div>
 </div>
 
@@ -649,11 +863,11 @@ body::before {
                             {% with media=item.media %}
                             <td>
                                 {% if media.release_date %}
-                                    <a href="{% url 'movie_page' media.tmdb_id %}">{{ media.title }}</a>
+                                    <a href="{% url 'movie_page' media.tmdb_id %}">{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}</a>
                                 {% elif media.first_air_date %}
-                                    <a href="{% url 'tv_show_page' media.tmdb_id %}">{{ media.title }}</a>
+                                    <a href="{% url 'tv_show_page' media.tmdb_id %}">{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}</a>
                                 {% else %}
-                                    {{ media.title }}
+                                    {{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}
                                 {% endif %}
                             </td>
                             <td>
@@ -710,11 +924,11 @@ body::before {
                         <div class="filmography-info">
                             <div class="filmography-title">
                                 {% if media.release_date %}
-                                    <a href="{% url 'movie_page' media.tmdb_id %}">{{ media.title }}</a>
+                                    <a href="{% url 'movie_page' media.tmdb_id %}">{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}</a>
                                 {% elif media.first_air_date %}
-                                    <a href="{% url 'tv_show_page' media.tmdb_id %}">{{ media.title }}</a>
+                                    <a href="{% url 'tv_show_page' media.tmdb_id %}">{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}</a>
                                 {% else %}
-                                    {{ media.title }}
+                                    {{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}
                                 {% endif %}
                             </div>
                             <div class="filmography-year">
@@ -755,6 +969,298 @@ body::before {
 
     function closeProfileModal() {
         document.getElementById('profileModal').style.display = 'none';
+    }
+
+    let tmdbFilmographyData = null;
+
+    function showTMDBFilmography() {
+        const modal = document.getElementById('tmdbFilmographyModal');
+        const overlay = document.getElementById('tmdbModalOverlay');
+        modal.classList.add('visible');
+        overlay.classList.add('visible');
+
+        // Fetch data if not already loaded
+        if (!tmdbFilmographyData) {
+            fetchTMDBFilmography();
+        }
+    }
+
+    function closeTMDBFilmography() {
+        const modal = document.getElementById('tmdbFilmographyModal');
+        const overlay = document.getElementById('tmdbModalOverlay');
+        modal.classList.remove('visible');
+        overlay.classList.remove('visible');
+    }
+
+    function switchTMDBTab(tab) {
+        // Update tab buttons
+        document.querySelectorAll('.tmdb-tab').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+
+        // Update tab content
+        document.querySelectorAll('.tmdb-tab-content').forEach(c => c.classList.remove('active'));
+        if (tab === 'movies') {
+            document.getElementById('tmdbMoviesContent').classList.add('active');
+        } else {
+            document.getElementById('tmdbTVContent').classList.add('active');
+        }
+    }
+
+    function fetchTMDBFilmography() {
+        const personId = {{ person.id }};
+        const url = `/api/people/${personId}/tmdb-filmography/`;
+
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch filmography');
+                }
+                return response.json();
+            })
+            .then(data => {
+                tmdbFilmographyData = data;
+                renderTMDBMovies(data.movies);
+                renderTMDBTVShows(data.tv_shows);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('tmdbMoviesContent').innerHTML = 
+                    '<div class="tmdb-error">Failed to load movies: ' + error.message + '</div>';
+                document.getElementById('tmdbTVContent').innerHTML = 
+                    '<div class="tmdb-error">Failed to load TV shows: ' + error.message + '</div>';
+            });
+    }
+
+    function renderTMDBMovies(movies) {
+        const container = document.getElementById('tmdbMoviesContent');
+        
+        if (movies.length === 0) {
+            container.innerHTML = '<div class="tmdb-loading">No movies found.</div>';
+            return;
+        }
+
+        // Group movies by ID to combine multiple roles
+        const groupedMovies = {};
+        movies.forEach(movie => {
+            if (!groupedMovies[movie.id]) {
+                groupedMovies[movie.id] = {
+                    ...movie,
+                    roles: []
+                };
+            }
+            
+            // Add role info
+            if (movie.role_type === 'Acting') {
+                if (movie.character) {
+                    groupedMovies[movie.id].roles.push(movie.character);
+                }
+            } else {
+                groupedMovies[movie.id].roles.push(`${movie.job} (${movie.department})`);
+            }
+        });
+
+        // Convert back to array and sort by date
+        const uniqueMovies = Object.values(groupedMovies).sort((a, b) => {
+            const dateA = a.release_date || '';
+            const dateB = b.release_date || '';
+            return dateB.localeCompare(dateA);
+        });
+
+        let html = '<div class="tmdb-credits-grid">';
+        uniqueMovies.forEach(movie => {
+            const inDatabase = movie.in_database;
+            const year = movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A';
+            const rolesText = movie.roles.filter(r => r).join(', ') || 'Unknown role';
+            const displayTitle = movie.original_title && movie.original_title !== movie.title 
+                ? `${movie.title} (${movie.original_title})` 
+                : movie.title;
+            
+            html += `
+                <div class="tmdb-credit-card ${inDatabase ? 'in-database' : ''}">
+                    ${movie.poster_path ? 
+                        `<img src="${movie.poster_path}" alt="${movie.title}" class="tmdb-credit-poster">` :
+                        `<div class="tmdb-credit-poster no-poster">🎬</div>`
+                    }
+                    <div class="tmdb-credit-info">
+                        <div class="tmdb-credit-title">${displayTitle}</div>
+                        <div class="tmdb-credit-details">${year} • ⭐ ${movie.vote_average.toFixed(1)}</div>
+                        <div class="tmdb-credit-role">${rolesText}</div>
+                        ${inDatabase ? 
+                            '<span class="tmdb-badge">In Database</span>' :
+                            `<button class="tmdb-add-button" onclick="addMovieToDatabase(${movie.id}, this)">Add to Database</button>`
+                        }
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function renderTMDBTVShows(tvShows) {
+        const container = document.getElementById('tmdbTVContent');
+        
+        if (tvShows.length === 0) {
+            container.innerHTML = '<div class="tmdb-loading">No TV shows found.</div>';
+            return;
+        }
+
+        // Group TV shows by ID to combine multiple roles
+        const groupedShows = {};
+        tvShows.forEach(show => {
+            if (!groupedShows[show.id]) {
+                groupedShows[show.id] = {
+                    ...show,
+                    roles: [],
+                    totalEpisodes: 0
+                };
+            }
+            
+            // Add role info
+            if (show.role_type === 'Acting') {
+                if (show.character) {
+                    groupedShows[show.id].roles.push(show.character);
+                }
+            } else {
+                groupedShows[show.id].roles.push(`${show.job} (${show.department})`);
+            }
+            
+            // Accumulate episode count
+            groupedShows[show.id].totalEpisodes += show.episode_count || 0;
+        });
+
+        // Convert back to array and sort by date
+        const uniqueShows = Object.values(groupedShows).sort((a, b) => {
+            const dateA = a.first_air_date || '';
+            const dateB = b.first_air_date || '';
+            return dateB.localeCompare(dateA);
+        });
+
+        let html = '<div class="tmdb-credits-grid">';
+        uniqueShows.forEach(show => {
+            const inDatabase = show.in_database;
+            const year = show.first_air_date ? new Date(show.first_air_date).getFullYear() : 'N/A';
+            const rolesText = show.roles.filter(r => r).join(', ') || 'Unknown role';
+            const episodes = show.totalEpisodes > 0 ? `${show.totalEpisodes} eps` : '';
+            const displayTitle = show.original_title && show.original_title !== show.title 
+                ? `${show.title} (${show.original_title})` 
+                : show.title;
+            
+            html += `
+                <div class="tmdb-credit-card ${inDatabase ? 'in-database' : ''}">
+                    ${show.poster_path ? 
+                        `<img src="${show.poster_path}" alt="${show.title}" class="tmdb-credit-poster">` :
+                        `<div class="tmdb-credit-poster no-poster">📺</div>`
+                    }
+                    <div class="tmdb-credit-info">
+                        <div class="tmdb-credit-title">${displayTitle}</div>
+                        <div class="tmdb-credit-details">${year} • ⭐ ${show.vote_average.toFixed(1)} ${episodes ? '• ' + episodes : ''}</div>
+                        <div class="tmdb-credit-role">${rolesText}</div>
+                        ${inDatabase ? 
+                            '<span class="tmdb-badge">In Database</span>' :
+                            `<button class="tmdb-add-button" onclick="addTVShowToDatabase(${show.id}, this)">Add to Database</button>`
+                        }
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function addMovieToDatabase(movieId, button) {
+        button.disabled = true;
+        button.textContent = 'Adding...';
+
+        fetch('/movies/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: movieId,
+                add_to_watchlist: false
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message && (data.message.includes('already exists') || data.message.includes('queued') || data.movie_id)) {
+                button.textContent = 'Added!';
+                button.parentElement.parentElement.classList.add('in-database');
+                setTimeout(() => {
+                    button.outerHTML = '<span class="tmdb-badge">In Database</span>';
+                    // Refresh the filmography data
+                    tmdbFilmographyData = null;
+                    fetchTMDBFilmography();
+                }, 1000);
+            } else {
+                throw new Error(data.error || 'Failed to add movie');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            button.textContent = 'Error!';
+            button.disabled = false;
+            setTimeout(() => {
+                button.textContent = 'Add to Database';
+            }, 2000);
+        });
+    }
+
+    function addTVShowToDatabase(showId, button) {
+        button.disabled = true;
+        button.textContent = 'Adding...';
+
+        fetch('/tvshows/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: showId,
+                add_to_watchlist: false
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message && (data.message.includes('already exists') || data.message.includes('queued') || data.task_id)) {
+                button.textContent = 'Added!';
+                button.parentElement.parentElement.classList.add('in-database');
+                setTimeout(() => {
+                    button.outerHTML = '<span class="tmdb-badge">In Database</span>';
+                    // Refresh the filmography data
+                    tmdbFilmographyData = null;
+                    fetchTMDBFilmography();
+                }, 1000);
+            } else {
+                throw new Error(data.error || 'Failed to add TV show');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            button.textContent = 'Error!';
+            button.disabled = false;
+            setTimeout(() => {
+                button.textContent = 'Add to Database';
+            }, 2000);
+        });
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
     }
 
     document.querySelectorAll('table.interactive').forEach(element => {

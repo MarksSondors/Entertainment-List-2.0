@@ -2626,177 +2626,179 @@ def browse_by_people(request):
 
 # Add this view function
 @login_required
-def movie_statistics(request):
+def statistics_page(request):
     """
-    Display personalized movie statistics for the current user.
+    Main statistics page with tabs for different content types.
     """
-    # Get content type for Movie model
+    from django.utils import timezone
+    
+    # Get content types
     movie_content_type = ContentType.objects.get_for_model(Movie)
+    tvshow_content_type = ContentType.objects.get_for_model(TVShow)
     
-    # Get filter parameters
-    selected_year = request.GET.get('year', '')
-    selected_genre = request.GET.get('genre', '')
+    # Calculate last 7 days cutoff
+    seven_days_ago = timezone.now() - timedelta(days=7)
     
-    # Base query for user's movie reviews
-    reviews = Review.objects.filter(
+    # Get user's movie reviews
+    movie_reviews = Review.objects.filter(
         user=request.user,
         content_type=movie_content_type
-    ).select_related('user')
+    )
     
-    # Apply filters
-    if selected_year:
-        reviews = reviews.filter(date_added__year=selected_year)
+    # Get user's movie reviews from last 7 days
+    movie_reviews_last_7_days = movie_reviews.filter(
+        date_added__gte=seven_days_ago
+    )
     
-    if selected_genre:
-        # This is more complex as we need to filter on the GenericForeignKey
-        genre = get_object_or_404(Genre, id=selected_genre)
-        movie_ids_with_genre = Movie.objects.filter(genres=genre).values_list('id', flat=True)
-        reviews = reviews.filter(object_id__in=movie_ids_with_genre)
+    # Get user's TV show reviews
+    tvshow_reviews = Review.objects.filter(
+        user=request.user,
+        content_type=tvshow_content_type
+    )
     
-    # Get available years for the filter dropdown
-    available_years = reviews.dates('date_added', 'year')
-    available_years = [date.year for date in available_years]
-    
-    # Calculate totals
-    total_movies = reviews.count()
-    avg_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
-    
-    # Get movies for these reviews
-    movie_ids = reviews.values_list('object_id', flat=True)
+    # Calculate movie watching time
+    movie_ids = movie_reviews.values_list('object_id', flat=True)
     movies = Movie.objects.filter(id__in=movie_ids)
+    movie_total_minutes = sum(movie.runtime or 0 for movie in movies)
     
-    # Calculate total hours watched (based on movie runtime)
-    total_minutes = sum(movie.runtime or 0 for movie in movies)
-    total_hours = round(total_minutes / 60, 1)
+    # Calculate movie watching time for last 7 days
+    movie_ids_last_7_days = movie_reviews_last_7_days.values_list('object_id', flat=True)
+    movies_last_7_days = Movie.objects.filter(id__in=movie_ids_last_7_days)
+    movie_last_7_days_minutes = sum(movie.runtime or 0 for movie in movies_last_7_days)
     
-    # Monthly activity data
-    monthly_data = [0] * 12
-    for review in reviews:
-        month = review.date_added.month
-        monthly_data[month-1] += 1
-    
-    # Genre distribution
-    genre_counts = defaultdict(int)
-    genre_labels = []
-    genre_data = []
-    
-    for movie in movies:
-        for genre in movie.genres.all():
-            genre_counts[genre.name] += 1
-    
-    # Sort genres by count and get top 10
-    top_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-    for genre_name, count in top_genres:
-        genre_labels.append(genre_name)
-        genre_data.append(count)
-    
-    # Rating distribution
-    rating_distribution = [0] * 10
-    for review in reviews:
-        if 1 <= review.rating <= 10:
-            # Convert float rating to integer index
-            index = int(review.rating) - 1
-            rating_distribution[index] += 1
-    
-    # Yearly comparison
-    yearly_data = []
-    yearly_labels = []
-    
-    year_counts = defaultdict(int)
-    for review in Review.objects.filter(
-        user=request.user,
-        content_type=movie_content_type
-    ):
-        year = review.date_added.year
-        year_counts[year] += 1
-    
-    # Sort years chronologically
-    years_sorted = sorted(year_counts.keys())
-    for year in years_sorted:
-        yearly_labels.append(str(year))
-        yearly_data.append(year_counts[year])
-    
-    # Top rated movies
-    top_movies = []
-    for review in reviews.order_by('-rating', '-date_added')[:10]:
-        try:
-            movie = Movie.objects.get(id=review.object_id)
-            top_movies.append({
-                'movie': movie,
-                'rating': review.rating,
-                'date_added': review.date_added
-            })
-        except Movie.DoesNotExist:
-            continue
-    
-    # Determine top director
-    director_counts = defaultdict(list)
-    for movie in movies:
-        # Get director(s) from the crew
-        for person, roles in movie.get_crew().items():  # Add parentheses to call the method
-            if 'Director' in roles:
-                director_counts[person].append(movie)
-    
-    top_director = {"name": "None", "count": 0, "movies": []}
-    if director_counts:
-        top_director_name = max(director_counts.items(), key=lambda x: len(x[1]))[0]
-        top_director = {
-            "name": top_director_name,
-            "count": len(director_counts[top_director_name]),
-            "movies": director_counts[top_director_name][:5]  # Limit to 5 movies
-        }
-    
-    # Calculate best streak
-    if reviews:
-        # Sort reviews by date
-        sorted_reviews = sorted(reviews, key=lambda x: x.date_added)
-        dates = [review.date_added.date() for review in sorted_reviews]
-        
-        current_streak = 1
-        best_streak = 1
-        for i in range(1, len(dates)):
-            if (dates[i] - dates[i-1]) == timedelta(days=1):
-                current_streak += 1
-                best_streak = max(best_streak, current_streak)
-            else:
-                current_streak = 1
-    else:
-        best_streak = 0
-    
-    # Get all genres for the filter dropdown
-    genres = Genre.objects.all().order_by('name')
-    
-    # Find the shortest and longest movies
+    # Find shortest and longest movies (only from watched movies)
     shortest_movie = None
     longest_movie = None
-    if movies:
-        valid_movies = [m for m in movies if m.runtime is not None]
-        if valid_movies:
-            shortest_movie = min(valid_movies, key=lambda x: x.runtime)
-            longest_movie = max(valid_movies, key=lambda x: x.runtime)
+    if movies.exists():
+        # Filter out movies with no runtime and find shortest
+        movies_with_runtime = movies.filter(runtime__gt=0)
+        if movies_with_runtime.exists():
+            shortest_movie = movies_with_runtime.order_by('runtime').first()
+            longest_movie = movies_with_runtime.order_by('-runtime').first()
+    
+    # Calculate TV show watching time (from actual watched episodes)
+    tvshow_ids = tvshow_reviews.values_list('object_id', flat=True)
+    tvshows = TVShow.objects.filter(id__in=tvshow_ids)
+    
+    # Get actual watched episodes for these shows
+    from tvshows.models import WatchedEpisode
+    watched_episodes = WatchedEpisode.objects.filter(
+        user=request.user,
+        episode__season__show_id__in=tvshow_ids
+    ).select_related('episode', 'episode__season', 'episode__season__show')
+    
+    # Get watched episodes from last 7 days
+    watched_episodes_last_7_days = watched_episodes.filter(
+        watched_date__gte=seven_days_ago
+    )
+    
+    # Calculate total time from watched episodes
+    tvshow_total_minutes = 0
+    for watched_episode in watched_episodes:
+        # Use episode runtime if available, otherwise default to 45 minutes
+        episode_runtime = getattr(watched_episode.episode, 'runtime', None) or 45
+        tvshow_total_minutes += episode_runtime
+    
+    # Calculate total time from watched episodes in last 7 days
+    tvshow_last_7_days_minutes = 0
+    for watched_episode in watched_episodes_last_7_days:
+        # Use episode runtime if available, otherwise default to 45 minutes
+        episode_runtime = getattr(watched_episode.episode, 'runtime', None) or 45
+        tvshow_last_7_days_minutes += episode_runtime
+    
+    def format_time(total_minutes):
+        if total_minutes == 0:
+            return "0 hours (0 hours)"
+        
+        total_hours = total_minutes // 60
+        
+        # Calculate months, days, hours
+        months = total_hours // (24 * 30)  # Approximate 30 days per month
+        remaining_hours = total_hours % (24 * 30)
+        days = remaining_hours // 24
+        hours = remaining_hours % 24
+        
+        # Build the formatted string
+        parts = []
+        if months > 0:
+            parts.append(f"{months} month{'s' if months != 1 else ''}")
+        if days > 0:
+            parts.append(f"{days} day{'s' if days != 1 else ''}")
+        if hours > 0:
+            parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+        
+        if not parts:
+            parts.append("0 hours")
+        
+        formatted = ", ".join(parts)
+        return f"{formatted} ({total_hours:,} hours)"
+    
+    def format_hours_only(total_minutes):
+        """Format time as just hours for the 'last 7 days' stat"""
+        total_hours = total_minutes // 60
+        return f"{total_hours} hour{'s' if total_hours != 1 else ''}"
+    
+    # Calculate monthly activity breakdown
+    from django.db.models import Count
+    from django.db.models.functions import TruncMonth
+    import calendar
+    
+    # Get all years that have movie reviews
+    movie_years = movie_reviews.datetimes('date_added', 'year').values_list('date_added__year', flat=True)
+    available_years = sorted(set(movie_years), reverse=True)
+    
+    # Get selected year from request, default to current year or latest year with data
+    selected_year = request.GET.get('year')
+    if selected_year:
+        try:
+            selected_year = int(selected_year)
+        except ValueError:
+            selected_year = None
+    
+    if not selected_year:
+        if available_years:
+            selected_year = available_years[0]  # Most recent year with data
+        else:
+            selected_year = timezone.now().year
+    
+    # Get monthly data for selected year
+    monthly_data = movie_reviews.filter(
+        date_added__year=selected_year
+    ).annotate(
+        month=TruncMonth('date_added')
+    ).values('month').annotate(
+        count=Count('id')
+    ).order_by('month')
+    
+    # Create a complete 12-month array
+    monthly_breakdown = []
+    monthly_counts = {item['month'].month: item['count'] for item in monthly_data}
+    
+    for month_num in range(1, 13):
+        month_name = calendar.month_abbr[month_num]
+        count = monthly_counts.get(month_num, 0)
+        monthly_breakdown.append({
+            'month': month_name,
+            'month_num': month_num,
+            'count': count
+        })
     
     context = {
-        'total_movies': total_movies,
-        'avg_rating': avg_rating,
-        'total_hours': total_hours,
-        'monthly_data': json.dumps(monthly_data),
-        'genre_labels': json.dumps(genre_labels),
-        'genre_data': json.dumps(genre_data),
-        'rating_distribution': json.dumps(rating_distribution),
-        'yearly_labels': json.dumps(yearly_labels),
-        'yearly_data': json.dumps(yearly_data),
-        'top_movies': top_movies,
-        'top_director': top_director,
-        'best_streak': best_streak,
-        'genres': genres,
-        'available_years': available_years,
-        'selected_year': int(selected_year) if selected_year else None,
-        'selected_genre': int(selected_genre) if selected_genre else None,
+        'page_title': 'Statistics',
+        'movie_time_spent': format_time(movie_total_minutes),
+        'tvshow_time_spent': format_time(tvshow_total_minutes),
+        'movie_total_count': movie_reviews.count(),
+        'tvshow_total_count': tvshow_reviews.count(),
+        'tvshow_episodes_watched': watched_episodes.count(),
+        'movie_last_7_days': format_hours_only(movie_last_7_days_minutes),
+        'tvshow_last_7_days': format_hours_only(tvshow_last_7_days_minutes),
         'shortest_movie': shortest_movie,
         'longest_movie': longest_movie,
+        'monthly_breakdown': monthly_breakdown,
+        'available_years': available_years,
+        'selected_year': selected_year,
     }
-    
-    return render(request, 'statistics_movies.html', context)
+    return render(request, 'statistics_page.html', context)
 
 @login_required
 def settings_page(request):
@@ -2881,6 +2883,7 @@ def settings_page(request):
         notification_prefs.new_releases = 'new_releases' in request.POST
         notification_prefs.watchlist_updates = 'watchlist_updates' in request.POST
         notification_prefs.recommendations = 'recommendations' in request.POST
+        notification_prefs.new_reviews = 'new_reviews' in request.POST
         notification_prefs.movie_of_week = 'movie_of_week' in request.POST
         notification_prefs.system_notifications = 'system_notifications' in request.POST
         notification_prefs.quiet_hours_enabled = 'quiet_hours_enabled' in request.POST

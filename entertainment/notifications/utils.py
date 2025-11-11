@@ -183,6 +183,7 @@ def is_notification_type_enabled(user, notification_type):
         'new_release': prefs.new_releases,
         'watchlist_update': prefs.watchlist_updates,
         'recommendation': prefs.recommendations,
+        'new_review': prefs.new_reviews,
         'system': prefs.system_notifications,
     }
     
