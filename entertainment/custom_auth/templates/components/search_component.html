@@ -1,408 +1,234 @@
 {% load static %}
 
-<div class="search-container">
-    <form class="search-form" method="GET" id="searchForm">        <div class="search-input-wrapper">
+<div class="search-wrapper">
+    <!-- Compact Search Bar -->
+    <div class="win98-search-bar">
+        <div class="search-input-row">
+            <img src="{% static 'images/win98/search_globe_transparent.gif' %}" alt="" class="search-icon">
             <input type="text" 
+                   id="searchInput" 
                    name="search" 
-                   placeholder="Search" 
+                   placeholder="Search..."
                    value="{{ request.GET.search }}"
-                   class="search-input"
-                   id="searchInput"
                    autocomplete="off"
                    autocorrect="off"
                    autocapitalize="off"
                    spellcheck="false">
+            <button id="cancelButton" class="win98-btn-small" onclick="clearSearch()" style="display: none;" aria-label="Close">
+                <img src="{% static 'images/win98/close_icon.png' %}" alt="X" style="width: 12px; height: 12px; image-rendering: pixelated;">
+            </button>
         </div>
-        <button type="button" class="cancel-button" id="cancelButton" style="display: none;" onclick="clearSearch()">
-            Cancel
-        </button>
-    </form>
-    
-    <div class="search-tabs" id="searchTabs" style="display: none;">
-        <div class="search-tab active" data-endpoint="movies">MOVIES</div>
-        <div class="search-tab" data-endpoint="tvshows">TV SHOWS</div>
-        <div class="search-tab" data-endpoint="people">PEOPLE</div>
-        <div class="search-tab" data-endpoint="users">USERS</div>
-    </div>
-</div>
 
-<!-- Search Results Container -->
-<div class="search-results-container" id="searchResults" style="display: none;">
-    <div class="search-results-list" id="resultsGrid">
-        <!-- Results will be populated here -->
-    </div>
-    <div class="results-count" id="resultsCount"></div>
-    
-    <!-- Add Content Buttons -->
-    <div class="add-content-container" id="addContentContainer" style="display: none;">
-        <div class="add-content-buttons">
-            <button type="button" class="add-content-button" id="addMovieButton" style="display: none;">
-                <span class="add-icon">+</span>
-                Add Movie
-            </button>
-            <button type="button" class="add-content-button" id="addTvShowButton" style="display: none;">
-                <span class="add-icon">+</span>
-                Add TV Show
-            </button>
+        <!-- Tabs (Hidden by default) -->
+        <div id="searchTabs" class="win98-tabs" style="display: none;">
+            <button class="search-tab active" data-endpoint="movies">Movies</button>
+            <button class="search-tab" data-endpoint="tvshows">TV Shows</button>
+            <button class="search-tab" data-endpoint="people">People</button>
+            <button class="search-tab" data-endpoint="users">Users</button>
         </div>
-        <div class="add-content-text">
-            Can't find what you're looking for? Add it to our database!
+    </div>
+
+    <!-- Results Dropdown (Floating) -->
+    <div id="searchResults" class="win98-results-dropdown" style="display: none;">
+        <div class="results-status-bar" id="resultsCount">Ready</div>
+        <div class="sunken-panel">
+            <div id="resultsGrid" class="results-list">
+                <!-- Results populated by JS -->
+            </div>
+        </div>
+        
+        <!-- Add Content Container -->
+        <div id="addContentContainer" style="display: none; padding: 4px; text-align: center; border-top: 1px solid var(--win98-dark);">
+            <button type="button" id="addMovieButton" class="win98-btn-small" style="display: none; width: 100%;">Add Movie</button>
+            <button type="button" id="addTvShowButton" class="win98-btn-small" style="display: none; width: 100%;">Add TV Show</button>
         </div>
     </div>
 </div>
 
 <style>
-    /* Theme-adaptive CSS variables */
-    :root {
-        --bg-color: #c0c0c0;
-        --text-color: #000;
-        --border-light: #dfdfdf;
-        --border-dark: #808080;
-        --input-bg: white;
-        --hover-bg: #d4d0c8;
-        --secondary-text: #666;
-        --poster-bg: #808080;
+    .search-wrapper {
+        position: relative;
+        max-width: 800px;
+        margin: 0 auto 10px auto;
+        z-index: 1000;
     }
 
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --bg-color: #2d2d30;
-            --text-color: #ffffff;
-            --border-light: #484848;
-            --border-dark: #1e1e1e;
-            --input-bg: #383838;
-            --hover-bg: #404040;
-            --secondary-text: #cccccc;
-            --poster-bg: #555555;
-        }
-    }    .search-container {
-        position: relative; /* Changed from sticky to relative since parent wrapper is fixed */
-        background: var(--bg-color);
-        padding: 8px;
-        margin-bottom: 20px;
-        border-top: 2px solid var(--border-light);
-        border-left: 2px solid var(--border-light);
-        border-right: 2px solid var(--border-dark);
-        border-bottom: 2px solid var(--border-dark);
-        z-index: 100;
-    }
-
-    .search-container.searching {
-        margin-bottom: 0;
-    }
-
-    .search-form {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 0 8px;
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-
-    .search-input-wrapper {
-        flex: 1;
-        background: var(--bg-color);
+    .win98-search-bar {
+        background: var(--win98-gray);
+        border: 2px solid var(--win98-light);
+        border-right-color: var(--win98-dark);
+        border-bottom-color: var(--win98-dark);
         padding: 4px;
-        border-top: 2px solid var(--border-dark);
-        border-left: 2px solid var(--border-dark);
-        border-right: 2px solid var(--border-light);
-        border-bottom: 2px solid var(--border-light);
+        box-shadow: 1px 1px 0 var(--win98-black);
     }
 
-    .search-input {
-        width: 100%;
-        padding: 4px 8px;
-        border: 1px inset var(--bg-color);
-        background: var(--input-bg);
-        color: var(--text-color);
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 11px;
-        outline: none;
-        height: 20px;
-        box-sizing: border-box;
-    }
-
-    .search-input:focus {
-        border: 1px inset var(--bg-color);
-        background: var(--input-bg);
-    }
-
-    .cancel-button {
-        background: var(--bg-color);
-        color: var(--text-color);
-        border-top: 1px solid var(--border-light);
-        border-left: 1px solid var(--border-light);
-        border-right: 1px solid var(--border-dark);
-        border-bottom: 1px solid var(--border-dark);
-        padding: 4px 12px;
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 11px;
-        cursor: pointer;
-        height: 28px;
-        box-sizing: border-box;
-    }
-
-    .cancel-button:hover {
-        background: var(--hover-bg);
-    }
-
-    .cancel-button:active {
-        border-top: 1px solid var(--border-dark);
-        border-left: 1px solid var(--border-dark);
-        border-right: 1px solid var(--border-light);
-        border-bottom: 1px solid var(--border-light);
-        background: var(--bg-color);
-    }
-
-    .search-tabs {
+    .search-input-row {
         display: flex;
-        max-width: 600px;
-        margin: 8px auto 0;
-        padding: 0 0px;
-        border-bottom: 1px solid var(--border-dark);
+        align-items: center;
+        gap: 8px;
+    }
+
+    .search-icon {
+        width: 16px;
+        height: 16px;
+        image-rendering: pixelated;
+    }
+
+    #searchInput {
+        flex: 1;
+        height: 30px;
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        padding: 0 6px;
+        font-family: 'MS Sans Serif', 'Segoe UI', sans-serif;
+        font-size: 14px;
+        background: var(--win98-input-bg);
+        color: var(--win98-input-text);
+        outline: none;
+    }
+
+    .win98-btn-small {
+        min-width: 30px;
+        height: 30px;
+        padding: 0 8px;
+        background: var(--win98-gray);
+        color: var(--win98-text);
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        
+        /* Win98 Button Style (Outset) - Matching Navbar */
+        border-top: 1px solid var(--win98-light);
+        border-left: 1px solid var(--win98-light);
+        border-right: 1px solid var(--win98-black);
+        border-bottom: 1px solid var(--win98-black);
+        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+        transition: none;
+    }
+
+    .win98-btn-small:active {
+        /* Win98 Pressed Style (Inset) - Matching Navbar */
+        border-top: 1px solid var(--win98-black);
+        border-left: 1px solid var(--win98-black);
+        border-right: 1px solid var(--win98-light);
+        border-bottom: 1px solid var(--win98-light);
+        box-shadow: inset 1px 1px 0 var(--win98-dark);
+        
+        /* Dithered pattern for active state */
+        background-image: linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern)), 
+                          linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern));
+        background-position: 0 0, 1px 1px;
+        background-size: 4px 4px;
+        
+        padding-top: 0;
+        padding-left: 0;
+    }
+
+    .win98-tabs {
+        display: flex;
+        gap: 2px;
+        margin-top: 6px;
+        padding-left: 24px;
     }
 
     .search-tab {
-        padding: 6px 16px;
+        background: var(--win98-gray);
+        border: none;
+        box-shadow: inset 1px 1px var(--win98-light), 
+                    inset -1px 0 var(--win98-dark), 
+                    inset -2px 0 var(--win98-black);
+        padding: 4px 8px;
         font-family: 'MS Sans Serif', sans-serif;
-        font-size: 11px;
-        color: var(--text-color);
+        font-size: 12px;
+        color: var(--win98-text);
         cursor: pointer;
-        background: var(--bg-color);
-        border-top: 1px solid var(--border-light);
-        border-left: 1px solid var(--border-light);
-        border-right: 1px solid var(--border-dark);
-        border-bottom: none;
+        border-radius: 3px 3px 0 0;
         margin-right: 2px;
     }
 
     .search-tab.active {
+        font-weight: bold;
+        padding-bottom: 5px;
         position: relative;
-        background: var(--hover-bg);
-        border-bottom: 1px solid var(--hover-bg);
-        margin-bottom: -1px;
-        font-weight: bold;
-    }
-    input[type=text]{
-        background: var(--input-bg);
-    }
-    .search-tab:hover:not(.active) {
-        background: var(--hover-bg);
+        top: 2px;
+        z-index: 2;
+        box-shadow: inset 1px 1px var(--win98-light), 
+                    inset -1px 0 var(--win98-dark), 
+                    inset -2px 0 var(--win98-black);
     }
 
-    .search-tab:active:not(.active) {
-        border-top: 1px solid var(--border-dark);
-        border-left: 1px solid var(--border-dark);
-        border-right: 1px solid var(--border-light);
-    }
-
-    /* Add Content Buttons Styles */
-    .add-content-container {
-        background: var(--bg-color);
-        border-top: 2px solid var(--border-light);
-        border-left: 2px solid var(--border-light);
-        border-right: 2px solid var(--border-dark);
-        border-bottom: 2px solid var(--border-dark);
-        padding: 8px;
-        margin-top: 20px;
-        z-index: 999;
-    }
-
-    .add-content-buttons {
-        display: flex;
-        gap: 8px;
-        justify-content: center;
-        margin-bottom: 4px;
-    }
-
-    .add-content-button {
-        background: var(--bg-color);
-        color: var(--text-color);
-        border-top: 1px solid var(--border-light);
-        border-left: 1px solid var(--border-light);
-        border-right: 1px solid var(--border-dark);
-        border-bottom: 1px solid var(--border-dark);
-        padding: 6px 12px;
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 11px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        min-width: 100px;
-        justify-content: center;
-    }
-
-    .add-content-button:hover {
-        background: var(--hover-bg);
-    }
-
-    .add-content-button:active {
-        border-top: 1px solid var(--border-dark);
-        border-left: 1px solid var(--border-dark);
-        border-right: 1px solid var(--border-light);
-        border-bottom: 1px solid var(--border-light);
-        background: var(--bg-color);
-    }
-
-    .add-icon {
-        font-weight: bold;
-        font-size: 14px;
-    }
-
-    .add-content-text {
-        text-align: center;
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 10px;
-        color: var(--secondary-text);
-    }    /* Mobile-specific styles */
-    @media (max-width: 768px) {
-        .search-results-container {
-            max-height: 85vh !important;
-            padding-bottom: 210px !important;
-            margin-bottom: 0 !important;
-        }
-
-        .add-content-container {
-            position: fixed !important;
-            bottom: 70px !important;
-            left: 0 !important;
-            right: 0 !important;
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-            border-left: none !important;
-            border-right: none !important;
-            border-bottom: none !important;
-            z-index: 1000 !important;
-            width: 100% !important;
-            box-sizing: border-box !important;
-        }
-
-        .add-content-buttons {
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .add-content-button {
-            width: 200px;
-            padding: 10px 12px;
-        }
-
-        .add-content-container[style*="block"] {
-            display: block !important;
-        }
-    }
-
-    /* Desktop styles */
-    @media (min-width: 769px) {
-        .add-content-container {
-            position: sticky;
-            bottom: 20px;
-            margin-top: 20px;
-        }
-    }    /* Search Results Styles */
-    .search-results-container {
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 0;
-        max-height: 90vh;
-        overflow-y: auto;
-        overflow-x: hidden;
-        scrollbar-width: thin;
-        scrollbar-color: var(--border-dark) var(--bg-color);
-    }
-
-    /* Custom scrollbar styling for search results */
-    .search-results-container::-webkit-scrollbar {
-        width: 12px;
-    }
-
-    .search-results-container::-webkit-scrollbar-track {
-        background: var(--bg-color);
-        border: 1px inset var(--border-dark);
-    }
-
-    .search-results-container::-webkit-scrollbar-thumb {
-        background: var(--border-dark);
-        border: 1px outset var(--border-dark);
-        border-radius: 0;
-    }
-
-    .search-results-container::-webkit-scrollbar-thumb:hover {
-        background: var(--border-light);
-    }
-
-    .search-results-list {
+    .win98-results-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--win98-gray);
+        border: 2px outset var(--win98-light);
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+        margin-top: 2px;
+        padding: 2px;
         display: flex;
         flex-direction: column;
-        gap: 0;
-        margin-bottom: 0;
-        border-top: none;
     }
 
-    .search-results-header {
-        margin-bottom: 15px;
-    }
-
-    .search-results-header h3 {
+    .results-status-bar {
         font-family: 'MS Sans Serif', sans-serif;
-        font-size: 16px;
-        margin: 0;
-        color: var(--text-color);
+        font-size: 11px;
+        color: var(--win98-text);
+        padding: 2px 4px;
+        margin-bottom: 2px;
+    }
+
+    .sunken-panel {
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        background: var(--win98-input-bg);
+        max-height: 60vh;
+        overflow-y: auto;
     }
 
     .result-item {
-        background: var(--bg-color);
-        border-top: none;
-        border-left: 2px solid var(--border-light);
-        border-right: 2px solid var(--border-dark);
-        border-bottom: 1px solid var(--border-dark);
-        padding: 8px;
-        cursor: pointer;
-        transition: background-color 0.2s;
         display: flex;
         align-items: center;
-        gap: 12px;
-        position: relative;
+        padding: 4px;
+        cursor: pointer;
+        color: var(--win98-input-text);
+        border: 1px dotted transparent;
     }
 
     .result-item:hover {
-        background: var(--hover-bg);
+        background-color: #000080;
+        color: white;
+        border: 1px dotted #ffffff;
     }
 
-    .result-item:active {
-        border-top: 2px solid var(--border-dark);
-        border-left: 2px solid var(--border-dark);
-        border-right: 2px solid var(--border-light);
-        border-bottom: 2px solid var(--border-light);
-    }
-
-    .result-item:last-child {
-        border-bottom: 2px solid var(--border-dark);
+    @media (prefers-color-scheme: dark) {
+        .result-item:hover {
+            background-color: #004e98;
+        }
     }
 
     .result-poster {
-        width: 40px;
-        height: 60px;
+        width: 32px;
+        height: 48px;
         object-fit: cover;
-        border: 1px solid var(--border-dark);
-        flex-shrink: 0;
+        margin-right: 8px;
+        border: 1px solid var(--win98-dark);
     }
 
     .result-poster-placeholder {
-        width: 40px;
-        height: 60px;
-        background: var(--poster-bg);
+        width: 32px;
+        height: 48px;
+        background: var(--win98-dark);
+        margin-right: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
         color: white;
         font-size: 8px;
-        text-align: center;
-        border: 1px solid var(--border-dark);
-        flex-shrink: 0;
     }
 
     .result-content {
@@ -412,142 +238,29 @@
 
     .result-title {
         font-family: 'MS Sans Serif', sans-serif;
-        font-size: 11px;
+        font-size: 12px;
         font-weight: bold;
-        margin-bottom: 2px;
-        line-height: 1.2;
-        color: var(--text-color);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
     .result-meta {
-        font-family: 'MS Sans Serif', sans-serif;
         font-size: 10px;
-        color: var(--secondary-text);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 2px;
-    }
-
-    .result-year {
-        font-weight: normal;
-    }
-
-    .result-rating {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-
-    .rating-star {
-        color: #ffd700;
-        font-size: 8px;
-    }
-
-    .rating-text {
-        font-size: 9px;
-    }
-
-    .watchlist-indicator {
-        position: absolute;
-        top: 4px;
-        right: 4px;
-        background: #0078d4;
-        color: white;
-        font-size: 8px;
-        padding: 2px 4px;
-        border-radius: 2px;
-        font-family: 'MS Sans Serif', sans-serif;
-    }
-
-    .watchlist-users {
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 9px;
-        color: var(--secondary-text);
-        margin-top: 1px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .watchlist-users-label {
-        font-weight: bold;
-    }
-
-    .user-result {
-        padding: 8px;
+        opacity: 0.8;
     }
 
     .user-avatar {
         width: 32px;
         height: 32px;
-        border-radius: 50%;
-        background: var(--poster-bg);
+        background: var(--win98-dark);
+        color: white;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 12px;
+        margin-right: 8px;
         font-weight: bold;
-        color: white;
-        flex-shrink: 0;
-    }
-
-    .results-count {
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 11px;
-        color: var(--secondary-text);
-        text-align: center;
-        padding: 10px;
-        border-top: 1px solid var(--border-dark);
-        margin-top: 0;
-    }
-
-    .no-results {
-        text-align: center;
-        padding: 30px;
-        font-family: 'MS Sans Serif', sans-serif;
-        color: var(--secondary-text);
-    }    .loading {
-        text-align: center;
-        padding: 30px;
-        font-family: 'MS Sans Serif', sans-serif;
-        color: var(--secondary-text);
-    }    /* Add Content Result Styles */
-    .add-content-result {
-        background: var(--bg-color) !important;
-    }
-
-    .add-content-result:hover {
-        background: var(--hover-bg) !important;
-    }
-
-    .add-icon-placeholder {
-        background: var(--poster-bg) !important;
-        color: white !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border: 1px solid var(--border-dark) !important;
-    }
-
-    .add-icon-large {
-        font-size: 24px;
-        font-weight: bold;
-    }
-
-    .add-content-result .result-title {
-        color: var(--text-color) !important;
-        font-weight: bold !important;
-    }
-
-    .add-content-description {
-        font-style: italic;
-        color: var(--secondary-text) !important;
-        font-size: 9px !important;
+        border: 1px solid var(--win98-light);
     }
 </style>
 
@@ -574,19 +287,6 @@
             'users': 'Search for users...'
         };
 
-        function updateAddButtons() {
-            if (currentEndpoint === 'movies') {
-                addMovieButton.style.display = 'flex';
-                addTvShowButton.style.display = 'none';
-            } else if (currentEndpoint === 'tvshows') {
-                addMovieButton.style.display = 'none';
-                addTvShowButton.style.display = 'flex';
-            } else {
-                addMovieButton.style.display = 'none';
-                addTvShowButton.style.display = 'none';
-            }
-        }
-
         function clearSearch() {
             searchInput.value = '';
             searchTabs.style.display = 'none';
@@ -595,22 +295,19 @@
             if (defaultContent) defaultContent.style.display = 'block';
             addContentContainer.style.display = 'none';
             searchInput.blur();
-            
-            document.querySelector('.search-container').classList.remove('searching');
-        }        function performSearch(query, type) {
+        }
+
+        function performSearch(query, type) {
             if (!query.trim()) {
                 clearSearch();
                 return;
             }
 
-            document.querySelector('.search-container').classList.add('searching');
-
-            searchResults.style.display = 'block';
+            searchResults.style.display = 'flex';
             if (defaultContent) defaultContent.style.display = 'none';
             
-            // Hide the floating add content container since we'll show it as results
-            addContentContainer.style.display = 'none';
-            resultsGrid.innerHTML = '<div class="loading">Searching...</div>';
+            resultsGrid.innerHTML = '<div style="padding: 10px; text-align: center;">Searching...</div>';
+            resultsCount.textContent = 'Searching...';
 
             fetch(`{% url 'discover_search' %}?search=${encodeURIComponent(query)}&type=${type}`)
                 .then(response => response.json())
@@ -618,25 +315,26 @@
                     if (data.success) {
                         displayResults(data);
                     } else {
-                        resultsGrid.innerHTML = `<div class="no-results">Error: ${data.error}</div>`;
+                        resultsGrid.innerHTML = `<div style="padding: 10px; text-align: center;">Error: ${data.error}</div>`;
+                        resultsCount.textContent = 'Error';
                     }
                 })
                 .catch(error => {
                     console.error('Search error:', error);
-                    resultsGrid.innerHTML = '<div class="no-results">Search failed. Please try again.</div>';
+                    resultsGrid.innerHTML = '<div style="padding: 10px; text-align: center;">Search failed.</div>';
+                    resultsCount.textContent = 'Failed';
                 });
-        }function displayResults(data) {
-            resultsCount.textContent = `${data.count} result${data.count !== 1 ? 's' : ''} found`;
+        }
+
+        function displayResults(data) {
+            resultsCount.textContent = `${data.count} object(s) found`;
 
             if (data.results.length === 0) {
-                resultsGrid.innerHTML = '<div class="no-results">No results found</div>';
-                resultsCount.style.display = 'none';
-                // Add the add content buttons as results even when no results found
+                resultsGrid.innerHTML = '<div style="padding: 10px; text-align: center;">No results found</div>';
                 addAddContentResults();
                 return;
             }
 
-            resultsCount.style.display = 'block';
             resultsGrid.innerHTML = '';
 
             data.results.forEach(item => {
@@ -645,7 +343,6 @@
                 resultItem.onclick = () => window.location.href = item.url;
 
                 if (data.search_type === 'users') {
-                    resultItem.className += ' user-result';
                     resultItem.innerHTML = `
                         <div class="user-avatar">${item.username.charAt(0).toUpperCase()}</div>
                         <div class="result-content">
@@ -653,18 +350,6 @@
                         </div>
                     `;
                 } else if (data.search_type === 'people') {
-                    let ratingHtml = '';
-                    if (item.avg_rating) {
-                        const avgRatingValue = Math.round(item.avg_rating);
-                        const ratingClass = avgRatingValue >= 7 ? 'high-rating' : 
-                                          avgRatingValue >= 5 ? 'mid-rating' : 'low-rating';
-                        
-                        ratingHtml = `<div class="result-rating">
-                            <div class="activity-rating ${ratingClass}">${item.avg_rating}<span class="rating-max">/10</span></div>
-                            <span class="rating-count">(${item.rating_count})</span>
-                        </div>`;
-                    }
-                    
                     resultItem.innerHTML = `
                         ${item.profile_picture ? 
                             `<img src="${item.profile_picture}" alt="${item.name}" class="result-poster">` : 
@@ -673,48 +358,18 @@
                         <div class="result-content">
                             <div class="result-title">${item.name}</div>
                             <div class="result-meta">
-                                <span class="result-year"></span>
-                                ${ratingHtml}
+                                ${item.avg_rating ? `<span>Rating: ${item.avg_rating}/10</span>` : ''}
                             </div>
                         </div>
                     `;
                 } else {
-                    // Movies and TV Shows
                     let yearText = '';
                     if (item.year) {
-                        if (item.end_year && item.end_year !== item.year) {
-                            yearText = `${item.year}-${item.end_year}`;
-                        } else {
-                            yearText = item.year.toString();
-                        }
-                    }
-
-                    let ratingHtml = '';
-                    if (item.avg_rating) {
-                        ratingHtml = `<div class="result-rating">
-                            <span class="rating-star">★</span>
-                            <span class="rating-text">${item.avg_rating}/10</span>
-                            <span class="rating-count">(${item.rating_count})</span>
-                        </div>`;
-                        
-                        if (item.user_rating) {
-                            ratingHtml = `<div class="result-rating">
-                                <span class="rating-star">★</span>
-                                <span class="rating-text">${item.avg_rating}/10</span>
-                                <span class="rating-count">(${item.rating_count})</span>
-                                <span class="user-rating">• You: ${item.user_rating}/10</span>
-                            </div>`;
-                        }
-                    } else if (item.user_rating) {
-                        ratingHtml = `<div class="result-rating">
-                            <span class="rating-star">★</span>
-                            <span class="rating-text">${item.user_rating}/10</span>
-                            <span class="user-rating">(You)</span>
-                        </div>`;
+                        yearText = (item.end_year && item.end_year !== item.year) ? 
+                            `${item.year}-${item.end_year}` : item.year.toString();
                     }
 
                     resultItem.innerHTML = `
-                        ${item.in_watchlist ? '<div class="watchlist-indicator">In your watchlist</div>' : ''}
                         ${item.poster ? 
                             `<img src="${item.poster}" alt="${item.title}" class="result-poster">` : 
                             '<div class="result-poster-placeholder">No Poster</div>'
@@ -722,14 +377,10 @@
                         <div class="result-content">
                             <div class="result-title">${item.title}</div>
                             <div class="result-meta">
-                                <span class="result-year">${yearText}</span>
-                                ${ratingHtml}
+                                <span>${yearText}</span>
+                                ${item.avg_rating ? `<span>★ ${item.avg_rating}</span>` : ''}
+                                ${item.in_watchlist ? '<span style="color: #008000; font-weight: bold;">(In Watchlist)</span>' : ''}
                             </div>
-                            ${item.watchlist_users && item.watchlist_users.length > 0 ? 
-                                `<div class="watchlist-users">
-                                    <span class="watchlist-users-label">Watchlisted by:</span> ${item.watchlist_users.slice(0, 3).join(', ')}${item.watchlist_users.length > 3 ? ` +${item.watchlist_users.length - 3} more` : ''}
-                                </div>` : ''
-                            }
                         </div>
                     `;
                 }
@@ -737,57 +388,52 @@
                 resultsGrid.appendChild(resultItem);
             });
             
-            // Add the add content buttons as results at the end
             addAddContentResults();
         }
 
         function addAddContentResults() {
-            // Only show add buttons for movies and tvshows
             if (currentEndpoint === 'movies' || currentEndpoint === 'tvshows') {
                 const addResultItem = document.createElement('div');
-                addResultItem.className = 'result-item add-content-result';
+                addResultItem.className = 'result-item';
+                addResultItem.style.borderTop = '1px dotted var(--win98-dark)';
+                addResultItem.style.marginTop = '4px';
                 
                 const buttonText = currentEndpoint === 'movies' ? 'Add Movie' : 'Add TV Show';
                 const currentQuery = searchInput.value.trim();
                 
                 addResultItem.innerHTML = `
-                    <div class="result-poster-placeholder add-icon-placeholder">
-                        <span class="add-icon-large">+</span>
+                    <div class="result-poster-placeholder" style="background: var(--win98-gray); color: var(--win98-text); border: 1px solid var(--win98-text);">
+                        <span style="font-size: 16px; font-weight: bold;">+</span>
                     </div>
                     <div class="result-content">
                         <div class="result-title">${buttonText}</div>
                         <div class="result-meta">
-                            <span class="add-content-description">Can't find what you're looking for? Add it to our database!</span>
+                            <span>Not found? Add it to the database!</span>
                         </div>
                     </div>
                 `;
                 
                 addResultItem.onclick = () => {
                     if (currentEndpoint === 'movies') {
-                        if (typeof openModal === 'function') {
-                            openModal(currentQuery);
-                        } else {
-                            window.location.href = "{% url 'home_page' %}";
-                        }
+                        if (typeof openModal === 'function') openModal(currentQuery);
+                        else window.location.href = "{% url 'home_page' %}";
                     } else if (currentEndpoint === 'tvshows') {
-                        if (typeof openTVShowModal === 'function') {
-                            openTVShowModal(currentQuery);
-                        } else {
-                            window.location.href = "{% url 'home_page' %}";
-                        }
+                        if (typeof openTVShowModal === 'function') openTVShowModal(currentQuery);
+                        else window.location.href = "{% url 'home_page' %}";
                     }
                 };
                 
                 resultsGrid.appendChild(addResultItem);
             }
-        }        searchInput.addEventListener('focus', function() {
+        }
+
+        searchInput.addEventListener('focus', function() {
             searchTabs.style.display = 'flex';
-            cancelButton.style.display = 'block';
-            
-            if (searchInput.value.trim()) {
-                performSearch(searchInput.value, currentEndpoint);
-            }
-        });        document.querySelectorAll('.search-tab').forEach(tab => {
+            cancelButton.style.display = 'flex';
+            if (searchInput.value.trim()) performSearch(searchInput.value, currentEndpoint);
+        });
+
+        document.querySelectorAll('.search-tab').forEach(tab => {
             tab.addEventListener('click', function() {
                 document.querySelectorAll('.search-tab').forEach(t => {
                     t.classList.remove('active');
@@ -799,18 +445,13 @@
                 currentEndpoint = endpoint;
                 searchInput.placeholder = placeholders[endpoint];
                 
-                if (searchInput.value.trim()) {
-                    performSearch(searchInput.value, currentEndpoint);
-                }
+                if (searchInput.value.trim()) performSearch(searchInput.value, currentEndpoint);
             });
         });
 
         searchInput.addEventListener('input', function() {
             const query = searchInput.value;
-            
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-            }
+            if (searchTimeout) clearTimeout(searchTimeout);
             
             if (!query.trim()) {
                 clearSearch();
@@ -818,7 +459,7 @@
             }
             
             searchTabs.style.display = 'flex';
-            cancelButton.style.display = 'block';
+            cancelButton.style.display = 'flex';
             
             if (query.trim().length >= 2) {
                 searchTimeout = setTimeout(() => {
@@ -830,32 +471,12 @@
         searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                if (searchTimeout) {
-                    clearTimeout(searchTimeout);
-                }
+                if (searchTimeout) clearTimeout(searchTimeout);
                 performSearch(searchInput.value, currentEndpoint);
-            }
-        });        addMovieButton.addEventListener('click', function() {
-            const currentQuery = searchInput.value.trim();
-            if (typeof openModal === 'function') {
-                openModal(currentQuery);
-            } else {
-                window.location.href = "{% url 'home_page' %}";
-            }
-        });
-
-        addTvShowButton.addEventListener('click', function() {
-            const currentQuery = searchInput.value.trim();
-            if (typeof openTVShowModal === 'function') {
-                openTVShowModal(currentQuery);
-            } else {
-                window.location.href = "{% url 'home_page' %}";
             }
         });
 
         window.clearSearch = clearSearch;
         window.performSearch = performSearch;
-        window.getCurrentEndpoint = function() { return currentEndpoint; };
-        window.getCurrentQuery = function() { return searchInput.value; };
     });
 </script>

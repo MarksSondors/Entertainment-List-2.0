@@ -34,12 +34,34 @@
         :root {
             --bg-color: #c0c0c0; /* Fallback color for light theme */
             --bg-image: url("{% static 'images/background-light.webp' %}");
+            
+            /* Win98 Theme Variables */
+            --win98-gray: #c0c0c0;
+            --win98-light: #ffffff;
+            --win98-dark: #808080;
+            --win98-black: #000000;
+            --win98-text: #000000;
+            --win98-active-bg: #e0e0e0;
+            --win98-active-pattern: #c0c0c0;
+            --win98-input-bg: #ffffff;
+            --win98-input-text: #000000;
         }
 
         @media (prefers-color-scheme: dark) {
             :root {
                 --bg-color: #2d2d30; /* Fallback color for dark theme */
                 --bg-image: url("{% static 'images/background-dark.jpg' %}");
+                
+                /* Dark Win98 Theme Variables */
+                --win98-gray: #303030;
+                --win98-light: #606060;
+                --win98-dark: #151515;
+                --win98-black: #000000;
+                --win98-text: #e0e0e0;
+                --win98-active-bg: #404040;
+                --win98-active-pattern: #303030;
+                --win98-input-bg: #383838;
+                --win98-input-text: #ffffff;
             }
         }
 
