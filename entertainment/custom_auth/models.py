@@ -317,3 +317,11 @@ def save_user_settings(sender, instance, **kwargs):
     else:
         # If for some reason the settings don't exist, create them
         UserSettings.objects.create(user=instance)
+
+# Signal to send notification when a review is created
+@receiver(post_save, sender=Review)
+def send_review_notification(sender, instance, created, **kwargs):
+    """Send notification when a new review is created"""
+    if created:
+        from django_q.tasks import async_task
+        async_task('custom_auth.tasks.process_review_notification', instance.id)
