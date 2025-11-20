@@ -9,30 +9,43 @@
         gap: 8px;
         padding: 4px;
         scrollbar-width: thin;
+        scroll-snap-type: x mandatory;
+        /* Win98 Scrollbar colors for Firefox */
+        scrollbar-color: #c0c0c0 #dfdfdf;
     }
     
     .scrollable-row::-webkit-scrollbar {
-        height: 8px;
+        height: 16px; /* Classic scrollbar height */
+        background: #c0c0c0;
     }
     
     .scrollable-row::-webkit-scrollbar-thumb {
-        background: var(--border-dark);
-        border-radius: 4px;
+        background: #c0c0c0;
+        /* 3D Button effect for scrollbar thumb */
+        box-shadow: inset 1px 1px #dfdfdf, inset -1px -1px #000000;
+        border: 1px solid #808080;
+        border-left-color: #ffffff;
+        border-top-color: #ffffff;
     }
     
     .scrollable-row::-webkit-scrollbar-track {
-        background: var(--bg-color);
+        background: #dfdfdf; /* Checkerboard pattern ideally, but gray works */
     }
     
     .scrollable-row .poster-item {
         flex: 0 0 auto;
         width: 200px;
         margin-bottom: 8px;
+        scroll-snap-align: start;
     }
     
     .poster-card {
-        border: 1px solid var(--poster-border);
+        /* Win98 "Raised" Window/Button look */
         background-color: var(--window-bg);
+        box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+        border: none;
+        padding: 2px; /* Inner spacing for the frame */
+        
         height: 100%;
         display: flex;
         flex-direction: column;
@@ -41,6 +54,12 @@
         overflow: hidden;
         border-radius: 0;
         font-family: 'MS Sans Serif', sans-serif;
+    }
+    
+    .poster-card:active {
+        /* "Pressed" look when clicking */
+        box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+        padding: 3px 1px 1px 3px; /* Shift content */
     }
     
     .poster-card img {
@@ -82,13 +101,29 @@
     }
 
     @media (max-width: 768px) {
+        /* Hide scrollbar on mobile */
+        .scrollable-row {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        .scrollable-row::-webkit-scrollbar {
+            display: none;
+        }
+
         .poster-card img {
             width: 100%;
             height: auto;
         }
         
         .scrollable-row .poster-item {
-            width: 160px;
+            width: 150px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .scrollable-row .poster-item {
+            width: 130px;
         }
     }
 </style>

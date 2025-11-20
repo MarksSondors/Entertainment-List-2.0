@@ -30,16 +30,41 @@
     
     .show-all-link:hover {
         text-decoration: underline;
-    }    /* Genre-specific scrollable row adjustments */
+    }
+
+    /* Genre-specific scrollable row adjustments */
+    .genre-scrollable {
+        /* Enable snap scrolling */
+        scroll-snap-type: x mandatory;
+        padding-bottom: 0;
+    }
+
     .genre-scrollable .genre-item {
         flex: 0 0 auto;
         width: 200px;
         margin-bottom: 8px;
+        scroll-snap-align: start;
+    }
+
+    /* Hide scrollbar only on mobile/touch devices where swipe is natural */
+    @media (max-width: 768px) {
+        .genre-scrollable {
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none;  /* IE and Edge */
+        }
+        
+        .genre-scrollable::-webkit-scrollbar {
+            display: none;
+        }
     }
 
     .genre-card {
-        border: 1px solid var(--poster-border);
+        /* Win98 "Raised" look */
         background-color: var(--window-bg);
+        box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+        border: none;
+        padding: 2px;
+        
         height: 280px;
         display: flex;
         flex-direction: column;
@@ -49,12 +74,20 @@
         border-radius: 0;
         font-family: 'MS Sans Serif', sans-serif;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: none; /* Win98 didn't have smooth transitions */
     }
 
     .genre-card:hover {
-        border: 2px solid var(--button-hover);
-        margin: -1px;
+        /* No border change, maybe just cursor or slight brightness? 
+           Actually, let's keep it simple or maybe invert on click.
+           For now, removing the modern border hover. */
+        margin: 0;
+    }
+    
+    .genre-card:active {
+        /* "Pressed" look */
+        box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+        padding: 3px 1px 1px 3px;
     }
 
     .genre-card-bg {
@@ -118,16 +151,41 @@
         }
     }    /* Mobile responsive */
     @media (max-width: 768px) {
+        .window-body {
+            padding: 4px !important;
+        }
+
+        .genre-scrollable {
+            gap: 8px;
+        }
+
         .genre-scrollable .genre-item {
-            width: 160px;
+            width: 150px;
+            margin-bottom: 0;
         }
         
         .genre-card {
-            height: 240px;
+            height: 220px;
+            margin-bottom: 0;
         }
         
         .genre-card-title {
-            font-size: 16px;
+            font-size: 15px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .genre-scrollable .genre-item {
+            width: 130px;
+        }
+        
+        .genre-card {
+            height: 190px;
+        }
+        
+        .genre-card-title {
+            font-size: 14px;
+            padding: 8px;
         }
     }
 </style>
