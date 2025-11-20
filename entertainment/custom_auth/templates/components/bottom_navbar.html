@@ -1,333 +1,152 @@
 <!-- filepath: entertainment/custom_auth/templates/components/bottom_navbar.html -->
 {% load static %}
 
-<nav class="bottom-navbar" style="
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background-color: #c0c0c0;
-    border-top: 2px outset #ffffff;
-    padding: 8px 0;
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    z-index: 1000;
-    box-shadow: 0 -2px 4px rgba(0,0,0,0.2);
-">
+<nav class="win98-navbar">
     <!-- Watchlist Button -->
-    <a href="{% url 'watchlist_page' %}" class="navbar-item {% if request.resolver_match.url_name == 'watchlist_page' %}active{% endif %}" 
-       style="
-           flex: 1;
-           display: flex;
-           flex-direction: column;
-           align-items: center;
-           justify-content: center;
-           text-decoration: none;
-           color: {% if request.resolver_match.url_name == 'watchlist_page' %}#008080{% else %}#000000{% endif %};
-           padding: 4px 8px;
-           position: relative;
-       ">
-        <div class="icon" style="
-            font-size: 24px;
-            margin-bottom: 2px;
-            {% if request.resolver_match.url_name == 'watchlist_page' %}
-            color: #008080;
-            font-weight: bold;
-            {% endif %}
-        ">📋</div>
-        <span style="
-            font-size: 12px;
-            {% if request.resolver_match.url_name == 'watchlist_page' %}
-            font-weight: bold;
-            {% endif %}
-        ">Watchlist</span>
-        {% if request.resolver_match.url_name == 'watchlist_page' %}
-        <div style="
-            position: absolute;
-            bottom: -8px;
-            height: 4px;
-            width: 50%;
-            background-color: #008080;
-            border-radius: 2px;
-        "></div>
-        {% endif %}
+    <a href="{% url 'watchlist_page' %}" class="win98-btn {% if request.resolver_match.url_name == 'watchlist_page' %}active{% endif %}">
+        <img src="{% static 'images/win98/msagent-0.png' %}" alt="📋" class="win98-icon">
+        <span class="label">Watchlist</span>
     </a>
 
     <!-- Discover Button -->
-    <a href="{% url 'discover_page' %}" class="navbar-item {% if request.resolver_match.url_name == 'discover_page' %}active{% endif %}"
-       style="
-           flex: 1;
-           display: flex;
-           flex-direction: column;
-           align-items: center;
-           justify-content: center;
-           text-decoration: none;
-           color: {% if request.resolver_match.url_name == 'discover_page' %}#008080{% else %}#000000{% endif %};
-           padding: 4px 8px;
-           position: relative;
-       ">
-        <div class="icon" style="
-            font-size: 24px;
-            margin-bottom: 2px;
-            {% if request.resolver_match.url_name == 'discover_page' %}
-            color: #008080;
-            font-weight: bold;
-            {% endif %}
-        ">🔍</div>
-        <span style="
-            font-size: 12px;
-            {% if request.resolver_match.url_name == 'discover_page' %}
-            font-weight: bold;
-            {% endif %}
-        ">Discover</span>
-        {% if request.resolver_match.url_name == 'discover_page' %}
-        <div style="
-            position: absolute;
-            bottom: -8px;
-            height: 4px;
-            width: 50%;
-            background-color: #008080;
-            border-radius: 2px;
-        "></div>
-        {% endif %}
+    <a href="{% url 'discover_page' %}" class="win98-btn {% if request.resolver_match.url_name == 'discover_page' %}active{% endif %}">
+        <img src="{% static 'images/win98/search_web-0.png' %}" alt="🔍" class="win98-icon">
+        <span class="label">Discover</span>
     </a>
 
-    <!-- Profile Button - Modified to be a direct link -->
-    <a href="{% url 'profile_page' %}" class="navbar-item {% if request.resolver_match.url_name == 'profile_page' %}active{% endif %}"
-       style="
-           flex: 1;
-           display: flex;
-           flex-direction: column;
-           align-items: center;
-           justify-content: center;
-           text-decoration: none;
-           color: {% if request.resolver_match.url_name == 'profile_page' %}#008080{% else %}#000000{% endif %};
-           padding: 4px 8px;
-           position: relative;
-       ">
-        <div class="icon" style="
-            font-size: 24px;
-            margin-bottom: 2px;
-            {% if request.resolver_match.url_name == 'profile_page' %}
-            color: #008080;
-            font-weight: bold;
-            {% endif %}
-        ">👤</div>
-        <span style="
-            font-size: 12px;
-            {% if request.resolver_match.url_name == 'profile_page' %}
-            font-weight: bold;
-            {% endif %}
-        ">Profile</span>
-        {% if request.resolver_match.url_name == 'profile_page' %}
-        <div style="
-            position: absolute;
-            bottom: -8px;
-            height: 4px;
-            width: 50%;
-            background-color: #008080;
-            border-radius: 2px;
-        "></div>
-        {% endif %}
+    <!-- Profile Button -->
+    <a href="{% url 'profile_page' %}" class="win98-btn {% if request.resolver_match.url_name == 'profile_page' %}active{% endif %}">
+        <img src="{% static 'images/win98/user_computer-0.png' %}" alt="👤" class="win98-icon">
+        <span class="label">Profile</span>
     </a>
 </nav>
 
-<!-- Add CSS for dark mode compatibility -->
 <style>
-    /* Bottom navbar base styles with better mobile support */
-    .bottom-navbar {
-        height: 60px !important;
-        min-height: 60px !important;
-        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
-        z-index: 99999 !important;
-        transform: translate3d(0, 0, 0) !important;
-        -webkit-transform: translate3d(0, 0, 0) !important;
-        will-change: transform !important;
+    :root {
+        /* Default (Light) Theme - Classic Win98 */
+        --win98-gray: #c0c0c0;
+        --win98-light: #ffffff;
+        --win98-dark: #808080;
+        --win98-black: #000000;
+        --win98-text: #000000;
+        --win98-active-bg: #e0e0e0;
+        --win98-active-pattern: #c0c0c0;
     }
-    
+
     @media (prefers-color-scheme: dark) {
-        .bottom-navbar {
-            background-color: #2d2d30 !important;
-            border-top-color: #555 !important;
-        }
-        
-        .navbar-item:not(.active) {
-            color: #e0e0e0 !important;
-        }
-    }
-    
-    /* iPhone 14 Pro Max and similar large screens */
-    @media screen and (min-width: 428px) and (max-width: 932px) and (-webkit-device-pixel-ratio: 3) {
-        .bottom-navbar {
-            height: 70px !important;
-            min-height: 70px !important;
-            padding: 10px 0 !important;
-            padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
-            position: fixed !important;
-            bottom: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            z-index: 999999 !important;
-        }
-        
-        body {
-            padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
-        }
-        
-        .navbar-item .icon {
-            font-size: 22px !important;
-        }
-        
-        .navbar-item span {
-            font-size: 12px !important;
+        :root {
+            /* Dark Theme - "Dark98" */
+            --win98-gray: #303030;
+            --win98-light: #606060;
+            --win98-dark: #151515;
+            --win98-black: #000000; /* Keep black for deep shadows */
+            --win98-text: #e0e0e0;
+            --win98-active-bg: #404040;
+            --win98-active-pattern: #303030;
         }
     }
-    
-    /* Enhanced mobile optimizations */
-    @media (max-width: 768px) {
-        .bottom-navbar {
-            padding: 8px 0 !important;
-            height: 60px !important;
-            min-height: 60px !important;
-            position: fixed !important;
-            bottom: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            z-index: 99999 !important;
-            transform: translateZ(0) !important;
-            -webkit-backface-visibility: hidden !important;
-            backface-visibility: hidden !important;
-        }
-        
-        .navbar-item .icon {
-            font-size: 18px !important;
-        }
-        
-        .navbar-item span {
-            font-size: 10px !important;
-        }
-        
-        .navbar-item {
-            padding: 2px 4px !important;
-        }
-    }
-    
-    /* Extra large mobile screens (iPhone 14 Pro Max, etc.) */
-    @media (max-width: 932px) and (min-width: 768px) {
-        .bottom-navbar {
-            height: 65px !important;
-            min-height: 65px !important;
-            padding: 8px 0 !important;
-            padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
-        }
-        
-        body {
-            padding-bottom: calc(75px + env(safe-area-inset-bottom, 0px)) !important;
-        }
-    }
-    
-    /* Extra small screens */
-    @media (max-width: 480px) {
-        .bottom-navbar {
-            height: 55px !important;
-            min-height: 55px !important;
-            padding: 6px 0 !important;
-        }
-        
-        .navbar-item .icon {
-            font-size: 16px !important;
-            margin-bottom: 1px !important;
-        }
-        
-        .navbar-item span {
-            font-size: 9px !important;
-        }
-    }
-    
-    /* Very small screens */
-    @media (max-width: 360px) {
-        .navbar-item span {
-            font-size: 8px !important;
-        }
-        
-        .navbar-item .icon {
-            font-size: 14px !important;
-        }
-    }
-    
-    /* Ensure main content doesn't get hidden behind navbar */
-    body {
-        padding-bottom: 70px !important;
-        margin-bottom: 0 !important;
-    }
-    
-    @media (max-width: 768px) {
-        body {
-            padding-bottom: 70px !important;
-        }
-    }
-    
-    @media (max-width: 480px) {
-        body {
-            padding-bottom: 65px !important;
-        }
-    }
-    
-    /* iOS Safari specific fixes - Enhanced for newer iPhones */
-    @supports (-webkit-touch-callout: none) {
-        .bottom-navbar {
-            padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
-            position: fixed !important;
-            bottom: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            z-index: 999999 !important;
-        }
-        
-        body {
-            padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
-        }
-        
-        /* Specific fix for iPhone 14 Pro Max */
-        @media screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) {
-            .bottom-navbar {
-                height: 75px !important;
-                min-height: 75px !important;
-                padding: 12px 0 !important;
-                padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 12px) !important;
-            }
-            
-            body {
-                padding-bottom: calc(85px + env(safe-area-inset-bottom, 20px)) !important;
-            }
-        }
-    }
-    
-    /* Force visibility on all devices with additional specificity */
-    html .bottom-navbar {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        position: fixed !important;
-        bottom: 0 !important;
-        width: 100vw !important;
-    }
-    
-    /* Debugging helper - remove after testing */
-    .bottom-navbar::before {
-        content: '';
-        position: absolute;
-        top: -1px;
+
+    .win98-navbar {
+        position: fixed;
+        bottom: 0;
         left: 0;
         right: 0;
-        height: 1px;
-        background: red;
-        z-index: 1;
+        background-color: var(--win98-gray);
+        border-top: 2px solid var(--win98-light);
+        box-shadow: 0 -1px 0 var(--win98-dark); /* Simple bevel */
+        display: flex;
+        justify-content: space-between;
+        padding: 4px;
+        padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+        z-index: 9999;
+        height: auto;
+    }
+
+    .win98-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none !important;
+        color: var(--win98-text) !important;
+        background-color: var(--win98-gray);
+        margin: 0 2px;
+        padding: 6px 4px;
+        min-height: 48px;
+        cursor: pointer;
+        
+        /* Win98 Button Style (Outset) */
+        border-top: 1px solid var(--win98-light);
+        border-left: 1px solid var(--win98-light);
+        border-right: 1px solid var(--win98-black);
+        border-bottom: 1px solid var(--win98-black);
+        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+        
+        transition: none; /* Retro feel - no smooth transitions */
+    }
+
+    .win98-btn:active, .win98-btn.active {
+        /* Win98 Pressed Style (Inset) */
+        border-top: 1px solid var(--win98-black);
+        border-left: 1px solid var(--win98-black);
+        border-right: 1px solid var(--win98-light);
+        border-bottom: 1px solid var(--win98-light);
+        box-shadow: inset 1px 1px 0 var(--win98-dark);
+        
+        /* Dithered pattern for active state (optional, but very Win98) */
+        background-image: linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern)), 
+                          linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern));
+        background-position: 0 0, 1px 1px;
+        background-size: 2px 2px;
+        background-color: var(--win98-active-bg); /* Slightly lighter base for the pattern */
+
+        /* Shift content to simulate press */
+        padding-top: 7px; 
+        padding-bottom: 5px;
+        padding-left: 5px;
+        padding-right: 3px;
+    }
+
+    .win98-icon {
+        width: 24px;
+        height: 24px;
+        margin-bottom: 4px;
+        image-rendering: pixelated; /* Essential for retro look */
+        pointer-events: none;
+    }
+
+    .win98-btn .label {
+        font-size: 11px;
+        font-family: 'MS Sans Serif', 'Segoe UI', sans-serif;
+        font-weight: bold;
+        line-height: 1.2;
+    }
+
+    /* Ensure body has enough padding so navbar doesn't cover content */
+    body {
+        padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 480px) {
+        .win98-btn {
+            min-height: 44px;
+            padding: 4px;
+        }
+        .win98-btn:active, .win98-btn.active {
+            padding-top: 5px;
+            padding-bottom: 3px;
+            padding-left: 5px;
+            padding-right: 3px;
+        }
+        .win98-icon {
+            width: 22px;
+            height: 22px;
+        }
+        .win98-btn .label {
+            font-size: 10px;
+        }
     }
 </style>
+
