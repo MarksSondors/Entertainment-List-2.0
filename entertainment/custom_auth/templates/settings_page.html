@@ -264,6 +264,10 @@
             --shadow-color: rgba(0,0,0,0.5);
             --profile-bg: #2a2a2a;
         }
+
+        .title-bar {
+            background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+        }
     }
 
     /* Layout styles */
@@ -277,113 +281,102 @@
         max-width: 1000px;
     }
 
-    /* Window styling with theme support */
+    /* Window styling removed to use default 98.css styles */
     .window {
         background-color: var(--window-bg);
-        border: 2px outset var(--border-light);
-        box-shadow: 2px 2px 4px var(--shadow-color);
-    }    .title-bar {
-        background: linear-gradient(90deg, var(--progress-bar), #006666);
-        color: white;
-        padding: 4px 8px;
-        font-weight: bold;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 11px;
-        font-family: 'MS Sans Serif', Tahoma, sans-serif;
     }
 
-    .title-bar-controls {
-        display: flex;
-        gap: 2px;
-    }
-
-    .title-bar-controls button {
-        width: 16px;
-        height: 14px;
-        border: 1px outset var(--border-light);
-        background-color: var(--button-bg);
-        font-size: 6px;
-        line-height: 1;
-        padding: 0;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .title-bar-controls button:hover {
-        background-color: var(--button-hover);
-    }
-
-    .title-bar-controls button:active {
-        border: 1px inset var(--border-light);
-        background-color: var(--bg-color);
-    }
-
-    .title-bar-controls button:nth-child(1)::before { content: "_"; }
-    .title-bar-controls button:nth-child(2)::before { content: "□"; }
-    .title-bar-controls button:nth-child(3)::before { content: "✕"; }    .window-body {
-        background-color: var(--window-bg);
-        color: var(--text-color);
-        padding: 8px;
+    .window-body {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        padding: 12px;
         font-family: 'MS Sans Serif', Tahoma, sans-serif;
         font-size: 11px;
     }
 
     .sunken-panel {
-        border: 1px inset var(--border-light);
-        background-color: var(--bg-color);
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        background-color: var(--win98-input-bg);
         padding: 8px;
         margin: 4px 0;
     }    .status-bar {
         display: flex;
         justify-content: space-between;
         flex-wrap: wrap;
-        border: 2px inset var(--border-light);
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        border-top: none;
         padding: 2px 4px;
-        background-color: var(--bg-color);
-        color: var(--text-color);
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
         font-family: 'MS Sans Serif', Tahoma, sans-serif;
         font-size: 11px;
+        margin-top: 2px;
     }
     
     .status-bar-field {
         font-size: 11px;
         margin-right: 10px;
-    }.btn {
-        background-color: var(--button-bg);
-        border: 2px outset var(--border-light);
-        color: var(--button-text);
-        padding: 4px 12px;
-        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        border: 1px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        padding: 0 4px;
+        flex: 1;
+    }
+
+    .btn {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        font-family: 'MS Sans Serif', sans-serif;
         font-size: 11px;
-        font-weight: normal;
         cursor: pointer;
-        min-width: 75px;
         text-align: center;
-        box-sizing: border-box;
-        white-space: nowrap;
+        min-width: 75px;
+        padding: 4px 12px;
+        
+        /* Authentic Win98 Button Style */
+        border-top: 1px solid var(--win98-light);
+        border-left: 1px solid var(--win98-light);
+        border-right: 1px solid var(--win98-black);
+        border-bottom: 1px solid var(--win98-black);
+        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+        transition: none;
     }
 
     .btn:hover {
-        background-color: var(--button-hover);
+        background-color: var(--win98-gray);
     }
 
     .btn:active {
-        border: 2px inset var(--border-light);
-        background-color: var(--bg-color);
+        /* Win98 Pressed Style (Inset) */
+        border-top: 1px solid var(--win98-black);
+        border-left: 1px solid var(--win98-black);
+        border-right: 1px solid var(--win98-light);
+        border-bottom: 1px solid var(--win98-light);
+        box-shadow: inset 1px 1px 0 var(--win98-dark);
+        
+        /* Dithered pattern for active state */
+        background-image: linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern)), 
+                          linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern));
+        background-position: 0 0, 1px 1px;
+        background-size: 4px 4px;
+        
+        /* Shift text */
+        padding-top: 5px;
+        padding-left: 13px;
+        padding-bottom: 3px;
+        padding-right: 11px;
     }
 
     .btn:focus {
-        outline: 1px dotted var(--text-color);
-        outline-offset: -3px;
+        outline: 1px dotted var(--win98-text);
+        outline-offset: -4px;
     }    /* Form styling */
     input[type="text"], input[type="time"], input[type="checkbox"] {
-        background-color: var(--window-bg);
-        color: var(--text-color);
-        border: 1px inset var(--border-light);
+        background-color: var(--win98-input-bg);
+        color: var(--win98-input-text);
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
         font-family: 'MS Sans Serif', Tahoma, sans-serif;
         font-size: 11px;
     }
@@ -394,7 +387,7 @@
     }
 
     input[type="text"]:read-only {
-        background-color: var(--bg-color);
+        background-color: var(--win98-gray);
         color: var(--text-muted);
     }
 
@@ -403,6 +396,22 @@
         height: 13px;
         margin-right: 6px;
         vertical-align: middle;
+        appearance: none;
+        -webkit-appearance: none;
+        background-color: var(--win98-input-bg);
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        position: relative;
+    }
+
+    input[type="checkbox"]:checked::after {
+        content: '✓';
+        position: absolute;
+        top: -3px;
+        left: 1px;
+        font-size: 12px;
+        font-weight: bold;
+        color: var(--win98-text);
     }
 
     label {
@@ -452,10 +461,7 @@
             padding: 10px !important;
         }
         
-        .title-bar {
-            padding: 12px 8px;
-            font-size: 14px;
-        }
+
         
         /* Prevent buttons from stretching full width on mobile */
         .btn {
