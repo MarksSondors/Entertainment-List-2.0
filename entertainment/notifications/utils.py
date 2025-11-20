@@ -9,6 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 import json
 import logging
+import uuid
 
 from .models import PushSubscription, NotificationLog, NotificationPreference, QueuedNotification
 
@@ -42,7 +43,7 @@ def send_push_notification(subscription_id, title, body, **kwargs):
         'icon': kwargs.get('icon', '/static/favicon/web-app-manifest-192x192.png'),
         'badge': kwargs.get('badge', '/static/favicon/favicon-96x96.png'),
         'vibrate': kwargs.get('vibrate', [200, 100, 200]),
-        'tag': kwargs.get('tag', 'default'),
+        'tag': kwargs.get('tag', str(uuid.uuid4())),
         'url': kwargs.get('url', '/'),
         'requireInteraction': kwargs.get('require_interaction', False),
     }
