@@ -12,102 +12,114 @@
         </div>
 
         <!-- Modal Body -->
-        <div class="modal-body">
+        <div class="window-body" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column;">
             <!-- Stage 1: Search and Select -->
-            <div id="tv-show-modal-stage-1">
+            <div id="tv-show-modal-stage-1" style="display: flex; flex-direction: column; height: 100%;">
                 <!-- Search Input -->
-                <div id="tv-show-tmdb-search-form" style="display: flex; align-items: center; margin-bottom: 10px;">
+                <div class="field-row" style="margin-bottom: 10px;">
                     <label for="tv-show-query">Search:</label>
-                    <input type="text" id="tv-show-query" name="tv-show-query" style="margin: 0 10px; flex-grow: 1;" placeholder="Enter TV show title">
+                    <input type="text" id="tv-show-query" name="tv-show-query" style="flex-grow: 1;" placeholder="Enter TV show title">
                     <button id="tv-show-search-button">Search</button>
                 </div>
+                
                 <!-- Results Section -->
-                <div style="margin-top: 15px;">
-                    <fieldset>
-                        <legend>Search Results</legend>
-                        <div style="overflow-y: auto; max-height: 300px; border: 2px inset; background-color: white; padding: 5px; margin-bottom: 10px;">
-                            <ul id="tv-show-results-list" class="tree-view" style="height: 100%; width: 100%;"></ul>
-                        </div>
-                        <div>
-                            <p><strong>Total Results:</strong> <span id="tv-show-total-results">0</span></p>
-                            <div id="tv-show-loading-more" style="text-align: center; padding: 10px; display: none;">
-                                <p>Loading more results...</p>
-                            </div>
-                        </div>
-                    </fieldset>
+                <div class="sunken-panel" style="flex: 1; overflow-y: auto; background-color: var(--input-bg); margin-bottom: 10px; padding: 0;">
+                    <ul id="tv-show-results-list" class="tree-view" style="height: 100%; width: 100%; border: none; margin: 0;"></ul>
                 </div>
-                <!-- Navigation Buttons -->
-                <div style="text-align: right; margin-top: 15px;">
-                    <div id="tv-show-selection-hint" style="text-align: left; margin-bottom: 10px; color: #666; font-style: italic; display: none;">
-                        👆 Click on a TV show above to select it, then click "Next: Edit Details"
+                
+                <div id="tv-show-loading-more" style="text-align: center; padding: 5px; display: none;">
+                    <p style="margin: 0;">Loading more results...</p>
+                </div>
+                
+                <!-- Status Bar & Navigation -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
+                    <div class="status-bar-field" style="flex: 1; margin-right: 10px;">
+                        Total Results: <span id="tv-show-total-results">0</span>
                     </div>
-                    <button id="tv-show-to-stage-2-btn" disabled>Next: Edit Details</button>
+                    
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div id="tv-show-selection-hint" style="color: var(--text-muted); font-style: italic; display: none; font-size: 11px;">
+                            Select a TV show to continue
+                        </div>
+                        <button id="tv-show-to-stage-2-btn" disabled style="min-width: 80px;">Next &gt;</button>
+                    </div>
                 </div>
             </div>
 
             <!-- Stage 2: Edit TV Show Details -->
-            <div id="tv-show-modal-stage-2" style="display: none;">
-                <form method="post" id="add-tv-show-form" enctype="multipart/form-data">
+            <div id="tv-show-modal-stage-2" style="display: none; flex-direction: column; height: 100%;">
+                <form method="post" id="add-tv-show-form" enctype="multipart/form-data" style="display: flex; flex-direction: column; height: 100%;">
                     {% csrf_token %}
                     <input type="hidden" id="tv-show-tmdb_id" name="tmdb_id">
                     
-                    <!-- TV Show Preview -->
-                    <div style="display: flex; margin-bottom: 15px; gap: 15px;">
-                        <div style="flex: 1; text-align: center;">
-                            <h4>Poster</h4>
-                            <img id="tv-show-poster-preview" src="" alt="TV show poster" style="max-width: 100%; height: 200px; cursor: pointer;" onclick="openTVShowPosterSelectionModal()">
-                            <div style="margin-top: 5px;">
-                                <button type="button" onclick="openTVShowPosterSelectionModal()">Browse TMDB Posters</button>
+                    <!-- Tabs -->
+                    <menu role="tablist" style="margin-bottom: 0;">
+                        <li role="tab" aria-selected="true" id="tv-show-tab-general"><a href="#general">General</a></li>
+                        <li role="tab" aria-selected="false" id="tv-show-tab-images"><a href="#images">Images</a></li>
+                    </menu>
+                    
+                    <div class="window" role="tabpanel" style="flex: 1; margin: 0; border-top: none; padding: 12px; overflow-y: auto;">
+                        <!-- General Tab Content -->
+                        <div id="tv-show-tab-content-general">
+                            <div class="field-row" style="margin-bottom: 10px;">
+                                <label style="width: 80px;">Title:</label>
+                                <input type="text" id="tv-show-title-display" readonly style="flex: 1;">
+                                <input type="hidden" id="tv-show-title-hidden" name="title">
                             </div>
-                            <input type="hidden" id="tv-show-default-poster-path" name="default_poster_path">
-                        </div>
-                        <div style="flex: 1; text-align: center;">
-                            <h4>Backdrop</h4>
-                            <img id="tv-show-backdrop-preview" src="" alt="TV show backdrop" style="max-width: 100%; height: 200px; cursor: pointer;" onclick="openTVShowBackdropSelectionModal()">
-                            <div style="margin-top: 5px;">
-                                <button type="button" onclick="openTVShowBackdropSelectionModal()">Browse TMDB Backdrops</button>
+                            
+                            <div class="field-row" style="margin-bottom: 10px;">
+                                <label style="width: 80px;">First Air Date:</label>
+                                <input type="text" id="tv-show-first_air_date-display" readonly style="width: 120px;">
+                                <input type="hidden" id="tv-show-first_air_date-hidden" name="first_air_date">
                             </div>
-                            <input type="hidden" id="tv-show-default-backdrop-path" name="default_backdrop_path">
+                            
+                            <div class="field-row-stacked" style="margin-bottom: 15px;">
+                                <label>Description:</label>
+                                <textarea id="tv-show-description-display" readonly style="height: 100px; width: 100%; resize: vertical; font-family: inherit;"></textarea>
+                                <input type="hidden" id="tv-show-description-hidden" name="description">
+                            </div>
+                            
+                            <fieldset style="margin-bottom: 10px;">
+                                <legend>Options</legend>
+                                <div class="field-row">
+                                    <input type="checkbox" id="tv-show-is_anime" name="tv-show-is_anime">
+                                    <label for="tv-show-is_anime">This is an anime series</label>
+                                </div>
+                                <div class="field-row">
+                                    <input type="checkbox" id="tv-show-add_to_watchlist" name="add_to_watchlist" checked>
+                                    <label for="tv-show-add_to_watchlist">Add to my watchlist</label>
+                                </div>
+                            </fieldset>
                         </div>
-                    </div>                      <!-- TV Show Details -->
-                    <div class="field-row" style="margin-bottom: 15px;">
-                        <label style="min-width: 80px;">Title:</label>
-                        <span id="tv-show-title" style="color: var(--text-color, #000); background-color: var(--input-bg, #fff); padding: 4px 8px; border: 1px inset; margin-left: 10px; flex: 1; display: inline-block;"></span>
-                        <input type="hidden" id="tv-show-title-hidden" name="title">
-                    </div>
-                    
-                    <div class="field-row" style="margin-bottom: 15px;">
-                        <label style="min-width: 80px;">First Air Date:</label>
-                        <span id="tv-show-first_air_date" style="color: var(--text-color, #000); background-color: var(--input-bg, #fff); padding: 4px 8px; border: 1px inset; margin-left: 10px; flex: 1; display: inline-block;"></span>
-                        <input type="hidden" id="tv-show-first_air_date-hidden" name="first_air_date">
-                    </div>
-                    
-                    <div class="field-row-stacked" style="margin-bottom: 15px;">
-                        <label>Description:</label>
-                        <div style="color: var(--text-color, #000); background-color: var(--input-bg, #fff); padding: 8px; border: 1px inset; margin-top: 5px; line-height: 1.4;">
-                            <div id="tv-show-description-short" style="display: block;"></div>
-                            <div id="tv-show-description-full" style="display: none;"></div>
-                            <button type="button" id="tv-show-read-more-btn" onclick="toggleTVShowDescription()" style="background: none; border: none; color: #0066cc; text-decoration: underline; cursor: pointer; padding: 0; margin-top: 5px; font-size: inherit; display: none;">Read more</button>
-                        </div>
-                        <input type="hidden" id="tv-show-description-hidden" name="description">
-                    </div>
-                    
-                    <!-- Additional Options -->
-                    <div style="margin-bottom: 15px;">
-                        <div class="field-row">
-                            <input type="checkbox" id="tv-show-is_anime" name="tv-show-is_anime">
-                            <label for="tv-show-is_anime">This is an anime series</label>
-                        </div>
-                        <div class="field-row">
-                            <input type="checkbox" id="tv-show-add_to_watchlist" name="add_to_watchlist" checked>
-                            <label for="tv-show-add_to_watchlist">Add to my watchlist</label>
+                        
+                        <!-- Images Tab Content -->
+                        <div id="tv-show-tab-content-images" style="display: none;">
+                            <div style="display: flex; gap: 20px; height: 100%;">
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                                    <h4 style="margin-top: 0;">Poster</h4>
+                                    <div class="sunken-panel" style="padding: 10px; background: var(--poster-bg); margin-bottom: 10px; display: flex; justify-content: center; align-items: center; width: 100%; height: 250px;">
+                                        <img id="tv-show-poster-preview" src="" alt="TV show poster" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: pointer;" onclick="openTVShowPosterSelectionModal()">
+                                    </div>
+                                    <button type="button" onclick="openTVShowPosterSelectionModal()" style="width: 100%;">Browse Posters...</button>
+                                    <input type="hidden" id="tv-show-default-poster-path" name="default_poster_path">
+                                </div>
+                                
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                                    <h4 style="margin-top: 0;">Backdrop</h4>
+                                    <div class="sunken-panel" style="padding: 10px; background: var(--poster-bg); margin-bottom: 10px; display: flex; justify-content: center; align-items: center; width: 100%; height: 250px;">
+                                        <img id="tv-show-backdrop-preview" src="" alt="TV show backdrop" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: pointer;" onclick="openTVShowBackdropSelectionModal()">
+                                    </div>
+                                    <button type="button" onclick="openTVShowBackdropSelectionModal()" style="width: 100%;">Browse Backdrops...</button>
+                                    <input type="hidden" id="tv-show-default-backdrop-path" name="default_backdrop_path">
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
                     <!-- Navigation Buttons -->
                     <div style="display: flex; justify-content: space-between; margin-top: 15px;">
-                        <button type="button" id="tv-show-back-to-stage-1-btn">Back to Search</button>
-                        <button type="button" id="tv-show-submit-btn">Add TV Show</button>
+                        <button type="button" id="tv-show-back-to-stage-1-btn">&lt; Back</button>
+                        <button type="button" id="tv-show-submit-btn" style="font-weight: bold;">Finish</button>
                     </div>
                 </form>
             </div>
@@ -248,11 +260,18 @@
         // Reset search
         $("#tv-show-query").val("");
         $("#tv-show-results-list").empty();
+        $("#tv-show-total-results").text("0");
         
         // Reset form
         $("#add-tv-show-form")[0].reset();
         selectedTVShow = null;
         $("#tv-show-to-stage-2-btn").prop("disabled", true);
+        
+        // Reset tabs
+        $("#tv-show-tab-general").attr("aria-selected", "true");
+        $("#tv-show-tab-images").attr("aria-selected", "false");
+        $("#tv-show-tab-content-general").show();
+        $("#tv-show-tab-content-images").hide();
         
         // Reset infinite scroll variables
         allTVResults = [];
@@ -266,42 +285,40 @@
     }
     
     function goToTVShowStage2() {
-        if (!selectedTVShow) return;          // Fill form with selected TV show data
+        if (!selectedTVShow) return;
+        
+        // Fill form with selected TV show data
         $("#tv-show-tmdb_id").val(selectedTVShow.id);
-        $("#tv-show-title").text(selectedTVShow.name);
+        
+        // Populate display fields and hidden inputs
+        $("#tv-show-title-display").val(selectedTVShow.name);
         $("#tv-show-title-hidden").val(selectedTVShow.name);
-        $("#tv-show-first_air_date").text(selectedTVShow.first_air_date || 'N/A');
+        
+        $("#tv-show-first_air_date-display").val(selectedTVShow.first_air_date || 'N/A');
         $("#tv-show-first_air_date-hidden").val(selectedTVShow.first_air_date || '');
         
-        // Handle description with truncation
         const description = selectedTVShow.overview || 'No description available';
+        $("#tv-show-description-display").val(description);
         $("#tv-show-description-hidden").val(selectedTVShow.overview || '');
-        
-        if (description.length > 150) {
-            const shortText = description.substring(0, 150) + '...';
-            $("#tv-show-description-short").text(shortText);
-            $("#tv-show-description-full").text(description);
-            $("#tv-show-read-more-btn").show();
-        } else {
-            $("#tv-show-description-short").text(description);
-            $("#tv-show-description-full").text('');
-            $("#tv-show-read-more-btn").hide();
-        }
         
         // Set preview images
         if (selectedTVShow.poster_path) {
             $("#tv-show-poster-preview").attr("src", `https://image.tmdb.org/t/p/w500${selectedTVShow.poster_path}`);
             $("#tv-show-default-poster-path").val(selectedTVShow.poster_path);
+        } else {
+            $("#tv-show-poster-preview").attr("src", ""); // Clear if no poster
         }
         
         if (selectedTVShow.backdrop_path) {
             $("#tv-show-backdrop-preview").attr("src", `https://image.tmdb.org/t/p/w500${selectedTVShow.backdrop_path}`);
             $("#tv-show-default-backdrop-path").val(selectedTVShow.backdrop_path);
+        } else {
+            $("#tv-show-backdrop-preview").attr("src", ""); // Clear if no backdrop
         }
         
         // Switch stages
         $("#tv-show-modal-stage-1").hide();
-        $("#tv-show-modal-stage-2").show();
+        $("#tv-show-modal-stage-2").css("display", "flex"); // Use flex for the new layout
         $("#tv-show-modal-title").text("Edit TV Show Details");
     }
     
@@ -381,7 +398,7 @@
                         // Create resolution overlay
                         const resolutionOverlay = $('<div>', {
                             text: `${poster.width}×${poster.height}`,
-                            style: 'position: absolute; bottom: 4px; right: 4px; background: rgba(0, 0, 0, 0.7); color: white; padding: 2px 4px; font-size: 10px; font-family: monospace; border-radius: 2px;'
+                            style: 'position: absolute; bottom: 4px; right: 4px; background: rgba(0, 0, 0, 0.7); color: white; padding: 2px 4px; font-size: 10px; font-family: monospace; border-radius: 0px;'
                         });
                         
                         containerElement.append(imgElement);
@@ -419,7 +436,7 @@
                         // Create resolution overlay
                         const resolutionOverlay = $('<div>', {
                             text: `${backdrop.width}×${backdrop.height}`,
-                            style: 'position: absolute; bottom: 4px; right: 4px; background: rgba(0, 0, 0, 0.7); color: white; padding: 2px 4px; font-size: 10px; font-family: monospace; border-radius: 2px;'
+                            style: 'position: absolute; bottom: 4px; right: 4px; background: rgba(0, 0, 0, 0.7); color: white; padding: 2px 4px; font-size: 10px; font-family: monospace; border-radius: 0px;'
                         });
                         
                         containerElement.append(imgElement);
@@ -679,6 +696,23 @@
         // Stage navigation
         $("#tv-show-to-stage-2-btn").on("click", goToTVShowStage2);
         $("#tv-show-back-to-stage-1-btn").on("click", goToTVShowStage1);
+        
+        // Tab navigation
+        $("#tv-show-tab-general a").on("click", function(e) {
+            e.preventDefault();
+            $("#tv-show-tab-general").attr("aria-selected", "true");
+            $("#tv-show-tab-images").attr("aria-selected", "false");
+            $("#tv-show-tab-content-general").show();
+            $("#tv-show-tab-content-images").hide();
+        });
+        
+        $("#tv-show-tab-images a").on("click", function(e) {
+            e.preventDefault();
+            $("#tv-show-tab-general").attr("aria-selected", "false");
+            $("#tv-show-tab-images").attr("aria-selected", "true");
+            $("#tv-show-tab-content-general").hide();
+            $("#tv-show-tab-content-images").show();
+        });
         
         // Form submission
         $("#tv-show-submit-btn").on("click", submitTVShow);
@@ -1040,5 +1074,39 @@
 
 .modal .field-row-stacked > div {
     width: 100% !important; /* Description div should still be full width */
+}
+
+/* Tab styling overrides */
+menu[role="tablist"] {
+    margin-bottom: -2px !important; /* Connect tabs to the window below */
+    position: relative;
+    z-index: 10;
+}
+
+div[role="tabpanel"] {
+    background: var(--window-bg);
+    position: relative;
+    z-index: 1;
+}
+
+/* Force sharp corners for Windows 98 aesthetic */
+.modal .window,
+.modal .window-body,
+.modal button,
+.modal input,
+.modal textarea,
+.modal select,
+.modal .status-pill,
+.modal .sunken-panel,
+.modal .title-bar,
+.modal .title-bar-controls button {
+    border-radius: 0 !important;
+}
+
+/* Ensure title bar gradient works in dark mode */
+@media (prefers-color-scheme: dark) {
+    .modal .title-bar {
+        background: linear-gradient(90deg, var(--win98-dark, #000080), var(--win98-light, #1084d0)) !important;
+    }
 }
 </style>

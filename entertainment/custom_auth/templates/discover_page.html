@@ -219,42 +219,15 @@
         }
 
         /* Movie of the Week Component Styles */
+        /* Window styling removed to use default 98.css styles */
         .window {
-            border: 2px outset var(--bg-color);
-            background-color: var(--bg-color);
-            font-family: 'MS Sans Serif', sans-serif;
-            box-shadow: 2px 2px 4px var(--shadow-color);
-        }
-
-        .title-bar {
-            background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
-            color: white;
-            padding: 2px;
-            font-size: 11px;
-            font-weight: bold;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            background-color: var(--window-bg);
         }
 
         @media (prefers-color-scheme: dark) {
             .title-bar {
-                background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+                background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
             }
-        }
-
-        .title-bar-controls button {
-            width: 16px;
-            height: 14px;
-            border: 1px outset var(--button-bg);
-            background: var(--button-bg);
-            margin-left: 2px;
-            font-size: 8px;
-            cursor: pointer;
-        }
-
-        .title-bar-controls button:active {
-            border: 1px inset var(--button-bg);
         }
 
         .window-body {

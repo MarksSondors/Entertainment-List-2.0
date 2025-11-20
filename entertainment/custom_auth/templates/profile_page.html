@@ -28,7 +28,9 @@
                         </div>
                         <div class="username">{{ user.username }}</div>
                         {% if user.username == current_user.username %}
-                        <button class="btn settings-btn" onclick="window.location.href='{% url 'settings_page' %}'">Settings</button>
+                        <button class="btn settings-btn" onclick="window.location.href='{% url 'settings_page' %}'" aria-label="Settings">
+                            <img src="{% static 'images/win98/settings_icon.png' %}" alt="" style="width: 24px; height: 24px; image-rendering: pixelated;">
+                        </button>
                         {% endif %}
                     </div>
 
@@ -196,8 +198,6 @@
                     <div class="field-row mt-3" style="justify-content: space-between;">
                         <div>
                             <span>{{ user.username }}'s profile</span>
-                        </div>                        <div>
-                            <button class="btn" onclick="window.history.back()">Back</button>
                         </div>
                     </div></div>
             </div>
@@ -245,6 +245,10 @@
             --username-color: #4da6ff;
             --online-color: #00ff00;
         }
+
+        .title-bar {
+            background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+        }
     }    /* Layout styles */
     .profile-layout {
         display: flex;
@@ -262,8 +266,9 @@
         margin-bottom: 15px;
         padding: 15px;
         background: var(--profile-bg);
-        border: 1px inset var(--border-light);
-        border-radius: 4px;
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        border-radius: 0;
         min-height: 110px; /* Ensure consistent height */
     }
 
@@ -276,8 +281,9 @@
     .profile-picture {
         width: 120px;
         height: 120px;
-        border: 2px inset var(--border-light);
-        border-radius: 4px;
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        border-radius: 0;
         object-fit: cover;
         cursor: pointer;
         transition: transform 0.2s ease;
@@ -291,8 +297,9 @@
     .profile-initial {
         width: 120px;
         height: 120px;
-        border: 2px inset var(--border-light);
-        border-radius: 4px;
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        border-radius: 0;
         background: linear-gradient(45deg, #4a90e2, #357abd);
         color: white;
         display: flex;
@@ -348,17 +355,21 @@
         max-height: 100%;
         width: auto;
         height: auto;
-        border: 4px solid white;
-        border-radius: 8px;
+        border: 2px solid;
+        border-color: var(--win98-light) var(--win98-dark) var(--win98-dark) var(--win98-light);
+        border-radius: 0;
         object-fit: contain;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        background: var(--win98-gray);
+        padding: 2px;
     }
 
     .profile-zoom-initial {
         width: 300px;
         height: 300px;
-        border: 4px solid white;
-        border-radius: 8px;
+        border: 2px solid;
+        border-color: var(--win98-light) var(--win98-dark) var(--win98-dark) var(--win98-light);
+        border-radius: 0;
         background: linear-gradient(45deg, #4a90e2, #357abd);
         color: white;
         display: flex;
@@ -379,12 +390,44 @@
     }
 
     .settings-btn {
-        font-size: 14px;
-        padding: 10px 16px;
+        font-size: 11px;
+        padding: 4px;
         min-height: auto;
         flex-shrink: 0;
         align-self: center;
-        min-width: 80px;
+        min-width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        
+        /* Ensure it inherits the .btn styles correctly */
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        font-family: 'MS Sans Serif', sans-serif;
+        border-top: 1px solid var(--win98-light);
+        border-left: 1px solid var(--win98-light);
+        border-right: 1px solid var(--win98-black);
+        border-bottom: 1px solid var(--win98-black);
+        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+    }
+
+    .settings-btn:active {
+        border-top: 1px solid var(--win98-black);
+        border-left: 1px solid var(--win98-black);
+        border-right: 1px solid var(--win98-light);
+        border-bottom: 1px solid var(--win98-light);
+        box-shadow: inset 1px 1px 0 var(--win98-dark);
+        
+        background-image: linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern)), 
+                          linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern));
+        background-position: 0 0, 1px 1px;
+        background-size: 4px 4px;
+        
+        padding-top: 5px;
+        padding-left: 5px;
+        padding-bottom: 3px;
+        padding-right: 3px;
     }
 
     /* Profile Details Section */
@@ -392,8 +435,9 @@
         margin-bottom: 20px;
         padding: 10px 15px;
         background: var(--profile-bg);
-        border: 1px inset var(--border-light);
-        border-radius: 4px;
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        border-radius: 0;
     }
 
     .online-status {
@@ -451,7 +495,7 @@
         flex: 0 0 auto; /* Prevent shrinking */
         min-width: 80px;
         padding: 8px;
-        border-radius: 4px;
+        border-radius: 0;
         border: 1px solid transparent;
         background: var(--window-bg);
     }
@@ -459,22 +503,23 @@
     .user-card:hover {
         transform: scale(1.05);
         background-color: var(--button-hover);
-        border-color: var(--border-dark);
+        border: 1px dotted var(--win98-black);
     }
 
     .user-card-avatar {
         width: 50px;
         height: 50px;
-        border-radius: 4px;
+        border-radius: 0;
         object-fit: cover;
-        border: 2px inset var(--border-light);
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
         margin-bottom: 8px;
     }
 
     .user-card-avatar-initial {
         width: 50px;
         height: 50px;
-        border-radius: 4px;
+        border-radius: 0;
         background: linear-gradient(45deg, #6c757d, #495057);
         color: white;
         display: flex;
@@ -482,7 +527,8 @@
         justify-content: center;
         font-size: 20px;
         font-weight: bold;
-        border: 2px inset var(--border-light);
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
         margin-bottom: 8px;
         text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
     }
@@ -635,8 +681,9 @@
         width: 100px;
         height: 150px;
         object-fit: cover;
-        border: 2px inset var(--border-light);
-        border-radius: 4px;
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        border-radius: 0;
     }
     
     .poster-title {
@@ -669,50 +716,74 @@
         color: white;
     }
 
-    /* Window styling with theme support */
+    /* Window styling removed to use default 98.css styles */
     .window {
         background-color: var(--window-bg);
-        border: 2px outset var(--border-light);
-        box-shadow: 2px 2px 4px var(--shadow-color);
-    }
-
-    .title-bar {
-        background: linear-gradient(90deg, var(--progress-bar), #006666);
-        color: white;
-        padding: 4px 8px;
-        font-weight: bold;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
     }
 
     .window-body {
-        background-color: var(--window-bg);
-        color: var(--text-color);
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
         padding: 12px;
-    }    .sunken-panel {
-        border: 1px inset var(--border-light);
-        background-color: var(--bg-color);
+    }
+
+    .sunken-panel {
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        background-color: var(--win98-input-bg);
+    }
+
+    #userSearch {
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        padding: 4px;
+        font-family: 'MS Sans Serif', 'Segoe UI', sans-serif;
+        font-size: 12px;
+        background: var(--win98-input-bg);
+        color: var(--win98-input-text);
+        outline: none;
     }    .btn {
-        background-color: var(--button-bg);
-        border: 2px outset var(--border-light);
-        color: var(--button-text);
-        padding: 5px 10px;
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
         font-family: 'MS Sans Serif', sans-serif;
-        cursor: pointer;
         font-size: 11px;
-        min-width: 60px;
+        cursor: pointer;
         text-align: center;
-        box-shadow: 1px 1px 0px var(--border-dark);
+        min-width: 60px;
+        padding: 4px 8px;
+        
+        /* Authentic Win98 Button Style */
+        border-top: 1px solid var(--win98-light);
+        border-left: 1px solid var(--win98-light);
+        border-right: 1px solid var(--win98-black);
+        border-bottom: 1px solid var(--win98-black);
+        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+        transition: none;
     }
 
     .btn:hover {
-        background-color: var(--button-hover);
+        background-color: var(--win98-gray);
     }
 
     .btn:active {
-        border: 2px inset var(--border-light);
-        box-shadow: inset 1px 1px 2px var(--border-dark);
+        /* Win98 Pressed Style (Inset) */
+        border-top: 1px solid var(--win98-black);
+        border-left: 1px solid var(--win98-black);
+        border-right: 1px solid var(--win98-light);
+        border-bottom: 1px solid var(--win98-light);
+        box-shadow: inset 1px 1px 0 var(--win98-dark);
+        
+        /* Dithered pattern for active state */
+        background-image: linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern)), 
+                          linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern));
+        background-position: 0 0, 1px 1px;
+        background-size: 4px 4px;
+        
+        /* Shift text */
+        padding-top: 5px;
+        padding-left: 9px;
+        padding-bottom: 3px;
+        padding-right: 7px;
     }
       /* Enhanced Mobile Responsive Styles */
     @media (max-width: 768px) {
@@ -756,10 +827,11 @@
         .settings-btn {
             order: 3;
             font-size: 13px;
-            padding: 6px 12px;
+            padding: 4px;
             align-self: center;
             flex-shrink: 0;
-            min-width: 70px;
+            min-width: 30px;
+            height: 30px;
         }        .profile-picture,
         .profile-initial {
             width: 80px;
@@ -808,11 +880,7 @@
             padding-right: 10px !important;
         }
         
-        /* Make mobile title bars more obvious for interaction */
-        .title-bar {
-            padding: 12px 8px;
-            font-size: 14px;
-        }        /* Responsive user list */
+        /* Responsive user list */
         .user-card {
             min-width: 70px;
             padding: 6px;
@@ -895,10 +963,11 @@
 
         .settings-btn {
             font-size: 18px;
-            padding: 3px 6px;
+            padding: 4px;
             align-self: center;
             flex-shrink: 0;
-            min-width: 50px;
+            min-width: 36px;
+            height: 36px;
         }
 
         .profile-details {
