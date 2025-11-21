@@ -1,8 +1,11 @@
 from .models import *
 from api.services.tvshows import TVShowsService
 from api.services.movies import MoviesService
+from api.services.tvdb import TVDBService
 from django.contrib.contenttypes.models import ContentType
 from custom_auth.models import CustomUser
+from datetime import datetime, date
+import zoneinfo
 
 def extract_tvshow_data(tvshow_details, tvshow_poster=None, tvshow_backdrop=None, is_anime=False):
     """Extract and format basic TV show data from API response"""
@@ -28,6 +31,7 @@ def extract_tvshow_data(tvshow_details, tvshow_poster=None, tvshow_backdrop=None
         'first_air_date': tvshow_details.get('first_air_date'),
         'last_air_date': tvshow_details.get('last_air_date'),
         'tmdb_id': tvshow_details.get('id'),
+        'tvdb_id': tvshow_details.get('external_ids', {}).get('tvdb_id'),
         'imdb_id': tvshow_details.get('external_ids', {}).get('imdb_id'),
         'description': tvshow_details.get('overview'),
         'rating': tvshow_details.get('vote_average'),
@@ -277,6 +281,79 @@ def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=
     # Process seasons and episodes
     process_seasons(tvshow, tvshow_details.get('seasons', []), tvshows_service)
 
+    # If we have a TVDB ID, try to fetch accurate air dates and update episodes
+    if tvshow.tvdb_id:
+        try:
+            tvdb_service = TVDBService()
+            series_extended = tvdb_service.get_series_extended(tvshow.tvdb_id)
+            
+            if series_extended and 'data' in series_extended and 'episodes' in series_extended['data']:
+                tvdb_episodes = series_extended['data']['episodes']
+                
+                # Get series air time
+                series_air_time = series_extended['data'].get('airsTime')
+
+                # Create a map of (season_number, episode_number) -> tvdb_episode_data
+                tvdb_ep_map = {}
+                for ep in tvdb_episodes:
+                    s_num = ep.get('seasonNumber')
+                    e_num = ep.get('number')
+                    if s_num is not None and e_num is not None:
+                        tvdb_ep_map[(s_num, e_num)] = ep
+                
+                # Iterate over our episodes and update if needed
+                for season in tvshow.seasons.all():
+                    for episode in season.episodes.all():
+                        tvdb_ep = tvdb_ep_map.get((season.season_number, episode.episode_number))
+                        if tvdb_ep:
+                            updated = False
+                            # Update TVDB ID
+                            if not episode.tvdb_id:
+                                episode.tvdb_id = tvdb_ep.get('id')
+                                updated = True
+                            
+                            # Update air date if missing or if we want to trust TVDB more
+                            if tvdb_ep.get('aired'):
+                                try:
+                                    tvdb_date = date.fromisoformat(tvdb_ep.get('aired'))
+                                    if episode.air_date != tvdb_date:
+                                        episode.air_date = tvdb_date
+                                        updated = True
+                                    
+                                    # Update air time (datetime)
+                                    if series_air_time:
+                                        # Try parsing common formats
+                                        parsed_time = None
+                                        for fmt in ["%H:%M", "%I:%M %p"]:
+                                            try:
+                                                parsed_time = datetime.strptime(series_air_time, fmt).time()
+                                                break
+                                            except ValueError:
+                                                continue
+                                        
+                                        if parsed_time:
+                                            # Determine timezone
+                                            # Default to UTC
+                                            tz = zoneinfo.ZoneInfo("UTC")
+                                            
+                                            # If US show, use Eastern Time (as per TVDB policy)
+                                            if tvshow.countries.filter(iso_3166_1='US').exists():
+                                                tz = zoneinfo.ZoneInfo("America/New_York")
+                                            
+                                            dt = datetime.combine(tvdb_date, parsed_time)
+                                            from django.utils import timezone
+                                            dt_aware = timezone.make_aware(dt, timezone=tz)
+                                            
+                                            if episode.air_time != dt_aware:
+                                                episode.air_time = dt_aware
+                                                updated = True
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            if updated:
+                                episode.save()
+        except Exception as e:
+            print(f"Error updating episodes from TVDB: {e}")
 
     # Type	Name
     # 1	Original air date

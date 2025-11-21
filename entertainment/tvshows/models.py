@@ -14,6 +14,7 @@ class TVShow(Media):
     last_air_date = models.DateField(blank=True, null=True)
 
     tmdb_id = models.IntegerField(unique=True)
+    tvdb_id = models.IntegerField(blank=True, null=True)
     imdb_id = models.CharField(max_length=20, blank=True, null=True)
     
     status = models.CharField(max_length=50, blank=True, null=True)  # e.g., "Ended", "Returning Series"
@@ -175,12 +176,14 @@ class Episode(models.Model):
     title = models.CharField(max_length=255)
     episode_number = models.PositiveIntegerField()
     air_date = models.DateField(blank=True, null=True)
+    air_time = models.DateTimeField(blank=True, null=True)
     overview = models.TextField(blank=True, null=True)
     still = models.URLField(blank=True, null=True)
     
     runtime = models.IntegerField(blank=True, null=True)
     rating = models.FloatField(blank=True, null=True)
     tmdb_id = models.IntegerField(blank=True, null=True)
+    tvdb_id = models.IntegerField(blank=True, null=True)
     
     class Meta:
         unique_together = ['season', 'episode_number']
