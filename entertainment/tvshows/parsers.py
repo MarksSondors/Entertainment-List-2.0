@@ -6,6 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 from custom_auth.models import CustomUser
 from datetime import datetime, date
 import zoneinfo
+import pytz
 
 def extract_tvshow_data(tvshow_details, tvshow_poster=None, tvshow_backdrop=None, is_anime=False):
     """Extract and format basic TV show data from API response"""
@@ -333,20 +334,59 @@ def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=
                                         
                                         if parsed_time:
                                             # Determine timezone
-                                            # Default to UTC
-                                            tz = zoneinfo.ZoneInfo("UTC")
+                                            tz_name = "UTC"
                                             
-                                            # If US show, use Eastern Time (as per TVDB policy)
-                                            if tvshow.countries.filter(iso_3166_1='US').exists():
-                                                tz = zoneinfo.ZoneInfo("America/New_York")
+                                            # Manual map for major countries
+                                            MANUAL_TIMEZONES = {
+                                                'US': 'America/New_York',
+                                                'GB': 'Europe/London',
+                                                'JP': 'Asia/Tokyo',
+                                                'KR': 'Asia/Seoul',
+                                                'CN': 'Asia/Shanghai',
+                                                'IN': 'Asia/Kolkata',
+                                                'CA': 'America/Toronto',
+                                                'AU': 'Australia/Sydney',
+                                                'FR': 'Europe/Paris',
+                                                'DE': 'Europe/Berlin',
+                                                'IT': 'Europe/Rome',
+                                                'ES': 'Europe/Madrid',
+                                                'BR': 'America/Sao_Paulo',
+                                                'RU': 'Europe/Moscow',
+                                            }
+
+                                            # Get countries
+                                            countries = list(tvshow.countries.values_list('iso_3166_1', flat=True))
                                             
-                                            dt = datetime.combine(tvdb_date, parsed_time)
-                                            from django.utils import timezone
-                                            dt_aware = timezone.make_aware(dt, timezone=tz)
+                                            # Check for manual overrides first
+                                            found_manual = False
+                                            for code in countries:
+                                                if code in MANUAL_TIMEZONES:
+                                                    tz_name = MANUAL_TIMEZONES[code]
+                                                    found_manual = True
+                                                    break
                                             
-                                            if episode.air_time != dt_aware:
-                                                episode.air_time = dt_aware
-                                                updated = True
+                                            # If no manual override, try pytz
+                                            if not found_manual and countries:
+                                                try:
+                                                    # Use the first country
+                                                    country_code = countries[0]
+                                                    timezones = pytz.country_timezones.get(country_code, [])
+                                                    if timezones:
+                                                        tz_name = timezones[0]
+                                                except Exception:
+                                                    pass
+
+                                            try:
+                                                tz = zoneinfo.ZoneInfo(tz_name)
+                                                dt = datetime.combine(tvdb_date, parsed_time)
+                                                from django.utils import timezone
+                                                dt_aware = timezone.make_aware(dt, timezone=tz)
+                                                
+                                                if episode.air_time != dt_aware:
+                                                    episode.air_time = dt_aware
+                                                    updated = True
+                                            except Exception as e:
+                                                print(f"Error setting timezone {tz_name} for {tvshow.title}: {e}")
                                 except (ValueError, TypeError):
                                     pass
                             
