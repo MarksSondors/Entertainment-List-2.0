@@ -444,6 +444,7 @@ def subgroup_episodes(request, subgroup_id):
             'rating': episode.rating,
             'runtime': episode.runtime,
             'air_date': episode.air_date,
+            'air_time': episode.air_time,
             'is_watched': episode.id in watched_episodes,
             'watched_by': [watched.user.username for watched in watched_users],
         })
