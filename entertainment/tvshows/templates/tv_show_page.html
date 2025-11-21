@@ -789,7 +789,13 @@
                                     <div style="display: flex; align-items: center; margin: 5px 0; flex-wrap: wrap; gap: 15px; font-size: 12px; color: var(--text-muted);">
                                         <span>⭐ {{ episode.rating|default:"N/A" }}</span>
                                         <span>⏱️ {{ episode.runtime|default:"?" }} min</span>
-                                        <span>📅 {{ episode.air_date|date:"M d, Y"|default:"TBA" }}</span>
+                                        <span>📅 
+                                            {% if episode.air_time %}
+                                                {{ episode.air_time|date:"M d, Y (H:i T)" }}
+                                            {% else %}
+                                                {{ episode.air_date|date:"M d, Y"|default:"TBA" }}
+                                            {% endif %}
+                                        </span>
                                     </div>
                                     <p style="margin: 5px 0; font-size: 13px; line-height: 1.4;">{{ episode.overview|truncatechars:150 }}</p>
                                     
@@ -1261,7 +1267,14 @@
                                 <div style="display: flex; align-items: center; margin: 3px 0; color: var(--text-muted);">
                                     <span style="margin-right: 15px;">⭐ ${episode.rating || 'N/A'}</span>
                                     <span style="margin-right: 15px;">⏱️ ${episode.runtime || '?'} min</span>
-                                    <span>📅 ${episode.air_date ? new Date(episode.air_date).toLocaleDateString() : 'TBA'}</span>
+                                    <span>📅 ${
+                                        episode.air_time 
+                                        ? (() => {
+                                            const d = new Date(episode.air_time);
+                                            return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' })})`;
+                                        })()
+                                        : (episode.air_date ? new Date(episode.air_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBA')
+                                    }</span>
                                 </div>
                                 <p style="color: var(--text-color); margin: 5px 0;">${episode.overview ? (episode.overview.length > 150 ? episode.overview.substring(0, 150) + '...' : episode.overview) : 'No description available.'}</p>
                                 
