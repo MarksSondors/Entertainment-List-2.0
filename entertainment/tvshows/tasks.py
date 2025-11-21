@@ -1,11 +1,12 @@
-from django_q.tasks import async_task
+from django_q.tasks import async_task, schedule
 from .parsers import create_tvshow
 import logging
-from datetime import date
+from datetime import date, datetime
 from django.conf import settings
 from django_q.models import Schedule
 
 from api.services.tvshows import TVShowsService
+from api.services.tvdb import TVDBService
 from .models import TVShow, Season, Episode, EpisodeGroup, EpisodeSubGroup, Keyword, Genre, Country, ProductionCompany
 
 logger = logging.getLogger(__name__)
@@ -17,10 +18,7 @@ def check_new_episodes_today():
     Should be run daily (e.g., at 9 AM).
     """
     from django.utils import timezone
-    from django.contrib.contenttypes.models import ContentType
-    from custom_auth.models import Watchlist
     from collections import defaultdict
-    from notifications.utils import send_notification_to_user
     
     logger.info("Starting daily new episode check")
     
@@ -42,16 +40,64 @@ def check_new_episodes_today():
     for episode in episodes_today:
         episodes_by_show[episode.season.show].append(episode)
     
-    # Get ContentType for TVShow
-    tvshow_content_type = ContentType.objects.get_for_model(TVShow)
-    
-    # Track notification stats
-    total_notifications = 0
-    total_users = set()
+    scheduled_count = 0
     
     # For each show with episodes today
     for show, episodes in episodes_by_show.items():
-        logger.info(f'Processing: {show.title} ({len(episodes)} episode(s))')
+        logger.info(f'Scheduling notification for: {show.title} ({len(episodes)} episode(s))')
+        
+        # Determine air time
+        air_time = None
+        for ep in episodes:
+            if ep.air_time:
+                air_time = ep.air_time
+                break # Use the first one found
+        
+        run_at = timezone.now()
+        if air_time:
+            # air_time is now a DateTimeField, so it's already a full datetime
+            if air_time > timezone.now():
+                run_at = air_time
+                logger.info(f"  Scheduled for {run_at}")
+            else:
+                logger.info(f"  Air time {air_time} passed, sending immediately")
+        
+        # Schedule the task
+        schedule(
+            'tvshows.tasks.send_show_notification',
+            show.id,
+            [ep.id for ep in episodes],
+            schedule_type=Schedule.ONCE,
+            next_run=run_at
+        )
+        scheduled_count += 1
+    
+    result = {
+        'scheduled_notifications': scheduled_count,
+        'shows_with_episodes': len(episodes_by_show),
+        'total_episodes': episodes_today.count()
+    }
+    
+    logger.info(f'Episode notification scheduling complete: {result}')
+    return result
+
+def send_show_notification(show_id, episode_ids):
+    """
+    Task to send notifications for a specific show's episodes.
+    """
+    from django.contrib.contenttypes.models import ContentType
+    from custom_auth.models import Watchlist
+    from notifications.utils import send_notification_to_user
+    
+    try:
+        show = TVShow.objects.get(id=show_id)
+        episodes = Episode.objects.filter(id__in=episode_ids).order_by('episode_number')
+        
+        if not episodes.exists():
+            return
+            
+        # Get ContentType for TVShow
+        tvshow_content_type = ContentType.objects.get_for_model(TVShow)
         
         # Get all users who have this show in their watchlist
         watchlist_users = Watchlist.objects.filter(
@@ -60,14 +106,11 @@ def check_new_episodes_today():
         ).select_related('user')
         
         if not watchlist_users.exists():
-            logger.info(f'  No users watching {show.title}')
-            continue
-        
-        logger.info(f'  Notifying {watchlist_users.count()} user(s) about {show.title}')
-        
+            return
+            
         # Create notification message
-        if len(episodes) == 1:
-            episode = episodes[0]
+        if episodes.count() == 1:
+            episode = episodes.first()
             title = f"📺 New Episode: {show.title}"
             body = f"S{episode.season.season_number:02d}E{episode.episode_number:02d} - {episode.title} is now available!"
         else:
@@ -76,13 +119,14 @@ def check_new_episodes_today():
                 f"S{ep.season.season_number:02d}E{ep.episode_number:02d}"
                 for ep in episodes
             ])
-            body = f"{len(episodes)} new episodes are now available: {episode_list}"
+            body = f"{episodes.count()} new episodes are now available: {episode_list}"
         
         url = show.get_absolute_url()
         
         # Send notification to each user
+        count = 0
         for watchlist_item in watchlist_users:
-            result = send_notification_to_user(
+            send_notification_to_user(
                 user_id=watchlist_item.user.id,
                 title=title,
                 body=body,
@@ -92,20 +136,14 @@ def check_new_episodes_today():
                 content_type=tvshow_content_type,
                 object_id=show.id,
             )
+            count += 1
             
-            if result.get('success', 0) > 0 or result.get('queued'):
-                total_notifications += 1
-                total_users.add(watchlist_item.user.id)
-    
-    result = {
-        'notified_users': len(total_users),
-        'notifications_sent': total_notifications,
-        'shows_with_episodes': len(episodes_by_show),
-        'total_episodes': episodes_today.count()
-    }
-    
-    logger.info(f'Episode notification complete: {result}')
-    return result
+        logger.info(f"Sent notifications to {count} users for {show.title}")
+        
+    except TVShow.DoesNotExist:
+        logger.error(f"TVShow {show_id} not found during notification send")
+    except Exception as e:
+        logger.error(f"Error sending notifications for show {show_id}: {e}")
 
 
 def create_tvshow_async(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
@@ -204,7 +242,7 @@ def update_single_tvshow(tvshow_id):
         
         # Use TVShowsService instead of direct requests
         tvshows_service = TVShowsService()
-        data = tvshows_service.get_show_details(tvshow.tmdb_id, append_to_response="videos,keywords")
+        data = tvshows_service.get_show_details(tvshow.tmdb_id, append_to_response="videos,keywords,external_ids")
         
         if not data:
             logger.error(f"TMDB API error for TV show {tvshow.title} (ID: {tvshow_id}): Failed to retrieve data")
@@ -214,6 +252,11 @@ def update_single_tvshow(tvshow_id):
         updates = {}
         
         # Check and update basic fields
+        if 'external_ids' in data:
+            tvdb_id = data['external_ids'].get('tvdb_id')
+            if tvdb_id and tvdb_id != tvshow.tvdb_id:
+                updates['tvdb_id'] = tvdb_id
+
         if data.get('status') != tvshow.status:
             updates['status'] = data.get('status')
             
@@ -350,8 +393,10 @@ def update_single_tvshow(tvshow_id):
             async_task(update_tvshow_seasons, tvshow.id)
             if tvshow.is_anime:
                 async_task(update_episode_groups, tvshow.id)
-            else:
-                pass
+            
+            # Update episodes from TVDB if we have a TVDB ID
+            if tvshow.tvdb_id:
+                async_task(update_episodes_from_tvdb, tvshow.id)
             
             return f"Updated TV show {tvshow.title} with {len(updates)} changes: {', '.join([f'{k}={v}' for k, v in updates.items()])}"
         else:
@@ -361,8 +406,11 @@ def update_single_tvshow(tvshow_id):
             async_task(update_tvshow_seasons, tvshow.id)
             if tvshow.is_anime:
                 async_task(update_episode_groups, tvshow.id)
-            else:
-                pass
+            
+            # Update episodes from TVDB if we have a TVDB ID
+            if tvshow.tvdb_id:
+                async_task(update_episodes_from_tvdb, tvshow.id)
+
             return f"No basic updates needed for TV show {tvshow.title}, checking for new episodes and episode groups"
             
     except TVShow.DoesNotExist:
@@ -730,3 +778,93 @@ def setup_scheduled_tasks():
     )
     
     return "TV show scheduled task setup complete"
+
+def update_episodes_from_tvdb(tvshow_id):
+    """
+    Update episodes with accurate air dates and IDs from TVDB.
+    """
+    try:
+        tvshow = TVShow.objects.get(id=tvshow_id)
+        if not tvshow.tvdb_id:
+            return "No TVDB ID for show"
+
+        tvdb_service = TVDBService()
+        series_extended = tvdb_service.get_series_extended(tvshow.tvdb_id)
+        
+        if not series_extended or 'data' not in series_extended or 'episodes' not in series_extended['data']:
+            return "No episodes found in TVDB response"
+
+        tvdb_episodes = series_extended['data']['episodes']
+        
+        # Get series air time
+        series_air_time = series_extended['data'].get('airsTime')
+        
+        # Create a map for faster lookup: (season_number, episode_number) -> tvdb_episode
+        tvdb_map = {}
+        for ep in tvdb_episodes:
+            s_num = ep.get('seasonNumber')
+            e_num = ep.get('number')
+            if s_num is not None and e_num is not None:
+                tvdb_map[(s_num, e_num)] = ep
+
+        updated_count = 0
+        # Iterate over all episodes of the show
+        for season in tvshow.seasons.all():
+            for episode in season.episodes.all():
+                tvdb_ep = tvdb_map.get((season.season_number, episode.episode_number))
+                if tvdb_ep:
+                    updated = False
+                    # Update TVDB ID
+                    if not episode.tvdb_id:
+                        episode.tvdb_id = tvdb_ep.get('id')
+                        updated = True
+                    
+                    # Update air date if missing or different (trusting TVDB for air dates)
+                    if tvdb_ep.get('aired'):
+                        try:
+                            tvdb_date = date.fromisoformat(tvdb_ep.get('aired'))
+                            if episode.air_date != tvdb_date:
+                                episode.air_date = tvdb_date
+                                updated = True
+                            
+                            # Update air time (datetime)
+                            if series_air_time:
+                                from django.utils import timezone
+                                import zoneinfo
+                                
+                                # Try parsing common formats
+                                parsed_time = None
+                                for fmt in ["%H:%M", "%I:%M %p"]:
+                                    try:
+                                        parsed_time = datetime.strptime(series_air_time, fmt).time()
+                                        break
+                                    except ValueError:
+                                        continue
+                                
+                                if parsed_time:
+                                    # Determine timezone
+                                    # Default to UTC
+                                    tz = zoneinfo.ZoneInfo("UTC")
+                                    
+                                    # If US show, use Eastern Time (as per TVDB policy)
+                                    if tvshow.countries.filter(iso_3166_1='US').exists():
+                                        tz = zoneinfo.ZoneInfo("America/New_York")
+                                    
+                                    dt = datetime.combine(tvdb_date, parsed_time)
+                                    dt_aware = timezone.make_aware(dt, timezone=tz)
+                                    
+                                    if episode.air_time != dt_aware:
+                                        episode.air_time = dt_aware
+                                        updated = True
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if updated:
+                        episode.save()
+                        updated_count += 1
+        
+        return f"Updated {updated_count} episodes from TVDB for {tvshow.title}"
+
+    except Exception as e:
+        logger.error(f"Error updating episodes from TVDB for {tvshow.title}: {e}")
+        return f"Error: {e}"
