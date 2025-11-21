@@ -16,3 +16,4 @@ django-debug-toolbar>=4.4.6
 django-silk>=5.1.0
 networkx>=3.2.1
 pywebpush>=1.14.0
+pytz>=2024.1
