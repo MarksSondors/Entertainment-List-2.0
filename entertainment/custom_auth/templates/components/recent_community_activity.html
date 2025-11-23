@@ -34,7 +34,7 @@
     </div>        <div class="status-bar">
             <div class="status-bar-field" id="activity-last-updated-horizontal">Last updated: Just now</div>
             <div class="status-bar-field">
-                <span id="refresh-indicator-horizontal" style="display: none;">⟳</span>
+                <span id="refresh-indicator-horizontal" style="display: none;"><img src="{% static 'images/win98/world.png' %}" alt="Refreshing" style="width: 16px; height: 16px; vertical-align: middle;"></span>
                 <span id="auto-refresh-status">Auto-refresh: ON</span>
             </div>
         </div>
@@ -48,6 +48,17 @@
         border: 1px inset var(--bg-color);
         background-color: var(--window-bg);
         padding: 8px;
+    }
+
+    /* Fix for icons inheriting border from global styles */
+    .activity-title img,
+    .activity-action img,
+    .watched-badge img,
+    .review-badge img {
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        background: transparent !important;
     }
     
     .horizontal-activity-scroll {
@@ -475,7 +486,7 @@
                             <span class="activity-timestamp">${activity.timestamp}</span>
                         </div>
                         <div class="activity-title">
-                            <span class="review-badge">⭐ REVIEW</span>${activity.content_type}: ${activity.title}
+                            <span class="review-badge"><img src="{% static 'images/win98/document.png' %}" alt="Review" style="width: 12px; height: 12px; vertical-align: middle;"> REVIEW</span>${activity.content_type}: ${activity.title}
                         </div>
                         <div class="activity-text">${activity.content ? `"${activity.content}"` : 'No review text provided.'}</div>
                     </div>
@@ -493,7 +504,7 @@
                         </div>
                         <div class="activity-title">${activity.content_type}: ${activity.title}</div>
                         <div class="activity-action">
-                            <span class="watched-badge">📺</span> 
+                            <span class="watched-badge"><img src="{% static 'images/win98/camera_vid.png' %}" alt="Watched" style="width: 16px; height: 16px; vertical-align: middle;"></span> 
                             ${activity.action || `Watched ${activity.episode_count} episode${activity.episode_count > 1 ? 's' : ''}`}
                         </div>
                     </div>

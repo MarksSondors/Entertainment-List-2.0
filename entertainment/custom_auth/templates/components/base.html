@@ -30,7 +30,20 @@
     {% bootstrap_css %}
     {% bootstrap_javascript %}
     <link rel="stylesheet" href="https://unpkg.com/98.css" />
-    <style>        /* Theme-adaptive background images */
+    <style>
+        @font-face {
+            font-family: 'Pixelated MS Sans Serif';
+            src: url('https://unpkg.com/pixelated-ms-sans-serif@2.0.1/fonts/PixelatedMSSansSerif.woff') format('woff'),
+                 url('https://unpkg.com/pixelated-ms-sans-serif@2.0.1/fonts/PixelatedMSSansSerif.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+        }
+
+        body, button, input, select, textarea, .window, .title-bar, .status-bar, h1, h2, h3, h4, h5, h6, p, span, div, a, label, li, td, th {
+            font-family: 'Pixelated MS Sans Serif', Arial, sans-serif !important;
+        }
+
+        /* Theme-adaptive background images */
         :root {
             --bg-color: #c0c0c0; /* Fallback color for light theme */
             --bg-image: url("{% static 'images/background-light.webp' %}");

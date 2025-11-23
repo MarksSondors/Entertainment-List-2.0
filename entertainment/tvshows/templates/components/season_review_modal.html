@@ -31,7 +31,7 @@
             
             <div class="field-row-stacked">
                 <label for="seasonReviewText">Review:</label>
-                <textarea id="seasonReviewText" name="seasonReviewText" rows="4" placeholder="Write your review here..." required></textarea>
+                <textarea id="seasonReviewText" name="seasonReviewText" rows="4" placeholder="Write your review here..." style="font-family: inherit;" required></textarea>
                 <p id="seasonCharCount" style="text-align: right; font-size: 0.8em; margin: 2px 0;">0 characters</p>
             </div>
             
@@ -156,7 +156,7 @@
                 }
                 
                 if (ratingDisplay) {
-                    ratingDisplay.innerHTML = `<span style="color: #000080;">Your Rating: ⭐ ${rating}/10</span>`;
+                    ratingDisplay.innerHTML = `<span style="color: #000080;">Your Rating: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 12px; height: 12px; vertical-align: middle;"> ${rating}/10</span>`;
                 }
                 
                 // Optional: Show success message

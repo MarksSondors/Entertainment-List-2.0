@@ -1,265 +1,194 @@
 <!-- User Progress Section -->
 {% load tvshow_extras %}
+{% load static %}
 
 <style>
-/* Enhanced User Progress Section Styling */
+/* Win98 User Progress Section Styling */
 .user-progress-section {
-    font-family: 'MS Sans Serif', Arial, sans-serif;
-    background-color: var(--window-bg);
-    color: var(--text-color);
-    border: 2px outset var(--border-light);
-    margin: 20px 0;
-    box-shadow: 2px 2px 4px var(--shadow-color);
-}
-
-.user-progress-header {
-    background: linear-gradient(90deg, var(--progress-bar) 0%, #0066cc 100%);
-    color: white;
-    padding: 8px 12px;
-    font-size: 11px;
-    font-weight: bold;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--border-dark);
-}
-
-.user-progress-body {
-    background-color: var(--window-bg);
-    color: var(--text-color);
-    padding: 12px;
+    margin-bottom: 20px;
 }
 
 .user-progress-item {
     margin-bottom: 15px;
     padding: 8px;
+    background-color: var(--window-bg);
+    border: 2px groove var(--border-light);
     position: relative;
-    background-color: var(--progress-bg);
-    border: 2px inset var(--border-light);
-    box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
 }
 
 .user-progress-item.current-user {
-    background-color: var(--progress-bg);
-    border: 2px outset var(--border-light);
-    box-shadow: 2px 2px 4px var(--shadow-color);
+    background-color: var(--window-bg);
+    border: 2px groove var(--border-light);
+    /* Highlight current user slightly or just keep standard */
 }
 
-/* Enhanced Episode Progress Container */
+/* Episode Progress Container */
 .episode-progress-container {
-    background-color: var(--progress-bg);
+    background-color: var(--window-bg);
     border: 2px inset var(--border-light);
-    height: 28px;
+    height: 32px;
     overflow-x: auto;
     overflow-y: hidden;
     display: flex;
     position: relative;
     width: 100%;
-    border-radius: 0;
-    box-shadow: inset 1px 1px 3px var(--shadow-color);
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-dark) var(--progress-bg);
+    margin-top: 5px;
 }
 
+/* Scrollbar styling for Webkit */
 .episode-progress-container::-webkit-scrollbar {
-    height: 8px;
+    height: 12px;
+    background-color: var(--button-bg);
 }
 
 .episode-progress-container::-webkit-scrollbar-track {
-    background: var(--progress-bg);
-    border: 1px inset var(--border-light);
+    background-color: #dfdfdf; /* Standard scrollbar track */
 }
 
 .episode-progress-container::-webkit-scrollbar-thumb {
-    background: var(--border-dark);
-    border: 1px outset var(--border-light);
+    background-color: var(--button-bg);
+    border: 2px outset var(--border-light);
 }
 
-.episode-progress-container::-webkit-scrollbar-thumb:hover {
-    background: var(--text-color);
-}
-
-/* Progress container wrapper for many episodes */
-.progress-wrapper {
-    position: relative;
-}
-
-.progress-controls {
+.episode-progress-container::-webkit-scrollbar-button {
     display: none;
+}
+
+/* Progress controls */
+.progress-controls {
+    display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     font-size: 11px;
 }
 
-.progress-controls.show-controls {
-    display: flex;
-}
-
 .progress-mode-toggle {
-    background: var(--bg-color);
-    border: 1px outset var(--border-light);
-    color: var(--text-color);
-    font-size: 10px;
-    padding: 2px 6px;
-    cursor: pointer;
-    font-family: 'MS Sans Serif', Arial, sans-serif;
-}
-
-.progress-mode-toggle:hover {
-    background: var(--progress-bar);
-    color: white;
-}
-
-.progress-mode-toggle.active {
-    background: var(--progress-bar);
-    color: white;
-    border: 1px inset var(--border-light);
+    min-width: 60px;
 }
 
 .season-group {
     display: flex;
-    border-right: 1px solid var(--border-dark);
+    border-right: 2px solid var(--border-dark);
     height: 100%;
     flex-shrink: 0;
-    min-width: auto;
+    position: relative;
 }
 
 .season-group:last-child {
     border-right: none;
 }
 
-/* Compact view for many episodes */
-.episode-progress-container.compact-view .season-group {
-    min-width: 20px;
-    border-right: 2px solid var(--border-dark);
+/* View Modes */
+.episode-progress-container.detailed-view .episode-progress-indicator {
+    min-width: 12px;
 }
 
 .episode-progress-container.compact-view .episode-progress-indicator {
-    min-width: 2px;
-    margin-right: 0;
+    min-width: 3px;
 }
 
-.episode-progress-container.compact-view .season-group:nth-child(even) {
-    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%);
-}
-
-/* Detailed view (default) */
-.episode-progress-container.detailed-view .season-group {
-    flex-grow: 1;
-    flex-basis: 0;
-}
-
-/* Enhanced Episode Indicators */
+/* Episode Indicators */
 .episode-progress-indicator {
     flex: 1 1 0;
-    min-width: 8px;
+    min-width: 12px;
     height: 100%;
     margin-right: 1px;
     cursor: pointer;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
+    border: 1px solid var(--border-dark); /* Add border for blocky look */
     position: relative;
+    box-sizing: border-box;
 }
 
 .episode-progress-indicator:hover {
-    transform: scaleY(1.1);
     border: 1px solid var(--text-color);
-    z-index: 10;
-    box-shadow: 0 2px 4px var(--shadow-color);
+    background-image: linear-gradient(rgba(255,255,255,0.3), rgba(255,255,255,0.3)); /* Lighten on hover */
 }
 
-.episode-progress-indicator:last-child {
-    margin-right: 0;
-}
-
-/* Season labels for better navigation */
+/* Season labels */
 .season-label {
     position: absolute;
-    bottom: -20px;
-    left: 0;
+    bottom: 2px;
+    left: 2px;
     font-size: 9px;
-    color: var(--text-muted);
+    color: #000;
+    background: rgba(255,255,255,0.7);
+    padding: 0 2px;
     pointer-events: none;
-    background: var(--window-bg);
-    padding: 1px 3px;
-    border: 1px solid var(--border-light);
+    z-index: 5;
 }
 
-/* Enhanced Rating Indicators */
+/* Rating Badges */
 .user-ratings-display {
     margin-bottom: 8px;
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
 }
 
 .rating-badge {
     font-size: 11px;
-    color: white;
+    color: var(--text-color);
     padding: 2px 6px;
-    border: 1px outset var(--border-light);
-    border-radius: 0;
-    font-weight: bold;
-    text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
-    box-shadow: 1px 1px 2px var(--shadow-color);
+    border: 1px solid var(--border-dark);
+    background-color: var(--window-bg);
     cursor: pointer;
-    transition: all 0.2s ease;
-    position: relative;
-}
-
-.rating-badge::after {
-    content: '👁️';
-    font-size: 8px;
-    position: absolute;
-    top: -2px;
-    right: -2px;
-    background: rgba(255, 255, 255, 0.9);
-    border-radius: 50%;
-    width: 12px;
-    height: 12px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
+    gap: 4px;
 }
 
 .rating-badge:hover {
-    transform: translateY(-1px);
-    box-shadow: 2px 2px 4px var(--shadow-color);
-    border: 1px inset var(--border-light);
+    background-color: var(--button-hover);
+    border: 1px dotted var(--text-color);
 }
 
-.rating-badge:hover::after {
-    opacity: 1;
-    background: rgba(255, 255, 255, 1);
-}
-
-.season-rating-badge {
-    background: linear-gradient(45deg, var(--progress-bar), #0088aa);
-}
-
-.group-rating-badge {
-    background: linear-gradient(45deg, #008080, #00aaaa);
-}
-
-/* Enhanced Tooltip */
+/* Tooltip */
 .episode-rating-tooltip {
     display: none;
     position: absolute;
-    background: linear-gradient(135deg, var(--progress-bar), #0066cc);
-    color: white;
-    border: 2px outset var(--border-light);
-    padding: 6px 8px;
+    background-color: #ffffe1; /* Tooltip yellow */
+    color: #000;
+    border: 1px solid #000;
+    padding: 2px 4px;
     font-size: 11px;
     z-index: 1000;
     pointer-events: none;
-    border-radius: 0;
-    box-shadow: 2px 2px 4px var(--shadow-color);
-    text-shadow: 1px 1px 1px rgba(0,0,0,0.7);
+    box-shadow: 2px 2px 0px rgba(0,0,0,0.2);
+}
+
+/* Tooltip Rating Colors */
+.tooltip-season-rating {
+    color: #000080; /* Navy for light mode */
     font-weight: bold;
+}
+
+.tooltip-group-rating {
+    color: #008080; /* Teal for light mode */
+    font-weight: bold;
+}
+
+@media (prefers-color-scheme: dark) {
+    .episode-rating-tooltip {
+        background-color: var(--window-bg);
+        color: var(--text-color);
+        border: 1px solid var(--border-light);
+        box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+
+    .tooltip-season-rating {
+        color: #ffff80; /* Light Yellow for dark mode */
+    }
+
+    .tooltip-group-rating {
+        color: #80ffff; /* Light Cyan for dark mode */
+    }
+
+    .season-label {
+        color: #fff;
+        background: rgba(0,0,0,0.7);
+    }
 }
 
 /* Modal Styles */
@@ -271,8 +200,7 @@
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    animation: fadeIn 0.2s ease-in-out;
+    background-color: rgba(0, 0, 0, 0.5); /* Dotted overlay simulation */
 }
 
 .review-modal .window {
@@ -280,173 +208,49 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 90%;
-    max-width: 500px;
-    max-height: 80vh;
-    overflow-y: auto;
-    animation: slideIn 0.3s ease-out;
-}
-
-.review-rating-display {
-    font-size: 18px;
-    font-weight: bold;
-    color: var(--progress-bar);
-    margin: 8px 0;
-    text-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+    width: 400px;
+    max-width: 90%;
 }
 
 .review-text-content {
-    background: var(--window-bg);
+    background-color: var(--progress-bg);
+    color: var(--text-color);
     border: 2px inset var(--border-light);
     padding: 8px;
     margin: 4px 0;
     font-size: 12px;
-    line-height: 1.4;
-    white-space: pre-wrap;
     max-height: 200px;
     overflow-y: auto;
-    font-family: 'MS Sans Serif', Arial, sans-serif;
-}
-
-.review-metadata {
-    font-size: 10px;
-    color: var(--text-muted);
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border-dark);
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes slideIn {
-    from { 
-        opacity: 0;
-        transform: translate(-50%, -60%);
-    }
-    to { 
-        opacity: 1;
-        transform: translate(-50%, -50%);
-    }
 }
 
 /* Mobile optimizations */
 @media (max-width: 768px) {
-    .user-progress-section {
-        margin: 15px 0;
-    }
-    
-    .user-progress-header {
-        padding: 6px 8px;
-        font-size: 12px;
-    }
-    
-    .user-progress-body {
-        padding: 8px;
-    }
-    
     .episode-progress-container {
-        height: 36px;
+        height: 40px;
     }
     
     .episode-progress-indicator {
-        min-width: 10px;
-    }
-    
-    .episode-progress-container.compact-view .episode-progress-indicator {
-        min-width: 3px;
-    }
-    
-    .progress-controls.show-controls {
-        display: flex;
-        flex-wrap: wrap;
-    }
-    
-    .user-ratings-display {
-        gap: 3px;
-    }
-    
-    .rating-badge {
-        font-size: 10px;
-        padding: 2px 4px;
-    }
-    
-    .rating-badge::after {
-        font-size: 7px;
-        width: 10px;
-        height: 10px;
-        top: -1px;
-        right: -1px;
-    }
-    
-    .season-label {
-        bottom: -18px;
-        font-size: 8px;
-    }
-    
-    /* Modal mobile styles */
-    .review-modal .window {
-        width: 95%;
-        max-height: 85vh;
-    }
-    
-    .review-text-content {
-        max-height: 150px;
-    }
-}
-
-@media (max-width: 480px) {
-    .episode-progress-container {
-        height: 42px;
-    }
-    
-    .episode-progress-indicator {
-        min-width: 12px;
-    }
-    
-    .episode-progress-container.compact-view .episode-progress-indicator {
-        min-width: 4px;
-    }
-    
-    .user-progress-header {
-        flex-direction: column;
-        gap: 4px;
-        align-items: stretch;
-        text-align: center;
-    }
-    
-    .progress-controls {
-        font-size: 10px;
-    }
-    
-    .progress-mode-toggle {
-        font-size: 9px;
-        padding: 3px 8px;
-    }
-    
-    /* Modal extra small mobile styles */
-    .review-modal .window {
-        width: 98%;
-        max-height: 90vh;
-    }
-    
-    .review-text-content {
-        max-height: 120px;
-        font-size: 11px;
+        min-width: 15px;
     }
 }
 </style>
 
-<div class="user-progress-section">
-    <div class="user-progress-header">
-        <span>User Progress</span>
+<div class="window user-progress-section">
+    <div class="title-bar">
+        <div class="title-bar-text">User Progress</div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize"></button>
+            <button aria-label="Maximize"></button>
+            <button aria-label="Close"></button>
+        </div>
+    </div>
+    <div class="window-body">
         {% if combined_average_rating %}
-            <span>Combined Average: ⭐{{ combined_average_rating|floatformat:1 }}</span>
+            <div style="margin-bottom: 10px; font-weight: bold; display: flex; align-items: center; gap: 5px;">
+                Combined Average: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 16px; height: 16px;">{{ combined_average_rating|floatformat:1 }}
+            </div>
         {% endif %}
-    </div>    
-    <div class="user-progress-body">
+
         {% if users_progress %}
             {% for user_progress in users_progress %}
                 <div class="user-progress-item{% if user_progress.is_current_user %} current-user{% endif %}">
@@ -454,76 +258,62 @@
                         <span style="font-weight: bold; color: var(--text-color);">{{ user_progress.username }}</span>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="color: var(--text-muted); font-size: 11px;">
-                                {{ user_progress.watched_count }}/{{ user_progress.total_episodes }} episodes ({{ user_progress.progress_percentage|floatformat:1 }}%)
+                                {{ user_progress.watched_count }}/{{ user_progress.total_episodes }} ({{ user_progress.progress_percentage|floatformat:1 }}%)
                             </span>
                             {% if user_progress.average_rating %}
-                                <span style="font-weight: bold; color: var(--progress-bar); font-size: 11px;">
-                                    Average: ⭐{{ user_progress.average_rating|floatformat:1 }}
+                                <span style="font-weight: bold; color: var(--progress-bar); font-size: 11px; display: inline-flex; align-items: center; gap: 2px;">
+                                    Avg: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 12px; height: 12px;">{{ user_progress.average_rating|floatformat:1 }}
                                 </span>
                             {% endif %}
                         </div>
                     </div>
                     
-                    <!-- Display user ratings with enhanced styling -->
+                    <!-- Display user ratings -->
                     <div class="user-ratings-display">
-                        {% if user_progress.season_reviews or user_progress.subgroup_reviews %}
-                            <div style="width: 100%; margin-bottom: 6px; padding: 4px 6px; background: var(--progress-bg); border: 1px inset var(--border-light); font-size: 10px; color: var(--text-muted); text-align: center;">
-                                💡 Click any rating badge below to view full review text
-                            </div>
-                        {% endif %}
-                        
                         <!-- Season ratings -->
                         {% if user_progress.season_reviews %}
-                            <span style="font-size: 11px; font-weight: bold; color: var(--text-color);">Season Ratings:</span>
                             {% for review in user_progress.season_reviews %}
-                                <span class="rating-badge season-rating-badge" 
+                                <span class="rating-badge" 
                                       data-review-type="season"
                                       data-review-rating="{{ review.rating }}"
                                       data-review-text="{{ review.review_text|default:'No review text provided.' }}"
                                       data-review-title="Season {{ review.season_number }} Review"
                                       data-review-user="{{ user_progress.username }}"
                                       data-review-date="{{ review.created_at|date:'M d, Y' }}"
-                                      title="Click to read full review with text and details">
-                                    S{{ review.season_number }}: ⭐{{ review.rating }}
+                                      title="Click to read full review">
+                                    S{{ review.season_number }}: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 12px; height: 12px;">{{ review.rating }} <img src="{% static 'images/win98/document.png' %}" alt="Review" style="width: 12px; height: 12px;">
                                 </span>
                             {% endfor %}
                         {% endif %}
                         
                         <!-- Group ratings -->
                         {% if user_progress.subgroup_reviews %}
-                            {% if user_progress.season_reviews %}<br>{% endif %}
-                            <span style="font-size: 11px; font-weight: bold; color: var(--text-color);">Group Ratings:</span>
                             {% for review in user_progress.subgroup_reviews %}
-                                <span class="rating-badge group-rating-badge"
+                                <span class="rating-badge"
                                       data-review-type="group"
                                       data-review-rating="{{ review.rating }}"
                                       data-review-text="{{ review.review_text|default:'No review text provided.' }}"
                                       data-review-title="{{ review.name }} Review"
                                       data-review-user="{{ user_progress.username }}"
                                       data-review-date="{{ review.created_at|date:'M d, Y' }}"
-                                      title="Click to read full review with text and details">
-                                    {{ review.name|truncatechars:15 }}: ⭐{{ review.rating }}
+                                      title="Click to read full review">
+                                    {{ review.name|truncatechars:15 }}: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 12px; height: 12px;">{{ review.rating }} <img src="{% static 'images/win98/document.png' %}" alt="Review" style="width: 12px; height: 12px;">
                                 </span>
                             {% endfor %}
                         {% endif %}
                     </div>
-                      <!-- Enhanced Episode progress bar with controls -->
+
+                    <!-- Episode progress bar -->
                     <div class="progress-wrapper">
                         <div class="progress-controls" id="progress-controls-{{ forloop.counter }}">
-                            <span style="color: var(--text-color); font-weight: bold;">View:</span>
-                            <button class="progress-mode-toggle active" data-mode="detailed">Detailed</button>
-                            <button class="progress-mode-toggle" data-mode="compact">Compact</button>
-                            <span style="color: var(--text-muted); margin-left: 8px;">
-                                {{ user_progress.total_episodes }} episodes across {{ episodes_by_season|length }} season{{ episodes_by_season|length|pluralize }}
-                            </span>
+                            <button class="retro-btn progress-mode-toggle active" data-mode="detailed" style="padding: 2px 6px;">Detailed</button>
+                            <button class="retro-btn progress-mode-toggle" data-mode="compact" style="padding: 2px 6px;">Compact</button>
                         </div>
                         
                         <div class="episode-progress-container detailed-view" id="progress-container-{{ forloop.counter }}">
                             {% for season_num, episodes in episodes_by_season.items %}
                                 <div class="season-group" data-season="{{ season_num }}">
-                                    {% if forloop.first %}
-                                        <div class="season-label">S{{ season_num }}</div>
-                                    {% endif %}
+                                    <div class="season-label">S{{ season_num }}</div>
                                     {% for episode in episodes %}
                                         <div class="episode-progress-indicator" 
                                              data-season="{{ episode.season_num }}"
@@ -543,109 +333,64 @@
                                              style="background-color: {% if episode.id in user_progress.watched_episodes %}
                                                       {% if episode.id in user_progress.episode_review_map %}
                                                         {% with episode_review=user_progress.episode_review_map|get_item:episode.id %}
-                                                          {% if episode_review.rating == 10 %}#00FFAA{% comment %}Excellent - Bright Teal{% endcomment %}
-                                                          {% elif episode_review.rating == 9 %}#00DDFF{% comment %}Great - Bright Blue{% endcomment %}
-                                                          {% elif episode_review.rating == 8 %}#00AAFF{% comment %}Very Good - Blue{% endcomment %}
-                                                          {% elif episode_review.rating == 7 %}#00FF00{% comment %}Good - Green{% endcomment %}
-                                                          {% elif episode_review.rating == 6 %}#88FF00{% comment %}Above Average - Light Green{% endcomment %}
-                                                          {% elif episode_review.rating == 5 %}#FFFF00{% comment %}Average - Yellow{% endcomment %}
-                                                          {% elif episode_review.rating == 4 %}#FFAA00{% comment %}Below Average - Orange{% endcomment %}
-                                                          {% elif episode_review.rating == 3 %}#FF5500{% comment %}Poor - Light Red{% endcomment %}
-                                                          {% elif episode_review.rating == 2 %}#FF0000{% comment %}Very Poor - Red{% endcomment %}
-                                                          {% elif episode_review.rating == 1 %}#AA0000{% comment %}Terrible - Dark Red{% endcomment %}
-                                                          {% else %}#008080{% comment %}Default for reviewed - Teal{% endcomment %}
+                                                          {% if episode_review.rating >= 8 %}#000080{% comment %}High - Navy{% endcomment %}
+                                                          {% elif episode_review.rating >= 5 %}#008080{% comment %}Mid - Teal{% endcomment %}
+                                                          {% else %}#800000{% comment %}Low - Maroon{% endcomment %}
                                                           {% endif %}
                                                         {% endwith %}
                                                       {% elif episode.season_num in user_progress.season_ratings %}
                                                         {% with season_rating=user_progress.season_ratings|get_item:episode.season_num %}
-                                                          {% if season_rating == 10 %}#00FFAA{% comment %}Excellent - Bright Teal{% endcomment %}
-                                                          {% elif season_rating == 9 %}#00DDFF{% comment %}Great - Bright Blue{% endcomment %}
-                                                          {% elif season_rating == 8 %}#00AAFF{% comment %}Very Good - Blue{% endcomment %}
-                                                          {% elif season_rating == 7 %}#00FF00{% comment %}Good - Green{% endcomment %}
-                                                          {% elif season_rating == 6 %}#88FF00{% comment %}Above Average - Light Green{% endcomment %}
-                                                          {% elif season_rating == 5 %}#FFFF00{% comment %}Average - Yellow{% endcomment %}
-                                                          {% elif season_rating == 4 %}#FFAA00{% comment %}Below Average - Orange{% endcomment %}
-                                                          {% elif season_rating == 3 %}#FF5500{% comment %}Poor - Light Red{% endcomment %}
-                                                          {% elif season_rating == 2 %}#FF0000{% comment %}Very Poor - Red{% endcomment %}
-                                                          {% elif season_rating == 1 %}#AA0000{% comment %}Terrible - Dark Red{% endcomment %}
-                                                          {% else %}#4169E1{% comment %}Default for season reviews - Royal Blue{% endcomment %}
+                                                          {% if season_rating >= 8 %}#000080{% comment %}High - Navy{% endcomment %}
+                                                          {% elif season_rating >= 5 %}#008080{% comment %}Mid - Teal{% endcomment %}
+                                                          {% else %}#800000{% comment %}Low - Maroon{% endcomment %}
                                                           {% endif %}
                                                         {% endwith %}
-                                                      {% else %}var(--progress-bar){% comment %}Watched but not reviewed{% endcomment %}
+                                                      {% else %}#808080{% comment %}Watched - Grey{% endcomment %}
                                                       {% endif %}
-                                                    {% else %}var(--progress-bg){% comment %}Not watched{% endcomment %}
+                                                    {% else %}#fff{% comment %}Not watched - White{% endcomment %}
                                                     {% endif %};">
                                         </div>
                                     {% endfor %}
-                                    {% if not forloop.last and episodes|length > 5 %}
-                                        <div class="season-label">S{{ season_num }}</div>
-                                    {% endif %}
                                 </div>
                             {% endfor %}
                         </div>
                     </div>
-                    <!-- Enhanced tooltip -->
+                    <!-- Tooltip -->
                     <div class="episode-rating-tooltip"></div>
                 </div>
             {% endfor %}
         {% else %}
-            <div style="text-align: center; font-style: italic; background-color: var(--progress-bg); color: var(--text-color); padding: 15px; border: 2px inset var(--border-light); border-radius: 0;">
+            <div style="text-align: center; font-style: italic; padding: 15px; color: var(--text-muted);">
                 No users have watched episodes from this show yet.
             </div>
-        {% endif %}        <!-- Enhanced Rating Color Legend -->
-        <div style="margin-top: 15px; border: 2px inset var(--border-light); padding: 8px; background-color: var(--progress-bg);">
-            <div style="font-weight: bold; margin-bottom: 6px; color: var(--text-color); font-size: 11px;">Rating Color Legend</div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 4px 8px; font-size: 10px;">
+        {% endif %}
+
+        <!-- Legend (Simplified) -->
+        <fieldset style="margin-top: 15px; padding: 8px; border: 2px groove var(--border-light);">
+            <legend style="font-size: 11px;">Legend</legend>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 10px;">
                 <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: var(--progress-bg); border: 1px inset var(--border-light); margin-right: 4px;"></span>
-                    Not watched
+                    <span style="display: inline-block; width: 12px; height: 12px; background-color: #fff; border: 1px solid #000; margin-right: 4px;"></span>
+                    Not Watched
                 </span>
                 <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: var(--progress-bar); border: 1px outset var(--border-light); margin-right: 4px;"></span>
+                    <span style="display: inline-block; width: 12px; height: 12px; background-color: #808080; border: 1px solid #000; margin-right: 4px;"></span>
                     Watched
                 </span>
                 <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #AA0000; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    1★
+                    <span style="display: inline-block; width: 12px; height: 12px; background-color: #000080; border: 1px solid #000; margin-right: 4px;"></span>
+                    High Rating (8-10)
                 </span>
                 <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #FF0000; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    2★
+                    <span style="display: inline-block; width: 12px; height: 12px; background-color: #008080; border: 1px solid #000; margin-right: 4px;"></span>
+                    Mid Rating (5-7)
                 </span>
                 <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #FF5500; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    3★
-                </span>
-                <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #FFAA00; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    4★
-                </span>
-                <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #FFFF00; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    5★
-                </span>
-                <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #88FF00; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    6★
-                </span>
-                <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #00FF00; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    7★
-                </span>
-                <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #00AAFF; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    8★
-                </span>
-                <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #00DDFF; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    9★
-                </span>
-                <span style="display: inline-flex; align-items: center;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #00FFAA; border: 1px outset var(--border-light); margin-right: 4px;"></span>
-                    10★
+                    <span style="display: inline-block; width: 12px; height: 12px; background-color: #800000; border: 1px solid #000; margin-right: 4px;"></span>
+                    Low Rating (1-4)
                 </span>
             </div>
-        </div>
+        </fieldset>
     </div>
 </div>
 
@@ -661,7 +406,7 @@
         <div class="window-body">
             <div class="field-row-stacked" style="margin-bottom: 12px;">
                 <label>Rating</label>
-                <div class="review-rating-display" id="reviewModalRating">⭐ 0</div>
+                <div class="review-rating-display" id="reviewModalRating" style="display: flex; align-items: center; gap: 5px;"><img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 16px; height: 16px;"> 0</div>
                 <div class="review-metadata">
                     <span id="reviewModalUser">User</span> • <span id="reviewModalDate">Date</span>
                 </div>
@@ -680,6 +425,8 @@
 <!-- Enhanced tooltip support for ratings above episodes -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const staticStarUrl = "{% static 'images/win98/star-in-win-98 style.png' %}";
+
     // Modal functionality for review badges
     const modal = document.getElementById('reviewModal');
     const modalTitle = document.getElementById('reviewModalTitle');
@@ -699,7 +446,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const date = badge.getAttribute('data-review-date');
         
         modalTitle.textContent = title;
-        modalRating.innerHTML = `⭐ ${rating}`;
+        modalRating.innerHTML = `<img src="${staticStarUrl}" alt="Rating" style="width: 16px; height: 16px; vertical-align: middle;"> ${rating}`;
         modalText.textContent = text || 'No review text provided.';
         modalUser.textContent = user;
         modalDate.textContent = date;
@@ -790,16 +537,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const updateTooltipPosition = (indicator, tooltip) => {
             const rect = indicator.getBoundingClientRect();
             const containerRect = userProgress.getBoundingClientRect();
-            const progressContainer = userProgress.querySelector('.episode-progress-container');
             
-            // Calculate position (centered above the episode)
-            const left = Math.max(5, Math.min(
-                userProgress.offsetWidth - tooltip.offsetWidth - 5,
-                (rect.left - containerRect.left + (rect.width/2) - (tooltip.offsetWidth/2))
-            ));
+            // Calculate position relative to the userProgress container
+            // Center horizontally over the indicator
+            let left = (rect.left - containerRect.left) + (rect.width / 2) - (tooltip.offsetWidth / 2);
+            
+            // Ensure tooltip stays within container bounds
+            left = Math.max(5, Math.min(userProgress.offsetWidth - tooltip.offsetWidth - 5, left));
+            
+            // Position above the indicator
+            // Calculate bottom position relative to container bottom
+            // rect.top - containerRect.top gives distance from top of container to top of indicator
+            // We want to position it above that point
+            const topOfIndicator = rect.top - containerRect.top;
+            const bottomPos = userProgress.offsetHeight - topOfIndicator + 5;
             
             tooltip.style.left = left + 'px';
-            tooltip.style.bottom = (userProgress.offsetHeight - (rect.top - containerRect.top) + 8) + 'px';
+            tooltip.style.bottom = bottomPos + 'px';
         };
         
         // Add event listeners to all indicators
@@ -822,11 +576,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Add ratings if available with styled presentation
                 if (seasonRating) {
-                    tooltipContent += `<br><span style="color: #ffff80;">Season Rating: ⭐${seasonRating}</span>`;
+                    tooltipContent += `<br><span class="tooltip-season-rating">Season Rating: <img src="${staticStarUrl}" alt="Rating" style="width: 12px; height: 12px; vertical-align: middle;">${seasonRating}</span>`;
                 }
                 
                 if (subgroupRating && subgroupName) {
-                    tooltipContent += `<br><span style="color: #80ffff;">${subgroupName}: ⭐${subgroupRating}</span>`;
+                    tooltipContent += `<br><span class="tooltip-group-rating">${subgroupName}: <img src="${staticStarUrl}" alt="Rating" style="width: 12px; height: 12px; vertical-align: middle;">${subgroupRating}</span>`;
                 }
                 
                 // Set tooltip content and show

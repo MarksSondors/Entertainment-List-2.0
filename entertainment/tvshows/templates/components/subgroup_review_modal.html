@@ -28,7 +28,7 @@
             
             <div class="field-row-stacked">
                 <label for="subgroupReviewText">Review:</label>
-                <textarea id="subgroupReviewText" name="subgroupReviewText" rows="4" placeholder="Write your review here..." required></textarea>
+                <textarea id="subgroupReviewText" name="subgroupReviewText" rows="4" placeholder="Write your review here..." style="font-family: inherit;" required></textarea>
                 <p id="subgroupCharCount" style="text-align: right; font-size: 0.8em; margin: 2px 0;">0 characters</p>
             </div>
             
@@ -121,27 +121,44 @@
                 
                 // Update the review button text to "Edit Review"
                 const reviewButton = document.getElementById(`subgroup-review-button-${subgroupId}`);
+                const reviewButtonBottom = document.getElementById(`subgroup-review-button-bottom-${subgroupId}`);
+                
                 if (reviewButton) {
                     reviewButton.textContent = 'Edit Review';
                 }
-                
-                // Add a rating display if it doesn't exist
-                let ratingDisplay = document.querySelector(`[onclick="openSubgroupEpisodes('${subgroupId}')"]`).parentNode.querySelector('.user-rating');
-                if (!ratingDisplay) {
-                    ratingDisplay = document.createElement('div');
-                    ratingDisplay.className = 'user-rating';
-                    ratingDisplay.style.marginTop = '5px';
-                    ratingDisplay.style.fontWeight = 'bold';
-                    ratingDisplay.style.fontSize = '11px';
-                    
-                    // Insert before the "View Episodes" button
-                    const viewEpisodesButton = document.querySelector(`[onclick="openSubgroupEpisodes('${subgroupId}')"]`);
-                    const subgroupCard = viewEpisodesButton.parentNode;
-                    subgroupCard.insertBefore(ratingDisplay, viewEpisodesButton);
+                if (reviewButtonBottom) {
+                    reviewButtonBottom.textContent = 'Edit Review';
                 }
                 
-                if (ratingDisplay) {
-                    ratingDisplay.innerHTML = `<span style="color: var(--progress-bar);">Your Rating: ⭐ ${rating}/10</span>`;
+                // Add a rating display if it doesn't exist
+                // Find the subgroup card by its onclick attribute
+                const subgroupCard = document.querySelector(`.subgroup-card[onclick*="toggleSubgroup('${subgroupId}')"]`);
+                
+                if (subgroupCard) {
+                    let ratingDisplay = subgroupCard.querySelector('.user-rating');
+                    
+                    if (!ratingDisplay) {
+                        ratingDisplay = document.createElement('div');
+                        ratingDisplay.className = 'user-rating';
+                        ratingDisplay.style.marginTop = '5px';
+                        ratingDisplay.style.fontWeight = 'bold';
+                        ratingDisplay.style.fontSize = '11px';
+                        
+                        // Insert before the review button if it exists in the card
+                        if (reviewButton && subgroupCard.contains(reviewButton)) {
+                            reviewButton.parentNode.insertBefore(ratingDisplay, reviewButton);
+                        } else {
+                            // Fallback: append to subgroup-info
+                            const subgroupInfo = subgroupCard.querySelector('.subgroup-info');
+                            if (subgroupInfo) {
+                                subgroupInfo.appendChild(ratingDisplay);
+                            }
+                        }
+                    }
+                    
+                    if (ratingDisplay) {
+                        ratingDisplay.innerHTML = `<span style="color: var(--progress-bar);">Your Rating: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 12px; height: 12px; vertical-align: middle;"> ${rating}/10</span>`;
+                    }
                 }
                 
                 alert('Review submitted successfully!');
