@@ -319,6 +319,16 @@
     border-radius: 2px;
 }
 
+.subgroup-poster {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border: 2px solid var(--poster-border);
+    margin-bottom: 8px;
+    border-radius: 2px;
+    background-color: var(--border-dark);
+}
+
 /* Episodes container improvements */
 .episodes-container {
     display: none;
@@ -482,15 +492,64 @@
         padding: 6px 8px !important;
     }
     
+    /* Improved mobile list view for seasons */
     .seasons-grid {
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
-        grid-gap: 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+    
+    .season-card {
+        flex-direction: row !important;
+        align-items: flex-start !important;
+        text-align: left !important;
+        padding: 10px !important;
+        min-height: 140px;
     }
     
     .season-poster {
-        height: 180px !important;
+        width: 90px !important;
+        height: 135px !important;
+        margin-bottom: 0 !important;
+        margin-right: 15px !important;
+        flex-shrink: 0 !important;
+        object-fit: cover !important;
     }
     
+    /* Wrap content in season card for better layout */
+    .season-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding-left: 10px;
+        min-width: 0;
+    }
+
+    /* Wrap content in subgroup card for better layout */
+    .subgroup-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding-left: 10px;
+        min-width: 0;
+    }
+    
+    /* Force all children to take full width */
+    .season-info > *,
+    .subgroup-info > * {
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* Specific fix for progress bars */
+    .season-info .progress,
+    .subgroup-info .progress {
+        display: block !important;
+        margin: 8px 0 !important;
+    }
+
     .episode-item {
         flex-direction: column !important;
         align-items: stretch !important;
@@ -526,17 +585,34 @@
         padding: 6px 12px !important;
         font-size: 10px !important;
     }
-      .subgroups-grid {
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
-        grid-gap: 8px !important;
+
+    /* Improved mobile list view for subgroups */
+    .subgroups-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
     }
     
     .subgroup-card {
-        padding: 5px !important;
+        flex-direction: row !important;
+        align-items: flex-start !important;
+        text-align: left !important;
+        padding: 10px !important;
     }
     
-    .subgroup-card div:first-child {
-        height: 140px !important;
+    .subgroup-poster {
+        width: 120px !important;
+        height: 68px !important;
+        margin-bottom: 0 !important;
+        margin-right: 15px !important;
+        flex-shrink: 0 !important;
+        object-fit: cover !important;
+    }
+    
+    /* Make buttons full width on mobile inside card */
+    .subgroup-card .retro-btn {
+        width: 100% !important;
+        margin-top: 10px !important;
     }
     
     #previous-episodes-dialog {
@@ -554,24 +630,15 @@
         grid-template-columns: 1fr !important;
     }
     
-    .seasons-grid {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
-    }
-    
+    /* Adjustments for very small screens */
     .season-poster {
-        height: 160px !important;
-    }
-      .subgroups-grid {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
-        grid-gap: 5px !important;
+        width: 70px !important;
+        height: 105px !important;
     }
     
-    .subgroup-card {
-        padding: 4px !important;
-    }
-    
-    .subgroup-card div:first-child {
-        height: 120px !important;
+    .subgroup-poster {
+        width: 100px !important;
+        height: 56px !important;
     }
 }
 
@@ -742,33 +809,39 @@
                 {% for season in tv_show.seasons.all %}
                     <div class="season-card" onclick="toggleSeason('season-{{ season.id }}')">
                         <img src="{{ season.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                             {% if season.poster %}
+                             srcset="{{ season.poster|tmdb_image_size:'w154' }} 154w, {{ season.poster|tmdb_image_size:'w342' }} 342w, {{ season.poster }} 780w"
+                             sizes="(max-width: 768px) 90px, 240px"
+                             {% endif %}
                              alt="Season {{ season.season_number }} Poster" class="season-poster">
-                        <div style="margin: 8px 0;">
-                            <strong>{{ season.title }}</strong>
-                            {% if season.name and season.name != '' %}<p style="margin: 2px 0; font-size: 12px;">{{ season.name }}</p>{% endif %}
+                        <div class="season-info">
+                            <div style="margin: 8px 0;">
+                                <strong>{{ season.title }}</strong>
+                                {% if season.name and season.name != '' %}<p style="margin: 2px 0; font-size: 12px;">{{ season.name }}</p>{% endif %}
+                            </div>
+                            <div class="progress" style="margin: 5px 0;">
+                                <div class="progress-bar" id="progress-bar-{{ season.id }}" style="width: {{ season.progress|default:0 }}%;"></div>
+                            </div>
+                            <span id="season-progress-{{ season.id }}" style="font-size: 12px; margin-bottom: 8px;">
+                                {{ season.watched_episodes_count|default:0 }}/{{ season.episodes.count }}
+                            </span>
+                            
+                            <!-- Add user rating display if it exists -->
+                            {% if season.user_rating %}
+                            <div id="season-rating-{{ season.id }}" class="user-rating" style="margin-top: 5px; font-weight: bold; font-size: 11px;">
+                                <span style="color: var(--progress-bar);">Your Rating: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 14px; height: 14px; vertical-align: middle;"> {{ season.user_rating }}/10</span>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Review button - only visible when all episodes are watched -->
+                            <button 
+                                id="review-button-{{ season.id }}"
+                                class="season-review-button retro-btn"
+                                onclick="event.stopPropagation(); openSeasonReviewModal('{{ season.id }}', '{{ season.title }}');"
+                                style="margin-top: 8px; display: {% if season.watched_episodes_count == season.episodes.count and season.episodes.count > 0 %}block{% else %}none{% endif %}; font-size: 10px; padding: 3px 6px;">
+                                {% if season.user_rating %}Edit Review{% else %}Review Season{% endif %}
+                            </button>
                         </div>
-                        <div class="progress" style="margin: 5px 0;">
-                            <div class="progress-bar" id="progress-bar-{{ season.id }}" style="width: {{ season.progress|default:0 }}%;"></div>
-                        </div>
-                        <span id="season-progress-{{ season.id }}" style="font-size: 12px; margin-bottom: 8px;">
-                            {{ season.watched_episodes_count|default:0 }}/{{ season.episodes.count }}
-                        </span>
-                        
-                        <!-- Add user rating display if it exists -->
-                        {% if season.user_rating %}
-                        <div id="season-rating-{{ season.id }}" class="user-rating" style="margin-top: 5px; font-weight: bold; font-size: 11px;">
-                            <span style="color: var(--progress-bar);">Your Rating: ⭐ {{ season.user_rating }}/10</span>
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Review button - only visible when all episodes are watched -->
-                        <button 
-                            id="review-button-{{ season.id }}"
-                            class="season-review-button retro-btn"
-                            onclick="event.stopPropagation(); openSeasonReviewModal('{{ season.id }}', '{{ season.title }}');"
-                            style="margin-top: 8px; display: {% if season.watched_episodes_count == season.episodes.count and season.episodes.count > 0 %}block{% else %}none{% endif %}; font-size: 10px; padding: 3px 6px;">
-                            {% if season.user_rating %}Edit Review{% else %}Review Season{% endif %}
-                        </button>
                     </div>
                     
                     <!-- Season episodes container -->
@@ -787,9 +860,9 @@
                                 <div class="episode-info" style="flex: 1; margin: 0 15px 0 0;">
                                     <strong style="display: block; margin-bottom: 5px;">{{ episode.episode_number }}. {{ episode.title }}</strong>
                                     <div style="display: flex; align-items: center; margin: 5px 0; flex-wrap: wrap; gap: 15px; font-size: 12px; color: var(--text-muted);">
-                                        <span>⭐ {{ episode.rating|default:"N/A" }}</span>
-                                        <span>⏱️ {{ episode.runtime|default:"?" }} min</span>
-                                        <span>📅 
+                                        <span><img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 16px; height: 16px; vertical-align: middle;"> {{ episode.rating|default:"N/A" }}</span>
+                                        <span><img src="{% static 'images/win98/clock.png' %}" alt="Runtime" style="width: 16px; height: 16px; vertical-align: middle;"> {{ episode.runtime|default:"?" }} min</span>
+                                        <span><img src="{% static 'images/win98/calendar.png' %}" alt="Date" style="width: 16px; height: 16px; vertical-align: middle;"> 
                                             {% if episode.air_time %}
                                                 {{ episode.air_time|date:"M d, Y (H:i T)" }}
                                             {% else %}
@@ -802,7 +875,7 @@
                                     <!-- Add watched users section -->
                                     {% if episode.watched_users %}
                                         <div class="watched-users" style="font-size: 11px; margin-top: 8px; color: var(--text-muted);">
-                                            <span>👤 Watched by: 
+                                            <span><img src="{% static 'images/win98/users.png' %}" alt="Users" style="width: 16px; height: 16px; vertical-align: middle;"> Watched by: 
                                                 {% for user in episode.watched_users %}
                                                     {{ user.username }}{% if not forloop.last %}, {% endif %}
                                                 {% endfor %}
@@ -825,6 +898,24 @@
                                 No episodes available for this season.
                             </div>
                         {% endfor %}
+
+                        <!-- Bottom Review Button and Close Button -->
+                        <div style="margin-top: 15px; text-align: center; display: flex; justify-content: center; gap: 10px;">
+                            <button 
+                                id="review-button-bottom-{{ season.id }}"
+                                class="retro-btn"
+                                onclick="event.stopPropagation(); openSeasonReviewModal('{{ season.id }}', '{{ season.title }}');"
+                                style="display: {% if season.watched_episodes_count == season.episodes.count and season.episodes.count > 0 %}inline-block{% else %}none{% endif %}; padding: 6px 12px;">
+                                {% if season.user_rating %}Edit Review{% else %}Review Season{% endif %}
+                            </button>
+                            
+                            <button 
+                                class="retro-btn"
+                                onclick="event.stopPropagation(); toggleSeason('season-{{ season.id }}');"
+                                style="padding: 6px 12px;">
+                                Close
+                            </button>
+                        </div>
                     </div>
                 {% empty %}
                     <div style="text-align: center; font-style: italic; background-color: var(--progress-bg); padding: 15px; border: 2px inset var(--bg-color); grid-column: 1 / -1; color: var(--text-muted);">
@@ -859,47 +950,47 @@
                         
                         <div class="subgroups-grid">
                             {% for subgroup in group.sub_groups.all %}
-                                <div class="subgroup-card">
-                                    <div style="width: 100%; height: 200px; background-color: var(--border-dark); color: white; display: flex; align-items: center; justify-content: center; border: 2px solid var(--poster-border); margin-bottom: 8px; background-size: cover; background-position: center; border-radius: 2px; {% if subgroups_data|get_item:subgroup.id|get_item:'still_image' %}background-image: url('{{ subgroups_data|get_item:subgroup.id|get_item:'still_image' }}');{% endif %}">
-                                        <div style="background-color: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 3px;">
-                                            {{ subgroup.name }}
+                                <div class="subgroup-card" onclick="toggleSubgroup('{{ subgroup.id }}')">
+                                    <img src="{% if subgroups_data|get_item:subgroup.id|get_item:'still_image' %}{{ subgroups_data|get_item:subgroup.id|get_item:'still_image' }}{% else %}https://via.placeholder.com/300x169?text=No+Image{% endif %}" 
+                                         alt="{{ subgroup.name }}" 
+                                         class="subgroup-poster">
+                                    <div class="subgroup-info">
+                                        <div>
+                                            <strong>{{ subgroup.name }}</strong>
+                                            {% if subgroup.description %}
+                                                <p style="font-size: 12px; margin: 5px 0; color: var(--text-muted);">{{ subgroup.description|truncatechars:50 }}</p>
+                                            {% endif %}
                                         </div>
-                                    </div>
-                                    <div>
-                                        <strong>{{ subgroup.name }}</strong>
-                                        {% if subgroup.description %}
-                                            <p style="font-size: 12px; margin: 5px 0; color: var(--text-muted);">{{ subgroup.description|truncatechars:50 }}</p>
+                                        
+                                        <!-- Progress bar section -->
+                                        <div class="progress" style="margin: 8px 0;">
+                                            <div class="progress-bar" id="subgroup-progress-bar-{{ subgroup.id }}" style="width: {{ subgroups_data|get_item:subgroup.id|get_item:'progress'|default:0 }}%;"></div>
+                                        </div>
+                                        <span id="subgroup-progress-{{ subgroup.id }}" style="font-size: 12px; color: var(--text-muted);">
+                                            {{ subgroups_data|get_item:subgroup.id|get_item:'watched_count'|default:0 }}/{{ subgroups_data|get_item:subgroup.id|get_item:'total'|default:0 }}
+                                        </span>
+                                        
+                                        <!-- Add user rating display if it exists -->
+                                        {% if subgroups_data|get_item:subgroup.id|get_item:'user_rating' %}
+                                        <div class="user-rating" style="margin-top: 5px; font-weight: bold; font-size: 11px;">
+                                            <span style="color: var(--progress-bar);">Your Rating: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 14px; height: 14px; vertical-align: middle;"> {{ subgroups_data|get_item:subgroup.id|get_item:'user_rating' }}/10</span>
+                                        </div>
                                         {% endif %}
+                                        
+                                        <!-- Review button - update text if review exists -->
+                                        <button 
+                                            id="subgroup-review-button-{{ subgroup.id }}"
+                                            class="subgroup-review-button retro-btn"
+                                            onclick="event.stopPropagation(); openSubgroupReviewModal('{{ subgroup.id }}', '{{ subgroup.name }}');"
+                                            style="margin-top: 5px; width: 100%; font-size: 10px; padding: 3px 6px; display: {% if subgroups_data|get_item:subgroup.id|get_item:'completed' %}block{% else %}none{% endif %};">
+                                            {% if subgroups_data|get_item:subgroup.id|get_item:'user_rating' %}Edit Review{% else %}Review Group{% endif %}
+                                        </button>
                                     </div>
-                                    
-                                    <!-- Progress bar section -->
-                                    <div class="progress" style="margin: 8px 0;">
-                                        <div class="progress-bar" id="subgroup-progress-bar-{{ subgroup.id }}" style="width: {{ subgroups_data|get_item:subgroup.id|get_item:'progress'|default:0 }}%;"></div>
-                                    </div>
-                                    <span id="subgroup-progress-{{ subgroup.id }}" style="font-size: 12px; color: var(--text-muted);">
-                                        {{ subgroups_data|get_item:subgroup.id|get_item:'watched_count'|default:0 }}/{{ subgroups_data|get_item:subgroup.id|get_item:'total'|default:0 }}
-                                    </span>
-                                    
-                                    <!-- Add user rating display if it exists -->
-                                    {% if subgroups_data|get_item:subgroup.id|get_item:'user_rating' %}
-                                    <div class="user-rating" style="margin-top: 5px; font-weight: bold; font-size: 11px;">
-                                        <span style="color: var(--progress-bar);">Your Rating: ⭐ {{ subgroups_data|get_item:subgroup.id|get_item:'user_rating' }}/10</span>
-                                    </div>
-                                    {% endif %}
-                                    
-                                    <button onclick="openSubgroupEpisodes('{{ subgroup.id }}')" 
-                                            class="retro-btn" style="margin-top: 8px; width: 100%; font-size: 10px; padding: 4px 6px;">
-                                        View Episodes
-                                    </button>
-                                    
-                                    <!-- Review button - update text if review exists -->
-                                    <button 
-                                        id="subgroup-review-button-{{ subgroup.id }}"
-                                        class="subgroup-review-button retro-btn"
-                                        onclick="openSubgroupReviewModal('{{ subgroup.id }}', '{{ subgroup.name }}');"
-                                        style="margin-top: 5px; width: 100%; font-size: 10px; padding: 3px 6px; display: {% if subgroups_data|get_item:subgroup.id|get_item:'completed' %}block{% else %}none{% endif %};">
-                                        {% if subgroups_data|get_item:subgroup.id|get_item:'user_rating' %}Edit Review{% else %}Review Group{% endif %}
-                                    </button>
+                                </div>
+                                
+                                <!-- Subgroup episodes container (inline) -->
+                                <div class="episodes-container subgroup-episodes" id="subgroup-episodes-{{ subgroup.id }}" style="display: none;">
+                                    <p class="loading-message" style="text-align: center; padding: 20px; color: var(--text-color);">Loading episodes...</p>
                                 </div>
                             {% endfor %}
                         </div>
@@ -927,20 +1018,6 @@
 {% include "components/season_review_modal.html" %}
 
 {% if tv_show.episode_groups.exists %}
-<!-- Subgroup Episodes Dialog -->
-<div id="subgroup-episodes-dialog" class="window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; width: 90%; max-width: 600px; max-height: 80vh; flex-direction: column;">
-    <div class="title-bar" style="flex: 0 0 auto;">
-        <div class="title-bar-text" id="subgroup-episodes-title">Episodes</div>
-        <div class="title-bar-controls">
-            <button aria-label="Close" onclick="closeSubgroupEpisodes()"></button>
-        </div>
-    </div>
-    <div class="window-body" id="subgroup-episodes-content" style="flex: 1; overflow-y: auto; max-height: calc(80vh - 30px);">
-        <!-- Episodes content will be loaded here -->
-        <p class="loading-message">Loading episodes...</p>
-    </div>
-</div>
-
 <!-- Include the subgroup review modal -->
 {% include "components/subgroup_review_modal.html" %}
 {% endif %}
@@ -1127,6 +1204,7 @@
                     const progressElement = document.getElementById(`subgroup-progress-${subgroupId}`);
                     const progressBar = document.getElementById(`subgroup-progress-bar-${subgroupId}`);
                     const reviewButton = document.getElementById(`subgroup-review-button-${subgroupId}`);
+                    const reviewButtonBottom = document.getElementById(`subgroup-review-button-bottom-${subgroupId}`);
                     
                     if (progressElement) {
                         progressElement.textContent = `${progress.watched}/${progress.total}`;
@@ -1137,8 +1215,14 @@
                     }
                     
                     // Update subgroup review button visibility
+                    const shouldShow = (progress.watched === progress.total && progress.total > 0);
+                    
                     if (reviewButton) {
-                        reviewButton.style.display = (progress.watched === progress.total && progress.total > 0) ? 'block' : 'none';
+                        reviewButton.style.display = shouldShow ? 'block' : 'none';
+                    }
+                    
+                    if (reviewButtonBottom) {
+                        reviewButtonBottom.style.display = shouldShow ? 'inline-block' : 'none';
                     }
                 }
                   // Update buttons for marked episodes
@@ -1175,8 +1259,16 @@
     // Helper function to update button visibility
     function updateReviewButtonVisibility(id, watched, total) {
         const reviewButton = document.getElementById(`review-button-${id}`);
+        const reviewButtonBottom = document.getElementById(`review-button-bottom-${id}`);
+        
+        const shouldShow = (watched === total && total > 0);
+        
         if (reviewButton) {
-            reviewButton.style.display = (watched === total && total > 0) ? 'block' : 'none';
+            reviewButton.style.display = shouldShow ? 'block' : 'none';
+        }
+        
+        if (reviewButtonBottom) {
+            reviewButtonBottom.style.display = shouldShow ? 'inline-block' : 'none';
         }
     }    // Function to switch between main tabs (Seasons vs Episode Groups)
     function switchMainTab(tabId) {
@@ -1237,37 +1329,58 @@
         activeButton.style.border = '2px inset var(--border-dark)';
     }
     
-    function openSubgroupEpisodes(subgroupId) {
-        const dialog = document.getElementById('subgroup-episodes-dialog');
-        const content = document.getElementById('subgroup-episodes-content');
-        const overlay = document.getElementById('overlay');
-          // Show loading state
-        content.innerHTML = '<p class="loading-message" style="text-align: center; padding: 20px; color: var(--text-color);">Loading episodes...</p>';
-        dialog.style.display = 'block';
-        overlay.style.display = 'block';
+    function toggleSubgroup(subgroupId) {
+        const containerId = `subgroup-episodes-${subgroupId}`;
+        const episodesContainer = document.getElementById(containerId);
         
+        if (episodesContainer.style.display === "block") {
+            episodesContainer.style.display = "none";
+        } else {
+            // Close all other episode containers first (both seasons and subgroups)
+            document.querySelectorAll('.episodes-container').forEach(container => {
+                container.style.display = "none";
+            });
+            
+            episodesContainer.style.display = "block";
+            
+            // Check if content is loaded (simple check if it contains more than just the loading message)
+            // Or we can check a data attribute. For now, let's check if we need to load.
+            // If it only has the loading message, we load.
+            if (episodesContainer.querySelector('.loading-message')) {
+                loadSubgroupEpisodes(subgroupId, episodesContainer);
+            } else {
+                // If already loaded, scroll to last watched
+                scrollToLastWatchedEpisodeInSubgroup(episodesContainer);
+            }
+        }
+    }
+
+    function loadSubgroupEpisodes(subgroupId, content) {
         // Fetch episodes for this subgroup
         fetch(`/tvshows/subgroup/${subgroupId}/episodes/`)
             .then(response => response.json())
-            .then(data => {                if (data.episodes.length === 0) {
+            .then(data => {
+                if (data.episodes.length === 0) {
                     content.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-color);">No episodes available in this group.</div>';
                     return;
                 }
-                  let html = '';
+                
+                let html = `<h3 style="margin-bottom: 15px; color: var(--text-color);">${data.subgroup_name || 'Group'} Episodes</h3>`;
+                
                 data.episodes.forEach(episode => {
                     html += `
-                        <div class="episode-item" id="subgroup-episode-${episode.id}" style="display: flex; align-items: center; padding: 10px; margin-bottom: 10px; background-color: var(--window-bg); border: 1px solid var(--border-dark); color: var(--text-color);">
-                            <div class="episode-image">
+                        <div class="episode-item" id="subgroup-episode-${episode.id}" style="display: flex; align-items: flex-start; padding: 10px; border-bottom: 1px solid var(--border-dark); background-color: var(--progress-bg); margin-bottom: 8px; border-radius: 2px;">
+                            <div class="episode-image" style="flex-shrink: 0; margin-right: 15px;">
                                 <img src="${episode.still || 'https://via.placeholder.com/160x90?text=No+Image'}" 
                                      alt="Episode ${episode.episode_number}" 
                                      style="width: 160px; height: 90px; object-fit: cover; border: 1px solid var(--poster-border);">
                             </div>
-                            <div class="episode-info" style="flex: 1; margin: 0 10px;">
-                                <strong style="color: var(--text-color);">S${episode.season_number}E${episode.episode_number} - ${episode.title}</strong>
-                                <div style="display: flex; align-items: center; margin: 3px 0; color: var(--text-muted);">
-                                    <span style="margin-right: 15px;">⭐ ${episode.rating || 'N/A'}</span>
-                                    <span style="margin-right: 15px;">⏱️ ${episode.runtime || '?'} min</span>
-                                    <span>📅 ${
+                            <div class="episode-info" style="flex: 1; margin: 0 15px 0 0;">
+                                <strong style="display: block; margin-bottom: 5px; color: var(--text-color);">S${episode.season_number}E${episode.episode_number} - ${episode.title}</strong>
+                                <div style="display: flex; align-items: center; margin: 5px 0; flex-wrap: wrap; gap: 15px; font-size: 12px; color: var(--text-muted);">
+                                    <span><img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 16px; height: 16px; vertical-align: middle;"> ${episode.rating || 'N/A'}</span>
+                                    <span><img src="{% static 'images/win98/clock.png' %}" alt="Runtime" style="width: 16px; height: 16px; vertical-align: middle;"> ${episode.runtime || '?'} min</span>
+                                    <span><img src="{% static 'images/win98/calendar.png' %}" alt="Date" style="width: 16px; height: 16px; vertical-align: middle;"> ${
                                         episode.air_time 
                                         ? (() => {
                                             const d = new Date(episode.air_time);
@@ -1276,11 +1389,11 @@
                                         : (episode.air_date ? new Date(episode.air_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBA')
                                     }</span>
                                 </div>
-                                <p style="color: var(--text-color); margin: 5px 0;">${episode.overview ? (episode.overview.length > 150 ? episode.overview.substring(0, 150) + '...' : episode.overview) : 'No description available.'}</p>
+                                <p style="margin: 5px 0; font-size: 13px; line-height: 1.4; color: var(--text-color);">${episode.overview ? (episode.overview.length > 150 ? episode.overview.substring(0, 150) + '...' : episode.overview) : 'No description available.'}</p>
                                 
                                 ${episode.watched_by ? `
-                                <div class="watched-users" style="font-size: 12px; margin-top: 5px; color: var(--text-muted);">
-                                    <span>👤 Watched by: ${episode.watched_by.join(', ')}</span>
+                                <div class="watched-users" style="font-size: 11px; margin-top: 8px; color: var(--text-muted);">
+                                    <span><img src="{% static 'images/win98/users.png' %}" alt="Users" style="width: 16px; height: 16px; vertical-align: middle;"> Watched by: ${episode.watched_by.join(', ')}</span>
                                 </div>` : ''}
                             </div>
                             <button 
@@ -1290,28 +1403,46 @@
                                 data-episode-number="${episode.episode_number}"
                                 data-watched="${episode.is_watched ? 'true' : 'false'}"
                                 onclick="toggleWatchStatus(this)"
-                                style="min-width: 80px; align-self: center;">
+                                style="align-self: center;">
                                 ${episode.is_watched ? 'Watched' : 'Mark Watched'}
                             </button>
                         </div>
                     `;
                 });
-                  content.innerHTML = html;
                 
-                // Update dialog title
-                document.getElementById('subgroup-episodes-title').textContent = `Episodes: ${data.subgroup_name || 'Group'}`;
+                // Add bottom review button and close button
+                const subgroupData = subgroupsData[subgroupId];
+                const isCompleted = subgroupData && subgroupData.watched_count === subgroupData.total && subgroupData.total > 0;
+                const hasUserRating = subgroupData && subgroupData.user_rating;
+                
+                html += `
+                    <div style="margin-top: 15px; text-align: center; display: flex; justify-content: center; gap: 10px;">
+                        <button 
+                            id="subgroup-review-button-bottom-${subgroupId}"
+                            class="retro-btn"
+                            onclick="event.stopPropagation(); openSubgroupReviewModal('${subgroupId}', '${data.subgroup_name || 'Group'}');"
+                            style="display: ${isCompleted ? 'inline-block' : 'none'}; padding: 6px 12px;">
+                            ${hasUserRating ? 'Edit Review' : 'Review Group'}
+                        </button>
+                        
+                        <button 
+                            class="retro-btn"
+                            onclick="event.stopPropagation(); toggleSubgroup('${subgroupId}');"
+                            style="padding: 6px 12px;">
+                            Close
+                        </button>
+                    </div>
+                `;
+                
+                content.innerHTML = html;
                 
                 // Auto-scroll to the last watched episode in the subgroup
                 scrollToLastWatchedEpisodeInSubgroup(content);
-            })            .catch(error => {
+            })
+            .catch(error => {
                 console.error('Error fetching episodes:', error);
                 content.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-color);">Error loading episodes: ${error.message}</div>`;
             });
-    }
-    
-    function closeSubgroupEpisodes() {
-        document.getElementById('subgroup-episodes-dialog').style.display = 'none';
-        document.getElementById('overlay').style.display = 'none';
     }
     
     // Extend the existing markEpisodeWatched function to update subgroup progress
