@@ -138,11 +138,15 @@
                             Don't send notifications during specific hours
                         </small>
 
-                        <div class="field-row" style="margin-left: 20px; margin-bottom: 10px; align-items: center; gap: 10px;">
-                            <label for="quiet_hours_start">From:</label>
-                            <input type="time" id="quiet_hours_start" name="quiet_hours_start" value="{{ notification_prefs.quiet_hours_start|time:'H:i' }}" style="width: auto;">
-                            <label for="quiet_hours_end" style="margin-left: 10px;">To:</label>
-                            <input type="time" id="quiet_hours_end" name="quiet_hours_end" value="{{ notification_prefs.quiet_hours_end|time:'H:i' }}" style="width: auto;">
+                        <div class="field-row" style="margin-left: 20px; margin-bottom: 10px; align-items: center; gap: 10px; flex-wrap: nowrap !important;">
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <label for="quiet_hours_start">From:</label>
+                                <input type="time" id="quiet_hours_start" name="quiet_hours_start" value="{{ notification_prefs.quiet_hours_start|time:'H:i' }}" style="width: auto;">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <label for="quiet_hours_end">To:</label>
+                                <input type="time" id="quiet_hours_end" name="quiet_hours_end" value="{{ notification_prefs.quiet_hours_end|time:'H:i' }}" style="width: auto;">
+                            </div>
                         </div>
                         <small style="display: block; margin-left: 20px; margin-bottom: 15px; font-size: 12px; color: var(--text-muted);">
                             Example: 22:00 to 08:00 for overnight quiet hours
@@ -401,17 +405,21 @@
         background-color: var(--win98-input-bg);
         border: 2px solid;
         border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
-        position: relative;
+        /* position: relative; Removed to fix mobile layout issues */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     input[type="checkbox"]:checked::after {
         content: '✓';
-        position: absolute;
-        top: -3px;
-        left: 1px;
+        /* position: absolute; */
+        /* top: -3px; */
+        /* left: 1px; */
         font-size: 12px;
         font-weight: bold;
         color: var(--win98-text);
+        line-height: 1;
     }
 
     label {
@@ -446,7 +454,9 @@
         font-family: 'MS Sans Serif', Tahoma, sans-serif;
         font-size: 10px;
         color: var(--text-muted);
-    }/* Mobile responsive */
+    }
+
+    /* Mobile responsive */
     @media (max-width: 768px) {
         .profile-layout {
             flex-direction: column;
@@ -461,20 +471,48 @@
             padding: 10px !important;
         }
         
-
-        
         /* Prevent buttons from stretching full width on mobile */
         .btn {
             width: auto;
             min-width: auto;
             flex-shrink: 0;
-            font-size: 10px;
-            padding: 4px 8px;
+            font-size: 11px;
+            padding: 6px 10px; /* Slightly larger touch target */
+            margin-bottom: 4px;
         }
         
         .field-row {
             flex-wrap: wrap;
             gap: 8px;
+            margin-bottom: 4px !important; /* Tighter spacing with description */
+            flex-direction: row !important; /* Ensure row direction */
+            align-items: center !important;
+        }
+        
+        /* Reset indentation for descriptions and fields on mobile */
+        small[style*="margin-left"],
+        .field-row[style*="margin-left"] {
+            margin-left: 0 !important;
+        }
+
+        /* Reduce gap after descriptions */
+        small {
+            margin-bottom: 12px !important;
+        }
+        
+        /* Fix quiet hours section specifically */
+        label[style*="margin-left"] {
+            margin-left: 0 !important;
+        }
+
+        /* Ensure quiet hours inputs are aligned nicely */
+        input[type="time"] {
+            margin-left: 4px;
+        }
+
+        /* Fix alignment in quiet hours row by removing margin-top added by field-row-stacked *+* */
+        .field-row[style*="flex-wrap: nowrap"] > div {
+            margin-top: 0 !important;
         }
         
         .field-row[style*="justify-content: flex-end"] {
@@ -485,6 +523,7 @@
         .field-row[style*="justify-content: space-between"] {
             flex-direction: column;
             align-items: flex-start !important;
+            gap: 12px;
         }
 
         .field-row[style*="justify-content: space-between"] > div {
@@ -493,6 +532,25 @@
 
         .field-row[style*="justify-content: space-between"] > div[style*="display: flex"] {
             flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        /* Improve input sizing on mobile */
+        input[type="text"], 
+        input[type="time"],
+        textarea {
+            max-width: 100%;
+        }
+        
+        /* Better spacing for sunken panels */
+        .sunken-panel {
+            padding: 12px !important;
+            margin-bottom: 15px !important;
+        }
+        
+        /* Adjust button row spacing */
+        .field-row.button-row {
+            margin-top: 10px;
         }
     }
 </style>
