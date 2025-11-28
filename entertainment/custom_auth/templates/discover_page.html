@@ -177,28 +177,34 @@
             background: var(--bg-color);
             border-bottom: 2px solid var(--border-dark);
             box-shadow: 0 2px 4px var(--shadow-color);
+            /* PWA safe area for iPhone notch/Dynamic Island */
+            padding-top: env(safe-area-inset-top, 0px);
         }
 
         .search-results-wrapper {
             max-width: 1200px;
             margin: 0 auto;
             padding: 80px 20px 20px 20px; /* Top padding to account for fixed search bar */
+            /* Add safe area to top padding for PWA mode */
+            padding-top: calc(80px + env(safe-area-inset-top, 0px));
         }
 
         .default-content {
             max-width: 1200px;
             margin: 0 auto;
             padding: 80px 20px 0 20px; /* Add top padding to account for fixed search bar */
+            /* Add safe area to top padding for PWA mode */
+            padding-top: calc(80px + env(safe-area-inset-top, 0px));
         }
 
         /* Adjust padding for mobile */
         @media (max-width: 768px) {
             .search-results-wrapper {
-                padding-top: 90px; /* Slightly more padding on mobile */
+                padding-top: calc(90px + env(safe-area-inset-top, 0px)); /* Slightly more padding on mobile + safe area */
             }
             
             .default-content {
-                padding-top: 90px; /* Slightly more padding on mobile */
+                padding-top: calc(90px + env(safe-area-inset-top, 0px)); /* Slightly more padding on mobile + safe area */
             }
         }        .discover-section {
             margin-bottom: 40px;
