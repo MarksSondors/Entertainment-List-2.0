@@ -44,7 +44,9 @@
                 {% else %}
                     <div class="no-genres-message">
                         <div class="message-content">
-                            <div class="message-icon">📁</div>
+                            <div class="message-icon">
+                                <img src="{% static 'images/win98/directory_closed.png' %}" alt="" style="width: 48px; height: 48px;">
+                            </div>
                             <div class="message-text">No folders (genres) available.</div>
                             <div class="message-subtext">Genres will appear here once they are added to the system.</div>
                         </div>
@@ -81,6 +83,11 @@
         --folder-active-text: #ffffff;
         --input-bg: #ffffff;
         --alert-bg: #e1e1e1;
+        /* Win98 colors for title bar */
+        --win98-gray: #c0c0c0;
+        --win98-light: #ffffff;
+        --win98-dark: #808080;
+        --win98-black: #000000;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -104,6 +111,9 @@
             --folder-active-text: #ffffff;
             --input-bg: #2a2a2a;
             --alert-bg: #404040;
+            /* Win98 colors for dark mode title bar */
+            --win98-light: #606060;
+            --win98-dark: #151515;
         }
     }
 
@@ -128,20 +138,11 @@
         box-shadow: 2px 2px 4px var(--shadow-color);
     }
 
-    .title-bar {
-        background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
-        color: white;
-        padding: 2px;
-        font-size: 11px;
-        font-weight: bold;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
+    /* Title bar uses default 98.css gradient in light mode */
 
     @media (prefers-color-scheme: dark) {
         .title-bar {
-            background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+            background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
         }
     }
 
@@ -518,7 +519,6 @@
             font-size: 12px;
         }
     }
-</style>
 </style>
 
 <script>

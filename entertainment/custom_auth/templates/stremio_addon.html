@@ -1,0 +1,405 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}Stremio Addon | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="profile-layout">
+        <div class="main-content">
+            <div class="window">
+                <div class="title-bar">
+                    <div class="title-bar-text">Stremio Addon - {{ request.user.username }}</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body">
+                    
+                    <!-- About Section -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <h4>📺 What is the Stremio Addon?</h4>
+                        <div class="sunken-panel" style="padding: 10px;">
+                            <p style="margin: 0 0 10px 0;">
+                                The Entertainment List Stremio Addon brings your watchlists, recommendations, and community picks directly into Stremio. You'll see your personal catalogs right alongside other addons.
+                            </p>
+                            <p style="margin: 0;">
+                                <strong>Features:</strong>
+                            </p>
+                            <ul style="margin: 5px 0 0 20px; padding: 0;">
+                                <li>📋 <strong>My Watchlist (Movies & Series)</strong> - Your saved items</li>
+                                <li>🎯 <strong>Recommended For You</strong> - Personalized picks based on your ratings</li>
+                                <li>👥 <strong>Community Picks</strong> - Movies reviewed by other users</li>
+                                <li>⭐ <strong>Top Rated (Unseen)</strong> - Highest rated movies you haven't seen</li>
+                                <li>📝 <strong>Your Reviews</strong> - See your ratings in Stremio's detail view</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Installation Section -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <h4>🔧 Installation</h4>
+                        <div class="sunken-panel" style="padding: 10px;">
+                            {% if request.user.api_key %}
+                            <p style="margin: 0 0 15px 0;">
+                                Click the button below to install the addon. Your API key will be automatically configured.
+                            </p>
+                            
+                            <div style="text-align: center; margin: 20px 0;">
+                                <a href="{{ install_url }}" class="btn install-btn" target="_blank" style="font-size: 14px; padding: 10px 30px; text-decoration: none;">
+                                    🚀 Install Addon in Stremio
+                                </a>
+                            </div>
+                            
+                            <p style="margin: 15px 0 10px 0; font-size: 11px; color: var(--text-muted);">
+                                <strong>Manual Installation:</strong> If the button doesn't work, copy the URL below and paste it in Stremio's addon search:
+                            </p>
+                            
+                            <div class="field-row" style="margin-bottom: 10px;">
+                                <input type="text" id="addon-url" value="{{ install_url }}" readonly style="width: 100%; font-size: 10px;">
+                            </div>
+                            <div class="field-row">
+                                <button type="button" id="copy-addon-url" class="btn">
+                                    📋 Copy URL
+                                </button>
+                            </div>
+                            {% else %}
+                            <p style="margin: 0 0 15px 0; color: #c00;">
+                                ⚠️ You need to generate an API key first before installing the addon.
+                            </p>
+                            <a href="{% url 'settings_page' %}" class="btn">
+                                Go to Settings to Generate API Key
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Your API Key Section -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <h4>🔑 Your API Key</h4>
+                        <div class="sunken-panel" style="padding: 10px;">
+                            {% if request.user.api_key %}
+                            <div class="field-row" style="margin-bottom: 10px;">
+                                <input type="text" id="api_key" value="{{ request.user.api_key }}" readonly style="width: 100%;">
+                            </div>
+                            <small style="display: block; margin-bottom: 10px; font-size: 12px; color: var(--text-muted);">
+                                This key authenticates your addon. Keep it secure and don't share it publicly.
+                            </small>
+                            <div class="field-row button-row">
+                                <button type="button" id="copy-api-key" class="btn">
+                                    📋 Copy Key
+                                </button>
+                                <a href="{% url 'settings_page' %}" class="btn">
+                                    🔄 Regenerate Key
+                                </a>
+                            </div>
+                            {% else %}
+                            <p style="margin: 0;">
+                                No API key generated yet. <a href="{% url 'settings_page' %}">Generate one in Settings</a>.
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- How to Use Section -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <h4>📖 How to Use</h4>
+                        <div class="sunken-panel" style="padding: 10px;">
+                            <ol style="margin: 0 0 0 20px; padding: 0;">
+                                <li style="margin-bottom: 8px;">Click the <strong>"Install Addon in Stremio"</strong> button above</li>
+                                <li style="margin-bottom: 8px;">Stremio will open and show the addon details</li>
+                                <li style="margin-bottom: 8px;">Click <strong>"Install"</strong> in Stremio</li>
+                                <li style="margin-bottom: 8px;">Your catalogs will appear in the Discover section</li>
+                                <li style="margin-bottom: 0;">Browse movies/series and see your ratings in the details!</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <!-- Troubleshooting Section -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <h4>❓ Troubleshooting</h4>
+                        <div class="sunken-panel" style="padding: 10px;">
+                            <p style="margin: 0 0 10px 0;">
+                                <strong>Catalogs not showing?</strong><br>
+                                <small>Make sure you have items in your watchlist and have reviewed some movies.</small>
+                            </p>
+                            <p style="margin: 0 0 10px 0;">
+                                <strong>Addon not working after key regeneration?</strong><br>
+                                <small>Uninstall and reinstall the addon with the new URL.</small>
+                            </p>
+                            <p style="margin: 0;">
+                                <strong>Some movies missing from catalogs?</strong><br>
+                                <small>Movies without IMDB IDs are filtered out as Stremio requires them.</small>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="field-row" style="justify-content: flex-start;">
+                        <a href="{% url 'settings_page' %}" class="btn">← Back to Settings</a>
+                    </div>
+                </div>
+                <div class="status-bar">
+                    <div class="status-bar-field">User: {{ request.user.username }}</div>
+                    <div class="status-bar-field">Addon Version: 1.0.0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Theme-adaptive CSS variables */
+    :root {
+        --bg-color: #c0c0c0;
+        --text-color: #000;
+        --text-muted: #666;
+        --border-dark: #808080;
+        --border-light: #dfdfdf;
+        --window-bg: #c0c0c0;
+        --button-bg: #c0c0c0;
+        --button-text: #000;
+        --button-hover: #e0e0e0;
+        --shadow-color: rgba(0,0,0,0.25);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-color: #383838;
+            --text-color: #ffffff;
+            --text-muted: #b0b0b0;
+            --border-dark: #2a2a2a;
+            --border-light: #505050;
+            --window-bg: #404040;
+            --button-bg: #505050;
+            --button-text: #ffffff;
+            --button-hover: #606060;
+            --shadow-color: rgba(0,0,0,0.5);
+        }
+
+        .title-bar {
+            background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+        }
+    }
+
+    /* Layout styles */
+    .profile-layout {
+        display: flex;
+        justify-content: center;
+    }
+    
+    .main-content {
+        flex: 1;
+        max-width: 800px;
+    }
+
+    .window {
+        background-color: var(--window-bg);
+    }
+
+    .window-body {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        padding: 12px;
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+    }
+
+    .sunken-panel {
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        background-color: var(--win98-input-bg);
+        padding: 8px;
+        margin: 4px 0;
+    }
+
+    .status-bar {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        border-top: none;
+        padding: 2px 4px;
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+        margin-top: 2px;
+    }
+    
+    .status-bar-field {
+        font-size: 11px;
+        margin-right: 10px;
+        border: 1px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        padding: 0 4px;
+        flex: 1;
+    }
+
+    .btn {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+        text-align: center;
+        min-width: 75px;
+        padding: 4px 12px;
+        text-decoration: none;
+        display: inline-block;
+        
+        /* Authentic Win98 Button Style */
+        border-top: 1px solid var(--win98-light);
+        border-left: 1px solid var(--win98-light);
+        border-right: 1px solid var(--win98-black);
+        border-bottom: 1px solid var(--win98-black);
+        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+        transition: none;
+    }
+
+    .btn:hover {
+        background-color: var(--win98-gray);
+    }
+
+    .btn:active {
+        border-top: 1px solid var(--win98-black);
+        border-left: 1px solid var(--win98-black);
+        border-right: 1px solid var(--win98-light);
+        border-bottom: 1px solid var(--win98-light);
+        box-shadow: inset 1px 1px 0 var(--win98-dark);
+    }
+
+    .install-btn {
+        background-color: #008080;
+        color: #fff !important;
+    }
+
+    .install-btn:hover {
+        background-color: #006666;
+    }
+
+    input[type="text"] {
+        background-color: var(--win98-input-bg);
+        color: var(--win98-input-text);
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+        padding: 2px 4px;
+        box-sizing: border-box;
+    }
+
+    input[type="text"]:read-only {
+        background-color: var(--win98-gray);
+        color: var(--text-muted);
+    }
+
+    h4 {
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+        font-weight: bold;
+        margin: 0 0 8px 0;
+    }
+
+    .field-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .field-row.button-row {
+        gap: 8px;
+    }
+
+    .field-row-stacked {
+        display: block;
+    }
+
+    small {
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 10px;
+        color: var(--text-muted);
+    }
+
+    p, li {
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+        line-height: 1.4;
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+        .profile-layout {
+            flex-direction: column;
+        }
+        
+        .main-content {
+            flex: 1;
+            width: 100%;
+        }
+        
+        .container.py-4 {
+            padding: 10px !important;
+        }
+        
+        .btn {
+            width: auto;
+            min-width: auto;
+            flex-shrink: 0;
+            font-size: 11px;
+            padding: 6px 10px;
+            margin-bottom: 4px;
+        }
+        
+        .field-row {
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .sunken-panel {
+            padding: 12px !important;
+            margin-bottom: 15px !important;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Copy addon URL to clipboard
+        const copyAddonUrlBtn = document.getElementById('copy-addon-url');
+        if (copyAddonUrlBtn) {
+            copyAddonUrlBtn.addEventListener('click', function() {
+                const addonUrlInput = document.getElementById('addon-url');
+                addonUrlInput.select();
+                addonUrlInput.setSelectionRange(0, 99999);
+                
+                navigator.clipboard.writeText(addonUrlInput.value).then(function() {
+                    alert('Addon URL copied to clipboard!');
+                }).catch(function() {
+                    document.execCommand('copy');
+                    alert('Addon URL copied to clipboard!');
+                });
+            });
+        }
+
+        // Copy API key to clipboard
+        const copyApiKeyBtn = document.getElementById('copy-api-key');
+        if (copyApiKeyBtn) {
+            copyApiKeyBtn.addEventListener('click', function() {
+                const apiKeyInput = document.getElementById('api_key');
+                apiKeyInput.select();
+                apiKeyInput.setSelectionRange(0, 99999);
+                
+                navigator.clipboard.writeText(apiKeyInput.value).then(function() {
+                    alert('API key copied to clipboard!');
+                }).catch(function() {
+                    document.execCommand('copy');
+                    alert('API key copied to clipboard!');
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

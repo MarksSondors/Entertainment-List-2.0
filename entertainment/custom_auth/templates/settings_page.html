@@ -185,6 +185,21 @@
                 </div>
             </div>
 
+            <!-- Stremio Addon Section -->
+            <div class="field-row-stacked" style="margin-bottom: 15px;">
+                <h4>📺 Stremio Integration</h4>
+                <div class="sunken-panel" style="padding: 10px;">
+                    <p style="margin: 0 0 10px 0; font-size: 11px;">
+                        Connect your Entertainment List to Stremio and see your watchlists, recommendations, and reviews directly in the Stremio app.
+                    </p>
+                    <div class="field-row">
+                        <a href="{% url 'stremio_addon_page' %}" class="btn" style="text-decoration: none;">
+                            🚀 Setup Stremio Addon
+                        </a>
+                    </div>
+                </div>
+            </div>
+
             <!-- System Broadcast Section - Admin Only -->
             {% if request.user.is_staff %}
             <div class="field-row-stacked" style="margin-bottom: 15px;">

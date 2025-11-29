@@ -18,18 +18,18 @@
             <div class="content-type-selector">
                 <div class="horizontal-tabs">
                     <button class="horizontal-tab-btn active" id="movies_tab" data-content="movies">
-                        📽️ Movies ({{ movies|length }})
+                        <img src="{% static 'images/win98/camera_vid.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: text-bottom;"> Movies ({{ movies|length }})
                     </button>
                     
                     <button class="horizontal-tab-btn" id="tvshows_tab" data-content="tvshows">
-                        📺 TV Shows ({{ tv_shows|length }})
+                        <img src="{% static 'images/win98/network_television.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: text-bottom;"> TV Shows ({{ tv_shows|length }})
                     </button>
                 </div>
             </div>
             {% endif %}            <!-- Hidden Filter Form -->
             <form method="get" action="" class="filter-form" id="filterForm" style="display: none;">                <div class="window">
                     <div class="title-bar">
-                        <div class="title-bar-text">🔧 Filters & Sorting</div>
+                        <div class="title-bar-text"><img src="{% static 'images/win98/settings_icon.png' %}" alt="" style="width: 14px; height: 14px; vertical-align: text-bottom;"> Filters & Sorting</div>
                         <div class="title-bar-controls">
                             <button aria-label="Minimize"></button>
                             <button aria-label="Maximize"></button>
@@ -99,7 +99,7 @@
                         <div class="section-header">
                             <h3 class="section-title">
                                 {% if not tv_shows %}
-                                📽️ Movies
+                                <img src="{% static 'images/win98/camera_vid.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: text-bottom;"> Movies
                                 {% else %}
                                 Movies
                                 {% endif %}
@@ -153,7 +153,9 @@
                     {% else %}
                         <div class="no-content-message">
                             <div class="message-content">
-                                <div class="message-icon">🎬</div>
+                                <div class="message-icon">
+                                    <img src="{% static 'images/win98/camera_vid.png' %}" alt="" style="width: 48px; height: 48px;">
+                                </div>
                                 <div class="message-text">No movies found in this genre.</div>
                                 <div class="message-subtext">Movies with this genre will appear here once they are added.</div>
                             </div>
@@ -167,7 +169,7 @@
                     <div class="section-header">
                         <h3 class="section-title">
                             {% if not movies %}
-                            📺 TV Shows
+                            <img src="{% static 'images/win98/network_television.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: text-bottom;"> TV Shows
                             {% else %}
                             TV Shows
                             {% endif %}
@@ -225,7 +227,9 @@
                 {% if not movies and not tv_shows %}
                 <div class="no-content-message">
                     <div class="message-content">
-                        <div class="message-icon">📂</div>
+                        <div class="message-icon">
+                            <img src="{% static 'images/win98/directory_closed.png' %}" alt="" style="width: 48px; height: 48px;">
+                        </div>
                         <div class="message-text">No content found in this genre.</div>
                         <div class="message-subtext">Movies and TV shows with this genre will appear here once they are added to the system.</div>
                     </div>
@@ -243,7 +247,7 @@
     <!-- Fixed Filter Button at Bottom -->
     <div class="fixed-filter-container">
         <button class="retro-btn fixed-filters-btn" id="filtersBtn" onclick="toggleFilters()">
-            🔧 Filters <span id="activeFiltersCount" style="display: none;"></span>
+            <img src="{% static 'images/win98/settings_icon.png' %}" alt="" style="width: 14px; height: 14px; vertical-align: text-bottom;"> Filters <span id="activeFiltersCount" style="display: none;"></span>
         </button>
     </div>
 </div>
@@ -272,6 +276,11 @@
         --alert-bg: #e1e1e1;
         --tab-active: #ffffff;
         --tab-inactive: #e0e0e0;
+        /* Win98 colors for title bar */
+        --win98-gray: #c0c0c0;
+        --win98-light: #ffffff;
+        --win98-dark: #808080;
+        --win98-black: #000000;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -297,6 +306,9 @@
             --alert-bg: #404040;
             --tab-active: #2a2a2a;
             --tab-inactive: #383838;
+            /* Win98 colors for dark mode title bar */
+            --win98-light: #606060;
+            --win98-dark: #151515;
         }
     }    /* Page container - mobile-first approach */
     .genre-detail-container {
@@ -320,20 +332,11 @@
         box-shadow: 2px 2px 4px var(--shadow-color);
     }
 
-    .title-bar {
-        background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
-        color: white;
-        padding: 2px;
-        font-size: 11px;
-        font-weight: bold;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
+    /* Title bar uses default 98.css gradient in light mode */
 
     @media (prefers-color-scheme: dark) {
         .title-bar {
-            background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+            background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
         }
     }
 
@@ -967,17 +970,22 @@
 
         // Initialize active filters count display
         updateActiveFiltersCount();
-    });    // Toggle filters panel
+    });
+
+    // Icon path for JavaScript
+    const SETTINGS_ICON = "{% static 'images/win98/settings_icon.png' %}";
+
+    // Toggle filters panel
     function toggleFilters() {
         const filterForm = document.getElementById('filterForm');
         const filtersBtn = document.getElementById('filtersBtn');
         
         if (filterForm.style.display === 'none' || filterForm.style.display === '') {
             filterForm.style.display = 'block';
-            filtersBtn.innerHTML = '🔧 Filters (Open) <span id="activeFiltersCount" style="display: none;"></span>';
+            filtersBtn.innerHTML = `<img src="${SETTINGS_ICON}" alt="" style="width: 14px; height: 14px; vertical-align: text-bottom;"> Filters (Open) <span id="activeFiltersCount" style="display: none;"></span>`;
         } else {
             filterForm.style.display = 'none';
-            filtersBtn.innerHTML = '🔧 Filters <span id="activeFiltersCount" style="display: none;"></span>';
+            filtersBtn.innerHTML = `<img src="${SETTINGS_ICON}" alt="" style="width: 14px; height: 14px; vertical-align: text-bottom;"> Filters <span id="activeFiltersCount" style="display: none;"></span>`;
         }
         updateActiveFiltersCount();
     }// Update active filters count
