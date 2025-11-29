@@ -27,6 +27,7 @@ urlpatterns = [    # discover page
     path('profile/', views.profile_page, name='profile_page'),
     path('profile/<str:username>/', views.profile_page, name='profile_with_username'),
     path('settings/', views.settings_page, name='settings_page'),
+    path('settings/stremio/', views.stremio_addon_page, name='stremio_addon_page'),
 
     # watchlist
     path('watchlist/', views.watchlist_page, name='watchlist_page'),
@@ -36,6 +37,7 @@ urlpatterns = [    # discover page
     # People
     path('people/<int:person_id>/', views.people_detail, name='person_detail'),
     path('people/', views.browse_by_people, name='browse_by_people'),
+    path('api/people/', views.api_people_by_category, name='api_people_by_category'),
     path('api/people/<int:person_id>/tmdb-filmography/', views.get_person_tmdb_filmography, name='person_tmdb_filmography'),
 
     # reviews

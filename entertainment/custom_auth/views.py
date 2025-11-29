@@ -2441,188 +2441,193 @@ def _convert_to_low_quality_tmdb_url(poster_path):
 @login_required
 def browse_by_people(request):
     """
-    View for displaying people categorized by their roles with improved role identification
-    and optimized query performance. Only shows people involved in works that have reviews.
-    Includes additional data for enhanced display features.
+    View for displaying the people explorer page. Uses lazy loading for better performance.
+    The actual people data is loaded via AJAX using the api_people_by_category endpoint.
     """
-    # Cache key prefix for storing sorted people lists
-    cache_key_prefix = "people_browser_reviewed_"
+    return render(request, 'browse_by_people.html')
+
+
+@login_required
+def api_people_by_category(request):
+    """
+    API endpoint for fetching people by category with pagination and search.
+    Supports lazy loading for better performance.
+    """
+    from django.core.cache import cache
+    
+    category = request.GET.get('category', 'directors')
+    page = int(request.GET.get('page', 1))
+    per_page = int(request.GET.get('per_page', 30))
+    search_query = request.GET.get('search', '').strip().lower()
+    sort_by = request.GET.get('sort', 'rating-desc')
+    
+    cache_key_prefix = "people_browser_v2_"
     cache_timeout = 3600  # 1 hour cache timeout
     
-    # Function to efficiently get and sort people by role with caching
-    def get_people_by_role(role_filter, cache_key):
-        from django.core.cache import cache
-        
-        # Try to get cached result first
-        cached_result = cache.get(cache_key)
-        if cached_result:
-            return cached_result
-        
-        # First, identify media that has reviews
-        reviewed_media = Review.objects.values('content_type_id', 'object_id').distinct()
-        
-        # Then get all MediaPerson entries that match those reviewed media
-        reviewed_media_persons = MediaPerson.objects.filter(
-            content_type_id__in=[item['content_type_id'] for item in reviewed_media],
-            object_id__in=[item['object_id'] for item in reviewed_media]
-        ).values('person_id').distinct()
-        
-        # Get people matching the role filter AND who have been in reviewed works
-        # Include birth_date for the enhanced hover information
-        people = Person.objects.filter(
-            role_filter,
-            profile_picture__isnull=False,
-            id__in=reviewed_media_persons
-        ).distinct()[:150]
-        
-        # If no people match the criteria, return empty list early
-        if not people:
-            cache.set(cache_key, [], cache_timeout)
-            return []
-        
-        # Prefetch all media relations in a single query
-        person_ids = [p.id for p in people]
-        
-        # Get all media relations for these people in one query
-        media_relations = MediaPerson.objects.filter(
-            person_id__in=person_ids
-        ).values('person_id', 'content_type_id', 'object_id')
-        
-        # Group media relations by person
-        person_media = {}
-        for relation in media_relations:
-            person_id = relation['person_id']
-            if person_id not in person_media:
-                person_media[person_id] = set()
-            person_media[person_id].add(
-                (relation['content_type_id'], relation['object_id'])
-            )
-        
-        # Batch collect all content types and object IDs for reviews
-        all_media_identifiers = set()
-        for relations in person_media.values():
-            all_media_identifiers.update(relations)
-        
-        # Build a map of all media ratings at once
-        media_ratings = {}
-        if all_media_identifiers:
-            q_objects = Q()
-            for ct_id, obj_id in all_media_identifiers:
-                q_objects |= Q(content_type_id=ct_id, object_id=obj_id)
-                
-            # Get aggregated review data in one query
-            review_data = Review.objects.filter(q_objects).values(
-                'content_type_id', 'object_id'
-            ).annotate(
-                avg_rating=Avg('rating'),
-                count=models.Count('id')
-            )
-            
-            # Create a map for fast lookups
-            for data in review_data:
-                key = (data['content_type_id'], data['object_id'])
-                media_ratings[key] = {
-                    'avg_rating': data['avg_rating'],
-                    'count': data['count']
-                }
-        
-        # Assign ratings to people
-        people_with_ratings = []
-        for person in people:
-            # Get this person's media
-            person_media_list = person_media.get(person.id, [])
-            
-            if not person_media_list:
-                continue  # Skip people with no media
-                      # Calculate average rating across all media
-            total_rating = 0
-            total_count = 0
-            num_works = 0
-            
-            for media_key in person_media_list:
-                num_works += 1
-                if media_key in media_ratings:
-                    rating_data = media_ratings[media_key]
-                    # Weighted average: Rating * Count
-                    total_rating += rating_data['avg_rating'] * rating_data['count']
-                    total_count += rating_data['count']
-            
-            if total_count > 0:
-                person.avg_rating = round(total_rating / total_count, 1)
-                person.rating_count = total_count
-                person.num_works = num_works  # Add number of works for hover display
-                # Convert date_of_birth to birth_date for template consistency
-                person.birth_date = person.date_of_birth
-                people_with_ratings.append(person)
-        
-        # Sort by average rating (highest first) and then alphabetically by name
-        result = sorted(
-            people_with_ratings,
-            key=lambda p: (p.avg_rating is not None, p.avg_rating or 0, p.name),
-            reverse=True
-        )
-        
-        # Cache the result
-        cache.set(cache_key, result, cache_timeout)
-        
-        return result
-    
-    # Get people by category with improved role identification
-    directors = get_people_by_role(
-        Q(is_director=True), 
-        f"{cache_key_prefix}directors"
-    )
-    
-    writers = get_people_by_role(
-        # Include all writing roles
-        Q(is_screenwriter=True) | Q(is_writer=True) | Q(is_story=True),
-        f"{cache_key_prefix}writers"
-    )
-    
-    actors = get_people_by_role(
-        Q(is_actor=True),
-        f"{cache_key_prefix}actors"
-    )
-    
-    tv_creators = get_people_by_role(
-        Q(is_tv_creator=True),
-        f"{cache_key_prefix}tv_creators"
-    )
-    
-    musicians = get_people_by_role(
-        Q(is_musician=True) | Q(is_original_music_composer=True),
-        f"{cache_key_prefix}musicians"
-    )
-    
-    other_creators = get_people_by_role(
-        # Visual artists and other creators not covered in other categories
-        Q(is_comic_artist=True) | Q(is_graphic_novelist=True) | Q(is_book=True) | 
-        Q(is_novelist=True) | Q(is_original_story=True),
-        f"{cache_key_prefix}other_creators"
-    )
-      # Get category counts for the status bar
-    category_counts = {
-        'directors': len(directors),
-        'writers': len(writers),
-        'actors': len(actors),
-        'tv_creators': len(tv_creators),
-        'musicians': len(musicians),
-        'other_creators': len(other_creators),
+    # Map category to role filter
+    category_filters = {
+        'directors': Q(is_director=True),
+        'writers': Q(is_screenwriter=True) | Q(is_writer=True) | Q(is_story=True),
+        'actors': Q(is_actor=True),
+        'tv_creators': Q(is_tv_creator=True),
+        'musicians': Q(is_musician=True) | Q(is_original_music_composer=True),
+        'other_creators': Q(is_comic_artist=True) | Q(is_graphic_novelist=True) | Q(is_book=True) | Q(is_novelist=True) | Q(is_original_story=True),
     }
     
-    # Total person count
-    total_people = sum(category_counts.values())
+    role_filter = category_filters.get(category, category_filters['directors'])
+    cache_key = f"{cache_key_prefix}{category}"
     
-    return render(request, 'browse_by_people.html', {
-        'directors': directors,
-        'writers': writers,
-        'actors': actors,
-        'tv_creators': tv_creators,
-        'musicians': musicians,
-        'other_creators': other_creators,
-        'category_counts': category_counts,
-        'total_people': total_people,
+    # Try to get cached result first
+    people_with_ratings = cache.get(cache_key)
+    
+    if not people_with_ratings:
+        people_with_ratings = _fetch_people_by_role(role_filter)
+        cache.set(cache_key, people_with_ratings, cache_timeout)
+    
+    # Apply search filter
+    if search_query:
+        people_with_ratings = [
+            p for p in people_with_ratings 
+            if search_query in p['name'].lower()
+        ]
+    
+    # Apply sorting
+    if sort_by == 'name-asc':
+        people_with_ratings = sorted(people_with_ratings, key=lambda x: x['name'].lower())
+    elif sort_by == 'name-desc':
+        people_with_ratings = sorted(people_with_ratings, key=lambda x: x['name'].lower(), reverse=True)
+    elif sort_by == 'rating-asc':
+        people_with_ratings = sorted(people_with_ratings, key=lambda x: (x['avg_rating'] or 0))
+    else:  # rating-desc (default)
+        people_with_ratings = sorted(people_with_ratings, key=lambda x: (x['avg_rating'] or 0), reverse=True)
+    
+    # Paginate
+    total_count = len(people_with_ratings)
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_people = people_with_ratings[start_idx:end_idx]
+    
+    return JsonResponse({
+        'success': True,
+        'people': paginated_people,
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': total_count,
+            'total_pages': (total_count + per_page - 1) // per_page,
+            'has_more': end_idx < total_count
+        },
+        'category': category,
     })
+
+
+def _fetch_people_by_role(role_filter):
+    """
+    Helper function to fetch and process people by role.
+    Returns serialized list of people with their ratings.
+    """
+    # First, identify media that has reviews
+    reviewed_media = Review.objects.values('content_type_id', 'object_id').distinct()
+    
+    # Then get all MediaPerson entries that match those reviewed media
+    reviewed_media_persons = MediaPerson.objects.filter(
+        content_type_id__in=[item['content_type_id'] for item in reviewed_media],
+        object_id__in=[item['object_id'] for item in reviewed_media]
+    ).values('person_id').distinct()
+    
+    # Get people matching the role filter AND who have been in reviewed works
+    people = Person.objects.filter(
+        role_filter,
+        profile_picture__isnull=False,
+        id__in=reviewed_media_persons
+    ).distinct()[:200]
+    
+    if not people:
+        return []
+    
+    # Prefetch all media relations in a single query
+    person_ids = [p.id for p in people]
+    
+    # Get all media relations for these people in one query
+    media_relations = MediaPerson.objects.filter(
+        person_id__in=person_ids
+    ).values('person_id', 'content_type_id', 'object_id')
+    
+    # Group media relations by person
+    person_media = {}
+    for relation in media_relations:
+        person_id = relation['person_id']
+        if person_id not in person_media:
+            person_media[person_id] = set()
+        person_media[person_id].add(
+            (relation['content_type_id'], relation['object_id'])
+        )
+    # Batch collect all content types and object IDs for reviews
+    all_media_identifiers = set()
+    for relations in person_media.values():
+        all_media_identifiers.update(relations)
+    
+    # Build a map of all media ratings at once
+    media_ratings = {}
+    if all_media_identifiers:
+        q_objects = Q()
+        for ct_id, obj_id in all_media_identifiers:
+            q_objects |= Q(content_type_id=ct_id, object_id=obj_id)
+            
+        # Get aggregated review data in one query
+        review_data = Review.objects.filter(q_objects).values(
+            'content_type_id', 'object_id'
+        ).annotate(
+            avg_rating=Avg('rating'),
+            count=models.Count('id')
+        )
+        
+        # Create a map for fast lookups
+        for data in review_data:
+            key = (data['content_type_id'], data['object_id'])
+            media_ratings[key] = {
+                'avg_rating': data['avg_rating'],
+                'count': data['count']
+            }
+    
+    # Serialize people with ratings
+    people_with_ratings = []
+    for person in people:
+        # Get this person's media
+        person_media_list = person_media.get(person.id, [])
+        
+        if not person_media_list:
+            continue  # Skip people with no media
+                  
+        # Calculate average rating across all media
+        total_rating = 0
+        total_count = 0
+        num_works = 0
+        
+        for media_key in person_media_list:
+            num_works += 1
+            if media_key in media_ratings:
+                rating_data = media_ratings[media_key]
+                # Weighted average: Rating * Count
+                total_rating += rating_data['avg_rating'] * rating_data['count']
+                total_count += rating_data['count']
+        
+        avg_rating = None
+        if total_count > 0:
+            avg_rating = round(total_rating / total_count, 1)
+        
+        # Serialize person data for JSON response
+        people_with_ratings.append({
+            'id': person.id,
+            'name': person.name,
+            'profile_picture': person.profile_picture or None,
+            'birth_year': person.date_of_birth.year if person.date_of_birth else None,
+            'avg_rating': avg_rating,
+            'rating_count': total_count,
+            'num_works': num_works,
+        })
+    
+    return people_with_ratings
 
 # Add this view function
 @login_required
@@ -2921,6 +2926,39 @@ def settings_page(request):
         'user_settings': user_settings,
         'notification_prefs': notification_prefs,
     })
+
+
+@login_required
+def stremio_addon_page(request):
+    """
+    View to display Stremio addon installation page.
+    Shows the addon URL with the user's API key encoded.
+    """
+    import base64
+    import json
+    
+    # Generate API key if not exists
+    if request.user.api_key is None:
+        request.user.generate_api_key()
+        request.user.save()
+    
+    # Build the install URL with encoded config
+    if request.user.api_key:
+        config = {'api_key': request.user.api_key}
+        encoded_config = base64.urlsafe_b64encode(
+            json.dumps(config).encode()
+        ).decode().rstrip('=')
+        
+        # Build the full addon URL
+        base_url = request.build_absolute_uri('/stremio/')
+        install_url = f"stremio://{request.get_host()}/stremio/{encoded_config}/manifest.json"
+    else:
+        install_url = None
+    
+    return render(request, 'stremio_addon.html', {
+        'install_url': install_url,
+    })
+
 
 @login_required
 def release_calendar(request):
