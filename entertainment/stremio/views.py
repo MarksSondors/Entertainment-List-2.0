@@ -40,15 +40,25 @@ def cors_preflight_response() -> HttpResponse:
     return response
 
 
-def configure(request):
+def configure(request, config: str = None):
     """
     Stremio configure page.
     Shows API key input and generates install URL.
+    If config is provided, pre-fills the API key.
     """
+    from .authentication import decode_config
+    
     base_url = request.build_absolute_uri('/stremio/')
+    
+    # Pre-fill API key if config is provided
+    api_key = ''
+    if config:
+        config_data = decode_config(config)
+        api_key = config_data.get('api_key', '')
     
     return render(request, 'stremio/configure.html', {
         'base_url': base_url,
+        'api_key': api_key,
     })
 
 

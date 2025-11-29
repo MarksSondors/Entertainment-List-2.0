@@ -204,7 +204,7 @@
         
         <div class="form-group">
             <label for="api_key">API Key</label>
-            <input type="text" id="api_key" placeholder="Enter your API key" autocomplete="off">
+            <input type="text" id="api_key" placeholder="Enter your API key" autocomplete="off" value="{{ api_key }}">
             <p class="help-text">
                 Find your API key in your <a href="/settings/" target="_blank">account settings</a>
             </p>
@@ -226,7 +226,7 @@
                 <li>Your movie watchlist in Stremio</li>
                 <li>Your TV show watchlist in Stremio</li>
                 <li>Personalized movie recommendations</li>
-                <li>Community picks from other users</li>
+                <li>Movie of the Week picks you haven't seen</li>
                 <li>Top rated movies you haven't seen</li>
                 <li>Your ratings displayed on movie details</li>
             </ul>
@@ -296,8 +296,8 @@
             document.getElementById('installBtn').disabled = !this.value.trim();
         });
         
-        // Initial state
-        document.getElementById('installBtn').disabled = true;
+        // Initial state - check if API key is pre-filled
+        document.getElementById('installBtn').disabled = !document.getElementById('api_key').value.trim();
     </script>
 </body>
 </html>
