@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'music',
     'games',
     'notifications',  # Push notifications
+    'stremio',  # Stremio addon
 ]
 
 # Add debug apps only in DEBUG mode
