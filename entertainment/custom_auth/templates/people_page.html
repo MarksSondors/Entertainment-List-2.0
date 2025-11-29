@@ -1,4 +1,5 @@
 {% extends "components/base.html" %}
+{% load static %}
 
 {% block head %}
 <!-- Add viewport meta tag for proper mobile scaling -->
@@ -26,6 +27,11 @@
     --overlay-bg: rgba(0, 0, 0, 0.5);
     --highlight-bg: #000080;
     --highlight-text: white;
+    /* Win98 colors for title bar */
+    --win98-gray: #c0c0c0;
+    --win98-light: #ffffff;
+    --win98-dark: #808080;
+    --win98-black: #000000;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -47,6 +53,9 @@
         --overlay-bg: rgba(0, 0, 0, 0.7);
         --highlight-bg: #0060c0;
         --highlight-text: white;
+        /* Win98 colors for dark mode title bar */
+        --win98-light: #606060;
+        --win98-dark: #151515;
     }
 }
 
@@ -82,19 +91,12 @@ body::before {
 }
 
 .title-bar {
-    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
-    color: white;
-    padding: 2px;
-    font-size: 11px;
-    font-weight: bold;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    /* Uses default 98.css gradient in light mode */
 }
 
 @media (prefers-color-scheme: dark) {
     .title-bar {
-        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+        background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
     }
 }
 
@@ -606,97 +608,95 @@ body::before {
     margin-top: 3px;
 }
 
-.title-bar {
-    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
-    color: white;
-    padding: 2px;
-    font-size: 11px;
-    font-weight: bold;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+/* MOBILE-FIRST responsive styles */
+/* Base styles for mobile (320px+) */
+.window {
+    margin: 5px;
 }
 
-@media (prefers-color-scheme: dark) {
-    .title-bar {
-        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+.profile-container {
+    flex-direction: column;
+    padding: 10px;
+    gap: 10px;
+}
+
+.profile-image {
+    width: 150px;
+    margin: 0 auto;
+    display: block;
+}
+
+/* Mobile shows grid view by default */
+.filmography-desktop-view {
+    display: none;
+}
+
+.filmography-mobile-view {
+    display: block;
+}
+
+.filmography-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+}
+
+.filmography-card {
+    max-width: none;
+}
+
+.window-title h1, .window-title h2 {
+    font-size: 16px;
+}
+
+#profileModal {
+    max-width: 95%;
+}
+
+/* Small phones and up (480px+) */
+@media (min-width: 480px) {
+    .filmography-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
     }
 }
 
-.title-bar-controls button {
-    width: 16px;
-    height: 14px;
-    border: 1px outset var(--button-bg);
-    background: var(--button-bg);
-    color: var(--button-text);
-    margin-left: 2px;
-    font-size: 8px;
-    cursor: pointer;
-}
-
-.title-bar-controls button:active {
-    border: 1px inset var(--button-bg);
-}
-
-/* Mobile responsive styles */
-@media screen and (max-width: 767px) {
+/* Tablets (768px+) - switch to desktop view */
+@media (min-width: 768px) {
     .window {
-        margin: 5px;
+        margin: 10px;
     }
     
     .profile-container {
-        flex-direction: column;
-        padding: 10px;
-        gap: 10px;
+        flex-direction: row;
+        padding: 15px;
+        gap: 20px;
     }
     
     .profile-image {
-        width: 150px;
-        margin: 0 auto;
-        display: block;
+        width: 200px;
+        margin: 0;
     }
     
-    /* Switch to mobile filmography view */
+    /* Desktop shows table view */
     .filmography-desktop-view {
-        display: none;
+        display: block;
     }
     
     .filmography-mobile-view {
-        display: block;
+        display: none;
     }
     
-    .filmography-grid {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 4px;
-    }
-    
-    .window-title h1, .window-title h2 {
-        font-size: 16px;
-    }
-    
-    #profileModal {
-        max-width: 95%;
-    }
-}
-
-@media screen and (max-width: 480px) {
-    .filmography-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 6px;
-    }
-    
-    .filmography-card {
-        max-width: none;
-    }
-}
-
-@media (min-width: 768px) {
     .filmography-grid {
         grid-template-columns: repeat(4, 1fr);
         gap: 12px;
     }
+    
+    #profileModal {
+        max-width: 90%;
+    }
 }
 
+/* Large screens (1024px+) */
 @media (min-width: 1024px) {
     .filmography-grid {
         grid-template-columns: repeat(5, 1fr);
@@ -783,8 +783,9 @@ body::before {
                     
                     {% if person.tmdb_id %}
                     <p>
-                        <button onclick="showTMDBFilmography()" style="padding: 5px 10px; cursor: pointer;">
-                            🎬 View All TMDB Credits
+                        <button onclick="showTMDBFilmography()" style="padding: 5px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            <img src="{% static 'images/win98/camera_vid.png' %}" alt="" style="width: 16px; height: 16px;">
+                            View All TMDB Credits
                         </button>
                     </p>
                     {% endif %}
@@ -963,6 +964,16 @@ body::before {
 </div>
 
 <script>
+    // Static icon paths (using Django template tags)
+    const ICONS = {
+        star: "{% static 'images/win98/star-in-win-98 style.png' %}",
+        cameraVid: "{% static 'images/win98/camera_vid.png' %}",
+        tv: "{% static 'images/win98/network_television.png' %}",
+        userCard: "{% static 'images/win98/user_card.png' %}",
+        hourglass: "{% static 'images/win98/hourglass.png' %}",
+        msgError: "{% static 'images/win98/msg_error.png' %}"
+    };
+
     function openProfileModal() {
         document.getElementById('profileModal').style.display = 'block';
     }
@@ -1079,11 +1090,11 @@ body::before {
                 <div class="tmdb-credit-card ${inDatabase ? 'in-database' : ''}">
                     ${movie.poster_path ? 
                         `<img src="${movie.poster_path}" alt="${movie.title}" class="tmdb-credit-poster">` :
-                        `<div class="tmdb-credit-poster no-poster">🎬</div>`
+                        `<div class="tmdb-credit-poster no-poster"><img src="${ICONS.cameraVid}" alt="" style="width: 48px; height: 48px;"></div>`
                     }
                     <div class="tmdb-credit-info">
                         <div class="tmdb-credit-title">${displayTitle}</div>
-                        <div class="tmdb-credit-details">${year} • ⭐ ${movie.vote_average.toFixed(1)}</div>
+                        <div class="tmdb-credit-details">${year} • <img src="${ICONS.star}" alt="" style="width: 12px; height: 12px; vertical-align: text-bottom;"> ${movie.vote_average.toFixed(1)}</div>
                         <div class="tmdb-credit-role">${rolesText}</div>
                         ${inDatabase ? 
                             '<span class="tmdb-badge">In Database</span>' :
@@ -1150,11 +1161,11 @@ body::before {
                 <div class="tmdb-credit-card ${inDatabase ? 'in-database' : ''}">
                     ${show.poster_path ? 
                         `<img src="${show.poster_path}" alt="${show.title}" class="tmdb-credit-poster">` :
-                        `<div class="tmdb-credit-poster no-poster">📺</div>`
+                        `<div class="tmdb-credit-poster no-poster"><img src="${ICONS.tv}" alt="" style="width: 48px; height: 48px;"></div>`
                     }
                     <div class="tmdb-credit-info">
                         <div class="tmdb-credit-title">${displayTitle}</div>
-                        <div class="tmdb-credit-details">${year} • ⭐ ${show.vote_average.toFixed(1)} ${episodes ? '• ' + episodes : ''}</div>
+                        <div class="tmdb-credit-details">${year} • <img src="${ICONS.star}" alt="" style="width: 12px; height: 12px; vertical-align: text-bottom;"> ${show.vote_average.toFixed(1)} ${episodes ? '• ' + episodes : ''}</div>
                         <div class="tmdb-credit-role">${rolesText}</div>
                         ${inDatabase ? 
                             '<span class="tmdb-badge">In Database</span>' :

@@ -1,398 +1,138 @@
 {% extends 'components/base.html' %}
 {% load static %}
 
-{% block title %}Browse by People | Entertainment List{% endblock %}
+{% block title %}People Explorer | Entertainment List{% endblock %}
 
 {% block content %}
 <div class="people-page-container">
     <div class="window">
         <div class="title-bar">
-            <div class="title-bar-text">People Explorer</div>
+            <div class="title-bar-text">
+                <img src="{% static 'images/win98/users.png' %}" alt="" class="title-icon">
+                People Explorer
+            </div>
             <div class="title-bar-controls">
                 <button aria-label="Minimize"></button>
                 <button aria-label="Maximize"></button>
-                <button aria-label="Close"></button>
+                <button aria-label="Close" onclick="window.history.back()"></button>
             </div>
         </div>
-        <div class="window-body">            <!-- Address bar - Windows 95 style -->
-            <div class="field-row">
-                <label for="address-bar">Address:</label>
-                <input type="text" id="address-bar" readonly value="C:\Entertainment\People\" style="width: 100%">
-            </div>
-            
-            <!-- Search and filter row -->
-            <div class="field-row-stacked">
-                <div class="field-row">
-                    <label for="search-people">Search:</label>
-                    <input type="text" id="search-people" placeholder="Filter by name..." style="flex-grow: 1;">
+        <div class="window-body">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <img src="{% static 'images/win98/magnifying_glass.png' %}" alt="" class="toolbar-icon">
+                    <div class="search-box">
+                        <input type="text" id="search-people" placeholder="Search people..." aria-label="Search people">
+                    </div>
                 </div>
-                <div class="field-row">
-                    <label for="sort-by">Sort by:</label>
-                    <select id="sort-by">
-                        <option value="name-asc">Name (A-Z)</option>
-                        <option value="name-desc">Name (Z-A)</option>
+                <div class="toolbar-right">
+                    <img src="{% static 'images/win98/directory_closed.png' %}" alt="" class="toolbar-icon">
+                    <select id="sort-by" aria-label="Sort by">
                         <option value="rating-desc">Rating (High-Low)</option>
                         <option value="rating-asc">Rating (Low-High)</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Mobile-friendly tabs as dropdown on small screens -->
-            <div class="mobile-tab-selector">
-                <div class="field-row">
-                    <label for="mobile-tab-selector">Category:</label>
-                    <select id="mobile-tab-selector">
-                        <option value="0">Directors</option>
-                        <option value="1">Writers</option>
-                        <option value="2">Actors</option>
-                        <option value="3">TV Creators</option>
-                        <option value="4">Musicians</option>
-                        <option value="5">Other Creators</option>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
                     </select>
                 </div>
             </div>
             
-            <div class="tabs">
-                <!-- Desktop tabs, hidden on mobile -->
-                <menu role="tablist" class="desktop-tabs">
-                    <button role="tab" aria-selected="true" class="retro-btn tab-btn">Directors</button>
-                    <button role="tab" class="retro-btn tab-btn">Writers</button>
-                    <button role="tab" class="retro-btn tab-btn">Actors</button>
-                    <button role="tab" class="retro-btn tab-btn">TV Creators</button>
-                    <button role="tab" class="retro-btn tab-btn">Musicians</button>
-                    <button role="tab" class="retro-btn tab-btn">Other Creators</button>
-                </menu>
-                  <!-- Directors Tab -->
-                <div class="sunken-panel explorer-panel" role="tabpanel" style="min-height: 300px;">
-                    <div class="tab-loading-overlay" style="display: none;">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    {% if directors %}
-                        <div class="person-grid">
-                            {% for person in directors %}
-                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
-                                    <div class="text-center">
-                                        <div class="person-img-container">
-                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                                 alt="{{ person.name }}"  
-                                                 class="person-img"
-                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                                 loading="lazy">
-                                        </div>
-                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
-                                        {% if person.avg_rating %}
-                                            <div class="person-rating">
-                                                <span class="rating-badge">{{ person.avg_rating }}</span>
-                                                <small class="rating-count">({{ person.rating_count }})</small>
-                                            </div>
-                                        {% else %}
-                                            <div class="person-no-rating">No ratings</div>
-                                        {% endif %}
-                                    </div>
-                                    <div class="person-hover-info">
-                                        <strong>{{ person.name }}</strong>
-                                        {% if person.birth_date %}
-                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
-                                        {% endif %}
-                                        {% if person.num_works %}
-                                            <div>{{ person.num_works }} work(s)</div>
-                                        {% endif %}
-                                        <div class="hover-action">Click to view profile</div>
-                                    </div>
-                                </a>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="no-items-message">
-                            <div class="sunken-panel">
-                                No directors available.
-                            </div>
-                        </div>
-                    {% endif %}
+            <!-- Category Tabs - Mobile First -->
+            <div class="category-tabs">
+                <button class="tab-btn active" data-category="directors">
+                    <img src="{% static 'images/win98/camera_vid.png' %}" alt="" class="tab-icon-img">
+                    <span class="tab-label">Directors</span>
+                    <span class="tab-count" id="count-directors">-</span>
+                </button>
+                <button class="tab-btn" data-category="actors">
+                    <img src="{% static 'images/win98/user_card.png' %}" alt="" class="tab-icon-img">
+                    <span class="tab-label">Actors</span>
+                    <span class="tab-count" id="count-actors">-</span>
+                </button>
+                <button class="tab-btn" data-category="writers">
+                    <img src="{% static 'images/win98/notepad_file.png' %}" alt="" class="tab-icon-img">
+                    <span class="tab-label">Writers</span>
+                    <span class="tab-count" id="count-writers">-</span>
+                </button>
+                <button class="tab-btn" data-category="tv_creators">
+                    <img src="{% static 'images/win98/network_television.png' %}" alt="" class="tab-icon-img">
+                    <span class="tab-label">TV</span>
+                    <span class="tab-count" id="count-tv_creators">-</span>
+                </button>
+                <button class="tab-btn" data-category="musicians">
+                    <img src="{% static 'images/win98/cd_audio.png' %}" alt="" class="tab-icon-img">
+                    <span class="tab-label">Music</span>
+                    <span class="tab-count" id="count-musicians">-</span>
+                </button>
+                <button class="tab-btn" data-category="other_creators">
+                    <img src="{% static 'images/win98/paint_file.png' %}" alt="" class="tab-icon-img">
+                    <span class="tab-label">Other</span>
+                    <span class="tab-count" id="count-other_creators">-</span>
+                </button>
+            </div>
+            
+            <!-- Content Area -->
+            <div class="sunken-panel content-panel">
+                <div id="people-grid" class="people-grid">
+                    <!-- People cards loaded via JavaScript -->
                 </div>
-                  <!-- Writers Tab -->
-                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
-                    <div class="tab-loading-overlay" style="display: none;">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    {% if writers %}
-                        <div class="person-grid">
-                            {% for person in writers %}
-                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
-                                    <div class="person-content">
-                                        <div class="person-img-container">
-                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                                 alt="{{ person.name }}"  
-                                                 class="person-img"
-                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                                 loading="lazy">
-                                        </div>
-                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
-                                        {% if person.avg_rating %}
-                                            <div class="person-rating">
-                                                <span class="rating-badge">{{ person.avg_rating }}</span>
-                                                <small class="rating-count">({{ person.rating_count }})</small>
-                                            </div>
-                                        {% else %}
-                                            <div class="person-no-rating">No ratings</div>
-                                        {% endif %}
-                                    </div>
-                                    <div class="person-hover-info">
-                                        <strong>{{ person.name }}</strong>
-                                        {% if person.birth_date %}
-                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
-                                        {% endif %}
-                                        {% if person.num_works %}
-                                            <div>{{ person.num_works }} work(s)</div>
-                                        {% endif %}
-                                        <div class="hover-action">Click to view profile</div>
-                                    </div>
-                                </a>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="no-items-message">
-                            <div class="sunken-panel">
-                                No writers available.
-                            </div>
-                        </div>
-                    {% endif %}
+                
+                <!-- Loading State -->
+                <div id="loading-indicator" class="loading-indicator">
+                    <img src="{% static 'images/win98/hourglass.png' %}" alt="" class="loading-icon">
+                    <span>Loading...</span>
                 </div>
-                  <!-- Actors Tab -->
-                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
-                    <div class="tab-loading-overlay" style="display: none;">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    {% if actors %}
-                        <div class="person-grid">
-                            {% for person in actors %}
-                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
-                                    <div class="person-content">
-                                        <div class="person-img-container">
-                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                                 alt="{{ person.name }}"  
-                                                 class="person-img"
-                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                                 loading="lazy">
-                                        </div>
-                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
-                                        {% if person.avg_rating %}
-                                            <div class="person-rating">
-                                                <span class="rating-badge">{{ person.avg_rating }}</span>
-                                                <small class="rating-count">({{ person.rating_count }})</small>
-                                            </div>
-                                        {% else %}
-                                            <div class="person-no-rating">No ratings</div>
-                                        {% endif %}
-                                    </div>
-                                    <div class="person-hover-info">
-                                        <strong>{{ person.name }}</strong>
-                                        {% if person.birth_date %}
-                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
-                                        {% endif %}
-                                        {% if person.num_works %}
-                                            <div>{{ person.num_works }} work(s)</div>
-                                        {% endif %}
-                                        <div class="hover-action">Click to view profile</div>
-                                    </div>
-                                </a>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="no-items-message">
-                            <div class="sunken-panel">
-                                No actors available.
-                            </div>
-                        </div>
-                    {% endif %}
+                
+                <!-- Empty State -->
+                <div id="empty-state" class="empty-state" style="display: none;">
+                    <img src="{% static 'images/win98/users.png' %}" alt="" class="empty-icon-img">
+                    <div class="empty-text">No people found</div>
+                    <div class="empty-subtext">Try adjusting your search or filters</div>
                 </div>
-                  <!-- TV Creators Tab -->
-                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
-                    <div class="tab-loading-overlay" style="display: none;">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    {% if tv_creators %}
-                        <div class="person-grid">
-                            {% for person in tv_creators %}
-                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
-                                    <div class="person-content">
-                                        <div class="person-img-container">
-                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                                 alt="{{ person.name }}"  
-                                                 class="person-img"
-                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                                 loading="lazy">
-                                        </div>
-                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
-                                        {% if person.avg_rating %}
-                                            <div class="person-rating">
-                                                <span class="rating-badge">{{ person.avg_rating }}</span>
-                                                <small class="rating-count">({{ person.rating_count }})</small>
-                                            </div>
-                                        {% else %}
-                                            <div class="person-no-rating">No ratings</div>
-                                        {% endif %}
-                                    </div>
-                                    <div class="person-hover-info">
-                                        <strong>{{ person.name }}</strong>
-                                        {% if person.birth_date %}
-                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
-                                        {% endif %}
-                                        {% if person.num_works %}
-                                            <div>{{ person.num_works }} work(s)</div>
-                                        {% endif %}
-                                        <div class="hover-action">Click to view profile</div>
-                                    </div>
-                                </a>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="no-items-message">
-                            <div class="sunken-panel">
-                                No TV creators available.
-                            </div>
-                        </div>
-                    {% endif %}
-                </div>
-                  <!-- Musicians Tab -->
-                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
-                    <div class="tab-loading-overlay" style="display: none;">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    {% if musicians %}
-                        <div class="person-grid">
-                            {% for person in musicians %}
-                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
-                                    <div class="person-content">
-                                        <div class="person-img-container">
-                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                                 alt="{{ person.name }}"  
-                                                 class="person-img"
-                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                                 loading="lazy">
-                                        </div>
-                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
-                                        {% if person.avg_rating %}
-                                            <div class="person-rating">
-                                                <span class="rating-badge">{{ person.avg_rating }}</span>
-                                                <small class="rating-count">({{ person.rating_count }})</small>
-                                            </div>
-                                        {% else %}
-                                            <div class="person-no-rating">No ratings</div>
-                                        {% endif %}
-                                    </div>
-                                    <div class="person-hover-info">
-                                        <strong>{{ person.name }}</strong>
-                                        {% if person.birth_date %}
-                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
-                                        {% endif %}
-                                        {% if person.num_works %}
-                                            <div>{{ person.num_works }} work(s)</div>
-                                        {% endif %}
-                                        <div class="hover-action">Click to view profile</div>
-                                    </div>
-                                </a>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="no-items-message">
-                            <div class="sunken-panel">
-                                No musicians available.
-                            </div>
-                        </div>
-                    {% endif %}
-                </div>
-                  <!-- Other Creators Tab -->
-                <div class="sunken-panel explorer-panel" role="tabpanel" hidden style="min-height: 300px;">
-                    <div class="tab-loading-overlay" style="display: none;">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    {% if other_creators %}
-                        <div class="person-grid">
-                            {% for person in other_creators %}
-                            <div class="person-card" data-name="{{ person.name|lower }}" data-rating="{{ person.avg_rating|default:'0' }}">
-                                <a href="{% url 'person_detail' person.id %}" class="person-item" tabindex="0" title="{{ person.name }}">
-                                    <div class="person-content">
-                                        <div class="person-img-container">
-                                            <img src="{{ person.profile_picture|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg' }}" 
-                                                 alt="{{ person.name }}"  
-                                                 class="person-img"
-                                                 onerror="this.src='{% static 'images/profile-placeholder.png' %}';" 
-                                                 loading="lazy">
-                                        </div>
-                                        <div class="person-name" title="{{ person.name }}">{{ person.name }}</div>
-                                        {% if person.avg_rating %}
-                                            <div class="person-rating">
-                                                <span class="rating-badge">{{ person.avg_rating }}</span>
-                                                <small class="rating-count">({{ person.rating_count }})</small>
-                                            </div>
-                                        {% else %}
-                                            <div class="person-no-rating">No ratings</div>
-                                        {% endif %}
-                                    </div>
-                                    <div class="person-hover-info">
-                                        <strong>{{ person.name }}</strong>
-                                        {% if person.birth_date %}
-                                            <div>Born: {{ person.birth_date|date:"Y" }}</div>
-                                        {% endif %}
-                                        {% if person.num_works %}
-                                            <div>{{ person.num_works }} work(s)</div>
-                                        {% endif %}
-                                        <div class="hover-action">Click to view profile</div>
-                                    </div>
-                                </a>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="no-items-message">
-                            <div class="sunken-panel">
-                                No other creators available.
-                            </div>
-                        </div>
-                    {% endif %}
+                
+                <!-- Load More Button -->
+                <div id="load-more-container" class="load-more-container" style="display: none;">
+                    <button id="load-more-btn" class="load-more-btn">
+                        <img src="{% static 'images/win98/directory_open.png' %}" alt="" class="btn-icon">
+                        Load More
+                    </button>
                 </div>
             </div>
-              <!-- Back to top button -->
-            <button id="back-to-top" class="retro-btn back-to-top" title="Back to top" aria-label="Back to top">
-                <span class="arrow-up">▲</span>
-            </button>
             
             <!-- Status bar -->
             <div class="status-bar">
-                <div class="status-bar-field">
-                    <span id="item-count">0 item(s)</span>
+                <div class="status-bar-field" id="status-count">
+                    <img src="{% static 'images/win98/users.png' %}" alt="" class="status-icon">
+                    <span>0 people</span>
+                </div>
+                <div class="status-bar-field" id="status-category">
+                    <img src="{% static 'images/win98/directory_closed.png' %}" alt="" class="status-icon">
+                    <span>Directors</span>
                 </div>
                 <div class="status-bar-field">
-                    <span id="filtered-count"></span>
-                </div>
-                <div class="status-bar-field">
-                    <span id="current-category">Category: Directors</span>
-                </div>
-                <div class="status-bar-field">
-                    <span id="total-people">Total: {{ total_people }} people</span>
-                </div>
-                <div class="status-bar-field">
-                    <button class="retro-btn" onclick="window.history.back()">Back</button>
-                    <button class="retro-btn" onclick="window.location.href='{% url 'home_page' %}'">Home</button>
+                    <button class="retro-btn" onclick="window.history.back()">
+                        <img src="{% static 'images/win98/directory_closed.png' %}" alt="" class="btn-icon">
+                        Back
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Back to top button -->
+<button id="back-to-top" class="back-to-top" title="Back to top" aria-label="Back to top">
+    <img src="{% static 'images/win98/directory_open.png' %}" alt="" class="top-icon">
+</button>
+
 <style>
-    /* CSS Variables for Windows 95 theme consistency */
+    /* ======================================
+       MOBILE-FIRST CSS APPROACH
+       Base styles are for mobile (smallest)
+       Media queries add complexity for larger screens
+       ====================================== */
+
+    /* Theme-adaptive CSS variables */
     :root {
         --bg-color: #c0c0c0;
         --text-color: #000;
@@ -413,6 +153,14 @@
         --folder-active-text: #ffffff;
         --input-bg: #ffffff;
         --alert-bg: #e1e1e1;
+        --card-bg: #ffffff;
+        --card-hover: #f5f5f5;
+        --rating-gold: #ffc107;
+        /* Win98 theme colors - match bottom_navbar */
+        --win98-gray: #c0c0c0;
+        --win98-light: #ffffff;
+        --win98-dark: #808080;
+        --win98-black: #000000;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -436,45 +184,72 @@
             --folder-active-text: #ffffff;
             --input-bg: #2a2a2a;
             --alert-bg: #404040;
+            --card-bg: #353535;
+            --card-hover: #454545;
+            --rating-gold: #ffc107;
+            /* Win98 dark theme colors - match bottom_navbar */
+            --win98-gray: #303030;
+            --win98-light: #606060;
+            --win98-dark: #151515;
+            --win98-black: #000000;
         }
     }
 
-    /* Page container - mobile-first approach */
+    /* ======================================
+       BASE MOBILE STYLES (320px+)
+       ====================================== */
+
+    /* Page container - mobile first */
     .people-page-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 10px;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 4px;
     }
 
-    @media (min-width: 768px) {
-        .people-page-container {
-            padding: 20px;
-        }
-    }
-
-    /* Window styling matching other pages */
+    /* Window styling */
     .window {
         border: 2px outset var(--bg-color);
         background-color: var(--bg-color);
-        font-family: 'MS Sans Serif', sans-serif;
+        font-family: 'MS Sans Serif', Arial, sans-serif;
         box-shadow: 2px 2px 4px var(--shadow-color);
     }
 
+    /* Title bar - use default 98.css in light mode, override only for dark mode */
     .title-bar {
-        background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
-        color: white;
-        padding: 2px;
+        padding: 2px 4px;
         font-size: 11px;
         font-weight: bold;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 6px;
     }
 
     @media (prefers-color-scheme: dark) {
         .title-bar {
-            background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+            background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
         }
+    }
+
+    .title-bar-text {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .title-icon {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
+
+    .title-bar-controls {
+        display: flex;
+        flex-shrink: 0;
     }
 
     .title-bar-controls button {
@@ -485,6 +260,7 @@
         margin-left: 2px;
         font-size: 8px;
         cursor: pointer;
+        padding: 0;
     }
 
     .title-bar-controls button:active {
@@ -494,737 +270,975 @@
     .window-body {
         background-color: var(--window-bg);
         color: var(--text-color);
-        padding: 8px;
+        padding: 6px;
     }
 
-    @media (min-width: 768px) {
-        .window-body {
-            padding: 12px;
-        }
-    }
-
-    /* Form field styling */
-    .field-row {
+    /* ======================================
+       TOOLBAR - Mobile First
+       ====================================== */
+    .toolbar {
         display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 8px;
+        padding: 6px;
+        background: var(--explorer-bg);
+        border: 2px inset var(--bg-color);
+    }
+
+    .toolbar-left, .toolbar-right {
+        display: flex;
+        gap: 6px;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
+        width: 100%;
     }
 
-    .field-row label {
-        font-size: 11px;
-        font-family: 'MS Sans Serif', sans-serif;
-        white-space: nowrap;
+    .toolbar-icon {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
     }
 
-    .field-row input, .field-row select {
-        border: 1px inset var(--border-light);
-        background-color: var(--input-bg);
+    .search-box {
+        flex: 1;
+        min-width: 0; /* Allow shrinking */
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 5px 8px;
+        border: 1px solid var(--border-dark);
+        border-right-color: var(--border-light);
+        border-bottom-color: var(--border-light);
+        background: var(--input-bg);
         color: var(--text-color);
-        font-family: 'MS Sans Serif', sans-serif;
+        font-family: 'MS Sans Serif', Arial, sans-serif;
+        font-size: 12px;
+        box-sizing: border-box;
+    }
+
+    .toolbar-right select {
+        flex: 1;
+        padding: 4px 6px;
+        border: 1px solid var(--border-dark);
+        border-right-color: var(--border-light);
+        border-bottom-color: var(--border-light);
+        background: var(--input-bg);
+        color: var(--text-color);
+        font-family: 'MS Sans Serif', Arial, sans-serif;
         font-size: 11px;
-        padding: 2px 4px;
+        cursor: pointer;
+        min-width: 0;
     }
 
-    .field-row-stacked {
-        margin-bottom: 12px;
-    }
-    
-    .field-row-stacked .field-row:not(:last-child) {
+    /* ======================================
+       CATEGORY TABS - Mobile First (Compact)
+       ====================================== */
+    .category-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 3px;
         margin-bottom: 8px;
+        padding: 3px;
+        background: var(--bg-color);
+        border: 1px solid var(--border-dark);
     }
 
-    @media (max-width: 768px) {
-        .field-row {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 4px;
-        }
-
-        .field-row input, .field-row select {
-            width: 100%;
-        }
+    .tab-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 4px 2px;
+        border: 2px outset var(--button-bg);
+        background: var(--button-bg);
+        color: var(--button-text);
+        font-family: 'MS Sans Serif', Arial, sans-serif;
+        font-size: 9px;
+        cursor: pointer;
+        transition: all 0.1s;
+        min-height: 44px; /* Touch target */
     }
 
-    /* Person grid - mobile-first responsive grid */
-    .person-grid {
+    .tab-btn:hover {
+        background: var(--button-hover);
+    }
+
+    .tab-btn.active {
+        border: 2px inset var(--button-bg);
+        background: var(--explorer-bg);
+    }
+
+    .tab-icon-img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .tab-label {
+        font-size: 9px;
+        line-height: 1.1;
+        text-align: center;
+    }
+
+    .tab-count {
+        background: var(--progress-bar);
+        color: white;
+        padding: 1px 4px;
+        border-radius: 8px;
+        font-size: 8px;
+        font-weight: bold;
+        min-width: 16px;
+        text-align: center;
+    }
+
+    /* ======================================
+       CONTENT PANEL
+       ====================================== */
+    .content-panel {
+        min-height: 300px;
+        background: var(--explorer-bg);
+        border: 2px inset var(--bg-color);
+        padding: 8px;
+        position: relative;
+    }
+
+    /* ======================================
+       PEOPLE GRID - Mobile First (2 columns)
+       ====================================== */
+    .people-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
-        padding: 8px;
-    }
-    
-    @media (min-width: 480px) {
-        .person-grid {
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-        }
-    }
-    
-    @media (min-width: 768px) {
-        .person-grid {
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-        }
-    }
-    
-    @media (min-width: 1024px) {
-        .person-grid {
-            grid-template-columns: repeat(5, 1fr);
-            gap: 20px;
-        }
-    }
-    
-    @media (min-width: 1200px) {
-        .person-grid {
-            grid-template-columns: repeat(6, 1fr);
-        }
     }
 
-    /* Mobile tab selector */
-    .mobile-tab-selector {
-        margin-bottom: 12px;
-    }
-
-    @media (min-width: 768px) {
-        .mobile-tab-selector {
-            display: none;
-        }
-    }
-
-    /* Desktop tabs */
-    .desktop-tabs {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-        margin-bottom: 12px;
-    }
-
-    @media (max-width: 767px) {
-        .desktop-tabs {
-            display: none;
-        }
-    }
-
-    /* Tab button styling */
-    .tab-btn {
-        margin-right: 4px;
-        margin-bottom: 8px;
-    }
-
-    .tab-btn[aria-selected="true"] {
-        border: 2px inset var(--button-bg);
-        background-color: var(--window-bg);
-    }
-
-    /* Explorer panel styling */
-    .explorer-panel {
-        background-color: var(--explorer-bg);
-        overflow-y: auto;
-        position: relative;
-        min-height: 300px;
-        padding: 8px !important;
-    }
-
-    .sunken-panel {
-        border: 2px solid;
-        border-color: var(--border-dark) var(--border-light) var(--border-light) var(--border-dark);
-        padding: 8px;
-        background-color: var(--explorer-bg);
-    }
-
-    /* Custom grid system */
-    .person-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        gap: 8px;
-        padding: 8px;
-    }
-
-    @media (max-width: 480px) {
-        .person-grid {
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 6px;
-            padding: 4px;
-        }
-    }
-
-    @media (min-width: 768px) {
-        .person-grid {
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 12px;
-            padding: 12px;
-        }
-    }
-
-    /* Loading overlay */
-    .tab-loading-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(192, 192, 192, 0.8);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 10;
-    }
-
-    @media (prefers-color-scheme: dark) {
-        .tab-loading-overlay {
-            background-color: rgba(56, 56, 56, 0.8);
-        }
-    }
-
-    .loading-spinner {
-        width: 32px;
-        height: 32px;
-        border: 3px solid var(--border-light);
-        border-top: 3px solid var(--progress-bar);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    /* Person item styling */
-    .person-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 8px;
-        border: 1px solid transparent;
-        position: relative;
-        transition: all 0.2s ease;
-        height: 100%;
-        color: var(--text-color);
-        text-decoration: none;
-        background-color: var(--explorer-bg);
-        border-radius: 0;
-        min-height: 44px; /* Ensure minimum tap target size */
-        cursor: pointer;
-    }
-    
-    @media (max-width: 480px) {
-        .person-item {
-            padding: 6px;
-            min-height: 40px;
-        }
-    }
-
-    .person-item:hover {
-        background-color: var(--folder-hover);
-        border: 1px dotted var(--text-color);
-        transform: translateY(-1px);
-        color: var(--text-color);
-        text-decoration: none;
-    }
-
-    .person-item:active, .person-item.active {
-        background-color: var(--folder-active);
-        color: var(--folder-active-text) !important;
-        border: 1px solid var(--folder-active);
-    }
-
-    .person-item:active img, .person-item.active img {
-        filter: brightness(1.1);
-    }
-
-    /* Person content styling */
-    .person-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-        width: 100%;
-        height: 100%;
-    }
-
-    /* Person card */
+    /* Person Card - Mobile First */
     .person-card {
         display: flex;
         flex-direction: column;
-        height: 100%;
-        background-color: var(--explorer-bg);
-        border: 1px solid transparent;
-        border-radius: 0;
-        transition: all 0.2s ease;
-        min-height: 120px;
-    }
-    
-    @media (max-width: 480px) {
-        .person-card {
-            min-height: 110px;
-        }
-    }
-
-    /* Person image container for consistent sizing */
-    .person-img-container {
-        width: 75px;
-        height: 75px;
-        margin: 0 auto 8px auto;
-        overflow: hidden;
-        border-radius: 2px;
+        align-items: center;
+        padding: 8px 4px;
+        background: var(--card-bg);
         border: 1px solid var(--border-dark);
-        position: relative;
-        background-color: var(--window-bg);
+        border-radius: 3px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        color: var(--text-color);
+        min-height: 100px;
     }
 
-    @media (max-width: 480px) {
-        .person-img-container {
-            width: 60px;
-            height: 60px;
-        }
+    .person-card:hover {
+        background: var(--card-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px var(--shadow-color);
     }
 
-    /* Person images */
+    .person-card:active {
+        transform: translateY(0);
+        background: var(--folder-active);
+        color: var(--folder-active-text);
+    }
+
+    .person-img-wrapper {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid var(--poster-border);
+        margin-bottom: 6px;
+        background: var(--bg-color);
+        flex-shrink: 0;
+    }
+
     .person-img {
         width: 100%;
         height: 100%;
         object-fit: cover;
-        transition: transform 0.2s ease;
+        transition: transform 0.2s;
     }
 
-    .person-item:hover .person-img {
+    .person-card:hover .person-img {
         transform: scale(1.05);
     }
 
     .person-name {
+        font-size: 10px;
+        font-weight: bold;
         text-align: center;
-        font-size: 11px;
-        max-width: 100%;
-        margin: 0 auto 4px auto;
+        margin-bottom: 3px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-family: 'MS Sans Serif', sans-serif;
-        font-weight: normal;
-        padding: 0 4px;
+        max-width: 100%;
+        padding: 0 2px;
+        line-height: 1.2;
     }
 
-    @media (max-width: 480px) {
-        .person-name {
-            font-size: 10px;
-        }
-    }
-
-    /* Rating styling */
     .person-rating {
-        font-size: 10px;
-        margin-top: 2px;
-        text-align: center;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 9px;
     }
 
     .rating-badge {
-        background-color: var(--progress-bar);
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--progress-bar);
         color: white;
-        padding: 2px 4px;
-        border-radius: 0;
+        padding: 1px 4px;
+        border-radius: 2px;
         font-weight: bold;
-        font-size: 10px;
-        border: 1px outset var(--border-light);
+        font-size: 9px;
+    }
+
+    .rating-star-icon {
+        width: 10px;
+        height: 10px;
     }
 
     .rating-count {
         color: var(--text-muted);
-        font-size: 9px;
-        margin-left: 4px;
+        font-size: 8px;
     }
 
-    .person-no-rating {
-        font-size: 10px;
+    .person-meta {
+        font-size: 8px;
         color: var(--text-muted);
         margin-top: 2px;
     }
 
-    /* Hover info popup */
-    .person-hover-info {
-        position: absolute;
-        display: none;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        background-color: var(--window-bg);
-        border: 2px outset var(--border-light);
-        padding: 8px;
-        width: 150px;
-        z-index: 100;
-        box-shadow: 2px 2px 4px var(--shadow-color);
+    /* ======================================
+       LOADING STATE
+       ====================================== */
+    .loading-indicator {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 30px;
+        color: var(--text-muted);
+    }
+
+    .loading-icon {
+        width: 32px;
+        height: 32px;
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(1.05); }
+    }
+
+    /* ======================================
+       EMPTY STATE
+       ====================================== */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 16px;
         text-align: center;
-        font-size: 11px;
+    }
+
+    .empty-icon-img {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+        opacity: 0.6;
+    }
+
+    .empty-text {
+        font-size: 12px;
+        font-weight: bold;
+        margin-bottom: 6px;
         color: var(--text-color);
-        font-family: 'MS Sans Serif', sans-serif;
     }
 
-    .person-item:hover .person-hover-info {
-        display: block;
+    .empty-subtext {
+        font-size: 11px;
+        color: var(--text-muted);
     }
 
-    .hover-action {
-        margin-top: 4px;
-        font-style: italic;
-        font-size: 10px;
+    /* ======================================
+       LOAD MORE
+       ====================================== */
+    .load-more-container {
+        display: flex;
+        justify-content: center;
+        padding: 16px 8px;
     }
 
-    /* Center the content */
-    .text-center {
-        text-align: center;
-        width: 100%;
+    .load-more-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border: 2px outset var(--button-bg);
+        background: var(--button-bg);
+        color: var(--button-text);
+        font-family: 'MS Sans Serif', Arial, sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+        min-height: 36px;
     }
 
-    /* Status bar styling */
+    .load-more-btn:hover {
+        background: var(--button-hover);
+    }
+
+    .load-more-btn:active {
+        border: 2px inset var(--button-bg);
+    }
+
+    .load-more-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    /* ======================================
+       STATUS BAR - Mobile First
+       ====================================== */
     .status-bar {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
         border-top: 1px solid var(--border-dark);
         background-color: var(--bg-color);
-        padding: 2px 4px;
-        font-size: 11px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
+        padding: 4px;
         margin-top: 8px;
     }
 
     .status-bar-field {
-        border: 1px inset var(--bg-color);
-        padding: 2px 4px;
-        background-color: var(--bg-color);
-        color: var(--text-color);
-        font-size: 10px;
-    }
-
-    /* No items message */
-    .no-items-message {
         display: flex;
-        justify-content: center;
         align-items: center;
-        min-height: 200px;
-    }
-
-    .no-items-message .sunken-panel {
-        background-color: var(--alert-bg);
+        gap: 4px;
+        font-size: 10px;
         color: var(--text-color);
-        padding: 16px;
-        text-align: center;
-        font-size: 12px;
+        padding: 2px 4px;
+        border: 1px inset var(--bg-color);
+        justify-content: center;
     }
 
-    /* Button styling */
+    .status-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    /* Retro Button */
     .retro-btn {
-        border: 1px outset var(--button-bg);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        border: 2px outset var(--button-bg);
         background: var(--button-bg);
         color: var(--button-text);
-        padding: 2px 8px;
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 11px;
+        padding: 3px 8px;
+        font-family: 'MS Sans Serif', Arial, sans-serif;
+        font-size: 10px;
         cursor: pointer;
-        text-decoration: none;
-        display: inline-block;
-        transition: background-color 0.1s ease;
+        min-height: 24px;
     }
 
     .retro-btn:hover {
         background: var(--button-hover);
-        color: var(--button-text);
-        text-decoration: none;
     }
 
     .retro-btn:active {
-        border: 1px inset var(--button-bg);
+        border: 2px inset var(--button-bg);
     }
 
-    /* Back to top button */
+    /* ======================================
+       BACK TO TOP BUTTON
+       ====================================== */
     .back-to-top {
         position: fixed;
-        bottom: 80px;
-        right: 20px;
-        z-index: 100;
-        display: none;
+        bottom: 70px;
+        right: 12px;
         width: 40px;
         height: 40px;
-        text-align: center;
-        padding: 0;
-        border-radius: 0;
+        border: 2px outset var(--button-bg);
+        background: var(--button-bg);
+        color: var(--button-text);
+        cursor: pointer;
+        z-index: 100;
+        display: none;
+        align-items: center;
+        justify-content: center;
         box-shadow: 2px 2px 4px var(--shadow-color);
+        padding: 0;
     }
 
-    .back-to-top .arrow-up {
-        font-size: 16px;
-        line-height: 36px;
-        display: block;
+    .back-to-top:hover {
+        background: var(--button-hover);
     }
 
-    /* Enhanced mobile responsiveness */
-    @media (max-width: 480px) {
+    .back-to-top.visible {
+        display: flex;
+    }
+
+    .top-icon {
+        width: 20px;
+        height: 20px;
+        transform: rotate(-90deg);
+    }
+
+    /* ======================================
+       TABLET BREAKPOINT (480px+)
+       ====================================== */
+    @media (min-width: 480px) {
+        .people-page-container {
+            padding: 8px;
+        }
+
         .window-body {
-            padding: 6px;
+            padding: 8px;
         }
-        
-        .person-grid {
-            gap: 6px;
-            padding: 6px;
+
+        .category-tabs {
+            grid-template-columns: repeat(6, 1fr);
         }
-        
-        .person-img-container {
-            width: 55px;
-            height: 55px;
+
+        .tab-btn {
+            flex-direction: row;
+            padding: 6px 8px;
+            font-size: 10px;
+            gap: 4px;
+            min-height: 36px;
+        }
+
+        .tab-label {
+            font-size: 10px;
+        }
+
+        .people-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .person-img-wrapper {
+            width: 64px;
+            height: 64px;
         }
 
         .person-name {
-            font-size: 10px;
-            max-width: 80px;
-        }
-        
-        .field-row-stacked .field-row {
-            margin-bottom: 6px;
-        }
-    }
-
-    /* Mobile adjustments */
-    @media (max-width: 768px) {
-        .back-to-top {
-            bottom: 90px;
-        }
-
-        .person-img-container {
-            width: 60px;
-            height: 60px;
-        }
-
-        .person-name {
-            font-size: 10px;
-            max-width: 85px;
+            font-size: 11px;
         }
 
         .status-bar {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 4px;
+            flex-direction: row;
+            justify-content: space-between;
         }
 
         .status-bar-field {
-            margin-bottom: 2px;
-        }
-
-        .person-grid {
-            justify-content: center;
+            justify-content: flex-start;
         }
     }
 
-    /* Accessibility focus styles */
-    .person-item:focus {
-        outline: 2px solid var(--folder-active);
-        border: 1px solid var(--folder-active);
+    /* ======================================
+       SMALL DESKTOP BREAKPOINT (640px+)
+       ====================================== */
+    @media (min-width: 640px) {
+        .people-page-container {
+            padding: 12px;
+        }
+
+        .toolbar {
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toolbar-left {
+            flex: 1;
+            max-width: 300px;
+        }
+
+        .toolbar-right {
+            width: auto;
+            flex: none;
+        }
+
+        .toolbar-right select {
+            width: auto;
+            min-width: 150px;
+        }
+
+        .tab-btn {
+            padding: 8px 12px;
+        }
+
+        .tab-icon-img {
+            width: 16px;
+            height: 16px;
+        }
+
+        .people-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .person-img-wrapper {
+            width: 72px;
+            height: 72px;
+        }
+
+        .content-panel {
+            padding: 12px;
+        }
     }
 
-    .person-item:focus-visible {
-        outline: 3px solid var(--folder-active);
+    /* ======================================
+       DESKTOP BREAKPOINT (768px+)
+       ====================================== */
+    @media (min-width: 768px) {
+        .people-page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+
+        .window-body {
+            padding: 12px;
+        }
+
+        .title-bar {
+            padding: 3px 6px;
+            font-size: 12px;
+        }
+
+        .people-grid {
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .person-img-wrapper {
+            width: 80px;
+            height: 80px;
+        }
+
+        .person-name {
+            font-size: 12px;
+        }
+
+        .person-rating {
+            font-size: 10px;
+        }
+
+        .rating-badge {
+            font-size: 10px;
+        }
+
+        .rating-count {
+            font-size: 9px;
+        }
+
+        .status-bar-field {
+            font-size: 11px;
+        }
+
+        .back-to-top {
+            width: 44px;
+            height: 44px;
+            bottom: 80px;
+            right: 20px;
+        }
     }
 
-    /* Enhanced button styling for dark mode */
+    /* ======================================
+       LARGE DESKTOP BREAKPOINT (1024px+)
+       ====================================== */
+    @media (min-width: 1024px) {
+        .people-page-container {
+            padding: 20px;
+        }
+
+        .people-grid {
+            grid-template-columns: repeat(6, 1fr);
+        }
+
+        .content-panel {
+            min-height: 500px;
+        }
+    }
+
+    /* ======================================
+       DARK MODE BUTTON ENHANCEMENTS
+       ====================================== */
     @media (prefers-color-scheme: dark) {
-        .retro-btn {
+        .retro-btn, .tab-btn, .load-more-btn, .back-to-top {
             border-color: var(--border-light);
             box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
         }
-        
-        .retro-btn:hover {
+
+        .retro-btn:hover, .tab-btn:hover, .load-more-btn:hover, .back-to-top:hover {
             box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
         }
-    }
 
-    /* Responsive grid adjustments */
-    .person-grid .col {
-        padding: 4px;
-    }
-
-    @media (max-width: 576px) {
-        .person-grid {
-            --bs-gutter-x: 8px;
+        /* Invert icons for better visibility in dark mode */
+        .title-icon,
+        .toolbar-icon,
+        .tab-icon-img,
+        .btn-icon,
+        .status-icon,
+        .top-icon,
+        .loading-icon,
+        .empty-icon-img {
+            filter: brightness(1.2);
         }
-        
-        .person-grid .col {
-            padding: 2px;
+    }
+
+    /* ======================================
+       TOUCH-FRIENDLY ENHANCEMENTS
+       ====================================== */
+    @media (hover: none) and (pointer: coarse) {
+        /* Larger touch targets for mobile */
+        .tab-btn {
+            min-height: 48px;
+        }
+
+        .person-card {
+            min-height: 110px;
+        }
+
+        .load-more-btn {
+            min-height: 44px;
+            padding: 10px 20px;
+        }
+
+        .retro-btn {
+            min-height: 32px;
+            padding: 6px 12px;
         }
     }
 </style>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const tabs = document.querySelectorAll('menu[role="tablist"] button[role="tab"]');
-        const panels = document.querySelectorAll('div[role="tabpanel"]');
-        const mobileSelector = document.getElementById('mobile-tab-selector');
-        const searchInput = document.getElementById('search-people');
-        const sortSelect = document.getElementById('sort-by');
-        const backToTopBtn = document.getElementById('back-to-top');
-        const categoryNames = ['Directors', 'Writers', 'Actors', 'TV Creators', 'Musicians', 'Other Creators'];
-        let currentTabIndex = 0;
-        
-        // Handle desktop tab switching
-        tabs.forEach((tab, index) => {
-            tab.addEventListener('click', () => {
-                showLoading(index);
-                setTimeout(() => switchTab(index), 300);
-            });
-        });
-        
-        // Handle mobile dropdown switching
-        mobileSelector.addEventListener('change', function() {
-            const index = parseInt(this.value);
-            showLoading(index);
-            setTimeout(() => switchTab(index), 300);
-        });
-        
-        // Show loading effect
-        function showLoading(index) {
-            const targetPanel = panels[index];
-            const loadingOverlay = targetPanel.querySelector('.tab-loading-overlay');
-            loadingOverlay.style.display = 'flex';
-        }
-        
-        // Switch tab function for both mobile and desktop
-        function switchTab(index) {
-            currentTabIndex = index;
-            
-            // Update desktop tab state
-            tabs.forEach(t => t.setAttribute('aria-selected', 'false'));
-            tabs[index].setAttribute('aria-selected', 'true');
-            
-            // Update mobile selector
-            mobileSelector.value = index;
-            
-            // Show selected panel, hide others
-            panels.forEach(panel => panel.hidden = true);
-            panels[index].hidden = false;
-            
-            // Update category name in status bar            document.getElementById('current-category').textContent = `Category: ${categoryNames[index]}`;
-            
-            // Update the category count information
-            const categoryCounts = {
-                'Directors': {{ category_counts.directors|default:0 }},
-                'Writers': {{ category_counts.writers|default:0 }},
-                'Actors': {{ category_counts.actors|default:0 }},
-                'TV Creators': {{ category_counts.tv_creators|default:0 }},
-                'Musicians': {{ category_counts.musicians|default:0 }},
-                'Other Creators': {{ category_counts.other_creators|default:0 }}
-            };
-            
-            // Hide loading overlay
-            const loadingOverlay = panels[index].querySelector('.tab-loading-overlay');
-            setTimeout(() => {
-                loadingOverlay.style.display = 'none';
-            }, 300);
-            
-            // Apply current filter and sort
-            filterAndSortPeople();
-        }
-        
-        // Filter people by name
-        searchInput.addEventListener('input', filterAndSortPeople);
-        
-        // Sort people
-        sortSelect.addEventListener('change', filterAndSortPeople);
-        
-        function filterAndSortPeople() {
-            const searchTerm = searchInput.value.toLowerCase();
-            const sortType = sortSelect.value;
-            const currentPanel = panels[currentTabIndex];
-            const personCards = currentPanel.querySelectorAll('.person-card');
-            
-            // Filter by name
-            let visibleCount = 0;
-            personCards.forEach(card => {
-                const name = card.dataset.name;
-                const isVisible = name.includes(searchTerm);
-                card.style.display = isVisible ? '' : 'none';
-                if (isVisible) visibleCount++;
-            });
-            
-            // Update filtered count info
-            const totalCount = personCards.length;
-            document.getElementById('item-count').textContent = `${visibleCount} item(s)`;
-            if (searchTerm) {
-                document.getElementById('filtered-count').textContent = 
-                    `Showing ${visibleCount} of ${totalCount}`;
-            } else {
-                document.getElementById('filtered-count').textContent = '';
-            }
-            
-            // Sort cards
-            const personGrid = currentPanel.querySelector('.person-grid');
-            if (personGrid) {
-                const cardArray = Array.from(personCards);
-                
-                cardArray.sort((a, b) => {
-                    switch (sortType) {
-                        case 'name-asc':
-                            return a.dataset.name.localeCompare(b.dataset.name);
-                        case 'name-desc':
-                            return b.dataset.name.localeCompare(a.dataset.name);
-                        case 'rating-desc':
-                            return parseFloat(b.dataset.rating) - parseFloat(a.dataset.rating);
-                        case 'rating-asc':
-                            return parseFloat(a.dataset.rating) - parseFloat(b.dataset.rating);
-                        default:
-                            return 0;
-                    }
-                });
-                
-                // Reorder in the DOM
-                cardArray.forEach(card => {
-                    personGrid.appendChild(card);
-                });
-            }
-        }
-        
-        // Back to top functionality
-        window.addEventListener('scroll', function() {
-            if (window.pageYOffset > 300) {
-                backToTopBtn.style.display = 'block';
-            } else {
-                backToTopBtn.style.display = 'none';
+document.addEventListener('DOMContentLoaded', function() {
+    // State
+    let currentCategory = 'directors';
+    let currentPage = 1;
+    let currentSearch = '';
+    let currentSort = 'rating-desc';
+    let isLoading = false;
+    let hasMore = true;
+    let searchTimeout = null;
+    const categoryCounts = {};
+
+    // Static icon paths (using Django template tags)
+    const ICONS = {
+        users: "{% static 'images/win98/users.png' %}",
+        star: "{% static 'images/win98/star-in-win-98 style.png' %}",
+        hourglass: "{% static 'images/win98/hourglass.png' %}",
+        directoryOpen: "{% static 'images/win98/directory_open.png' %}",
+        directoryClosed: "{% static 'images/win98/directory_closed.png' %}",
+        msgError: "{% static 'images/win98/msg_error.png' %}",
+        cameraVid: "{% static 'images/win98/camera_vid.png' %}",
+        userCard: "{% static 'images/win98/user_card.png' %}",
+        notepad: "{% static 'images/win98/notepad_file.png' %}",
+        tv: "{% static 'images/win98/network_television.png' %}",
+        cdAudio: "{% static 'images/win98/cd_audio.png' %}",
+        paintFile: "{% static 'images/win98/paint_file.png' %}"
+    };
+
+    // Elements
+    const peopleGrid = document.getElementById('people-grid');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const emptyState = document.getElementById('empty-state');
+    const loadMoreContainer = document.getElementById('load-more-container');
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    const searchInput = document.getElementById('search-people');
+    const sortSelect = document.getElementById('sort-by');
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const backToTopBtn = document.getElementById('back-to-top');
+    const statusCount = document.getElementById('status-count');
+    const statusCategory = document.getElementById('status-category');
+
+    // Category display names and icons
+    const categoryInfo = {
+        'directors': { name: 'Directors', icon: ICONS.cameraVid },
+        'actors': { name: 'Actors', icon: ICONS.userCard },
+        'writers': { name: 'Writers', icon: ICONS.notepad },
+        'tv_creators': { name: 'TV Creators', icon: ICONS.tv },
+        'musicians': { name: 'Musicians', icon: ICONS.cdAudio },
+        'other_creators': { name: 'Other Creators', icon: ICONS.paintFile }
+    };
+
+    // Initialize
+    loadPeople(true);
+    
+    // Preload counts for all categories
+    preloadCategoryCounts();
+
+    // Event Listeners
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const category = btn.dataset.category;
+            if (category !== currentCategory) {
+                currentCategory = category;
+                currentPage = 1;
+                updateActiveTab();
+                loadPeople(true);
             }
         });
-        
-        backToTopBtn.addEventListener('click', function() {
-            window.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-            });
-        });
-        
-        // Keyboard navigation for person items
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && document.activeElement.classList.contains('person-item')) {
-                e.preventDefault();
-                const href = document.activeElement.getAttribute('href');
-                setTimeout(() => {
-                    window.location.href = href;
-                }, 100);
-            }
-        });
-        
-        // Add Windows 95/98 click delay behavior
-        const personLinks = document.querySelectorAll('.person-item');
-        personLinks.forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                // Visual feedback
-                this.classList.add('active');
-                const href = this.getAttribute('href');
-                setTimeout(() => {
-                    window.location.href = href;
-                }, 100);
-            });
-        });
-        
-        // Set initial item count for first tab
-        switchTab(0); // Initialize with first tab
     });
+
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            currentSearch = searchInput.value.trim();
+            currentPage = 1;
+            loadPeople(true);
+        }, 300);
+    });
+
+    sortSelect.addEventListener('change', () => {
+        currentSort = sortSelect.value;
+        currentPage = 1;
+        loadPeople(true);
+    });
+
+    loadMoreBtn.addEventListener('click', () => {
+        if (!isLoading && hasMore) {
+            currentPage++;
+            loadPeople(false);
+        }
+    });
+
+    // Back to top functionality
+    window.addEventListener('scroll', () => {
+        if (window.pageYOffset > 300) {
+            backToTopBtn.classList.add('visible');
+        } else {
+            backToTopBtn.classList.remove('visible');
+        }
+    });
+
+    backToTopBtn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Infinite scroll
+    let scrollTimeout = null;
+    window.addEventListener('scroll', () => {
+        if (isLoading || !hasMore) return;
+        
+        // Debounce scroll events
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            const scrollPosition = window.innerHeight + window.pageYOffset;
+            const threshold = document.body.offsetHeight - 500;
+            
+            if (scrollPosition >= threshold) {
+                currentPage++;
+                loadPeople(false);
+            }
+        }, 100);
+    });
+
+    // Functions
+    async function loadPeople(reset = false) {
+        if (isLoading) return;
+        
+        isLoading = true;
+        showLoading(reset);
+
+        try {
+            const params = new URLSearchParams({
+                category: currentCategory,
+                page: currentPage,
+                per_page: 30,
+                search: currentSearch,
+                sort: currentSort
+            });
+
+            const response = await fetch(`/api/people/?${params}`);
+            const data = await response.json();
+
+            if (data.success) {
+                renderPeople(data.people, reset);
+                hasMore = data.pagination.has_more;
+                
+                // Update counts
+                categoryCounts[currentCategory] = data.pagination.total;
+                updateCategoryCount(currentCategory, data.pagination.total);
+                
+                // Update status bar
+                updateStatusBar(data.pagination.total);
+                
+                // Show/hide load more button
+                loadMoreContainer.style.display = hasMore ? 'flex' : 'none';
+            }
+        } catch (error) {
+            console.error('Error loading people:', error);
+            showError();
+        } finally {
+            isLoading = false;
+            hideLoading();
+        }
+    }
+
+    async function preloadCategoryCounts() {
+        const categories = ['directors', 'actors', 'writers', 'tv_creators', 'musicians', 'other_creators'];
+        
+        for (const category of categories) {
+            if (category === currentCategory) continue;
+            
+            try {
+                const params = new URLSearchParams({
+                    category: category,
+                    page: 1,
+                    per_page: 1
+                });
+                
+                const response = await fetch(`/api/people/?${params}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    categoryCounts[category] = data.pagination.total;
+                    updateCategoryCount(category, data.pagination.total);
+                }
+            } catch (error) {
+                console.error(`Error loading count for ${category}:`, error);
+            }
+        }
+    }
+
+    function renderPeople(people, reset = false) {
+        if (reset) {
+            peopleGrid.innerHTML = '';
+        }
+
+        if (people.length === 0 && reset) {
+            showEmpty();
+            return;
+        }
+
+        emptyState.style.display = 'none';
+
+        people.forEach(person => {
+            const card = createPersonCard(person);
+            peopleGrid.appendChild(card);
+        });
+    }
+
+    function createPersonCard(person) {
+        const card = document.createElement('a');
+        card.href = `/people/${person.id}/`;
+        card.className = 'person-card';
+        card.title = person.name;
+
+        const imgUrl = person.profile_picture || 'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg';
+
+        let ratingHtml = '';
+        if (person.avg_rating) {
+            ratingHtml = `
+                <div class="person-rating">
+                    <span class="rating-badge">
+                        <img src="${ICONS.star}" alt="" class="rating-star-icon">
+                        ${person.avg_rating}
+                    </span>
+                    <span class="rating-count">(${person.rating_count})</span>
+                </div>
+            `;
+        } else {
+            ratingHtml = '<div class="person-rating"><span class="rating-count">No ratings</span></div>';
+        }
+
+        let metaHtml = '';
+        if (person.num_works) {
+            metaHtml = `<div class="person-meta">${person.num_works} work${person.num_works > 1 ? 's' : ''}</div>`;
+        }
+
+        card.innerHTML = `
+            <div class="person-img-wrapper">
+                <img src="${imgUrl}" 
+                     alt="${person.name}" 
+                     class="person-img" 
+                     loading="lazy"
+                     onerror="this.src='https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg';">
+            </div>
+            <div class="person-name">${person.name}</div>
+            ${ratingHtml}
+            ${metaHtml}
+        `;
+
+        return card;
+    }
+
+    function updateActiveTab() {
+        tabButtons.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.category === currentCategory);
+        });
+        const info = categoryInfo[currentCategory];
+        statusCategory.innerHTML = `
+            <img src="${info.icon}" alt="" class="status-icon">
+            <span>${info.name}</span>
+        `;
+    }
+
+    function updateCategoryCount(category, count) {
+        const countEl = document.getElementById(`count-${category}`);
+        if (countEl) {
+            countEl.textContent = count;
+        }
+    }
+
+    function updateStatusBar(total) {
+        statusCount.innerHTML = `
+            <img src="${ICONS.users}" alt="" class="status-icon">
+            <span>${total} ${total === 1 ? 'person' : 'people'}</span>
+        `;
+    }
+
+    function showLoading(fullScreen = false) {
+        if (fullScreen) {
+            loadingIndicator.style.display = 'flex';
+            peopleGrid.style.display = 'none';
+            emptyState.style.display = 'none';
+            loadMoreContainer.style.display = 'none';
+        } else {
+            loadMoreBtn.disabled = true;
+            loadMoreBtn.innerHTML = `
+                <img src="${ICONS.hourglass}" alt="" class="btn-icon">
+                Loading...
+            `;
+        }
+    }
+
+    function hideLoading() {
+        loadingIndicator.style.display = 'none';
+        peopleGrid.style.display = 'grid';
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.innerHTML = `
+            <img src="${ICONS.directoryOpen}" alt="" class="btn-icon">
+            Load More
+        `;
+    }
+
+    function showEmpty() {
+        emptyState.style.display = 'flex';
+        peopleGrid.style.display = 'none';
+        loadMoreContainer.style.display = 'none';
+    }
+
+    function showError() {
+        const emptyIconImg = emptyState.querySelector('.empty-icon-img');
+        if (emptyIconImg) {
+            emptyIconImg.src = ICONS.msgError;
+        }
+        emptyState.querySelector('.empty-text').textContent = 'Error loading people';
+        emptyState.querySelector('.empty-subtext').textContent = 'Please try again later';
+        showEmpty();
+    }
+});
 </script>
 {% endblock %}
