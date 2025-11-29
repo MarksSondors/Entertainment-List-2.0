@@ -67,9 +67,19 @@ def manifest(request, config: str = None):
     """
     Stremio manifest endpoint.
     Can be called with or without config for initial addon installation.
+    When called with a valid config, configurationRequired is set to False
+    so Stremio shows the Install button.
     """
     if request.method == 'OPTIONS':
         return cors_preflight_response()
+    
+    from .authentication import get_user_from_config
+    
+    # Check if config is provided and valid
+    is_configured = False
+    if config:
+        user = get_user_from_config(config)
+        is_configured = user is not None
     
     manifest_data = {
         'id': 'com.entertainment-list.addon',
@@ -113,7 +123,7 @@ def manifest(request, config: str = None):
         ],
         'behaviorHints': {
             'configurable': True,
-            'configurationRequired': True,
+            'configurationRequired': not is_configured,  # False when valid config provided
         },
         'config': [
             {
