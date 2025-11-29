@@ -40,12 +40,12 @@ def get_site_average_rating(media, media_type: str) -> float | None:
     return result['avg_rating']
 
 
-def get_site_url_for_media(media, media_type: str) -> str:
+def get_site_url_for_media(media, media_type: str, base_url: str = "https://entertaint.men") -> str:
     """Get the URL to the media's page on Entertainment List."""
     if media_type == 'movie':
-        return f"https://entertaint.men/movies/{media.tmdb_id}/"
+        return f"{base_url}/movies/{media.tmdb_id}/"
     else:
-        return f"https://entertaint.men/tv/{media.tmdb_id}/"
+        return f"{base_url}/tvshows/{media.tmdb_id}/"
 
 
 def to_stremio_meta(media, media_type: str, review=None, base_url: str = "https://entertaint.men") -> dict:
@@ -97,26 +97,17 @@ def to_stremio_meta(media, media_type: str, review=None, base_url: str = "https:
         elif str(backdrop).startswith('http'):
             meta['background'] = str(backdrop)
     
-    # Add site logo
-    meta['logo'] = f"{base_url}/static/images/logo.png"
-    
     # Add links with site average rating
     site_avg_rating = get_site_average_rating(media, media_type)
-    media_url = get_site_url_for_media(media, media_type)
+    media_url = get_site_url_for_media(media, media_type, base_url)
     
     links = []
     
     # Add Entertainment List rating link
     if site_avg_rating:
         links.append({
-            'name': f"Entertainment List: ⭐ {site_avg_rating:.1f}/10",
-            'category': 'Entertainment List',
-            'url': media_url
-        })
-    else:
-        links.append({
-            'name': "Entertainment List: No ratings yet",
-            'category': 'Entertainment List',
+            'name': f"⭐ {site_avg_rating:.1f}/10",
+            'category': 'Ratings',
             'url': media_url
         })
     
