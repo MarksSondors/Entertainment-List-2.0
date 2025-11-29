@@ -1,5 +1,4 @@
-from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Avg, Q
@@ -27,13 +26,25 @@ def cors_response(data: dict, status: int = 200) -> JsonResponse:
     return response
 
 
+def cors_preflight_response() -> HttpResponse:
+    """Handle CORS preflight OPTIONS request."""
+    response = HttpResponse()
+    response['Access-Control-Allow-Origin'] = '*'
+    response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response['Access-Control-Allow-Headers'] = 'Content-Type'
+    response['Access-Control-Max-Age'] = '86400'
+    return response
+
+
 @csrf_exempt
-@require_GET
 def manifest(request, config: str = None):
     """
     Stremio manifest endpoint.
     Can be called with or without config for initial addon installation.
     """
+    if request.method == 'OPTIONS':
+        return cors_preflight_response()
+    
     manifest_data = {
         'id': 'com.entertainment-list.addon',
         'version': '1.0.0',
@@ -92,13 +103,14 @@ def manifest(request, config: str = None):
 
 
 @csrf_exempt
-@require_GET
 @require_stremio_auth
 def catalog(request, config: str, media_type: str, catalog_id: str, extra: str = None):
     """
     Stremio catalog endpoint.
     Returns paginated list of media items for the specified catalog.
     """
+    if request.method == 'OPTIONS':
+        return cors_preflight_response()
     user = request.stremio_user
     
     # Parse skip from extra (format: "skip=100")
@@ -296,13 +308,15 @@ def get_top_rated(user, skip: int = 0) -> list[dict]:
 
 
 @csrf_exempt
-@require_GET
 @require_stremio_auth
 def meta(request, config: str, media_type: str, imdb_id: str):
     """
     Stremio meta endpoint.
     Returns detailed metadata for a specific item, including user's review.
     """
+    if request.method == 'OPTIONS':
+        return cors_preflight_response()
+    
     user = request.stremio_user
     
     # Remove .json suffix if present

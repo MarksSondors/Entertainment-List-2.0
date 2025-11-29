@@ -36,11 +36,20 @@ def require_stremio_auth(view_func):
     """Decorator to require valid API key in Stremio config."""
     @wraps(view_func)
     def wrapper(request, config, *args, **kwargs):
+        # Skip auth for OPTIONS preflight requests
+        if request.method == 'OPTIONS':
+            return view_func(request, config, *args, **kwargs)
+        
         user = get_user_from_config(config)
         if not user:
-            return JsonResponse({
+            response = JsonResponse({
                 'error': 'Invalid or missing API key'
             }, status=401)
+            # Add CORS headers to error response too
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type'
+            return response
         request.stremio_user = user
         return view_func(request, config, *args, **kwargs)
     return wrapper
