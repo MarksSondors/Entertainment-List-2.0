@@ -161,6 +161,35 @@
             display: block;
         }
         
+        .url-display {
+            margin-top: 16px;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+        
+        .url-display label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+        }
+        
+        .url-display input {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 12px;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+        }
+        
+        .url-display .help-text {
+            margin-top: 8px;
+        }
+        
         .features {
             margin-top: 30px;
             padding-top: 20px;
@@ -218,6 +247,12 @@
             <span>📋</span> Copy Manifest URL
         </button>
         
+        <div class="url-display" id="urlDisplay" style="display: none;">
+            <label>Manifest URL:</label>
+            <input type="text" id="manifestUrlField" readonly onclick="this.select()">
+            <p class="help-text">Copy this URL and paste it in Stremio: Settings → Addons → Search box</p>
+        </div>
+        
         <div class="status" id="status"></div>
         
         <div class="features">
@@ -257,13 +292,21 @@
         }
         
         function installAddon() {
+            const apiKey = document.getElementById('api_key').value.trim();
+            if (!apiKey) {
+                showStatus('Please enter your API key', 'error');
+                return;
+            }
+            
             const manifestUrl = getManifestUrl();
             if (!manifestUrl) return;
             
-            // Convert HTTPS URL to stremio:// protocol
+            // Convert to stremio:// protocol for installation
             const stremioUrl = manifestUrl.replace(/^https?:\/\//, 'stremio://');
             
-            showStatus('Opening Stremio...', 'success');
+            showStatus('Installing addon...', 'success');
+            
+            // Redirect to stremio:// URL - this works in browser and triggers Stremio app
             window.location.href = stremioUrl;
         }
         
@@ -272,7 +315,7 @@
             if (!manifestUrl) return;
             
             navigator.clipboard.writeText(manifestUrl).then(() => {
-                showStatus('Manifest URL copied to clipboard!', 'success');
+                showStatus('Manifest URL copied! Paste it in Stremio: Settings → Addons → Search box', 'success');
             }).catch(() => {
                 // Fallback for older browsers
                 const input = document.createElement('input');
@@ -281,7 +324,7 @@
                 input.select();
                 document.execCommand('copy');
                 document.body.removeChild(input);
-                showStatus('Manifest URL copied to clipboard!', 'success');
+                showStatus('Manifest URL copied! Paste it in Stremio: Settings → Addons → Search box', 'success');
             });
         }
         
@@ -293,11 +336,36 @@
         
         // Enable/disable install button based on input
         document.getElementById('api_key').addEventListener('input', function() {
-            document.getElementById('installBtn').disabled = !this.value.trim();
+            const hasValue = this.value.trim();
+            document.getElementById('installBtn').disabled = !hasValue;
+            updateUrlDisplay();
         });
         
+        function updateUrlDisplay() {
+            const apiKey = document.getElementById('api_key').value.trim();
+            const urlDisplay = document.getElementById('urlDisplay');
+            const urlField = document.getElementById('manifestUrlField');
+            
+            if (apiKey) {
+                const url = getManifestUrl();
+                if (url) {
+                    urlField.value = url;
+                    urlDisplay.style.display = 'block';
+                }
+            } else {
+                urlDisplay.style.display = 'none';
+            }
+        }
+        
         // Initial state - check if API key is pre-filled
-        document.getElementById('installBtn').disabled = !document.getElementById('api_key').value.trim();
+        const apiKeyInput = document.getElementById('api_key');
+        document.getElementById('installBtn').disabled = !apiKeyInput.value.trim();
+        
+        // If API key is pre-filled, show URL and status
+        if (apiKeyInput.value.trim()) {
+            updateUrlDisplay();
+            showStatus('API key loaded. Click Install to add the addon to Stremio.', 'success');
+        }
     </script>
 </body>
 </html>
