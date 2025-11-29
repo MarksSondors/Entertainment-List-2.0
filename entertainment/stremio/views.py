@@ -205,29 +205,49 @@ def get_watchlist_movies(user, skip: int = 0) -> list[dict]:
 
 
 def get_watchlist_series(user, skip: int = 0) -> list[dict]:
-    """Get TV shows from user's watchlist."""
+    """Get TV shows from user's watchlist that are not fully watched."""
     tvshow_ct = ContentType.objects.get_for_model(TVShow)
     
     watchlist_items = Watchlist.objects.filter(
         user=user,
         content_type=tvshow_ct
-    ).order_by('-date_added')[skip:skip + PAGE_SIZE]
+    ).order_by('-date_added')
     
     tvshow_ids = [item.object_id for item in watchlist_items]
     tvshows = TVShow.objects.filter(
         id__in=tvshow_ids
     ).exclude(
         Q(imdb_id__isnull=True) | Q(imdb_id='')
-    ).prefetch_related('genres')
+    ).prefetch_related('genres', 'seasons__episodes')
     
-    # Preserve watchlist order
+    # Build dict for ordering
     tvshow_dict = {t.id: t for t in tvshows}
+    
+    # Filter out fully watched shows and apply pagination
     metas = []
+    skipped = 0
+    
     for tvshow_id in tvshow_ids:
-        if tvshow_id in tvshow_dict:
-            item = to_stremio_catalog_item(tvshow_dict[tvshow_id], 'series')
-            if item:
-                metas.append(item)
+        if tvshow_id not in tvshow_dict:
+            continue
+        
+        tvshow = tvshow_dict[tvshow_id]
+        
+        # Check if show is fully watched (100% progress)
+        watch_progress = user.get_watch_progress(tvshow)
+        if watch_progress >= 100:
+            continue  # Skip fully watched shows
+        
+        # Handle pagination
+        if skipped < skip:
+            skipped += 1
+            continue
+        
+        item = to_stremio_catalog_item(tvshow, 'series')
+        if item:
+            metas.append(item)
+            if len(metas) >= PAGE_SIZE:
+                break
     
     return metas
 
