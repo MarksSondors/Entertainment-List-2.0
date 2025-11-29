@@ -4,6 +4,9 @@ from . import views
 app_name = 'stremio'
 
 urlpatterns = [
+    # Configure page (shown when user clicks Configure in Stremio)
+    path('', views.configure, name='configure'),
+    
     # Manifest without config (for initial addon discovery)
     path('manifest.json', views.manifest, name='manifest'),
     

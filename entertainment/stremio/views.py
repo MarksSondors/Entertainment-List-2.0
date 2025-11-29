@@ -1,4 +1,8 @@
+import base64
+import json
+
 from django.http import JsonResponse, HttpResponse
+from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Avg, Q
@@ -34,6 +38,18 @@ def cors_preflight_response() -> HttpResponse:
     response['Access-Control-Allow-Headers'] = 'Content-Type'
     response['Access-Control-Max-Age'] = '86400'
     return response
+
+
+def configure(request):
+    """
+    Stremio configure page.
+    Shows API key input and generates install URL.
+    """
+    base_url = request.build_absolute_uri('/stremio/')
+    
+    return render(request, 'stremio/configure.html', {
+        'base_url': base_url,
+    })
 
 
 @csrf_exempt
