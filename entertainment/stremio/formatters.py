@@ -1,3 +1,7 @@
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Avg
+
+
 def get_poster_url(media) -> str | None:
     """Get full poster URL for a media item."""
     poster = getattr(media, 'poster', None) or getattr(media, 'poster_path', None)
@@ -15,7 +19,36 @@ def get_poster_url(media) -> str | None:
     return None
 
 
-def to_stremio_meta(media, media_type: str, review=None) -> dict:
+def get_site_average_rating(media, media_type: str) -> float | None:
+    """Get the average rating from all users on the site for a media item."""
+    from custom_auth.models import Review
+    from movies.models import Movie
+    from tvshows.models import TVShow
+    
+    if media_type == 'movie':
+        model_class = Movie
+    else:
+        model_class = TVShow
+    
+    content_type = ContentType.objects.get_for_model(model_class)
+    
+    result = Review.objects.filter(
+        content_type=content_type,
+        object_id=media.id
+    ).aggregate(avg_rating=Avg('rating'))
+    
+    return result['avg_rating']
+
+
+def get_site_url_for_media(media, media_type: str) -> str:
+    """Get the URL to the media's page on Entertainment List."""
+    if media_type == 'movie':
+        return f"https://entertaint.men/movies/{media.tmdb_id}/"
+    else:
+        return f"https://entertaint.men/tv/{media.tmdb_id}/"
+
+
+def to_stremio_meta(media, media_type: str, review=None, base_url: str = "https://entertaint.men") -> dict:
     """
     Convert a Movie or TVShow to Stremio meta format.
     
@@ -23,6 +56,7 @@ def to_stremio_meta(media, media_type: str, review=None) -> dict:
         media: Movie or TVShow instance
         media_type: 'movie' or 'series'
         review: Optional Review instance or aggregated review data for the user
+        base_url: Base URL for the site (for links)
     """
     imdb_id = getattr(media, 'imdb_id', None)
     if not imdb_id:
@@ -62,6 +96,32 @@ def to_stremio_meta(media, media_type: str, review=None) -> dict:
             meta['background'] = f"https://image.tmdb.org/t/p/original{backdrop}"
         elif str(backdrop).startswith('http'):
             meta['background'] = str(backdrop)
+    
+    # Add site logo
+    meta['logo'] = f"{base_url}/static/images/logo.png"
+    
+    # Add links with site average rating
+    site_avg_rating = get_site_average_rating(media, media_type)
+    media_url = get_site_url_for_media(media, media_type)
+    
+    links = []
+    
+    # Add Entertainment List rating link
+    if site_avg_rating:
+        links.append({
+            'name': f"Entertainment List: ⭐ {site_avg_rating:.1f}/10",
+            'category': 'Entertainment List',
+            'url': media_url
+        })
+    else:
+        links.append({
+            'name': "Entertainment List: No ratings yet",
+            'category': 'Entertainment List',
+            'url': media_url
+        })
+    
+    if links:
+        meta['links'] = links
     
     return meta
 
