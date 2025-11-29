@@ -10,7 +10,7 @@ from django.db.models import Avg, Q
 from .authentication import require_stremio_auth
 from .formatters import to_stremio_meta, to_stremio_catalog_item
 
-from movies.models import Movie
+from movies.models import Movie, MovieOfWeekPick
 from tvshows.models import TVShow, Season
 from custom_auth.models import Watchlist, Review
 from movies.services.recommendation import MovieRecommender
@@ -85,7 +85,7 @@ def manifest(request, config: str = None):
             },
             {
                 'id': 'community-picks',
-                'name': 'Community Picks',
+                'name': 'Movie of the Week',
                 'type': 'movie',
                 'extra': [{'name': 'skip', 'isRequired': False}]
             },
@@ -213,51 +213,42 @@ def get_watchlist_series(user, skip: int = 0) -> list[dict]:
 
 
 def get_community_picks(user, skip: int = 0) -> list[dict]:
-    """Get movies reviewed by others that the user hasn't reviewed."""
+    """Get Movie of the Week picks that the user hasn't reviewed."""
     movie_ct = ContentType.objects.get_for_model(Movie)
     
-    # Get user's reviewed movie IDs
-    user_reviewed_ids = set(
+    # Get movie IDs the user has reviewed
+    user_reviewed_movie_ids = set(
         Review.objects.filter(
             user=user,
             content_type=movie_ct
         ).values_list('object_id', flat=True)
     )
     
-    # Get movies reviewed by others, ordered by latest review date
-    community_reviews = Review.objects.filter(
-        content_type=movie_ct
-    ).exclude(
-        user=user
-    ).exclude(
-        object_id__in=user_reviewed_ids
-    ).order_by('-date_added').values_list('object_id', flat=True)
+    # Get Movie of the Week picks where user hasn't reviewed the movie
+    # Ordered by most recent first (newest featured movies first)
+    motw_picks = MovieOfWeekPick.objects.select_related('movie').order_by('-end_date')
     
-    # Get unique movie IDs while preserving order
-    seen = set()
-    unique_movie_ids = []
-    for movie_id in community_reviews:
-        if movie_id not in seen:
-            seen.add(movie_id)
-            unique_movie_ids.append(movie_id)
-    
-    # Paginate the movie IDs
-    movie_ids = unique_movie_ids[skip:skip + PAGE_SIZE]
-    
-    movies = Movie.objects.filter(
-        id__in=movie_ids
-    ).exclude(
-        Q(imdb_id__isnull=True) | Q(imdb_id='')
-    ).prefetch_related('genres')
-    
-    # Preserve order from reviews
-    movie_dict = {m.id: m for m in movies}
     metas = []
-    for movie_id in movie_ids:
-        if movie_id in movie_dict:
-            item = to_stremio_catalog_item(movie_dict[movie_id], 'movie')
-            if item:
-                metas.append(item)
+    count = 0
+    skipped = 0
+    
+    for pick in motw_picks:
+        movie = pick.movie
+        # Skip if user has reviewed this movie or no imdb_id
+        if movie.id in user_reviewed_movie_ids or not movie.imdb_id:
+            continue
+        
+        # Handle pagination
+        if skipped < skip:
+            skipped += 1
+            continue
+        
+        item = to_stremio_catalog_item(movie, 'movie')
+        if item:
+            metas.append(item)
+            count += 1
+            if count >= PAGE_SIZE:
+                break
     
     return metas
 
