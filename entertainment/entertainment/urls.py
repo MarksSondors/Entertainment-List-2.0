@@ -55,6 +55,7 @@ urlpatterns = [
     path('music/', include('music.urls')),
     path('games/', include('games.urls')),
     path('api/notifications/', include('notifications.urls')),
+    path('stremio/', include('stremio.urls')),
     
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),    path('favicon.ico', RedirectView.as_view(url=staticfiles_storage.url('favicon/favicon.ico'))),
