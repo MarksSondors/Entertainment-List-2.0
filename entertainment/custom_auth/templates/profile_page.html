@@ -47,7 +47,9 @@
                     
                     <!-- Profile Details Below -->
                     <div class="profile-details">
-                        <div class="online-status">Online</div>
+                        <div class="online-status {% if user.is_online %}is-online{% else %}is-offline{% endif %}">
+                            {{ user.get_online_status }}
+                        </div>
                         <div class="status-message">
                             "{{ user.profile.status_message|default:"Hey there! I'm using Entertainment List" }}"
                         </div>
@@ -441,10 +443,18 @@
     }
 
     .online-status {
-        color: var(--online-color);
+        color: var(--text-muted);
         font-style: italic;
         margin-bottom: 8px;
         font-size: 14px;
+    }
+
+    .online-status.is-online {
+        color: var(--online-color);
+    }
+
+    .online-status.is-offline {
+        color: var(--text-muted);
     }
 
     .status-message {
