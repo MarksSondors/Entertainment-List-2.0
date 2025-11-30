@@ -14,6 +14,7 @@ class CustomUser(AbstractUser):
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='profile_pictures/', blank=True, null=True)
     api_key = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    last_active = models.DateTimeField(blank=True, null=True)
 
     def get_profile_picture(self):
         if self.profile_picture:
@@ -22,6 +23,47 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username
+    
+    def get_online_status(self):
+        """Returns the user's online status as a human-readable string."""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        if not self.last_active:
+            return "Offline"
+        
+        now = timezone.now()
+        diff = now - self.last_active
+        
+        # Consider user online if active in last 5 minutes
+        if diff < timedelta(minutes=5):
+            return "Online"
+        
+        # Calculate time ago
+        if diff < timedelta(hours=1):
+            minutes = int(diff.total_seconds() / 60)
+            return f"Online {minutes} minute{'s' if minutes != 1 else ''} ago"
+        elif diff < timedelta(days=1):
+            hours = int(diff.total_seconds() / 3600)
+            return f"Online {hours} hour{'s' if hours != 1 else ''} ago"
+        elif diff < timedelta(days=7):
+            days = diff.days
+            return f"Online {days} day{'s' if days != 1 else ''} ago"
+        elif diff < timedelta(days=30):
+            weeks = diff.days // 7
+            return f"Online {weeks} week{'s' if weeks != 1 else ''} ago"
+        else:
+            # Show the date for older activity
+            return f"Last seen {self.last_active.strftime('%b %d, %Y')}"
+    
+    def is_online(self):
+        """Returns True if the user is currently online (active in last 5 minutes)."""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        if not self.last_active:
+            return False
+        return (timezone.now() - self.last_active) < timedelta(minutes=5)
         
     def generate_api_key(self):
         """Generate a new unique API key for this user."""

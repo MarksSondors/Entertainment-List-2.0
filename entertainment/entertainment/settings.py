@@ -136,6 +136,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'custom_auth.middleware.UpdateLastActiveMiddleware',
 ]
 
 # Add debug middleware only in DEBUG mode
