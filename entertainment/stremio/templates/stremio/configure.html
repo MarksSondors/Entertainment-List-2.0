@@ -1,277 +1,248 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Entertainment List - Stremio Addon</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            color: #fff;
-        }
-        
-        .container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .logo {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .logo h1 {
-            font-size: 28px;
-            margin-bottom: 8px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .logo p {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 14px;
-        }
-        
-        .form-group {
-            margin-bottom: 24px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.9);
-        }
-        
-        input[type="text"] {
-            width: 100%;
-            padding: 14px 16px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-        
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #667eea;
-            background: rgba(255, 255, 255, 0.15);
-        }
-        
-        input[type="text"]::placeholder {
-            color: rgba(255, 255, 255, 0.4);
-        }
-        
-        .help-text {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.5);
-            margin-top: 8px;
-        }
-        
-        .help-text a {
-            color: #667eea;
-            text-decoration: none;
-        }
-        
-        .help-text a:hover {
-            text-decoration: underline;
-        }
-        
-        .btn {
-            width: 100%;
-            padding: 16px;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            color: #fff;
-            margin-bottom: 12px;
-            text-decoration: none;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-            color: #fff;
-        }
-        
-        .btn-primary.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-            pointer-events: none;
-        }
-        
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-        
-        .status {
-            text-align: center;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 16px;
-            display: none;
-        }
-        
-        .status.success {
-            background: rgba(72, 187, 120, 0.2);
-            color: #48bb78;
-            display: block;
-        }
-        
-        .status.error {
-            background: rgba(245, 101, 101, 0.2);
-            color: #f56565;
-            display: block;
-        }
-        
-        .url-display {
-            margin-top: 16px;
-            padding: 16px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-        }
-        
-        .url-display label {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.6);
-            margin-bottom: 8px;
-        }
-        
-        .url-display input {
-            width: 100%;
-            padding: 10px 12px;
-            font-size: 12px;
-            font-family: monospace;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-            color: #fff;
-            cursor: pointer;
-        }
-        
-        .url-display .help-text {
-            margin-top: 8px;
-        }
-        
-        .features {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .features h3 {
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: rgba(255, 255, 255, 0.5);
-            margin-bottom: 16px;
-        }
-        
-        .feature-list {
-            list-style: none;
-        }
-        
-        .feature-list li {
-            padding: 8px 0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 14px;
-        }
-        
-        .feature-list li::before {
-            content: "✓";
-            color: #48bb78;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="logo">
-            <h1>🎬 Entertainment List</h1>
-            <p>Connect your watchlists and recommendations to Stremio</p>
-        </div>
-        
-        <div class="form-group">
-            <label for="api_key">API Key</label>
-            <input type="text" id="api_key" placeholder="Enter your API key" autocomplete="off" value="{{ api_key }}">
-            <p class="help-text">
-                Find your API key in your <a href="/settings/" target="_blank">account settings</a>
-            </p>
-        </div>
-        
-        <a class="btn btn-primary" id="installBtn" href="#" onclick="return installAddon()">
-            <span>📺</span> Install Addon
-        </a>
-        
-        <button class="btn btn-secondary" id="copyBtn" onclick="copyUrl()">
-            <span>📋</span> Copy Manifest URL
-        </button>
-        
-        <div class="url-display" id="urlDisplay" style="display: none;">
-            <label>Manifest URL:</label>
-            <input type="text" id="manifestUrlField" readonly onclick="this.select()">
-            <p class="help-text">Copy this URL and paste it in Stremio: Settings → Addons → Search box</p>
-        </div>
-        
-        <div class="status" id="status"></div>
-        
-        <div class="features">
-            <h3>What you'll get</h3>
-            <ul class="feature-list">
-                <li>Your movie watchlist in Stremio</li>
-                <li>Your TV show watchlist in Stremio</li>
-                <li>Personalized movie recommendations</li>
-                <li>Movie of the Week picks you haven't seen</li>
-                <li>Top rated movies you haven't seen</li>
-                <li>Your ratings displayed on movie details</li>
-            </ul>
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}Stremio Addon Configuration | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="profile-layout">
+        <div class="main-content">
+            <div class="window">
+                <div class="title-bar">
+                    <div class="title-bar-text">Stremio Addon - Configuration</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body">
+                    
+                    <!-- Logo Section -->
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <img src="{% static 'images/logo.png' %}" alt="Entertainment List" style="width: 48px; height: auto; margin-bottom: 8px;">
+                        <h3 style="margin: 0; font-size: 14px;">Entertainment List</h3>
+                        <p style="margin: 4px 0 0 0; color: var(--text-muted);">Connect your watchlists to Stremio</p>
+                    </div>
+                    
+                    <!-- API Key Input Section -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <h4><img src="{% static 'images/win98/certificate.png' %}" alt="" class="win98-icon"> API Key</h4>
+                        <div class="sunken-panel" style="padding: 10px;">
+                            <div class="field-row" style="margin-bottom: 10px;">
+                                <input type="text" id="api_key" placeholder="Enter your API key" autocomplete="off" value="{{ api_key }}" style="width: 100%;">
+                            </div>
+                            <small style="display: block; margin-bottom: 10px; color: var(--text-muted);">
+                                Find your API key in your <a href="/settings/">account settings</a>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Install Button Section -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <h4><img src="{% static 'images/win98/cd_audio.png' %}" alt="" class="win98-icon"> Installation</h4>
+                        <div class="sunken-panel" style="padding: 10px;">
+                            <div style="text-align: center; margin: 10px 0 15px 0;">
+                                <a class="btn install-btn" id="installBtn" href="#" onclick="return installAddon()" style="font-size: 12px; padding: 8px 24px; text-decoration: none;">
+                                    <img src="{% static 'images/win98/network_television.png' %}" alt="" class="win98-icon">
+                                    Install Addon
+                                </a>
+                            </div>
+                            
+                            <div class="field-row button-row" style="justify-content: center;">
+                                <button class="btn" id="copyBtn" onclick="copyUrl()">
+                                    <img src="{% static 'images/win98/notepad_file.png' %}" alt="" class="win98-icon">
+                                    Copy Manifest URL
+                                </button>
+                            </div>
+                            
+                            <div id="urlDisplay" style="display: none; margin-top: 15px;">
+                                <label style="font-size: 10px; color: var(--text-muted);">Manifest URL:</label>
+                                <input type="text" id="manifestUrlField" readonly onclick="this.select()" style="width: 100%; font-size: 10px; margin-top: 4px;">
+                                <small style="display: block; margin-top: 8px; color: var(--text-muted);">
+                                    Copy this URL and paste it in Stremio: Settings → Addons → Search box
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Message -->
+                    <div class="status-message" id="status" style="display: none;"></div>
+                    
+                    <!-- Features Section -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <h4><img src="{% static 'images/win98/star.png' %}" alt="" class="win98-icon"> What you'll get</h4>
+                        <div class="sunken-panel" style="padding: 10px;">
+                            <ul style="margin: 0; padding: 0 0 0 20px;">
+                                <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/camera_vid.png' %}" alt="" class="win98-icon"> Continue Watching - Shows you're currently watching</li>
+                                <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/favorites.png' %}" alt="" class="win98-icon"> Your movie watchlist in Stremio</li>
+                                <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/network_television.png' %}" alt="" class="win98-icon"> Your TV show watchlist in Stremio</li>
+                                <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/magnifying_glass.png' %}" alt="" class="win98-icon"> Personalized movie recommendations</li>
+                                <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/users.png' %}" alt="" class="win98-icon"> Movie of the Week picks you haven't seen</li>
+                                <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/star.png' %}" alt="" class="win98-icon"> Top rated movies you haven't seen</li>
+                                <li style="margin-bottom: 0;"><img src="{% static 'images/win98/notepad_file.png' %}" alt="" class="win98-icon"> Your ratings displayed on movie details</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="field-row" style="justify-content: flex-start;">
+                        <a href="/settings/" class="btn">← Back to Settings</a>
+                    </div>
+                </div>
+                <div class="status-bar">
+                    <div class="status-bar-field">Entertainment List Stremio Addon</div>
+                    <div class="status-bar-field">Version 1.0.0</div>
+                </div>
+            </div>
         </div>
     </div>
+</div>
+
+<style>
+    .profile-layout {
+        display: flex;
+        justify-content: center;
+    }
     
-    <script>
+    .main-content {
+        flex: 1;
+        max-width: 600px;
+    }
+
+    .win98-icon {
+        width: 16px;
+        height: 16px;
+        vertical-align: middle;
+        margin-right: 4px;
+    }
+
+    .window-body {
+        padding: 12px;
+    }
+
+    .sunken-panel {
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        background-color: var(--win98-input-bg);
+        padding: 8px;
+        margin: 4px 0;
+    }
+
+    .status-bar {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        border-top: none;
+        padding: 2px 4px;
+        background-color: var(--win98-gray);
+        font-size: 11px;
+        margin-top: 2px;
+    }
+    
+    .status-bar-field {
+        font-size: 11px;
+        margin-right: 10px;
+        border: 1px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        padding: 0 4px;
+        flex: 1;
+    }
+
+    .btn.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    .install-btn {
+        background-color: #008080;
+        color: #fff !important;
+    }
+
+    .install-btn:hover {
+        background-color: #006666;
+    }
+
+    h3, h4 {
+        font-weight: bold;
+        margin: 0 0 8px 0;
+    }
+
+    h3 {
+        font-size: 14px;
+    }
+
+    h4 {
+        font-size: 11px;
+    }
+
+    .field-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .field-row.button-row {
+        gap: 8px;
+    }
+
+    .field-row-stacked {
+        display: block;
+    }
+
+    p, li {
+        font-size: 11px;
+        line-height: 1.5;
+    }
+
+    .status-message {
+        padding: 8px 10px;
+        margin-bottom: 15px;
+        font-size: 11px;
+        border: 2px solid;
+    }
+
+    .status-message.success {
+        background-color: #d4edda;
+        border-color: #155724;
+        color: #155724;
+    }
+
+    .status-message.error {
+        background-color: #f8d7da;
+        border-color: #721c24;
+        color: #721c24;
+    }
+
+    @media (max-width: 768px) {
+        .profile-layout {
+            flex-direction: column;
+        }
+        
+        .main-content {
+            flex: 1;
+            width: 100%;
+        }
+        
+        .container.py-4 {
+            padding: 10px !important;
+        }
+        
+        .field-row {
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .sunken-panel {
+            padding: 12px !important;
+            margin-bottom: 15px !important;
+        }
+    }
+</style>
+
+<script>
         const BASE_URL = "{{ base_url }}";
         
         function encodeConfig(apiKey) {
@@ -388,5 +359,4 @@
             showStatus('API key loaded. Click Install to add the addon to Stremio.', 'success');
         }
     </script>
-</body>
-</html>
+{% endblock %}

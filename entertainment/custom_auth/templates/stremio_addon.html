@@ -20,7 +20,7 @@
                     
                     <!-- About Section -->
                     <div class="field-row-stacked" style="margin-bottom: 15px;">
-                        <h4>📺 What is the Stremio Addon?</h4>
+                        <h4><img src="{% static 'images/win98/network_television.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> What is the Stremio Addon?</h4>
                         <div class="sunken-panel" style="padding: 10px;">
                             <p style="margin: 0 0 10px 0;">
                                 The Entertainment List Stremio Addon brings your watchlists, recommendations, and community picks directly into Stremio. You'll see your personal catalogs right alongside other addons.
@@ -29,18 +29,19 @@
                                 <strong>Features:</strong>
                             </p>
                             <ul style="margin: 5px 0 0 20px; padding: 0;">
-                                <li>📋 <strong>My Watchlist (Movies & Series)</strong> - Your saved items</li>
-                                <li>🎯 <strong>Recommended For You</strong> - Personalized picks based on your ratings</li>
-                                <li>👥 <strong>Community Picks</strong> - Movies reviewed by other users</li>
-                                <li>⭐ <strong>Top Rated (Unseen)</strong> - Highest rated movies you haven't seen</li>
-                                <li>📝 <strong>Your Reviews</strong> - See your ratings in Stremio's detail view</li>
+                                <li><img src="{% static 'images/win98/camera_vid.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>Continue Watching</strong> - Shows you're currently watching</li>
+                                <li><img src="{% static 'images/win98/favorites.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>My Watchlist (Movies & Series)</strong> - Your saved items</li>
+                                <li><img src="{% static 'images/win98/magnifying_glass.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>Recommended For You</strong> - Personalized picks based on your ratings</li>
+                                <li><img src="{% static 'images/win98/users.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>Movie of the Week</strong> - Community picks you haven't seen</li>
+                                <li><img src="{% static 'images/win98/star.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>Top Rated (Unseen)</strong> - Highest rated movies you haven't seen</li>
+                                <li><img src="{% static 'images/win98/notepad_file.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>Your Reviews</strong> - See your ratings in Stremio's detail view</li>
                             </ul>
                         </div>
                     </div>
 
                     <!-- Installation Section -->
                     <div class="field-row-stacked" style="margin-bottom: 15px;">
-                        <h4>🔧 Installation</h4>
+                        <h4><img src="{% static 'images/win98/cd_audio.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> Installation</h4>
                         <div class="sunken-panel" style="padding: 10px;">
                             {% if request.user.api_key %}
                             <p style="margin: 0 0 15px 0;">
@@ -49,7 +50,7 @@
                             
                             <div style="text-align: center; margin: 20px 0;">
                                 <a href="{{ install_url }}" class="btn install-btn" target="_blank" style="font-size: 14px; padding: 10px 30px; text-decoration: none;">
-                                    🚀 Install Addon in Stremio
+                                    <img src="{% static 'images/win98/network_television.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 6px;"> Install Addon in Stremio
                                 </a>
                             </div>
                             
@@ -62,7 +63,7 @@
                             </div>
                             <div class="field-row">
                                 <button type="button" id="copy-addon-url" class="btn">
-                                    📋 Copy URL
+                                    <img src="{% static 'images/win98/notepad_file.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> Copy URL
                                 </button>
                             </div>
                             {% else %}
@@ -78,7 +79,7 @@
 
                     <!-- Your API Key Section -->
                     <div class="field-row-stacked" style="margin-bottom: 15px;">
-                        <h4>🔑 Your API Key</h4>
+                        <h4><img src="{% static 'images/win98/certificate.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> Your API Key</h4>
                         <div class="sunken-panel" style="padding: 10px;">
                             {% if request.user.api_key %}
                             <div class="field-row" style="margin-bottom: 10px;">
@@ -89,10 +90,10 @@
                             </small>
                             <div class="field-row button-row">
                                 <button type="button" id="copy-api-key" class="btn">
-                                    📋 Copy Key
+                                    <img src="{% static 'images/win98/notepad_file.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> Copy Key
                                 </button>
                                 <a href="{% url 'settings_page' %}" class="btn">
-                                    🔄 Regenerate Key
+                                    <img src="{% static 'images/win98/settings_icon.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> Regenerate Key
                                 </a>
                             </div>
                             {% else %}
@@ -105,7 +106,7 @@
 
                     <!-- How to Use Section -->
                     <div class="field-row-stacked" style="margin-bottom: 15px;">
-                        <h4>📖 How to Use</h4>
+                        <h4><img src="{% static 'images/win98/document.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> How to Use</h4>
                         <div class="sunken-panel" style="padding: 10px;">
                             <ol style="margin: 0 0 0 20px; padding: 0;">
                                 <li style="margin-bottom: 8px;">Click the <strong>"Install Addon in Stremio"</strong> button above</li>
@@ -119,7 +120,7 @@
 
                     <!-- Troubleshooting Section -->
                     <div class="field-row-stacked" style="margin-bottom: 15px;">
-                        <h4>❓ Troubleshooting</h4>
+                        <h4><img src="{% static 'images/win98/msg_error.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> Troubleshooting</h4>
                         <div class="sunken-panel" style="padding: 10px;">
                             <p style="margin: 0 0 10px 0;">
                                 <strong>Catalogs not showing?</strong><br>

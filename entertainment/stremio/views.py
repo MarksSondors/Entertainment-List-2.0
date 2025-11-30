@@ -5,7 +5,7 @@ from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Avg, Q
+from django.db.models import Avg, Q, Count
 
 from .authentication import require_stremio_auth
 from .formatters import to_stremio_meta, to_stremio_catalog_item
@@ -92,6 +92,12 @@ def manifest(request, config: str = None):
         'idPrefixes': ['tt'],
         'catalogs': [
             {
+                'id': 'continue-watching',
+                'name': 'Continue Watching',
+                'type': 'series',
+                'extra': [{'name': 'skip', 'isRequired': False}]
+            },
+            {
                 'id': 'watchlist-movies',
                 'name': 'My Watchlist',
                 'type': 'movie',
@@ -161,6 +167,7 @@ def catalog(request, config: str, media_type: str, catalog_id: str, extra: str =
     
     # Route to appropriate catalog handler
     catalog_handlers = {
+        ('series', 'continue-watching'): lambda: get_continue_watching(user, skip),
         ('movie', 'watchlist-movies'): lambda: get_watchlist_movies(user, skip),
         ('series', 'watchlist-series'): lambda: get_watchlist_series(user, skip),
         ('movie', 'community-picks'): lambda: get_community_picks(user, skip),
@@ -198,6 +205,92 @@ def get_watchlist_movies(user, skip: int = 0) -> list[dict]:
     for movie_id in movie_ids:
         if movie_id in movie_dict:
             item = to_stremio_catalog_item(movie_dict[movie_id], 'movie')
+            if item:
+                metas.append(item)
+    
+    return metas
+
+
+def get_continue_watching(user, skip: int = 0) -> list[dict]:
+    """Get TV shows that user has started but not finished watching."""
+    from tvshows.models import Episode, WatchedEpisode
+    
+    tvshow_ct = ContentType.objects.get_for_model(TVShow)
+    
+    # Get all TV shows from user's watchlist
+    watchlist_items = Watchlist.objects.filter(
+        user=user,
+        content_type=tvshow_ct
+    ).order_by('-date_added')
+    
+    tvshow_ids = [item.object_id for item in watchlist_items]
+    
+    if not tvshow_ids:
+        return []
+    
+    # Get total aired episodes count per show
+    from django.utils import timezone
+    total_episodes = Episode.objects.filter(
+        season__show_id__in=tvshow_ids,
+        season__season_number__gt=0,
+        air_date__isnull=False,
+        air_date__lte=timezone.now()
+    ).values('season__show_id').annotate(
+        count=Count('id')
+    )
+    
+    # Get watched episodes count per show for this user
+    watched_episodes = WatchedEpisode.objects.filter(
+        user=user,
+        episode__season__show_id__in=tvshow_ids,
+        episode__season__season_number__gt=0
+    ).values('episode__season__show_id').annotate(
+        count=Count('id')
+    )
+    
+    # Create mappings for fast lookup
+    total_episodes_map = {item['season__show_id']: item['count'] for item in total_episodes}
+    watched_episodes_map = {item['episode__season__show_id']: item['count'] for item in watched_episodes}
+    
+    # Find shows in progress (0 < progress < 100)
+    in_progress_ids = []
+    progress_map = {}
+    
+    for tvshow_id in tvshow_ids:
+        total = total_episodes_map.get(tvshow_id, 0)
+        watched = watched_episodes_map.get(tvshow_id, 0)
+        
+        if total > 0:
+            progress = (watched / total * 100)
+            if 0 < progress < 100:
+                in_progress_ids.append(tvshow_id)
+                progress_map[tvshow_id] = progress
+    
+    if not in_progress_ids:
+        return []
+    
+    # Get TV shows and sort by most recently watched
+    tvshows = TVShow.objects.filter(
+        id__in=in_progress_ids
+    ).exclude(
+        Q(imdb_id__isnull=True) | Q(imdb_id='')
+    ).prefetch_related('genres')
+    
+    # Sort by progress (most recently active - higher progress first) and apply pagination
+    tvshow_dict = {t.id: t for t in tvshows}
+    
+    # Sort in_progress_ids by progress descending (shows closer to completion first)
+    sorted_ids = sorted(in_progress_ids, key=lambda x: progress_map.get(x, 0), reverse=True)
+    
+    metas = []
+    for idx, tvshow_id in enumerate(sorted_ids):
+        if idx < skip:
+            continue
+        if len(metas) >= PAGE_SIZE:
+            break
+        
+        if tvshow_id in tvshow_dict:
+            item = to_stremio_catalog_item(tvshow_dict[tvshow_id], 'series')
             if item:
                 metas.append(item)
     
