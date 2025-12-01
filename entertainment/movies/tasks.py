@@ -129,7 +129,9 @@ def update_unreleased_movies():
     return f"Scheduled updates for {unreleased_movies.count()} movies"
 
 def update_random_movies():
-    """Update information for 10% of the movies in the database (oldest updated first)."""
+    """Update information for 10% of the movies in the database (oldest updated first).
+    Also updates the people (cast and crew) associated with each movie.
+    """
     # Calculate 10% of total movies (minimum 1 movie)
     total_movies = Movie.objects.count()
     movies_to_update = max(1, int(total_movies * 0.1))
@@ -138,7 +140,7 @@ def update_random_movies():
     movies = Movie.objects.order_by('date_updated')[:movies_to_update]
     
     # Log how many movies will be updated
-    logger.info(f"Updating {len(movies)} movies ({movies_to_update} = 10% of {total_movies} total movies) with oldest update dates")
+    logger.info(f"Updating {len(movies)} movies ({movies_to_update} = 10% of {total_movies} total movies) with oldest update dates (including people)")
     
     # Update each movie
     updates_count = 0
@@ -146,21 +148,31 @@ def update_random_movies():
         try:
             # Schedule individual movie updates as separate tasks
             # This allows for better error isolation and parallel processing
-            async_task(update_single_movie, movie.id)
+            # Pass update_people=True as positional arg since async_task doesn't handle kwargs well
+            async_task(update_single_movie, movie.id, True)
             updates_count += 1
         except Exception as e:
             logger.error(f"Error scheduling update for movie {movie.title} (ID: {movie.id}): {e}")
     
-    return f"Scheduled updates for {updates_count} movies ({int(Movie.objects.count() * 0.1)} = 10% of total) with oldest update dates"
+    return f"Scheduled updates for {updates_count} movies (including associated people) with oldest update dates"
 
-def update_single_movie(movie_id):
-    """Update a single movie from TMDB."""
+def update_single_movie(movie_id, update_people=False):
+    """Update a single movie from TMDB.
+    
+    Args:
+        movie_id: The database ID of the movie to update
+        update_people: If True, also update the cast and crew associated with the movie
+    """
     try:
         movie = Movie.objects.get(id=movie_id)
+        logger.info(f"Updating movie {movie.title} (ID: {movie_id}), update_people={update_people}")
         
         # Use MoviesService instead of direct requests
         movies_service = MoviesService()
-        data = movies_service.get_movie_details(movie.tmdb_id, append_to_response="videos,keywords")
+        # Include credits if we're updating people
+        append_to_response = "videos,keywords,credits" if update_people else "videos,keywords"
+        logger.info(f"Fetching TMDB data with append_to_response={append_to_response}")
+        data = movies_service.get_movie_details(movie.tmdb_id, append_to_response=append_to_response)
         
         if not data:
             logger.error(f"TMDB API error for movie {movie.title} (ID: {movie_id}): Failed to retrieve data")
@@ -358,13 +370,246 @@ def update_single_movie(movie_id):
                     async_task(update_single_collection, updates['collection'].id)
                 elif isinstance(updates['collection'], int):
                     async_task(update_single_collection, updates['collection'])
-                    
-            return f"Updated movie {movie.title} with {len(updates)} changes: {', '.join([f'{k}={v}' for k, v in updates.items()])}"
         else:
             # Even when no content changes, update the date_updated field
             # This ensures rotation in the update_random_movies function
             movie.save(update_fields=['date_updated'])
-            return f"No updates needed for movie {movie.title}"
+        
+        # Update associated people and MediaPerson entries if requested
+        people_updated = 0
+        media_persons_updated = 0
+        media_persons_added = 0
+        
+        logger.info(f"update_people={update_people}, 'credits' in data={'credits' in data}")
+        
+        if update_people and 'credits' in data:
+            from custom_auth.models import MediaPerson, Person
+            from django.contrib.contenttypes.models import ContentType
+            
+            movie_content_type = ContentType.objects.get_for_model(Movie)
+            
+            # Get all persons currently associated with this movie
+            existing_person_ids = set(
+                MediaPerson.objects.filter(
+                    content_type=movie_content_type,
+                    object_id=movie.id
+                ).values_list('person__tmdb_id', flat=True)
+            )
+            
+            # Collect unique TMDB IDs from cast and crew
+            cast = data['credits'].get('cast', [])
+            crew = data['credits'].get('crew', [])
+            
+            logger.info(f"Found {len(cast)} cast members and {len(crew)} crew members from TMDB")
+            logger.info(f"Existing person TMDB IDs in DB: {len(existing_person_ids)}")
+            
+            # Get TMDb IDs of people in the credits
+            api_person_ids = set()
+            for person in cast:
+                api_person_ids.add(person.get('id'))
+            for person in crew:
+                if person.get('department') in ['Directing', 'Writing', 'Sound']:
+                    api_person_ids.add(person.get('id'))
+            
+            # Update existing persons that are both in our DB and in the credits
+            persons_to_update = api_person_ids & existing_person_ids
+            for tmdb_id in persons_to_update:
+                try:
+                    person = Person.objects.get(tmdb_id=tmdb_id)
+                    async_task(update_single_person, person.id)
+                    people_updated += 1
+                except Person.DoesNotExist:
+                    pass
+            
+            # Update or add MediaPerson entries for cast
+            for index, cast_member in enumerate(cast):
+                tmdb_id = cast_member.get('id')
+                cast_name = cast_member.get('name', 'Unknown')
+                
+                # Try to get existing person or create new one
+                person = None
+                try:
+                    person = Person.objects.get(tmdb_id=tmdb_id)
+                    logger.debug(f"Found existing person: {person.name} (TMDB ID: {tmdb_id})")
+                except Person.DoesNotExist:
+                    # Person doesn't exist in DB, create them
+                    logger.info(f"Person {cast_name} (TMDB ID: {tmdb_id}) not in DB, fetching details...")
+                    person_details = movies_service.get_person_details(tmdb_id)
+                    if person_details:
+                        person = Person.objects.create(
+                            tmdb_id=person_details.get('id'),
+                            name=person_details.get('name'),
+                            profile_picture=f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
+                            date_of_birth=person_details.get('birthday'),
+                            date_of_death=person_details.get('deathday'),
+                            bio=person_details.get('biography'),
+                            imdb_id=person_details.get('imdb_id'),
+                            is_actor=True
+                        )
+                        logger.info(f"Created new person: {person.name}")
+                    else:
+                        logger.warning(f"Could not fetch details for person TMDB ID: {tmdb_id}")
+                        continue
+                
+                if not person:
+                    continue
+                
+                # Check if MediaPerson entry exists
+                media_person = MediaPerson.objects.filter(
+                    content_type=movie_content_type,
+                    object_id=movie.id,
+                    person=person,
+                    role="Actor"
+                ).first()
+                
+                if media_person:
+                    # Update existing entry
+                    mp_updates = {}
+                    new_order = cast_member.get('order', index)
+                    new_character = cast_member.get('character')
+                    
+                    if media_person.order != new_order:
+                        mp_updates['order'] = new_order
+                    if new_character and media_person.character_name != new_character:
+                        mp_updates['character_name'] = new_character
+                    
+                    if mp_updates:
+                        for field, value in mp_updates.items():
+                            setattr(media_person, field, value)
+                        media_person.save()
+                        media_persons_updated += 1
+                        logger.info(f"Updated MediaPerson for {person.name} in {movie.title}")
+                else:
+                    # Create new MediaPerson entry
+                    logger.info(f"Creating new MediaPerson entry for {person.name} as Actor in {movie.title}")
+                    new_mp = MediaPerson.objects.create(
+                        content_type=movie_content_type,
+                        object_id=movie.id,
+                        person=person,
+                        role="Actor",
+                        character_name=cast_member.get('character'),
+                        order=cast_member.get('order', index)
+                    )
+                    logger.info(f"Created MediaPerson ID: {new_mp.id}")
+                    # Ensure person has is_actor flag
+                    if not person.is_actor:
+                        person.is_actor = True
+                        person.save(update_fields=['is_actor'])
+                    media_persons_added += 1
+                    logger.info(f"Added {person.name} as Actor in {movie.title}")
+            
+            # Update or add MediaPerson entries for crew
+            for crew_member in crew:
+                department = crew_member.get('department')
+                job = crew_member.get('job')
+                tmdb_id = crew_member.get('id')
+                
+                # Skip if not a relevant department/job
+                if department not in ['Directing', 'Writing', 'Sound']:
+                    continue
+                if (department == 'Directing' and job != 'Director') or \
+                   (department == 'Writing' and job not in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel', 'Book']) or \
+                   (department == 'Sound' and job != 'Original Music Composer'):
+                    continue
+                
+                # Try to get existing person or create new one
+                try:
+                    person = Person.objects.get(tmdb_id=tmdb_id)
+                except Person.DoesNotExist:
+                    # Person doesn't exist in DB, create them
+                    person_details = movies_service.get_person_details(tmdb_id)
+                    if person_details:
+                        person = Person.objects.create(
+                            tmdb_id=person_details.get('id'),
+                            name=person_details.get('name'),
+                            profile_picture=f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
+                            date_of_birth=person_details.get('birthday'),
+                            date_of_death=person_details.get('deathday'),
+                            bio=person_details.get('biography'),
+                            imdb_id=person_details.get('imdb_id')
+                        )
+                        logger.info(f"Created new crew person: {person.name}")
+                    else:
+                        logger.warning(f"Could not fetch details for crew person TMDB ID: {tmdb_id}")
+                        continue
+                
+                # Check if MediaPerson entry exists for this role
+                media_person = MediaPerson.objects.filter(
+                    content_type=movie_content_type,
+                    object_id=movie.id,
+                    person=person,
+                    role=job
+                ).first()
+                
+                if not media_person:
+                    # Check if person exists with a different crew role
+                    existing_mp = MediaPerson.objects.filter(
+                        content_type=movie_content_type,
+                        object_id=movie.id,
+                        person=person
+                    ).exclude(role="Actor").first()
+                    
+                    if existing_mp and existing_mp.role != job:
+                        # Role has changed, update it
+                        logger.info(f"Updating role for {person.name} from {existing_mp.role} to {job}")
+                        existing_mp.role = job
+                        existing_mp.save()
+                        media_persons_updated += 1
+                    elif not existing_mp:
+                        # Create new MediaPerson entry for crew
+                        logger.info(f"Creating new MediaPerson entry for {person.name} as {job} in {movie.title}")
+                        new_mp = MediaPerson.objects.create(
+                            content_type=movie_content_type,
+                            object_id=movie.id,
+                            person=person,
+                            role=job
+                        )
+                        logger.info(f"Created crew MediaPerson ID: {new_mp.id}")
+                        # Update person role flags
+                        role_flag_updated = False
+                        if job == 'Director' and not person.is_director:
+                            person.is_director = True
+                            role_flag_updated = True
+                        elif job == 'Original Music Composer' and not person.is_original_music_composer:
+                            person.is_original_music_composer = True
+                            role_flag_updated = True
+                        elif job == 'Screenplay' and not person.is_screenwriter:
+                            person.is_screenwriter = True
+                            role_flag_updated = True
+                        elif job == 'Writer' and not person.is_writer:
+                            person.is_writer = True
+                            role_flag_updated = True
+                        elif job == 'Story' and not person.is_story:
+                            person.is_story = True
+                            role_flag_updated = True
+                        elif job == 'Original Story' and not person.is_original_story:
+                            person.is_original_story = True
+                            role_flag_updated = True
+                        elif job == 'Novel' and not person.is_novelist:
+                            person.is_novelist = True
+                            role_flag_updated = True
+                        elif job == 'Comic Book' and not person.is_comic_artist:
+                            person.is_comic_artist = True
+                            role_flag_updated = True
+                        elif job == 'Graphic Novel' and not person.is_graphic_novelist:
+                            person.is_graphic_novelist = True
+                            role_flag_updated = True
+                        elif job == 'Book' and not person.is_book:
+                            person.is_book = True
+                            role_flag_updated = True
+                        
+                        if role_flag_updated:
+                            person.save()
+                        
+                        media_persons_added += 1
+                        logger.info(f"Added {person.name} as {job} in {movie.title}")
+            
+            logger.info(f"For {movie.title}: {people_updated} people scheduled for update, {media_persons_updated} entries updated, {media_persons_added} entries added")
+        
+        if updates:
+            return f"Updated movie {movie.title} with {len(updates)} changes. {people_updated} people scheduled, {media_persons_updated} updated, {media_persons_added} added."
+        else:
+            return f"No movie field updates for {movie.title}. {people_updated} people scheduled, {media_persons_updated} updated, {media_persons_added} added."
             
     except Movie.DoesNotExist:
         logger.error(f"Movie with ID {movie_id} not found")
@@ -372,6 +617,78 @@ def update_single_movie(movie_id):
     except Exception as e:
         logger.error(f"Error updating movie {movie_id}: {e}")
         return f"Error updating movie {movie_id}: {str(e)}"
+
+def update_single_person(person_id):
+    """Update a single person's details from TMDB.
+    
+    Args:
+        person_id: The database ID of the Person to update
+    """
+    from custom_auth.models import Person
+    
+    try:
+        person = Person.objects.get(id=person_id)
+        
+        if not person.tmdb_id:
+            logger.warning(f"Person {person.name} (ID: {person_id}) has no TMDB ID, skipping update")
+            return f"Person {person.name} has no TMDB ID"
+        
+        movies_service = MoviesService()
+        data = movies_service.get_person_details(person.tmdb_id)
+        
+        if not data:
+            logger.error(f"TMDB API error for person {person.name} (ID: {person_id}): Failed to retrieve data")
+            return f"Failed to update person {person_id}"
+        
+        updates = {}
+        
+        # Update basic fields if they've changed
+        if data.get('name') and data.get('name') != person.name:
+            updates['name'] = data.get('name')
+        
+        if data.get('biography') and data.get('biography') != person.bio:
+            updates['bio'] = data.get('biography')
+        
+        if data.get('profile_path'):
+            new_profile = f"https://image.tmdb.org/t/p/original{data['profile_path']}"
+            if new_profile != person.profile_picture:
+                updates['profile_picture'] = new_profile
+        
+        if data.get('birthday') and data.get('birthday') != str(person.date_of_birth):
+            try:
+                updates['date_of_birth'] = date.fromisoformat(data['birthday'])
+            except (ValueError, TypeError):
+                pass
+        
+        if data.get('deathday'):
+            if data['deathday'] != str(person.date_of_death):
+                try:
+                    updates['date_of_death'] = date.fromisoformat(data['deathday'])
+                except (ValueError, TypeError):
+                    pass
+        elif person.date_of_death:
+            # If API says person is alive but we have a death date, clear it
+            updates['date_of_death'] = None
+        
+        if data.get('imdb_id') and data.get('imdb_id') != person.imdb_id:
+            updates['imdb_id'] = data.get('imdb_id')
+        
+        # Apply updates if there are any
+        if updates:
+            logger.info(f"Updating person {person.name} (ID: {person_id}) with: {list(updates.keys())}")
+            for field, value in updates.items():
+                setattr(person, field, value)
+            person.save()
+            return f"Updated person {person.name} with {len(updates)} changes"
+        else:
+            return f"No updates needed for person {person.name}"
+    
+    except Person.DoesNotExist:
+        logger.error(f"Person with ID {person_id} not found")
+        return f"Person {person_id} not found"
+    except Exception as e:
+        logger.error(f"Error updating person {person_id}: {e}")
+        return f"Error updating person {person_id}: {str(e)}"
 
 def update_movie_collections():
     """Update collections by adding any missing movies from TMDB."""

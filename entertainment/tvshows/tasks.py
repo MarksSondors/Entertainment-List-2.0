@@ -7,6 +7,7 @@ from django_q.models import Schedule
 
 from api.services.tvshows import TVShowsService
 from api.services.tvdb import TVDBService
+from api.services.movies import MoviesService
 from .models import TVShow, Season, Episode, EpisodeGroup, EpisodeSubGroup, Keyword, Genre, Country, ProductionCompany
 
 logger = logging.getLogger(__name__)
@@ -228,21 +229,29 @@ def update_random_tvshows():
     for tvshow in tvshows:
         try:
             # Schedule individual TV show updates as separate tasks
-            async_task(update_single_tvshow, tvshow.id)
+            # Pass True for update_people to also update associated cast/crew
+            async_task(update_single_tvshow, tvshow.id, True)
             updates_count += 1
         except Exception as e:
             logger.error(f"Error scheduling update for TV show {tvshow.title} (ID: {tvshow.id}): {e}")
     
     return f"Scheduled updates for {updates_count} TV shows with oldest update dates"
 
-def update_single_tvshow(tvshow_id):
-    """Update a single TV show from TMDB."""
+def update_single_tvshow(tvshow_id, update_people=False):
+    """Update a single TV show from TMDB.
+    
+    Args:
+        tvshow_id: The database ID of the TV show to update
+        update_people: If True, also update/create Person and MediaPerson entries for cast/crew
+    """
     try:
         tvshow = TVShow.objects.get(id=tvshow_id)
         
         # Use TVShowsService instead of direct requests
         tvshows_service = TVShowsService()
-        data = tvshows_service.get_show_details(tvshow.tmdb_id, append_to_response="videos,keywords,external_ids")
+        # Include credits in API request if we need to update people
+        append_to_response = "videos,keywords,external_ids,credits" if update_people else "videos,keywords,external_ids"
+        data = tvshows_service.get_show_details(tvshow.tmdb_id, append_to_response=append_to_response)
         
         if not data:
             logger.error(f"TMDB API error for TV show {tvshow.title} (ID: {tvshow_id}): Failed to retrieve data")
@@ -381,6 +390,268 @@ def update_single_tvshow(tvshow_id):
 
                 tvshow.production_companies.set(company_instances)
                 logger.info(f"Updated production companies for {tvshow.title}")
+
+        # Update associated people and MediaPerson entries if requested
+        people_updated = 0
+        media_persons_updated = 0
+        media_persons_added = 0
+        
+        logger.info(f"update_people={update_people}, 'credits' in data={'credits' in data}")
+        
+        if update_people and 'credits' in data:
+            from custom_auth.models import MediaPerson, Person
+            from django.contrib.contenttypes.models import ContentType
+            from movies.tasks import update_single_person
+            
+            # MoviesService has get_person_details method
+            movies_service = MoviesService()
+            
+            tvshow_content_type = ContentType.objects.get_for_model(TVShow)
+            
+            # Get all persons currently associated with this TV show
+            existing_person_ids = set(
+                MediaPerson.objects.filter(
+                    content_type=tvshow_content_type,
+                    object_id=tvshow.id
+                ).values_list('person__tmdb_id', flat=True)
+            )
+            
+            # Collect data from credits
+            cast = data['credits'].get('cast', [])
+            crew = data['credits'].get('crew', [])
+            created_by = data.get('created_by', [])
+            
+            logger.info(f"Found {len(cast)} cast members, {len(crew)} crew members, and {len(created_by)} creators from TMDB")
+            logger.info(f"Existing person TMDB IDs in DB: {len(existing_person_ids)}")
+            
+            # Get TMDb IDs of people in the credits
+            api_person_ids = set()
+            for person in cast:
+                api_person_ids.add(person.get('id'))
+            for person in crew:
+                if person.get('department') in ['Directing', 'Writing', 'Sound']:
+                    api_person_ids.add(person.get('id'))
+            for person in created_by:
+                api_person_ids.add(person.get('id'))
+            
+            # Update existing persons that are both in our DB and in the credits
+            persons_to_update = api_person_ids & existing_person_ids
+            for tmdb_id in persons_to_update:
+                try:
+                    person = Person.objects.get(tmdb_id=tmdb_id)
+                    async_task(update_single_person, person.id)
+                    people_updated += 1
+                except Person.DoesNotExist:
+                    pass
+            
+            # Update or add MediaPerson entries for cast (Actors)
+            for index, cast_member in enumerate(cast):
+                tmdb_id = cast_member.get('id')
+                cast_name = cast_member.get('name', 'Unknown')
+                
+                # Try to get existing person or create new one
+                person = None
+                try:
+                    person = Person.objects.get(tmdb_id=tmdb_id)
+                    logger.debug(f"Found existing person: {person.name} (TMDB ID: {tmdb_id})")
+                except Person.DoesNotExist:
+                    # Person doesn't exist in DB, create them
+                    logger.info(f"Person {cast_name} (TMDB ID: {tmdb_id}) not in DB, fetching details...")
+                    person_details = movies_service.get_person_details(tmdb_id)
+                    if person_details:
+                        person = Person.objects.create(
+                            tmdb_id=person_details.get('id'),
+                            name=person_details.get('name'),
+                            profile_picture=f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
+                            date_of_birth=person_details.get('birthday'),
+                            date_of_death=person_details.get('deathday'),
+                            bio=person_details.get('biography'),
+                            imdb_id=person_details.get('imdb_id'),
+                            is_actor=True
+                        )
+                        logger.info(f"Created new person: {person.name}")
+                    else:
+                        logger.warning(f"Could not fetch details for person TMDB ID: {tmdb_id}")
+                        continue
+                
+                if not person:
+                    continue
+                
+                # Check if MediaPerson entry exists
+                media_person = MediaPerson.objects.filter(
+                    content_type=tvshow_content_type,
+                    object_id=tvshow.id,
+                    person=person,
+                    role="Actor"
+                ).first()
+                
+                if media_person:
+                    # Update existing entry
+                    mp_updates = {}
+                    new_order = cast_member.get('order', index)
+                    new_character = cast_member.get('character')
+                    
+                    if media_person.order != new_order:
+                        mp_updates['order'] = new_order
+                    if new_character and media_person.character_name != new_character:
+                        mp_updates['character_name'] = new_character
+                    
+                    if mp_updates:
+                        for field, value in mp_updates.items():
+                            setattr(media_person, field, value)
+                        media_person.save()
+                        media_persons_updated += 1
+                        logger.info(f"Updated MediaPerson for {person.name} in {tvshow.title}")
+                else:
+                    # Create new MediaPerson entry
+                    logger.info(f"Creating new MediaPerson entry for {person.name} as Actor in {tvshow.title}")
+                    new_mp = MediaPerson.objects.create(
+                        content_type=tvshow_content_type,
+                        object_id=tvshow.id,
+                        person=person,
+                        role="Actor",
+                        character_name=cast_member.get('character'),
+                        order=cast_member.get('order', index)
+                    )
+                    logger.info(f"Created MediaPerson ID: {new_mp.id}")
+                    # Ensure person has is_actor flag
+                    if not person.is_actor:
+                        person.is_actor = True
+                        person.save(update_fields=['is_actor'])
+                    media_persons_added += 1
+                    logger.info(f"Added {person.name} as Actor in {tvshow.title}")
+            
+            # Update or add MediaPerson entries for creators
+            for creator in created_by:
+                tmdb_id = creator.get('id')
+                creator_name = creator.get('name', 'Unknown')
+                
+                # Try to get existing person or create new one
+                try:
+                    person = Person.objects.get(tmdb_id=tmdb_id)
+                except Person.DoesNotExist:
+                    # Person doesn't exist in DB, create them
+                    person_details = movies_service.get_person_details(tmdb_id)
+                    if person_details:
+                        person = Person.objects.create(
+                            tmdb_id=person_details.get('id'),
+                            name=person_details.get('name'),
+                            profile_picture=f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
+                            date_of_birth=person_details.get('birthday'),
+                            date_of_death=person_details.get('deathday'),
+                            bio=person_details.get('biography'),
+                            imdb_id=person_details.get('imdb_id')
+                        )
+                        logger.info(f"Created new creator person: {person.name}")
+                    else:
+                        logger.warning(f"Could not fetch details for creator TMDB ID: {tmdb_id}")
+                        continue
+                
+                # Check if MediaPerson entry exists for this role
+                media_person = MediaPerson.objects.filter(
+                    content_type=tvshow_content_type,
+                    object_id=tvshow.id,
+                    person=person,
+                    role="Creator"
+                ).first()
+                
+                if not media_person:
+                    # Create new MediaPerson entry for creator
+                    logger.info(f"Creating new MediaPerson entry for {person.name} as Creator in {tvshow.title}")
+                    new_mp = MediaPerson.objects.create(
+                        content_type=tvshow_content_type,
+                        object_id=tvshow.id,
+                        person=person,
+                        role="Creator"
+                    )
+                    logger.info(f"Created creator MediaPerson ID: {new_mp.id}")
+                    media_persons_added += 1
+                    logger.info(f"Added {person.name} as Creator in {tvshow.title}")
+            
+            # Update or add MediaPerson entries for crew
+            for crew_member in crew:
+                department = crew_member.get('department')
+                job = crew_member.get('job')
+                tmdb_id = crew_member.get('id')
+                
+                # Skip if not a relevant department/job
+                if department not in ['Directing', 'Writing', 'Sound']:
+                    continue
+                if (department == 'Directing' and job != 'Director') or \
+                   (department == 'Writing' and job not in ['Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel', 'Book']) or \
+                   (department == 'Sound' and job != 'Original Music Composer'):
+                    continue
+                
+                # Try to get existing person or create new one
+                try:
+                    person = Person.objects.get(tmdb_id=tmdb_id)
+                except Person.DoesNotExist:
+                    # Person doesn't exist in DB, create them
+                    person_details = movies_service.get_person_details(tmdb_id)
+                    if person_details:
+                        person = Person.objects.create(
+                            tmdb_id=person_details.get('id'),
+                            name=person_details.get('name'),
+                            profile_picture=f"https://image.tmdb.org/t/p/original{person_details.get('profile_path')}" if person_details.get('profile_path') else None,
+                            date_of_birth=person_details.get('birthday'),
+                            date_of_death=person_details.get('deathday'),
+                            bio=person_details.get('biography'),
+                            imdb_id=person_details.get('imdb_id')
+                        )
+                        logger.info(f"Created new crew person: {person.name}")
+                    else:
+                        logger.warning(f"Could not fetch details for crew person TMDB ID: {tmdb_id}")
+                        continue
+                
+                # Check if MediaPerson entry exists for this role
+                media_person = MediaPerson.objects.filter(
+                    content_type=tvshow_content_type,
+                    object_id=tvshow.id,
+                    person=person,
+                    role=job
+                ).first()
+                
+                if not media_person:
+                    # Check if person exists with a different crew role
+                    existing_mp = MediaPerson.objects.filter(
+                        content_type=tvshow_content_type,
+                        object_id=tvshow.id,
+                        person=person
+                    ).exclude(role__in=["Actor", "Creator"]).first()
+                    
+                    if existing_mp and existing_mp.role != job:
+                        # Role has changed, update it
+                        logger.info(f"Updating role for {person.name} from {existing_mp.role} to {job}")
+                        existing_mp.role = job
+                        existing_mp.save()
+                        media_persons_updated += 1
+                    elif not existing_mp:
+                        # Create new MediaPerson entry for crew
+                        logger.info(f"Creating new MediaPerson entry for {person.name} as {job} in {tvshow.title}")
+                        new_mp = MediaPerson.objects.create(
+                            content_type=tvshow_content_type,
+                            object_id=tvshow.id,
+                            person=person,
+                            role=job
+                        )
+                        logger.info(f"Created crew MediaPerson ID: {new_mp.id}")
+                        # Update person role flags
+                        role_flag_updated = False
+                        if job == 'Director' and not person.is_director:
+                            person.is_director = True
+                            role_flag_updated = True
+                        if job == 'Original Music Composer' and not person.is_musician:
+                            person.is_musician = True
+                            role_flag_updated = True
+                        if role_flag_updated:
+                            person.save()
+                        media_persons_added += 1
+                        logger.info(f"Added {person.name} as {job} in {tvshow.title}")
+            
+            logger.info(f"People update summary for {tvshow.title}: "
+                       f"{people_updated} persons updated, "
+                       f"{media_persons_updated} MediaPerson entries updated, "
+                       f"{media_persons_added} MediaPerson entries added")
 
         # Apply updates if there are any
         if updates:
