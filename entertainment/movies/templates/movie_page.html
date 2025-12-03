@@ -73,6 +73,61 @@
     z-index: -1;
 }
 
+/* Mobile backdrop enhancements */
+@media (max-width: 768px) {
+    .backdrop-overlay {
+        position: fixed;
+        background-attachment: scroll; /* Better performance on mobile */
+        background-position: center top;
+    }
+    
+    .backdrop-overlay::after {
+        /* Gradient overlay for mobile - more visible backdrop at top, fades to solid */
+        background: linear-gradient(
+            to bottom,
+            rgba(192, 192, 192, 0.7) 0%,
+            rgba(192, 192, 192, 0.85) 30%,
+            var(--backdrop-overlay) 60%
+        );
+    }
+}
+
+@media (max-width: 768px) and (prefers-color-scheme: dark) {
+    .backdrop-overlay::after {
+        background: linear-gradient(
+            to bottom,
+            rgba(56, 56, 56, 0.65) 0%,
+            rgba(56, 56, 56, 0.8) 30%,
+            var(--backdrop-overlay) 60%
+        );
+    }
+}
+
+/* Extra small screens - even more visible backdrop */
+@media (max-width: 480px) {
+    .backdrop-overlay::after {
+        background: linear-gradient(
+            to bottom,
+            rgba(192, 192, 192, 0.6) 0%,
+            rgba(192, 192, 192, 0.75) 20%,
+            rgba(192, 192, 192, 0.9) 50%,
+            var(--backdrop-overlay) 70%
+        );
+    }
+}
+
+@media (max-width: 480px) and (prefers-color-scheme: dark) {
+    .backdrop-overlay::after {
+        background: linear-gradient(
+            to bottom,
+            rgba(56, 56, 56, 0.55) 0%,
+            rgba(56, 56, 56, 0.7) 20%,
+            rgba(56, 56, 56, 0.85) 50%,
+            var(--backdrop-overlay) 70%
+        );
+    }
+}
+
 /* Window styling */
 .window {
     border: 2px outset var(--bg-color);
