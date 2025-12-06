@@ -37,6 +37,25 @@ from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 logger = logging.getLogger(__name__)
 
 
+def get_low_res_poster_url(poster_url):
+    """
+    Convert TMDB poster URL to lower resolution.
+    Replaces w500 or original with w185 for better performance.
+    """
+    if not poster_url:
+        return poster_url
+    
+    # TMDB image URLs typically look like: https://image.tmdb.org/t/p/w500/poster.jpg
+    # We want to replace w500 or original with w185
+    if 'image.tmdb.org' in poster_url:
+        # Replace common high-res sizes with w185
+        poster_url = poster_url.replace('/w500/', '/w185/')
+        poster_url = poster_url.replace('/original/', '/w185/')
+        poster_url = poster_url.replace('/w780/', '/w185/')
+    
+    return poster_url
+
+
 # new and polished code
 @login_required
 def discover_page(request):
@@ -598,42 +617,53 @@ def profile_page(request, username=None):
     Otherwise, show the logged-in user's profile.
     """
     if username:
-        user = get_object_or_404(CustomUser, username=username)
+        # Only fetch needed fields for the profile user
+        user = get_object_or_404(
+            CustomUser.objects.only('id', 'username', 'profile_picture'),
+            username=username
+        )
     else:
         user = request.user
     
-    # Get all users for the sidebar (limit to a reasonable number)
-    all_users = CustomUser.objects.all().order_by('username')[:50]
+    # Get all users for the sidebar (only fetch needed fields)
+    all_users = CustomUser.objects.only('id', 'username', 'profile_picture').order_by('username')[:50]
     
-    # Get user's favorite movies by finding movies they've reviewed
-    # and sorting by rating (highest first)
+    # Cache ContentType lookups to avoid repeated queries
     movie_content_type = ContentType.objects.get_for_model(Movie)
+    tv_show_content_type = ContentType.objects.get_for_model(TVShow)
+    
+    # Get user's favorite movies - fetch only top 20 reviews
     movie_reviews = Review.objects.filter(
         user=user,
         content_type=movie_content_type
-    ).select_related('content_type').order_by('-rating')
+    ).only('object_id', 'rating').order_by('-rating')[:20]
     
     # Create a list of movies with their review scores
     favorite_movies = []
-    movie_ids = [review.object_id for review in movie_reviews[:20]]
-    movies_dict = {movie.id: movie for movie in Movie.objects.filter(id__in=movie_ids)}
+    movie_ids = [review.object_id for review in movie_reviews]
+    # Fetch only necessary fields for movies
+    movies_dict = {movie.id: movie for movie in Movie.objects.filter(
+        id__in=movie_ids
+    ).only('id', 'title', 'poster', 'tmdb_id', 'release_date')}
     
-    for review in movie_reviews[:20]:  # Limit to top 11 rated movies
+    for review in movie_reviews:
         movie = movies_dict.get(review.object_id)
         if movie:
-            movie.user_rating = review.rating  # Add the user's rating to the movie object
+            movie.user_rating = review.rating
+            movie.poster = get_low_res_poster_url(movie.poster)
             favorite_movies.append(movie)
     
-    # Get user's favorite TV shows
-    tv_show_content_type = ContentType.objects.get_for_model(TVShow)
+    # Get user's favorite TV shows - only fetch what we need
     tv_show_reviews = Review.objects.filter(
         user=user,
         content_type=tv_show_content_type
-    ).select_related('content_type', 'season', 'episode_subgroup').order_by('-rating')
+    ).only('object_id', 'rating').order_by('-rating')
     
-    # Prefetch all TV shows in a single query
+    # Prefetch all TV shows in a single query with only necessary fields
     tv_show_ids = set(review.object_id for review in tv_show_reviews)
-    tv_shows_dict = {tv.id: tv for tv in TVShow.objects.filter(id__in=tv_show_ids)}
+    tv_shows_dict = {tv.id: tv for tv in TVShow.objects.filter(
+        id__in=tv_show_ids
+    ).only('id', 'title', 'poster', 'tmdb_id', 'first_air_date')}
     
     # Group reviews by TV show to handle multiple reviews per show
     tv_show_ratings = {}
@@ -662,30 +692,57 @@ def profile_page(request, username=None):
         show = show_data['tv_show']
         show.user_rating = round(show_data['total_rating'] / show_data['count'], 1) if show_data['count'] > 0 else 0
         show.review_count = show_data['count']  # Add the count of reviews for this show
+        show.poster = get_low_res_poster_url(show.poster)  # Use lower resolution poster
         favorite_shows.append(show)
     
-    # Get user's watchlist
-    watchlist_items = user.get_watchlist()[:20]  # Limit to top 10 items
+    # Get user's watchlist with prefetched content_type
+    watchlist_items = list(user.get_watchlist().select_related('content_type')[:20])
     
     # Prepare watchlist items for template display
     watchlist_for_template = []
     if watchlist_items:
-        # Add reviews data to items
+        # Group watchlist items by content type for bulk fetching
+        items_by_ct = {}
+        for item in watchlist_items:
+            ct_id = item.content_type_id
+            if ct_id not in items_by_ct:
+                items_by_ct[ct_id] = []
+            items_by_ct[ct_id].append(item)
+        
+        # Bulk fetch media objects
+        media_cache = {}
+        for ct_id, items in items_by_ct.items():
+            if ct_id == movie_content_type.id:
+                movie_ids = [item.object_id for item in items]
+                movies = Movie.objects.filter(id__in=movie_ids).only(
+                    'id', 'title', 'poster', 'tmdb_id'
+                )
+                for movie in movies:
+                    media_cache[(ct_id, movie.id)] = movie
+            elif ct_id == tv_show_content_type.id:
+                tv_ids = [item.object_id for item in items]
+                tvshows = TVShow.objects.filter(id__in=tv_ids).only(
+                    'id', 'title', 'poster', 'tmdb_id'
+                )
+                for tv in tvshows:
+                    media_cache[(ct_id, tv.id)] = tv
+        
+        # Add reviews data to items (optimized version)
         add_review_data_to_items(watchlist_items, user)
         
-        # Process items for template
+        # Process items for template using cached media objects
         for item in watchlist_items:
-            media = item.media  # This will use the GenericForeignKey
+            media = media_cache.get((item.content_type_id, item.object_id))
             if media:
                 watchlist_for_template.append({
                     'id': item.id,
                     'title': media.title,
-                    'poster_url': media.poster,
+                    'poster_url': get_low_res_poster_url(media.poster),
                     'media_type': item.content_type.model,
                     'avg_rating': getattr(item, 'avg_rating', None),
                     'rating_count': getattr(item, 'rating_count', None),
-                    'tmdb_id': media.tmdb_id,  # Add tmdb_id for URL construction
-                    'object_id': media.id      # Add the actual media object ID
+                    'tmdb_id': media.tmdb_id,
+                    'object_id': media.id
                 })
     
     context = {
@@ -712,8 +769,17 @@ def watchlist_page(request):
     watchlist_items = user.get_watchlist()
     
     if not watchlist_items:
-        # Handle empty watchlist case
-        return render(request, 'watchlist_page.html', {'watchlist_empty': True})
+        # Handle empty watchlist case - return empty lists for all sections
+        context = {
+            'continue_watching': [],
+            'havent_started': [],
+            'finished_shows': [],
+            'movies': [],
+            'genres': [],
+            'countries': [],
+            'watchlist_empty': True,
+        }
+        return render(request, 'watchlist_page_old.html', context)
     
     # Group items by content type for efficient media fetching
     items_by_content_type = {}
@@ -964,10 +1030,6 @@ def add_review_data_to_items(items, current_user):
             grouped_items[key] = []
         grouped_items[key].append(item)
     
-    # Prefetch content types in one query
-    content_type_ids = {item.content_type_id for item in items}
-    content_types = {ct.id: ct for ct in ContentType.objects.filter(id__in=content_type_ids)}
-    
     # Identify TV show content type
     from tvshows.models import TVShow
     tv_show_content_type_id = ContentType.objects.get_for_model(TVShow).id
@@ -983,29 +1045,30 @@ def add_review_data_to_items(items, current_user):
         if ct_id == tv_show_content_type_id:
             tv_show_ids.append(obj_id)
     
-    # Fetch all direct reviews in a SINGLE query exclude tv show season and episode subgroup reviews
-    all_reviews = Review.objects.filter(review_query).select_related('user').exclude(
-        Q(season__isnull=False) | Q(episode_subgroup__isnull=False))
+    # Fetch all direct reviews in a SINGLE query - only fetch needed fields
+    all_reviews = list(Review.objects.filter(review_query).exclude(
+        Q(season__isnull=False) | Q(episode_subgroup__isnull=False)
+    ).values('content_type_id', 'object_id', 'rating', 'user__username'))
     
     # For TV shows, also fetch season and episode subgroup reviews
     if tv_show_ids:
-        # Get season and subgroup reviews for these TV shows
+        # Get season and subgroup reviews for these TV shows - only needed fields
         from django.db.models import Q
-        tv_show_season_reviews = Review.objects.filter(
+        tv_show_season_reviews = list(Review.objects.filter(
             content_type_id=tv_show_content_type_id,
             object_id__in=tv_show_ids
         ).exclude(
             season=None,
             episode_subgroup=None
-        ).select_related('user', 'season', 'episode_subgroup')
+        ).values('content_type_id', 'object_id', 'rating', 'user__username'))
         
         # Add these reviews to our collection
-        all_reviews = list(all_reviews) + list(tv_show_season_reviews)
+        all_reviews = all_reviews + tv_show_season_reviews
     
     # Group reviews by content type and object ID for fast lookup
     grouped_reviews = {}
     for review in all_reviews:
-        key = (review.content_type_id, review.object_id)
+        key = (review['content_type_id'], review['object_id'])
         if key not in grouped_reviews:
             grouped_reviews[key] = []
         grouped_reviews[key].append(review)
@@ -1017,7 +1080,7 @@ def add_review_data_to_items(items, current_user):
         
         # Create review data
         review_data = [
-            {'username': review.user.username, 'rating': review.rating}
+            {'username': review['user__username'], 'rating': review['rating']}
             for review in other_reviews
         ]
         
@@ -1025,7 +1088,7 @@ def add_review_data_to_items(items, current_user):
         avg_rating = None
         rating_count = len(other_reviews)
         if other_reviews:
-            avg_rating = round(sum(review.rating for review in other_reviews) / rating_count, 1)
+            avg_rating = round(sum(review['rating'] for review in other_reviews) / rating_count, 1)
         
         
         # Apply to all related items
