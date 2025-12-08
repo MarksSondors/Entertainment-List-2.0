@@ -1,0 +1,1050 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block title %}{{ game.title }} | Entertainment List{% endblock %}
+
+{% block content %}
+<!-- Add this near the top of your content block, before any scripts -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+
+<style>
+/* Theme-adaptive CSS variables */
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --progress-bg: #fff;
+    --progress-bar: #008080;
+    --shadow-color: rgba(0,0,0,0.25);
+    --poster-border: #a0a0a0;
+    --backdrop-overlay: rgba(192, 192, 192, 0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --progress-bg: #2a2a2a;
+        --progress-bar: #00a0a0;
+        --shadow-color: rgba(0,0,0,0.5);
+        --poster-border: #606060;
+        --backdrop-overlay: rgba(56, 56, 56, 0.9);
+    }
+}
+
+/* Game page specific styles */
+.game-page-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Backdrop overlay */
+.backdrop-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('{{ game.backdrop|default:game.poster }}') no-repeat center center fixed;
+    background-size: cover;
+    z-index: -2;
+}
+
+.backdrop-overlay::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--backdrop-overlay);
+    z-index: -1;
+}
+
+/* Mobile backdrop enhancements */
+@media (max-width: 768px) {
+    .backdrop-overlay {
+        position: fixed;
+        background-attachment: scroll; /* Better performance on mobile */
+        background-position: center top;
+    }
+    
+    .backdrop-overlay::after {
+        /* Gradient overlay for mobile - more visible backdrop at top, fades to solid */
+        background: linear-gradient(
+            to bottom,
+            rgba(192, 192, 192, 0.7) 0%,
+            rgba(192, 192, 192, 0.85) 30%,
+            var(--backdrop-overlay) 60%
+        );
+    }
+}
+
+@media (max-width: 768px) and (prefers-color-scheme: dark) {
+    .backdrop-overlay::after {
+        background: linear-gradient(
+            to bottom,
+            rgba(56, 56, 56, 0.65) 0%,
+            rgba(56, 56, 56, 0.8) 30%,
+            var(--backdrop-overlay) 60%
+        );
+    }
+}
+
+/* Extra small screens - even more visible backdrop */
+@media (max-width: 480px) {
+    .backdrop-overlay::after {
+        background: linear-gradient(
+            to bottom,
+            rgba(192, 192, 192, 0.6) 0%,
+            rgba(192, 192, 192, 0.75) 20%,
+            rgba(192, 192, 192, 0.9) 50%,
+            var(--backdrop-overlay) 70%
+        );
+    }
+}
+
+@media (max-width: 480px) and (prefers-color-scheme: dark) {
+    .backdrop-overlay::after {
+        background: linear-gradient(
+            to bottom,
+            rgba(56, 56, 56, 0.55) 0%,
+            rgba(56, 56, 56, 0.7) 20%,
+            rgba(56, 56, 56, 0.85) 50%,
+            var(--backdrop-overlay) 70%
+        );
+    }
+}
+
+/* Window styling */
+.window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    margin-bottom: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+    }
+}
+
+.window-body {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 12px;
+}
+
+.status-bar {
+    border-top: 1px solid var(--border-dark);
+    background-color: var(--bg-color);
+    padding: 2px 4px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-bar-field {
+    border: 1px inset var(--bg-color);
+    padding: 2px 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.retro-btn {
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--button-text);
+    padding: 2px 8px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background-color 0.1s ease;
+}
+
+.retro-btn:hover {
+    background: var(--button-hover);
+    color: var(--button-text);
+    text-decoration: none;
+}
+
+.retro-btn:active {
+    border: 1px inset var(--button-bg);
+}
+
+/* Enhanced button styling for dark mode */
+@media (prefers-color-scheme: dark) {
+    .retro-btn {
+        border-color: var(--border-light);
+        box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+    }
+    
+    .retro-btn:hover {
+        box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+    }
+}
+
+.game-info-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.game-poster {
+    flex-shrink: 0;
+}
+
+.game-poster img {
+    width: 200px;
+    border: 2px solid var(--border-dark);
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+    cursor: pointer;
+}
+
+.game-details {
+    flex-grow: 1;
+    color: var(--text-color);
+}
+
+.game-details p {
+    margin: 8px 0;
+}
+
+.game-details a {
+    color: var(--text-color);
+}
+
+.game-details a:hover {
+    color: var(--button-hover);
+}
+
+.metacritic-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-weight: bold;
+    color: white;
+    border-radius: 3px;
+}
+
+.metacritic-badge.high { background-color: #66cc33; }
+.metacritic-badge.mid { background-color: #ffcc33; color: black; }
+.metacritic-badge.low { background-color: #ff0000; }
+
+.button-container {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+}
+
+/* Fellow Collectors section */
+.fellow-collectors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.hoarder-badge {
+    text-decoration: none;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 3px 6px;
+    border: 1px outset var(--border-light);
+    font-size: 12px;
+    white-space: nowrap;
+    display: inline-block;
+    margin-bottom: 3px;
+}
+
+.hoarder-badge:hover {
+    background-color: var(--button-hover);
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+/* Review Table Styles */
+.review-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+}
+
+.review-table th,
+.review-table td {
+    padding: 8px;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-color);
+}
+
+.review-table th {
+    background-color: var(--window-bg);
+    text-align: left;
+    border-bottom: 2px solid var(--border-dark);
+    font-weight: bold;
+}
+
+.review-table tbody tr:hover {
+    background-color: var(--button-hover);
+}
+
+.review-table tbody tr.highlighted {
+    background-color: #000080;
+    color: white;
+}
+
+.review-action-buttons {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+/* Mobile optimization styles */
+@media (max-width: 768px) {
+    .game-page-container {
+        padding: 10px;
+    }
+    
+    .game-info-container {
+        flex-direction: column !important;
+    }
+    
+    .game-poster {
+        width: 100% !important;
+        text-align: center;
+        margin-bottom: 15px;
+    }
+    
+    .game-poster img {
+        width: 200px !important;
+        max-width: 80% !important;
+    }
+    
+    .game-details {
+        width: 100% !important;
+        text-align: center;
+    }
+    
+    .button-container {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+        justify-content: center;
+    }
+    
+    .button-container .retro-btn {
+        width: 100% !important;
+        font-size: 14px !important;
+    }
+    
+    /* Hide desktop table view on mobile */
+    .review-table.desktop-view {
+        display: none !important;
+    }
+    
+    /* Show mobile review cards */
+    .mobile-view.review-cards {
+        display: flex !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .mobile-view.review-cards {
+        display: none !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .game-page-container {
+        padding: 5px !important;
+    }
+    
+    .button-container {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .review-action-buttons {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 5px !important;
+    }
+}
+
+/* Review Card Styles for Mobile */
+.review-card {
+    background-color: var(--window-bg);
+    border: 1px solid var(--border-light);
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 3px;
+    color: var(--text-color);
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+    margin: 10% auto;
+    width: 80%;
+    max-width: 600px;
+    position: relative;
+}
+</style>
+
+<meta name="username" content="{{ request.user.username }}">
+
+<!-- Backdrop overlay -->
+<div class="backdrop-overlay"></div>
+
+<div class="game-page-container">
+    <!-- Game Information Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">{{ game.title }}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="game-info-container">
+                <div class="game-poster">
+                    {% if game.poster %}
+                    <img src="{{ game.poster }}" 
+                         alt="{{ game.title }} Poster" 
+                         onclick="openPosterModal()">
+                    {% include "components/poster_modal.html" with poster_url=game.poster title=game.title %}
+                    {% else %}
+                    <div style="width: 200px; height: 300px; background: var(--border-dark); display: flex; align-items: center; justify-content: center; color: var(--text-muted); border: 2px solid var(--border-dark);">
+                        No Image
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="game-details">
+                    <p><strong>Description:</strong> {{ game.description|truncatewords:100|default:"No description available." }}</p>
+                    
+                    {% if game.release_date %}
+                    <p><strong>Release Date:</strong> {{ game.release_date|date:"F j, Y" }}</p>
+                    {% endif %}
+                    
+                    {% if game.rating %}
+                    <p><strong>RAWG Rating:</strong> {{ game.rating|floatformat:1 }}/5</p>
+                    {% endif %}
+                    
+                    {% if user_avg_rating %}
+                    <p><strong>User Rating:</strong> {{ user_avg_rating }}/10 ({{ user_rating_count }} review{{ user_rating_count|pluralize }})</p>
+                    {% else %}
+                    <p><strong>User Rating:</strong> <em style="color: var(--text-muted);">No user reviews yet</em></p>
+                    {% endif %}
+                    
+                    {% if game.metacritic %}
+                    <p><strong>Metacritic:</strong> 
+                        <span class="metacritic-badge {% if game.metacritic >= 75 %}high{% elif game.metacritic >= 50 %}mid{% else %}low{% endif %}">
+                            {{ game.metacritic }}
+                        </span>
+                    </p>
+                    {% endif %}
+
+                    {% if game.genres.all %}
+                    <p><strong>Genres:</strong> 
+                        {% for genre in game.genres.all %}
+                            {{ genre.name }}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+
+                    {% if game.platforms.all %}
+                    <p><strong>Platforms:</strong> 
+                        {% for platform in game.platforms.all %}
+                            {{ platform.name }}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+
+                    {% if game.developers.all %}
+                    <p><strong>Developers:</strong> 
+                        {% for developer in game.developers.all %}
+                            <a href="{% url 'developer_detail' developer.pk %}">{{ developer.name }}</a>{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+
+                    {% if game.publishers.all %}
+                    <p><strong>Publishers:</strong> 
+                        {% for publisher in game.publishers.all %}
+                            <a href="{% url 'publisher_detail' publisher.pk %}">{{ publisher.name }}</a>{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+
+                    {% if game.game_collection %}
+                    <p><strong>Collection:</strong> 
+                        <a href="{% url 'game_collection_detail' game.game_collection.pk %}">{{ game.game_collection.name }}</a>
+                    </p>
+                    {% endif %}
+
+                    {% if game.keywords.all %}
+                    <p><strong>Keywords:</strong> 
+                        {% for keyword in game.keywords.all %}
+                            {{ keyword.name }}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Fellow Game Collectors section -->
+            {% if watchlist_users %}
+            <div style="margin-top: 15px;">
+                <p style="font-weight: bold; margin-bottom: 5px; color: var(--text-color);">Fellow Game Collectors:</p>
+                <div class="fellow-collectors">
+                    {% for user in watchlist_users %}
+                        <a href="/profile/{{ user.username }}/" class="hoarder-badge">
+                            {{ user.username }}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Action buttons -->
+            <div class="button-container">
+                {% if in_watchlist %}
+                    <button class="retro-btn" onclick="removeFromWatchlist()">Remove from Watchlist</button>
+                {% else %}
+                    <button class="retro-btn" onclick="addToWatchlist()">Add to Watchlist</button>
+                {% endif %}
+                
+                <button class="retro-btn" onclick="openReviewModal()">Write a Review</button>
+            </div>
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">
+                {% if game.rating %}RAWG: {{ game.rating|floatformat:1 }}/5{% endif %}
+                {% if user_avg_rating %} • Users: {{ user_avg_rating }}/10{% endif %}
+                {% if game.release_date %} • {{ game.release_date|date:"Y" }}{% endif %}
+                {% if game.metacritic %} • MC: {{ game.metacritic }}{% endif %}
+            </div>
+            <div class="status-bar-field">Last updated: {{ game.date_updated|date:"M d, Y" }}</div>
+        </div>
+    </div>
+    
+    <!-- User Reviews Window -->
+    <div class="window" style="margin-top: 20px;">
+        <div class="title-bar">
+            <div class="title-bar-text">User Reviews</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <!-- Desktop view -->
+            <table class="interactive review-table desktop-view" style="display: table;">
+                <thead>
+                    <tr style="background-color: var(--window-bg); border-bottom: 2px solid var(--border-dark);">
+                        <th style="width: 15%;">User</th>
+                        <th style="text-align: center; width: 10%;">Rating</th>
+                        <th style="width: 55%;">Review</th>
+                        <th style="text-align: right; width: 20%;">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="4" style="padding: 8px; text-align: center; color: var(--text-muted);">Loading reviews...</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <!-- Mobile view -->
+            <div class="mobile-view review-cards" style="display: none; flex-direction: column; gap: 10px;">
+                <div class="loading-message" style="padding: 10px; text-align: center; color: var(--text-muted);">Loading reviews...</div>
+            </div>
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Community Reviews</div>
+            <div class="status-bar-field">
+                <button class="retro-btn" onclick="openReviewModal()" style="font-size: 12px; padding: 2px 8px;">
+                    Add Review
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Review Detail Modal -->
+<div id="reviewDetailModal" class="modal">
+    <div class="modal-content window">
+        <div class="title-bar">
+            <div class="title-bar-text" id="reviewModalUsername">User Review</div>
+            <div class="title-bar-controls">
+                <button onclick="closeReviewDetailModal()" aria-label="Close">✕</button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <p style="margin: 0; color: var(--text-color);"><strong>Rating: </strong><span id="reviewModalRating"></span>/10</p>
+                <p style="margin: 0; color: var(--text-color);"><strong>Date: </strong><span id="reviewModalDate"></span></p>
+            </div>
+            <p style="margin: 10px 0 5px; color: var(--text-color);"><strong>Review:</strong></p>
+            <div id="reviewModalText" style="color: var(--text-color);"></div>
+            <div id="reviewModalActions" style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 5px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Include the review modal component -->
+{% include "components/movie_review_modal.html" with content_id=game.id content_type='game' %}
+
+<script>
+    // Helper function to sanitize content
+    function sanitizeContent(content) {
+        if (!content) return '';
+        if (typeof DOMPurify !== 'undefined') {
+            return DOMPurify.sanitize(content);
+        }
+        // Fallback: basic HTML escaping
+        const div = document.createElement('div');
+        div.textContent = content;
+        return div.innerHTML;
+    }
+    
+    // Function to get CSRF token from cookies
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    // Handle mobile vs desktop view for reviews
+    function checkViewport() {
+        const reviewTable = document.querySelector('.review-table.desktop-view');
+        const reviewCards = document.querySelector('.mobile-view.review-cards');
+        
+        if (window.innerWidth <= 768) {
+            if (reviewTable) reviewTable.style.display = 'none';
+            if (reviewCards) reviewCards.style.display = 'flex';
+        } else {
+            if (reviewTable) reviewTable.style.display = 'table';
+            if (reviewCards) reviewCards.style.display = 'none';
+        }
+    }
+    
+    // Load reviews function
+    window.loadReviews = function(contentId, contentType) {
+        fetch(`/${contentType}s/reviews/?${contentType}_id=${contentId}`)
+        .then(response => response.json())
+        .then(reviews => {
+            // Handle desktop table view
+            const reviewsTable = document.querySelector('.review-table.desktop-view tbody');
+            if (reviewsTable) {
+                reviewsTable.innerHTML = '';
+                
+                if (reviews.length === 0) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td colspan="4" style="padding: 4px; text-align: center; color: var(--text-color);">No reviews yet. Be the first to review!</td>`;
+                    reviewsTable.appendChild(row);
+                } else {
+                    const currentUsername = document.querySelector('meta[name="username"]')?.content || '';
+                    
+                    reviews.forEach(review => {
+                        const row = document.createElement('tr');
+                        
+                        const reviewDate = new Date(review.date_added);
+                        const formattedDate = reviewDate.toLocaleDateString('en-US', {
+                            year: 'numeric', month: 'short', day: 'numeric'
+                        });
+                        
+                        const isAuthor = review.user === currentUsername;
+                        const sanitizedReviewText = review.review_text ? 
+                            review.review_text.replace(/'/g, "\\'").replace(/\n/g, "\\n") : '';
+                        
+                        let displayText = review.review_text || '';
+                        const sanitizedDisplayText = sanitizeContent(displayText);
+                        
+                        const tdUser = document.createElement('td');
+                        tdUser.style.cssText = "padding: 4px; border-bottom: 1px solid var(--border-light); color: var(--text-color);";
+                        tdUser.textContent = review.user;
+                        
+                        const tdRating = document.createElement('td');
+                        tdRating.style.cssText = "padding: 4px; text-align: center; border-bottom: 1px solid var(--border-light); color: var(--text-color);";
+                        tdRating.textContent = `${review.rating}/10`;
+                        
+                        const tdContent = document.createElement('td');
+                        tdContent.style.cssText = "padding: 4px; border-bottom: 1px solid var(--border-light); cursor: pointer; color: var(--text-color);";
+                        if (displayText) {
+                            tdContent.innerHTML = sanitizedDisplayText.substring(0, 100) + 
+                                (sanitizedDisplayText.length > 100 ? '...' : '');
+                        } else {
+                            const emElem = document.createElement('em');
+                            emElem.textContent = 'No text review';
+                            tdContent.appendChild(emElem);
+                        }
+                        
+                        tdContent.onclick = function() {
+                            openReviewDetailModal({
+                                id: review.id, 
+                                user: review.user, 
+                                rating: review.rating, 
+                                review_text: sanitizedReviewText, 
+                                date_added: review.date_added
+                            }, isAuthor, contentType);
+                        };
+                        
+                        const tdDate = document.createElement('td');
+                        tdDate.style.cssText = "padding: 4px; text-align: right; border-bottom: 1px solid var(--border-light); color: var(--text-color);";
+                        tdDate.textContent = formattedDate;
+                        
+                        if (isAuthor) {
+                            const actionsDiv = document.createElement('div');
+                            actionsDiv.className = 'review-action-buttons';
+                            
+                            const editBtn = document.createElement('button');
+                            editBtn.style.cssText = 'font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px;';
+                            editBtn.textContent = 'Edit';
+                            editBtn.onclick = function(e) {
+                                e.stopPropagation();
+                                editReview(review.id, review.rating, sanitizedReviewText, review.date_added);
+                            };
+                            
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.style.cssText = 'font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px;';
+                            deleteBtn.textContent = 'Delete';
+                            deleteBtn.onclick = function(e) {
+                                e.stopPropagation();
+                                deleteReview(review.id, contentType);
+                            };
+                            
+                            actionsDiv.appendChild(editBtn);
+                            actionsDiv.appendChild(deleteBtn);
+                            tdDate.appendChild(actionsDiv);
+                        }
+                        
+                        row.appendChild(tdUser);
+                        row.appendChild(tdRating);
+                        row.appendChild(tdContent);
+                        row.appendChild(tdDate);
+                        
+                        reviewsTable.appendChild(row);
+                    });
+                }
+            }
+            
+            // Handle mobile card view
+            const reviewCards = document.querySelector('.mobile-view.review-cards');
+            if (reviewCards) {
+                reviewCards.innerHTML = '';
+                
+                if (reviews.length === 0) {
+                    const emptyCard = document.createElement('div');
+                    emptyCard.className = 'review-card';
+                    emptyCard.textContent = 'No reviews yet. Be the first to review!';
+                    reviewCards.appendChild(emptyCard);
+                } else {
+                    const currentUsername = document.querySelector('meta[name="username"]')?.content || '';
+                    
+                    reviews.forEach(review => {
+                        const reviewDate = new Date(review.date_added);
+                        const formattedDate = reviewDate.toLocaleDateString('en-US', {
+                            year: 'numeric', month: 'short', day: 'numeric'
+                        });
+                        
+                        const isAuthor = review.user === currentUsername;
+                        let displayText = review.review_text || '';
+                        const sanitizedText = sanitizeContent(displayText);
+                        const hasLongText = sanitizedText.length > 150;
+                        const truncatedText = hasLongText ? sanitizedText.substring(0, 150) + '...' : sanitizedText;
+                        
+                        const reviewCard = document.createElement('div');
+                        reviewCard.className = 'review-card';
+                        
+                        const headerDiv = document.createElement('div');
+                        headerDiv.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 5px;';
+                        
+                        const userStrong = document.createElement('strong');
+                        userStrong.textContent = review.user;
+                        
+                        const dateSpan = document.createElement('span');
+                        dateSpan.textContent = formattedDate;
+                        
+                        headerDiv.appendChild(userStrong);
+                        headerDiv.appendChild(dateSpan);
+                        
+                        const ratingDiv = document.createElement('div');
+                        ratingDiv.style.cssText = 'font-size: 14px; margin-bottom: 8px;';
+                        ratingDiv.innerHTML = `Rating: <strong>${review.rating}/10</strong>`;
+                        
+                        const textDiv = document.createElement('div');
+                        textDiv.className = 'review-text';
+                        textDiv.style.cssText = 'margin-bottom: 10px; word-break: break-word;';
+                        
+                        if (displayText) {
+                            textDiv.innerHTML = hasLongText ? truncatedText : sanitizedText;
+                        } else {
+                            textDiv.innerHTML = '<em>No text review</em>';
+                        }
+                        
+                        reviewCard.appendChild(headerDiv);
+                        reviewCard.appendChild(ratingDiv);
+                        reviewCard.appendChild(textDiv);
+                        
+                        if (isAuthor) {
+                            const actionsDiv = document.createElement('div');
+                            actionsDiv.className = 'review-action-buttons';
+                            actionsDiv.style.cssText = 'display: flex; gap: 5px; justify-content: flex-end;';
+                            
+                            const editBtn = document.createElement('button');
+                            editBtn.style.cssText = 'font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px 5px;';
+                            editBtn.textContent = 'Edit';
+                            editBtn.onclick = function() {
+                                editReview(review.id, review.rating, review.review_text || '', review.date_added);
+                            };
+                            
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.style.cssText = 'font-size: 12px; background-color: #C3C3C3; border: 1px outset; padding: 2px 5px;';
+                            deleteBtn.textContent = 'Delete';
+                            deleteBtn.onclick = function() {
+                                deleteReview(review.id, contentType);
+                            };
+                            
+                            actionsDiv.appendChild(editBtn);
+                            actionsDiv.appendChild(deleteBtn);
+                            reviewCard.appendChild(actionsDiv);
+                        }
+                        
+                        reviewCards.appendChild(reviewCard);
+                    });
+                }
+            }
+            
+            // Check if current user has already reviewed
+            const currentUsername = document.querySelector('meta[name="username"]')?.content || '';
+            const userReview = reviews.find(review => review.user === currentUsername);
+            if (userReview) {
+                const reviewButtons = document.querySelectorAll('button[onclick*="openReviewModal"]');
+                reviewButtons.forEach(btn => {
+                    btn.textContent = 'Edit Review';
+                    btn.onclick = function() { 
+                        editReview(userReview.id, userReview.rating, userReview.review_text || '', userReview.date_added); 
+                    };
+                });
+                
+                window.userReviewId = userReview.id;
+                window.userReviewRating = userReview.rating;
+                window.userReviewText = userReview.review_text;
+                window.userWatchDate = userReview.date_added;
+            }
+            
+            checkViewport();
+        })
+        .catch(error => {
+            console.error('Error loading reviews:', error);
+            const elements = [
+                document.querySelector('.review-table.desktop-view tbody'),
+                document.querySelector('.mobile-view.review-cards')
+            ];
+            
+            elements.forEach(el => {
+                if (el) {
+                    el.innerHTML = `<div style="padding: 10px; text-align: center;">Error loading reviews</div>`;
+                }
+            });
+        });
+    };
+    
+    // Review detail modal functions
+    function openReviewDetailModal(review, isAuthor, contentType) {
+        document.getElementById('reviewModalUsername').textContent = review.user;
+        document.getElementById('reviewModalRating').textContent = review.rating;
+        
+        const reviewDate = new Date(review.date_added);
+        document.getElementById('reviewModalDate').textContent = reviewDate.toLocaleDateString('en-US', {
+            year: 'numeric', month: 'short', day: 'numeric'
+        });
+        
+        const modalText = document.getElementById('reviewModalText');
+        modalText.textContent = review.review_text || 'No text review';
+        
+        const actionsContainer = document.getElementById('reviewModalActions');
+        actionsContainer.innerHTML = '';
+        
+        if (isAuthor) {
+            const editButton = document.createElement('button');
+            editButton.style.cssText = 'font-family: "MS Sans Serif"; background-color: #C3C3C3; border: 2px outset; padding: 5px;';
+            editButton.textContent = 'Edit';
+            editButton.onclick = function() {
+                closeReviewDetailModal();
+                editReview(review.id, review.rating, review.review_text || '', review.date_added);
+            };
+            
+            const deleteButton = document.createElement('button');
+            deleteButton.style.cssText = 'font-family: "MS Sans Serif"; background-color: #C3C3C3; border: 2px outset; padding: 5px;';
+            deleteButton.textContent = 'Delete';
+            deleteButton.onclick = function() {
+                if (confirm('Are you sure you want to delete this review?')) {
+                    deleteReview(review.id, contentType);
+                    closeReviewDetailModal();
+                }
+            };
+            
+            actionsContainer.appendChild(editButton);
+            actionsContainer.appendChild(deleteButton);
+        }
+        
+        document.getElementById('reviewDetailModal').style.display = 'block';
+    }
+    
+    function closeReviewDetailModal() {
+        document.getElementById('reviewDetailModal').style.display = 'none';
+    }
+    
+    // Watchlist functions
+    function addToWatchlist(gameId = {{ game.id }}, buttonElement = null) {
+        if (!buttonElement) {
+            buttonElement = event.target;
+        }
+        
+        fetch('/games/watchlist/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: gameId
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                buttonElement.textContent = 'Remove from Watchlist';
+                buttonElement.onclick = function() { 
+                    removeFromWatchlist(gameId, buttonElement); 
+                };
+                alert('Game added to watchlist!');
+            } else {
+                response.json().then(data => {
+                    alert('Failed to add game to watchlist: ' + (data.error || 'Unknown error'));
+                }).catch(() => {
+                    alert('Failed to add game to watchlist');
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding game to watchlist');
+        });
+    }
+    
+    function removeFromWatchlist(gameId = {{ game.id }}, buttonElement = null) {
+        if (!buttonElement) {
+            buttonElement = event.target;
+        }
+        
+        fetch('/games/watchlist/', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: gameId
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                buttonElement.textContent = 'Add to Watchlist';
+                buttonElement.onclick = function() { 
+                    addToWatchlist(gameId, buttonElement); 
+                };
+                alert('Game removed from watchlist!');
+            } else {
+                alert('Failed to remove game from watchlist');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error removing game from watchlist');
+        });
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        checkViewport();
+        const contentId = {{ game.id }};
+        if (contentId) {
+            setTimeout(() => {
+                loadReviews(contentId, 'game');
+            }, 50);
+        }
+    });
+    
+    window.addEventListener('resize', checkViewport);
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('reviewDetailModal');
+        if (event.target === modal) {
+            closeReviewDetailModal();
+        }
+    });
+    
+    // Make table rows interactive
+    document.querySelectorAll('table.interactive').forEach(element => {
+        element.addEventListener('click', (event) => {
+            const highlightedClass = 'highlighted';
+            const isRow = element => element.tagName === 'TR' && element.parentElement.tagName === 'TBODY';
+            const newlySelectedRow = event.composedPath().find(isRow);
+            const previouslySelectedRow = Array.from(newlySelectedRow?.parentElement?.children || [])
+                .filter(isRow).find(element => element.classList.contains(highlightedClass));
+                
+            if(previouslySelectedRow){
+                previouslySelectedRow.classList.toggle(highlightedClass);
+            }
+
+            if (newlySelectedRow) {
+                newlySelectedRow.classList.toggle(highlightedClass);
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -128,6 +128,40 @@
                         </div>
                     </div>
 
+                    <!-- Favorite Games Section -->
+                    <div id="favorites-games" class="content-section">
+                        <div class="window" style="width: 100%; margin-top: 20px;">
+                            <div class="title-bar">
+                                <div class="title-bar-text">Favorite Games</div>
+                            </div>
+                            <div class="window-body">
+                                <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
+                                    {% if favorite_games %}
+                                        <div class="poster-row">
+                                            {% for game in favorite_games %}
+                                                <a href="{% url 'game_detail' game.id %}" class="poster-link">
+                                                    <img src="{{ game.poster|default:'#' }}" alt="{{ game.title }}" 
+                                                         class="poster-image"
+                                                         onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
+                                                    {% if game.user_rating %}
+                                                    <div class="rating-badge">
+                                                        {{ game.user_rating }}
+                                                    </div>
+                                                    {% endif %}
+                                                    <span class="poster-title">{{ game.title }}</span>
+                                                </a>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="field-row" style="justify-content: center;">
+                                            <p>No favorite games added yet.</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Watchlist Section -->
                     <div id="watchlist" class="content-section">
                         <div class="window" style="width: 100%; margin-top: 20px;">
@@ -143,6 +177,8 @@
                                                     <a href="{% url 'movie_page' item.tmdb_id %}" class="poster-link">
                                                 {% elif item.media_type == 'TVShow' or item.media_type == 'TV Show' or item.media_type == 'tvshow' or item.media_type == 'tv' %}
                                                     <a href="{% url 'tv_show_page' item.tmdb_id %}" class="poster-link">
+                                                {% elif item.media_type == 'Game' or item.media_type == 'game' %}
+                                                    <a href="{% url 'game_detail' item.game_id %}" class="poster-link">
                                                 {% else %}
                                                     <a href="#" class="poster-link">
                                                 {% endif %}

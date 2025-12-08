@@ -23,6 +23,7 @@
         <div id="searchTabs" class="win98-tabs" style="display: none;">
             <button class="search-tab active" data-endpoint="movies">Movies</button>
             <button class="search-tab" data-endpoint="tvshows">TV Shows</button>
+            <button class="search-tab" data-endpoint="games">Games</button>
             <button class="search-tab" data-endpoint="people">People</button>
             <button class="search-tab" data-endpoint="users">Users</button>
         </div>
@@ -41,6 +42,7 @@
         <div id="addContentContainer" style="display: none; padding: 4px; text-align: center; border-top: 1px solid var(--win98-dark);">
             <button type="button" id="addMovieButton" class="win98-btn-small" style="display: none; width: 100%;">Add Movie</button>
             <button type="button" id="addTvShowButton" class="win98-btn-small" style="display: none; width: 100%;">Add TV Show</button>
+            <button type="button" id="addGameButton" class="win98-btn-small" style="display: none; width: 100%;">Add Game</button>
         </div>
     </div>
 </div>
@@ -283,6 +285,7 @@
         const placeholders = {
             'movies': 'Search for movies...',
             'tvshows': 'Search for TV shows...',
+            'games': 'Search for games...',
             'people': 'Search for people...',
             'users': 'Search for users...'
         };
@@ -362,6 +365,24 @@
                             </div>
                         </div>
                     `;
+                } else if (data.search_type === 'games') {
+                    let yearText = item.year ? item.year.toString() : '';
+
+                    resultItem.innerHTML = `
+                        ${item.poster ? 
+                            `<img src="${item.poster}" alt="${item.title}" class="result-poster" style="object-fit: cover;">` : 
+                            '<div class="result-poster-placeholder">No Image</div>'
+                        }
+                        <div class="result-content">
+                            <div class="result-title">${item.title}</div>
+                            <div class="result-meta">
+                                <span>${yearText}</span>
+                                ${item.metacritic ? `<span>MC: ${item.metacritic}</span>` : ''}
+                                ${item.avg_rating ? `<span>★ ${item.avg_rating}</span>` : ''}
+                                ${item.in_watchlist ? '<span style="color: #008000; font-weight: bold;">(In Watchlist)</span>' : ''}
+                            </div>
+                        </div>
+                    `;
                 } else {
                     let yearText = '';
                     if (item.year) {
@@ -392,13 +413,16 @@
         }
 
         function addAddContentResults() {
-            if (currentEndpoint === 'movies' || currentEndpoint === 'tvshows') {
+            if (currentEndpoint === 'movies' || currentEndpoint === 'tvshows' || currentEndpoint === 'games') {
                 const addResultItem = document.createElement('div');
                 addResultItem.className = 'result-item';
                 addResultItem.style.borderTop = '1px dotted var(--win98-dark)';
                 addResultItem.style.marginTop = '4px';
                 
-                const buttonText = currentEndpoint === 'movies' ? 'Add Movie' : 'Add TV Show';
+                let buttonText = 'Add Movie';
+                if (currentEndpoint === 'tvshows') buttonText = 'Add TV Show';
+                else if (currentEndpoint === 'games') buttonText = 'Add Game';
+                
                 const currentQuery = searchInput.value.trim();
                 
                 addResultItem.innerHTML = `
@@ -419,6 +443,9 @@
                         else window.location.href = "{% url 'home_page' %}";
                     } else if (currentEndpoint === 'tvshows') {
                         if (typeof openTVShowModal === 'function') openTVShowModal(currentQuery);
+                        else window.location.href = "{% url 'home_page' %}";
+                    } else if (currentEndpoint === 'games') {
+                        if (typeof openGameModal === 'function') openGameModal(currentQuery);
                         else window.location.href = "{% url 'home_page' %}";
                     }
                 };

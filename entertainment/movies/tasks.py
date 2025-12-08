@@ -272,11 +272,31 @@ def update_single_movie(movie_id, update_people=False):
             if current_keyword_names != new_keyword_names:
                 # Get or create keyword instances
                 keyword_instances = []
-                for keyword in data['keywords']['keywords']:
-                    keyword_instance, _ = Keyword.objects.get_or_create(
-                        tmdb_id=keyword.get('id'),
-                        defaults={'name': keyword.get('name')}
-                    )
+                for keyword_data in data['keywords']['keywords']:
+                    keyword_name = keyword_data.get('name')
+                    keyword_id = keyword_data.get('id')
+                    
+                    if not keyword_name:
+                        continue
+                        
+                    # Try to find by TMDB ID first
+                    keyword_instance = Keyword.objects.filter(tmdb_id=keyword_id).first()
+                    
+                    if not keyword_instance:
+                        # Try to find by name (case insensitive)
+                        keyword_instance = Keyword.objects.filter(name__iexact=keyword_name).first()
+                        if keyword_instance:
+                            # Update TMDB ID if found by name and missing
+                            if not keyword_instance.tmdb_id:
+                                keyword_instance.tmdb_id = keyword_id
+                                keyword_instance.save(update_fields=['tmdb_id'])
+                        else:
+                            # Create new if not found
+                            keyword_instance = Keyword.objects.create(
+                                name=keyword_name,
+                                tmdb_id=keyword_id
+                            )
+                            
                     keyword_instances.append(keyword_instance)
                 
                 # Set new keywords directly on the movie

@@ -9,7 +9,11 @@ from movies.models import Movie
 
 admin.site.register(CustomUser)
 admin.site.register(Genre)
-admin.site.register(Keyword)
+
+@admin.register(Keyword)
+class KeywordAdmin(admin.ModelAdmin):
+    search_fields = ['name']
+
 admin.site.register(Country)
 admin.site.register(Watchlist)
 admin.site.register(ProductionCompany)

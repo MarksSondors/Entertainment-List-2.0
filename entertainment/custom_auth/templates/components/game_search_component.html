@@ -1,0 +1,1033 @@
+{% load static %}
+{% comment %} game_search_component.html - Standalone game search modal component {% endcomment %}
+
+<div id="game-search-modal" class="modal" style="display: none;">
+    <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column;">
+        <!-- Modal Header -->
+        <div class="title-bar">
+            <div class="title-bar-text" id="game-modal-title">Add Game</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" id="close-game-modal-btn"></button>
+            </div>
+        </div>
+    <!-- Modal Body -->
+    <div class="window-body" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column;">
+    <!-- Stage 1: Search and Select -->
+    <div id="game-modal-stage-1" style="display: flex; flex-direction: column; height: 100%;">
+        <!-- Search Input -->
+        <div class="field-row" style="margin-bottom: 10px;">
+            <label for="game-query">Search:</label>
+            <input type="text" id="game-query" name="query" style="flex-grow: 1;" placeholder="Enter game title">
+            <button id="game-search-button">Search</button>
+        </div>
+        
+        <!-- Results Section -->
+        <div class="sunken-panel" style="flex: 1; overflow-y: auto; background-color: var(--input-bg); margin-bottom: 10px; padding: 0;">
+            <ul id="game-results-list" class="tree-view" style="height: 100%; width: 100%; border: none; margin: 0;"></ul>
+        </div>
+        
+        <div id="game-loading-more" style="text-align: center; padding: 5px; display: none;">
+            <p style="margin: 0;">Loading more results...</p>
+        </div>
+        
+        <!-- Status Bar & Navigation -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
+            <div class="status-bar-field" style="flex: 1; margin-right: 10px;">
+                Total Results: <span id="game-total-results">0</span>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div id="game-selection-hint" style="color: var(--text-muted); font-style: italic; display: none; font-size: 11px;">
+                    Select a game to continue
+                </div>
+                <button id="game-to-stage-2-btn" disabled style="min-width: 80px;">Next &gt;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stage 2: Edit Game Details -->
+    <div id="game-modal-stage-2" style="display: none; flex-direction: column; height: 100%;">
+        <form method="post" id="add-game-form" enctype="multipart/form-data" style="display: flex; flex-direction: column; height: 100%;">
+            {% csrf_token %}
+            <input type="hidden" id="game-rawg-id" name="rawg_id">
+            
+            <!-- Tabs -->
+            <menu role="tablist" style="margin-bottom: 0;">
+                <li role="tab" aria-selected="true" id="game-tab-general"><a href="#general">General</a></li>
+                <li role="tab" aria-selected="false" id="game-tab-images"><a href="#images">Images</a></li>
+            </menu>
+            
+            <div class="window" role="tabpanel" style="flex: 1; margin: 0; border-top: none; padding: 12px; overflow-y: auto;">
+                <!-- General Tab Content -->
+                <div id="game-tab-content-general">
+                    <div class="field-row" style="margin-bottom: 10px;">
+                        <label style="width: 80px;">Title:</label>
+                        <input type="text" id="game-title-display" readonly style="flex: 1;">
+                        <input type="hidden" id="game-title-hidden" name="title">
+                    </div>
+                    
+                    <div class="field-row" style="margin-bottom: 10px;">
+                        <label style="width: 80px;">Release Date:</label>
+                        <input type="text" id="game-release-date-display" readonly style="width: 120px;">
+                        <input type="hidden" id="game-release-date-hidden" name="release_date">
+                    </div>
+                    
+                    <div class="field-row" style="margin-bottom: 10px;">
+                        <label style="width: 80px;">Rating:</label>
+                        <input type="text" id="game-rating-display" readonly style="width: 80px;">
+                    </div>
+                    
+                    <div class="field-row" style="margin-bottom: 10px;">
+                        <label style="width: 80px;">Metacritic:</label>
+                        <input type="text" id="game-metacritic-display" readonly style="width: 80px;">
+                    </div>
+                    
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <label>Platforms:</label>
+                        <input type="text" id="game-platforms-display" readonly style="width: 100%;">
+                    </div>
+                    
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <label>Genres:</label>
+                        <input type="text" id="game-genres-display" readonly style="width: 100%;">
+                    </div>
+                    
+                    <fieldset style="margin-bottom: 10px;">
+                        <legend>Options</legend>
+                        <div class="field-row">
+                            <input type="checkbox" id="game-add-to-watchlist" name="add_to_watchlist" checked>
+                            <label for="game-add-to-watchlist">Add to my watchlist</label>
+                        </div>
+                    </fieldset>
+                </div>
+                
+                <!-- Images Tab Content -->
+                <div id="game-tab-content-images" style="display: none;">
+                    <div style="display: flex; gap: 20px; height: 100%;">
+                        <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                            <h4 style="margin-top: 0;">Cover Image</h4>
+                            <div class="sunken-panel" style="padding: 10px; background: var(--poster-bg); margin-bottom: 10px; display: flex; justify-content: center; align-items: center; width: 100%; height: 250px;">
+                                <img id="game-poster-preview" src="" alt="Game cover" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: pointer;" onclick="openGameCoverModal()">
+                            </div>
+                            <button type="button" onclick="openGameCoverModal()" style="width: 100%;">Browse SteamGridDB Covers...</button>
+                            <input type="hidden" id="game-poster-path" name="poster">
+                        </div>
+                        
+                        <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                            <h4 style="margin-top: 0;">Backdrop</h4>
+                            <div class="sunken-panel" style="padding: 10px; background: var(--poster-bg); margin-bottom: 10px; display: flex; justify-content: center; align-items: center; width: 100%; height: 250px;">
+                                <img id="game-backdrop-preview" src="" alt="Game backdrop" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: pointer;" onclick="openGameBackdropModal()">
+                            </div>
+                            <button type="button" onclick="openGameBackdropModal()" style="width: 100%;">Browse RAWG Backdrops...</button>
+                            <input type="hidden" id="game-backdrop-path" name="backdrop">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Navigation Buttons -->
+            <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+                <button type="button" id="game-back-to-stage-1-btn">&lt; Back</button>
+                <button type="button" id="game-submit-btn" style="font-weight: bold;">Finish</button>
+            </div>
+        </form>
+    </div>
+    </div>
+    </div>
+</div>
+
+<!-- Loading Screen Modal -->
+<div id="game-loading-screen-modal" class="modal" style="display: none; z-index: 1200;">
+    <div class="modal-content window" style="width: 400px;">
+        <div class="title-bar">
+            <div class="title-bar-text">Adding Game</div>
+        </div>
+        <div class="window-body" style="text-align: center; padding: 20px;">
+            <p id="game-loading-message">Adding game to your list...</p>
+            <div class="progress-indicator">
+                <span class="progress-indicator-bar"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Message Dialog -->
+<div id="game-message-dialog" class="modal" style="display: none; z-index: 1200;">
+    <div class="modal-content window" style="width: 400px;">
+        <div class="title-bar">
+            <div class="title-bar-text" id="game-dialog-title">Message</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" onclick="closeGameMessageDialog()"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <p id="game-dialog-message"></p>
+            <div style="text-align: right; margin-top: 15px;">
+                <button onclick="closeGameMessageDialog()">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Backdrop Selection Modal (RAWG) -->
+<div id="game-backdrop-modal" class="modal" style="display: none; z-index: 1100;">
+    <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="title-bar">
+            <div class="title-bar-text">Select Backdrop from RAWG</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" onclick="closeGameBackdropModal()"></button>
+            </div>
+        </div>
+        <div class="window-body" style="overflow-y: auto; flex: 1;">
+            <div id="game-backdrop-loading" style="text-align: center; padding: 20px;">
+                <p>Loading backdrops...</p>
+            </div>
+            <div id="game-backdrop-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 10px;">
+                <!-- Backdrops will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cover Selection Modal (SteamGridDB) -->
+<div id="game-cover-modal" class="modal" style="display: none; z-index: 1100;">
+    <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="title-bar">
+            <div class="title-bar-text">Select Cover from SteamGridDB</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" onclick="closeGameCoverModal()"></button>
+            </div>
+        </div>
+        <div class="window-body" style="overflow-y: auto; flex: 1;">
+            <div id="game-cover-loading" style="text-align: center; padding: 20px;">
+                <p>Loading covers from SteamGridDB...</p>
+            </div>
+            <div id="game-cover-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
+                <!-- Covers will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+// Game Search Component - Namespace to avoid conflicts
+const GameSearch = {
+    allResults: [],
+    currentPage: 1,
+    totalPages: 0,
+    selectedGame: null,
+    isLoadingMore: false,
+    currentQuery: '',
+    hasMoreResults: false,
+    screenshotTarget: 'poster', // 'poster' or 'backdrop'
+
+    // Modal Control Functions
+    openModal: function(searchQuery = '') {
+        $("#game-search-modal").show();
+        if (searchQuery) {
+            $("#game-query").val(searchQuery);
+            // Auto-trigger search if query provided
+            if (searchQuery.length > 2) {
+                this.currentQuery = searchQuery;
+                this.currentPage = 1;
+                this.allResults = [];
+                $('#game-results-list').empty();
+                this.fetchResults(searchQuery, this.currentPage, false);
+            }
+        }
+        $("#game-query").focus();
+    },
+
+    closeModal: function() {
+        $("#game-search-modal").hide();
+        this.resetModal();
+    },
+
+    // Message Dialog Functions
+    showMessage: function(title, message, isError = false) {
+        $("#game-dialog-title").text(title);
+        $("#game-dialog-message").text(message);
+        $("#game-dialog-message").css("color", isError ? "red" : "inherit");
+        $("#game-message-dialog").show();
+    },
+
+    resetModal: function() {
+        // Reset stage
+        $("#game-modal-stage-1").show();
+        $("#game-modal-stage-2").hide();
+        
+        // Reset search
+        $("#game-query").val("");
+        $("#game-results-list").empty();
+        $("#game-total-results").text("0");
+        
+        // Reset form
+        $("#add-game-form")[0].reset();
+        this.selectedGame = null;
+        $("#game-to-stage-2-btn").prop("disabled", true);
+        
+        // Reset tabs
+        $("#game-tab-general").attr("aria-selected", "true");
+        $("#game-tab-images").attr("aria-selected", "false");
+        $("#game-tab-content-general").show();
+        $("#game-tab-content-images").hide();
+        
+        // Reset infinite scroll variables
+        this.allResults = [];
+        this.currentPage = 1;
+        this.currentQuery = '';
+        this.hasMoreResults = false;
+        this.isLoadingMore = false;
+        
+        // Hide selection hint
+        $('#game-selection-hint').hide();
+    },
+
+    goToStage2: function() {
+        if (!this.selectedGame) return;
+        
+        const game = this.selectedGame;
+        
+        // Fill form with selected game data
+        $("#game-rawg-id").val(game.id);
+        
+        // Populate display fields
+        $("#game-title-display").val(game.name);
+        $("#game-title-hidden").val(game.name);
+        
+        $("#game-release-date-display").val(game.released || 'N/A');
+        $("#game-release-date-hidden").val(game.released || '');
+        
+        // Rating (RAWG uses 0-5 scale)
+        const ratingDisplay = game.rating ? `${game.rating.toFixed(1)} / 5` : 'N/A';
+        $("#game-rating-display").val(ratingDisplay);
+        
+        // Metacritic score
+        $("#game-metacritic-display").val(game.metacritic || 'N/A');
+        
+        // Platforms
+        const platforms = game.platforms ? game.platforms.map(p => p.platform.name).join(', ') : 'N/A';
+        $("#game-platforms-display").val(platforms);
+        
+        // Genres
+        const genres = game.genres ? game.genres.map(g => g.name).join(', ') : 'N/A';
+        $("#game-genres-display").val(genres);
+        
+        // Set poster - use RAWG as temporary placeholder, then auto-fetch SteamGridDB cover
+        if (game.background_image) {
+            $("#game-poster-preview").attr("src", game.background_image);
+            $("#game-poster-path").val(game.background_image);
+        } else {
+            $("#game-poster-preview").attr("src", "");
+            $("#game-poster-path").val("");
+        }
+        
+        // Auto-fetch SteamGridDB cover as default
+        $.ajax({
+            url: "{% url 'game_poster' %}",
+            type: "GET",
+            data: { name: game.name },
+            success: function(response) {
+                if (response.poster_url) {
+                    $("#game-poster-preview").attr("src", response.poster_url);
+                    $("#game-poster-path").val(response.poster_url);
+                }
+            }
+        });
+        
+        // Backdrop (use RAWG background_image - it's landscape which is good for backdrops)
+        if (game.background_image) {
+            $("#game-backdrop-preview").attr("src", game.background_image);
+            $("#game-backdrop-path").val(game.background_image);
+        } else {
+            $("#game-backdrop-preview").attr("src", "");
+            $("#game-backdrop-path").val("");
+        }
+        
+        // Switch stages
+        $("#game-modal-stage-1").hide();
+        $("#game-modal-stage-2").css("display", "flex");
+        $("#game-modal-title").text("Edit Game Details");
+    },
+
+    goToStage1: function() {
+        $("#game-modal-stage-2").hide();
+        $("#game-modal-stage-1").show();
+        $("#game-modal-title").text("Add Game");
+    },
+
+    renderResults: function(newResults = null) {
+        const resultsToRender = newResults || this.allResults;
+        const self = this;
+        
+        if (!newResults) {
+            $('#game-results-list').empty();
+        }
+        
+        resultsToRender.forEach(function(game, index) {
+            const listItem = $('<li></li>');
+            
+            // Use RAWG background_image for search results (stage 1)
+            const poster = game.background_image
+                ? `<img src="${game.background_image}" 
+                    alt="${game.name} cover" style="width: 50px; height: 50px; object-fit: cover; vertical-align: middle; margin-right: 10px;">`
+                : `<div style="width: 50px; height: 50px; background: #333; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; margin-right: 10px; font-size: 10px; color: #666;">No Image</div>`;
+
+            // Create database status indicators
+            let statusIndicators = '';
+            if (game.in_database) {
+                statusIndicators += `<span class="status-pill in-database">
+                    <a href="/games/${game.id}/" class="status-link">View Game</a>
+                </span>`;
+            }
+            if (game.in_watchlist) {
+                statusIndicators += `<span class="status-pill in-watchlist">
+                    <a href="/watchlist/games/" class="status-link">In Watchlist</a>
+                </span>`;
+            }
+
+            // Platforms display
+            const platforms = game.platforms 
+                ? game.platforms.slice(0, 3).map(p => p.platform.name).join(', ')
+                : '';
+            const platformsDisplay = platforms ? `<span style="color: var(--text-muted); font-size: 11px; margin-left: 10px;">${platforms}</span>` : '';
+
+            listItem.html(`
+                <div class="game-result">
+                    ${poster}
+                    <span class="game-title">${game.name} (${game.released ? game.released.substring(0, 4) : 'N/A'})</span>
+                    ${platformsDisplay}
+                    <div class="game-status">${statusIndicators}</div>
+                </div>
+            `);
+
+            listItem.on('click', function() {
+                self.selectedGame = game;
+                $("#game-to-stage-2-btn").prop("disabled", false);
+
+                // Highlight selected item
+                $('#game-results-list li').removeClass('selected');
+                $(this).addClass('selected');
+                
+                // Hide the selection hint once a game is selected
+                $('#game-selection-hint').hide();
+            });
+
+            $('#game-results-list').append(listItem);
+        });
+        
+        // Show selection hint when results are displayed (but only if no game is selected)
+        if (resultsToRender.length > 0 && !this.selectedGame && !newResults) {
+            $('#game-selection-hint').show();
+        }
+    },
+
+    updatePagination: function(response) {
+        $('#game-total-results').text(response.total_results);
+        this.totalPages = response.total_pages;
+        this.hasMoreResults = this.currentPage < this.totalPages;
+    },
+
+    fetchResults: function(query, page, append = false) {
+        if (this.isLoadingMore) return;
+        
+        const self = this;
+        this.isLoadingMore = true;
+        
+        if (!append) {
+            $("#game-loading-more").hide();
+        } else {
+            $("#game-loading-more").show();
+        }
+        
+        $.ajax({
+            url: "{% url 'rawg_search' %}",
+            method: "GET",
+            data: { query: query, page: page, page_size: 20 },
+            success: function(response) {
+                if (append) {
+                    self.allResults = self.allResults.concat(response.results);
+                    self.renderResults(response.results);
+                } else {
+                    self.allResults = response.results;
+                    self.renderResults();
+                }
+                
+                self.updatePagination(response);
+                self.isLoadingMore = false;
+                $("#game-loading-more").hide();
+            },
+            error: function() {
+                alert('An error occurred while searching for games.');
+                self.isLoadingMore = false;
+                $("#game-loading-more").hide();
+            }
+        });
+    },
+
+    submitGame: function() {
+        const self = this;
+        const rawgId = $("#game-rawg-id").val();
+        const posterPath = $("#game-poster-path").val();
+        const backdropPath = $("#game-backdrop-path").val();
+        const addToWatchlist = $("#game-add-to-watchlist").is(':checked');
+        
+        if (!rawgId) {
+            this.showMessage("Error", "Game ID is missing", true);
+            return;
+        }
+        
+        // Create data object
+        const gameData = {
+            id: rawgId,
+            poster: posterPath,
+            backdrop: backdropPath,
+            add_to_watchlist: addToWatchlist
+        };
+        
+        // Get CSRF token from the form
+        const csrfToken = $("input[name=csrfmiddlewaretoken]").val();
+        
+        // Show loading screen
+        $("#game-loading-screen-modal").show();
+        
+        // Submit to API
+        $.ajax({
+            url: "{% url 'games-list' %}",
+            method: "POST",
+            data: JSON.stringify(gameData),
+            contentType: "application/json",
+            headers: {
+                "X-CSRFToken": csrfToken
+            },
+            success: function(response) {
+                $("#game-loading-screen-modal").hide();
+                self.showMessage("Success", "Game added successfully!");
+                // Try to refresh the main search if the function exists
+                if (typeof performSearch === 'function' && typeof window.getCurrentEndpoint === 'function') {
+                    performSearch(window.getCurrentQuery(), window.getCurrentEndpoint());
+                }
+                self.closeModal();
+            },
+            error: function(xhr) {
+                $("#game-loading-screen-modal").hide();
+                let errorMsg = "Failed to add game.";
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg = xhr.responseJSON.error;
+                }
+                self.showMessage("Error", errorMsg, true);
+            }
+        });
+    },
+
+    fetchBackdrops: function(gameId) {
+        const self = this;
+        
+        $.ajax({
+            url: "{% url 'game_backdrops' %}",
+            method: "GET",
+            data: { game_id: gameId },
+            success: function(response) {
+                $("#game-backdrop-loading").hide();
+                const backdrops = response.results || [];
+                
+                if (backdrops.length > 0) {
+                    backdrops.forEach(function(backdrop) {
+                        const containerElement = $('<div>', {
+                            class: 'image-container',
+                            style: 'position: relative; cursor: pointer; border: 2px solid transparent;'
+                        });
+                        
+                        const imgElement = $('<img>', {
+                            src: backdrop.image,
+                            alt: 'Game backdrop',
+                            style: 'width: 100%; display: block;',
+                            'data-path': backdrop.image
+                        });
+                        
+                        containerElement.append(imgElement);
+                        containerElement.click(function() {
+                            // Select this backdrop
+                            $("#game-backdrop-grid .image-container").css('border', '2px solid transparent');
+                            $(this).css('border', '2px solid #000080');
+                            $("#game-backdrop-preview").attr("src", backdrop.image);
+                            $("#game-backdrop-path").val(backdrop.image);
+                            closeGameBackdropModal();
+                        });
+                        
+                        $("#game-backdrop-grid").append(containerElement);
+                    });
+                } else {
+                    $("#game-backdrop-grid").html("<p>No backdrops available.</p>");
+                }
+            },
+            error: function() {
+                $("#game-backdrop-loading").hide();
+                $("#game-backdrop-grid").html("<p>Failed to load backdrops. Please try again.</p>");
+            }
+        });
+    },
+
+    fetchCovers: function(gameName) {
+        const self = this;
+        
+        $.ajax({
+            url: "{% url 'game_covers' %}",
+            method: "GET",
+            data: { name: gameName },
+            success: function(response) {
+                $("#game-cover-loading").hide();
+                const covers = response.results || [];
+                
+                if (covers.length > 0) {
+                    covers.forEach(function(cover) {
+                        const containerElement = $('<div>', {
+                            class: 'image-container',
+                            style: 'position: relative; cursor: pointer; border: 2px solid transparent;'
+                        });
+                        
+                        const coverUrl = cover.thumb || cover.url;
+                        const isAnimated = coverUrl.endsWith('.webm') || coverUrl.endsWith('.mp4');
+                        
+                        let mediaElement;
+                        if (isAnimated) {
+                            // Use video element for animated covers
+                            mediaElement = $('<video>', {
+                                src: coverUrl,
+                                style: 'width: 100%; display: block;',
+                                'data-path': cover.url,
+                                autoplay: true,
+                                loop: true,
+                                muted: true,
+                                playsinline: true
+                            });
+                        } else {
+                            // Use img element for static covers
+                            mediaElement = $('<img>', {
+                                src: coverUrl,
+                                alt: 'Game cover',
+                                style: 'width: 100%; display: block;',
+                                'data-path': cover.url
+                            });
+                        }
+                        
+                        containerElement.append(mediaElement);
+                        containerElement.click(function() {
+                            // Select this cover as poster
+                            $("#game-cover-grid .image-container").css('border', '2px solid transparent');
+                            $(this).css('border', '2px solid #000080');
+                            $("#game-poster-preview").attr("src", cover.url);
+                            $("#game-poster-path").val(cover.url);
+                            closeGameCoverModal();
+                        });
+                        
+                        $("#game-cover-grid").append(containerElement);
+                    });
+                } else {
+                    $("#game-cover-grid").html("<p>No covers available on SteamGridDB.</p>");
+                }
+            },
+            error: function() {
+                $("#game-cover-loading").hide();
+                $("#game-cover-grid").html("<p>Failed to load covers. Please try again.</p>");
+            }
+        });
+    },
+
+    init: function() {
+        const self = this;
+        
+        // Modal control
+        $("#close-game-modal-btn").on("click", function() { self.closeModal(); });
+        
+        // Stage navigation
+        $("#game-to-stage-2-btn").on("click", function() { self.goToStage2(); });
+        $("#game-back-to-stage-1-btn").on("click", function() { self.goToStage1(); });
+        
+        // Tab navigation
+        $("#game-tab-general a").on("click", function(e) {
+            e.preventDefault();
+            $("#game-tab-general").attr("aria-selected", "true");
+            $("#game-tab-images").attr("aria-selected", "false");
+            $("#game-tab-content-general").show();
+            $("#game-tab-content-images").hide();
+        });
+        
+        $("#game-tab-images a").on("click", function(e) {
+            e.preventDefault();
+            $("#game-tab-general").attr("aria-selected", "false");
+            $("#game-tab-images").attr("aria-selected", "true");
+            $("#game-tab-content-general").hide();
+            $("#game-tab-content-images").show();
+        });
+        
+        // Form submission
+        $("#game-submit-btn").on("click", function() { self.submitGame(); });
+        
+        // Prevent default form submission
+        $("#add-game-form").on("submit", function(e) {
+            e.preventDefault();
+            self.submitGame();
+        });
+        
+        // Search functionality
+        $('#game-query').on('input', function() {
+            const query = $('#game-query').val();
+            if (query.length > 2) {
+                if (query !== self.currentQuery) {
+                    // New search - reset everything
+                    self.currentQuery = query;
+                    self.currentPage = 1;
+                    self.allResults = [];
+                    $('#game-results-list').empty();
+                    self.fetchResults(query, self.currentPage, false);
+                }
+            } else {
+                // Clear results if query is too short
+                $('#game-results-list').empty();
+                $('#game-total-results').text('0');
+                self.allResults = [];
+                self.currentQuery = '';
+                self.hasMoreResults = false;
+            }
+        });
+
+        $('#game-search-button').on('click', function() {
+            const query = $('#game-query').val();
+            if (query.length > 2) {
+                self.currentQuery = query;
+                self.currentPage = 1;
+                self.allResults = [];
+                $('#game-results-list').empty();
+                self.fetchResults(query, self.currentPage, false);
+            }
+        });
+
+        // Infinite scroll functionality
+        $('#game-results-list').parent().on('scroll', function() {
+            const scrollContainer = $(this);
+            const scrollTop = scrollContainer.scrollTop();
+            const scrollHeight = scrollContainer[0].scrollHeight;
+            const containerHeight = scrollContainer.height();
+            
+            // Check if user has scrolled to near the bottom (within 50px)
+            if (scrollHeight > containerHeight && scrollTop + containerHeight >= scrollHeight - 50) {
+                if (self.hasMoreResults && !self.isLoadingMore && self.currentQuery.length > 2) {
+                    self.currentPage++;
+                    self.fetchResults(self.currentQuery, self.currentPage, true);
+                }
+            }
+        });
+        
+        // Also add a fallback check with mousewheel/touch events
+        $('#game-results-list').parent().on('mousewheel DOMMouseScroll touchmove', function() {
+            setTimeout(() => {
+                $(this).trigger('scroll');
+            }, 100);
+        });
+    }
+};
+
+// Global functions for modal access
+function openGameModal(searchQuery = '') {
+    GameSearch.openModal(searchQuery);
+}
+
+function closeGameModal() {
+    GameSearch.closeModal();
+}
+
+function closeGameMessageDialog() {
+    $("#game-message-dialog").hide();
+}
+
+function openGameBackdropModal() {
+    if (!GameSearch.selectedGame) return;
+    $("#game-backdrop-grid").empty();
+    $("#game-backdrop-loading").show();
+    $("#game-backdrop-modal").show();
+    GameSearch.fetchBackdrops(GameSearch.selectedGame.id);
+}
+
+function closeGameBackdropModal() {
+    $("#game-backdrop-modal").hide();
+}
+
+function openGameCoverModal() {
+    if (!GameSearch.selectedGame) return;
+    $("#game-cover-grid").empty();
+    $("#game-cover-loading").show();
+    $("#game-cover-modal").show();
+    GameSearch.fetchCovers(GameSearch.selectedGame.name);
+}
+
+function closeGameCoverModal() {
+    $("#game-cover-modal").hide();
+}
+
+$(document).ready(function() {
+    GameSearch.init();
+});
+</script>
+
+<style>
+/* Game Search Component Styles - Scoped to avoid conflicts */
+
+/* Theme-adaptive CSS variables */
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --progress-bg: #fff;
+    --progress-bar: #008080;
+    --shadow-color: rgba(0,0,0,0.25);
+    --poster-border: #a0a0a0;
+    --input-bg: white;
+    --hover-bg: #d4d0c8;
+    --secondary-text: #666;
+    --poster-bg: #808080;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --progress-bg: #2a2a2a;
+        --progress-bar: #00a0a0;
+        --shadow-color: rgba(0,0,0,0.5);
+        --poster-border: #606060;
+        --input-bg: #383838;
+        --hover-bg: #404040;
+        --secondary-text: #cccccc;
+        --poster-bg: #555555;
+    }
+}
+
+#game-search-modal .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#game-search-modal .modal-content {
+    position: relative;
+    margin: auto;
+}
+
+/* Theme-adaptive modal content */
+#game-search-modal .window {
+    background-color: var(--window-bg);
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+}
+
+#game-search-modal .window-body {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+}
+
+/* Form elements theme adaptation */
+#game-search-modal input[type="text"] {
+    background: var(--input-bg);
+    color: var(--text-color);
+    border: 1px inset var(--bg-color);
+}
+
+#game-search-modal fieldset {
+    border: 2px inset var(--bg-color);
+    background-color: var(--window-bg);
+    color: var(--text-color);
+}
+
+#game-search-modal legend {
+    color: var(--text-color);
+}
+
+#game-search-modal button {
+    background: var(--button-bg);
+    color: var(--button-text);
+    border-top: 1px solid var(--border-light);
+    border-left: 1px solid var(--border-light);
+    border-right: 1px solid var(--border-dark);
+    border-bottom: 1px solid var(--border-dark);
+}
+
+#game-search-modal button:hover {
+    background: var(--button-hover);
+}
+
+#game-search-modal label {
+    color: var(--text-color);
+}
+
+/* Results list styling */
+#game-search-modal .tree-view {
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border: 2px inset var(--bg-color);
+}
+
+#game-search-modal .tree-view li {
+    color: var(--text-color);
+}
+
+#game-search-modal .tree-view li:hover {
+    background-color: var(--hover-bg);
+}
+
+#game-search-modal .selected {
+    background-color: #000080 !important;
+    color: white !important;
+}
+
+#game-screenshot-grid img:hover {
+    border: 2px solid #000080 !important;
+}
+
+.progress-indicator {
+    width: 100%;
+    height: 20px;
+    background-color: var(--progress-bg);
+    border: 2px inset var(--bg-color);
+    margin-top: 15px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-indicator-bar {
+    display: block;
+    height: 100%;
+    background-color: var(--progress-bar);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 40%;
+    animation: progress-animation 1.5s infinite linear;
+}
+
+@keyframes progress-animation {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 100%;
+    }
+}
+
+.game-result {
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 5px 0;
+}
+
+.game-title {
+    flex-grow: 1;
+    color: var(--text-color);
+}
+
+.game-status {
+    display: flex;
+    gap: 5px;
+    margin-left: 10px;
+}
+
+.status-pill {
+    font-size: 12px;
+    padding: 2px 8px;
+    border: 1px solid var(--border-dark);
+    background: var(--button-bg);
+    color: var(--text-color);
+    white-space: nowrap;
+    border-radius: 0px;
+}
+
+.in-database {
+    border-color: #008000;
+}
+
+.in-watchlist {
+    border-color: #FFA500;
+}
+
+.status-link {
+    text-decoration: none;
+    color: var(--text-color);
+}
+
+.status-link:hover {
+    text-decoration: underline;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    #game-search-modal .field-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+    }
+    
+    #game-search-modal .field-row label {
+        min-width: 70px !important;
+        margin-right: 8px !important;
+        margin-bottom: 0 !important;
+        flex-shrink: 0 !important;
+    }
+    
+    #game-search-modal .field-row-stacked {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    
+    #game-search-modal .field-row-stacked label {
+        min-width: unset !important;
+        margin-right: 0 !important;
+        margin-bottom: 5px !important;
+    }
+}
+
+/* Force sharp corners for Windows 98 aesthetic */
+#game-search-modal .window,
+#game-search-modal .window-body,
+#game-search-modal button,
+#game-search-modal input,
+#game-search-modal textarea,
+#game-search-modal select,
+#game-search-modal .status-pill,
+#game-search-modal .sunken-panel,
+#game-search-modal .title-bar,
+#game-search-modal .title-bar-controls button {
+    border-radius: 0 !important;
+}
+
+/* Ensure title bar gradient works in dark mode */
+@media (prefers-color-scheme: dark) {
+    #game-search-modal .title-bar,
+    #game-loading-screen-modal .title-bar,
+    #game-message-dialog .title-bar,
+    #game-screenshot-modal .title-bar {
+        background: linear-gradient(90deg, var(--win98-dark, #000080), var(--win98-light, #1084d0)) !important;
+    }
+}
+</style>

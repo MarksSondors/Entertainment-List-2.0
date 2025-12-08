@@ -465,6 +465,8 @@
                 detailUrl = `/movies/${activity.tmdb_id}`;
             } else if (activity.content_type === 'TV Show' && activity.tmdb_id) {
                 detailUrl = `/tvshows/${activity.tmdb_id}`;
+            } else if (activity.content_type === 'Game' && activity.media_id) {
+                detailUrl = `/games/${activity.media_id}/`;
             }
             activityCard.href = detailUrl;              // Build card content based on activity type
             if ('rating' in activity) {

@@ -127,10 +127,16 @@ def process_genres_keywords(book_details):
     # Process keywords - if available in the API
     keywords = book_details.get('keywords', [])
     keyword_instances = []
-    for keyword in keywords:
-        keyword_instance, _ = Keyword.objects.get_or_create(
-            name=keyword.get('name')
-        )
+    for keyword_data in keywords:
+        keyword_name = keyword_data.get('name')
+        if not keyword_name:
+            continue
+            
+        # Try to find by name (case insensitive)
+        keyword_instance = Keyword.objects.filter(name__iexact=keyword_name).first()
+        if not keyword_instance:
+            keyword_instance = Keyword.objects.create(name=keyword_name)
+            
         keyword_instances.append(keyword_instance)
 
     return genre_instances, keyword_instances

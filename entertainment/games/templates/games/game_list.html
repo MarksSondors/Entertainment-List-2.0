@@ -1,0 +1,156 @@
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}All Games | Entertainment List{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">Games Database</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <!-- Header with Add Button -->
+            <div class="field-row" style="justify-content: space-between; margin-bottom: 15px;">
+                <div>
+                    <strong>Total Games:</strong> {{ games|length }}
+                </div>
+                <button type="button" onclick="openGameModal()" class="win98-btn">
+                    + Add Game
+                </button>
+            </div>
+
+            <!-- Games Grid -->
+            {% if games %}
+            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                {% for game in games %}
+                <div class="col">
+                    <a href="{% url 'game_detail' game.pk %}" class="text-decoration-none">
+                        <div class="card h-100 game-card">
+                            {% if game.poster %}
+                            <img src="{{ game.poster }}" class="card-img-top" alt="{{ game.title }}" style="height: 200px; object-fit: cover;">
+                            {% else %}
+                            <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
+                                <span>No Image</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if game.metacritic %}
+                            <div class="metacritic-badge {% if game.metacritic >= 75 %}high-score{% elif game.metacritic >= 50 %}mid-score{% else %}low-score{% endif %}">
+                                {{ game.metacritic }}
+                            </div>
+                            {% endif %}
+                            
+                            <div class="card-body">
+                                <h5 class="card-title">{{ game.title }}</h5>
+                                <p class="card-text">
+                                    {% if game.release_date %}
+                                    <small class="text-muted">{{ game.release_date|date:"Y" }}</small>
+                                    {% endif %}
+                                    {% if game.rating %}
+                                    <small class="text-muted"> • ★ {{ game.rating|floatformat:1 }}/5</small>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="sunken-panel" style="padding: 40px; text-align: center;">
+                <p style="margin-bottom: 15px;">No games in the database yet.</p>
+                <button type="button" onclick="openGameModal()" class="win98-btn">
+                    + Add Your First Game
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Include the game search component -->
+{% include 'components/game_search_component.html' %}
+
+<style>
+.game-card {
+    transition: transform 0.2s;
+    background: var(--win98-gray);
+    border: 2px solid;
+    border-color: var(--win98-light) var(--win98-dark) var(--win98-dark) var(--win98-light);
+}
+
+.game-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+}
+
+.game-card .card-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--win98-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.game-card .card-body {
+    padding: 10px;
+}
+
+.metacritic-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 8px;
+    font-weight: bold;
+    font-size: 12px;
+    color: white;
+    border: 1px solid rgba(0,0,0,0.3);
+}
+
+.metacritic-badge.high-score {
+    background-color: #66cc33;
+}
+
+.metacritic-badge.mid-score {
+    background-color: #ffcc33;
+    color: black;
+}
+
+.metacritic-badge.low-score {
+    background-color: #ff0000;
+}
+
+.win98-btn {
+    background: var(--win98-gray);
+    color: var(--win98-text);
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 12px;
+    padding: 4px 12px;
+    cursor: pointer;
+    border-top: 1px solid var(--win98-light);
+    border-left: 1px solid var(--win98-light);
+    border-right: 1px solid var(--win98-black);
+    border-bottom: 1px solid var(--win98-black);
+    box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+}
+
+.win98-btn:active {
+    border-top: 1px solid var(--win98-black);
+    border-left: 1px solid var(--win98-black);
+    border-right: 1px solid var(--win98-light);
+    border-bottom: 1px solid var(--win98-light);
+    box-shadow: inset 1px 1px 0 var(--win98-dark);
+}
+
+.col {
+    position: relative;
+}
+</style>
+{% endblock %}
