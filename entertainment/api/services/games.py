@@ -1,348 +1,693 @@
-# IGDB API Service
-import time
-import threading
-from collections import deque
+# RAWG API Service
 from api.base import BaseService
 from decouple import config
+from datetime import datetime, timedelta
 import requests
-
-
-class RateLimiter:
-    """Rate limiter to control the number of requests per second"""
-    def __init__(self, max_calls, period=1.0):
-        self.max_calls = max_calls  # maximum calls allowed in period
-        self.period = period  # time period in seconds
-        self.calls = deque()  # timestamps of calls
-        self.lock = threading.RLock()  # lock for thread safety
-
-    def wait_if_needed(self):
-        """Wait if rate limit has been reached"""
-        with self.lock:
-            now = time.time()
-            
-            # Remove timestamps older than our period
-            while self.calls and self.calls[0] <= now - self.period:
-                self.calls.popleft()
-            
-            # If we've reached our limit, wait
-            if len(self.calls) >= self.max_calls:
-                sleep_time = self.calls[0] - (now - self.period)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-            
-            # Record this call
-            self.calls.append(time.time())
-
-
-class IGDBTokenManager:
-    """Manages Twitch OAuth2 tokens for IGDB API access"""
-    def __init__(self, client_id, client_secret):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.token = None
-        self.token_expires_at = None
-        self.lock = threading.RLock()
-    
-    def get_valid_token(self):
-        """Get a valid access token, refreshing if necessary"""
-        with self.lock:
-            # Check if token exists and is still valid (with 5 minute buffer)
-            if (self.token and self.token_expires_at and 
-                time.time() < self.token_expires_at - 300):
-                return self.token
-              # Get new token
-            return self._get_new_token()
-    
-    def _get_new_token(self):
-        """Get a new access token from Twitch"""
-        url = "https://id.twitch.tv/oauth2/token"
-        data = {
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "grant_type": "client_credentials"
-        }
-        
-        
-        try:
-            response = requests.post(url, data=data, timeout=10)
-            print(f"DEBUG: Token request response status: {response.status_code}")
-            response.raise_for_status()
-            token_data = response.json()
-            print(f"DEBUG: Token obtained successfully")
-            
-            self.token = token_data['access_token']
-            # Tokens expire in 60 days according to IGDB docs
-            self.token_expires_at = time.time() + token_data.get('expires_in', 5184000)
-            
-            return self.token
-        
-        except requests.exceptions.RequestException as e:
-            print(f"Failed to get IGDB access token: {e}")
-            raise
+import time
+import random
+import os
+from requests.exceptions import ConnectionError, Timeout
 
 
 class GamesService(BaseService):
-    def __init__(self):
-        
-        try:
-            self.client_id = config("IGDB_CLIENT_ID")
-            self.client_secret = config("IGDB_CLIENT_SECRET")
-        except Exception as e:
-            raise
-        
-        self.token_manager = IGDBTokenManager(self.client_id, self.client_secret)
-        
-        super().__init__(
-            base_url='https://api.igdb.com/v4'
-        )
-        
-        # Initialize rate limiter - IGDB doesn't specify exact limits, 
-        # so using conservative 4 requests per second
-        self.rate_limiter = RateLimiter(max_calls=4)
+    """
+    RAWG API service for fetching game data.
+    API Documentation: https://rawg.io/apidocs
     
-    def _post(self, endpoint, data=None, max_retries=3):
-        """Override _post method to add IGDB-specific headers and rate limiting"""
-        # Wait if we need to respect the rate limit
-        self.rate_limiter.wait_if_needed()
-        
-        # Get valid token
-        token = self.token_manager.get_valid_token()
-        
-        # Ensure endpoint doesn't start with a slash to avoid double slashes
-        endpoint = endpoint.lstrip('/') 
+    Note: RAWG uses 'key' as the API key parameter name (not 'api_key'),
+    so we override the _get method to handle this.
+    """
+    
+    def __init__(self):
+        super().__init__(
+            base_url='https://api.rawg.io/api',
+            api_key=None  # Don't pass to base, we handle it ourselves
+        )
+        # Set api_key AFTER super().__init__() to avoid being overwritten
+        self.api_key = os.environ.get("RAWG_API_KEY") or config("RAWG_API_KEY", default=None)
+    
+    def _get(self, endpoint, params=None, max_retries=3):
+        """
+        Override base _get to use 'key' parameter instead of 'api_key'.
+        RAWG API requires the parameter to be named 'key'.
+        """
+        endpoint = endpoint.lstrip('/')
         url = f'{self.base_url.rstrip("/")}/{endpoint}'
         
-        headers = {
-            'Client-ID': self.client_id,
-            'Authorization': f'Bearer {token}',
-            'Content-Type': 'text/plain'  # IGDB expects text/plain for query body
-        }
+        # RAWG uses 'key' not 'api_key'
+        params = params or {}
+        params['key'] = self.api_key
         
-        # Convert data to IGDB query format if it's a dict
-        if isinstance(data, dict):
-            # Convert dict to IGDB query string
-            query_parts = []
-            for key, value in data.items():
-                if isinstance(value, list):
-                    query_parts.append(f"{key} {','.join(map(str, value))}")
-                else:
-                    query_parts.append(f"{key} {value}")
-            query_body = '; '.join(query_parts) + ';'
-        else:
-            query_body = data or ''
-        
-        # Initialize retry counter
         retries = 0
-        
         while retries <= max_retries:
             try:
-                response = requests.post(url, data=query_body, headers=headers, timeout=10)
+                response = requests.get(url, params=params, timeout=10)
                 response.raise_for_status()
                 return response.json()
-            except (requests.ConnectionError, requests.Timeout) as e:
+            except (ConnectionError, Timeout) as e:
                 retries += 1
                 if retries > max_retries:
                     print(f"Failed after {max_retries} retries: {e}")
                     raise
-                
-                # Calculate backoff time with jitter
-                backoff = (2 ** (retries - 1)) * (1 + __import__('random').random())
+                backoff = (2 ** (retries - 1)) * (1 + random.random())
                 print(f"Connection error: {e}. Retrying in {backoff:.1f} seconds... (Attempt {retries}/{max_retries})")
                 time.sleep(backoff)
             except requests.exceptions.RequestException as e:
                 print(f"Request error: {e}")
                 raise
     
-    def search_games(self, query, limit=10, offset=0):
-        """Search for games by name"""
-        igdb_query = f"""
-            search "{query}";
-         fields name, summary, cover.url, cover.image_id, first_release_date, rating, rating_count,
-                   aggregated_rating, aggregated_rating_count, storyline, status, category,
-                   genres.name, platforms.name, involved_companies.company.name,
-                   involved_companies.developer, involved_companies.publisher,
-             screenshots.url, screenshots.image_id, artworks.url, collection.name, franchise.name;
-            limit {limit};
-            offset {offset};
+    def search_games(self, query, page_size=10, page=1):
         """
-        return self._post('games', igdb_query.strip())
+        Search for games by name.
+        
+        Args:
+            query: Search query string
+            page_size: Number of results per page (max 40)
+            page: Page number for pagination
+        
+        Returns:
+            Dict with 'count', 'next', 'previous', and 'results' keys
+        """
+        params = {
+            'search': query,
+            'page_size': min(page_size, 40),
+            'page': page,
+            'search_precise': True,
+        }
+        return self._get('games', params=params)
     
     def get_game_details(self, game_id):
-        """Get detailed information about a specific game"""
-        igdb_query = f"""
-            fields name, summary, cover.url, cover.image_id, first_release_date, rating, rating_count,
-                   aggregated_rating, aggregated_rating_count, storyline, status, category,
-                   genres.id, genres.name,
-                   platforms.id, platforms.name, platforms.abbreviation, platforms.alternative_name, platforms.generation, platforms.platform_logo.url,
-                   involved_companies.company.id, involved_companies.company.name, involved_companies.company.logo.url,
-                   involved_companies.developer, involved_companies.publisher,
-                   screenshots.url, screenshots.image_id, artworks.url,
-                   collection.id, collection.name, franchise.id, franchise.name, franchises.id, franchises.name,
-                   parent_game,
-                   dlcs.name, dlcs.id, expansions.name, expansions.id,
-                   similar_games.name, similar_games.id, similar_games.cover.url,
-                   keywords.id, keywords.name, websites.url, websites.category,
-                   external_games.uid, external_games.category;
-            where id = {game_id};
         """
-        return self._post('games', igdb_query.strip())
-    
-    def get_popular_games(self, limit=20, offset=0):
-        """Get popular games based on rating and rating count"""
-        igdb_query = f"""
-            fields name, summary, cover.url, first_release_date, rating, rating_count,
-                   aggregated_rating, aggregated_rating_count, genres.name, platforms.name;
-            where rating_count > 10 & rating > 70;
-            sort rating desc;
-            limit {limit};
-            offset {offset};
-        """
-        return self._post('games', igdb_query.strip())
-    
-    def get_new_releases(self, limit=20, offset=0):
-        """Get recently released games"""
-        # Get timestamp for 30 days ago
-        thirty_days_ago = int(time.time()) - (30 * 24 * 60 * 60)
+        Get detailed information about a specific game.
         
-        igdb_query = f"""
-            fields name, summary, cover.url, first_release_date, rating, rating_count,
-                   genres.name, platforms.name;
-            where first_release_date > {thirty_days_ago} & status = 0;
-            sort first_release_date desc;
-            limit {limit};
-            offset {offset};
-        """
-        return self._post('games', igdb_query.strip())
-    
-    def get_upcoming_games(self, limit=20, offset=0):
-        """Get upcoming games"""
-        # Get current timestamp
-        now = int(time.time())
+        Args:
+            game_id: RAWG game ID or slug
         
-        igdb_query = f"""
-            fields name, summary, cover.url, first_release_date, rating, rating_count,
-                   genres.name, platforms.name;
-            where first_release_date > {now} & status = 0;
-            sort first_release_date asc;
-            limit {limit};
-            offset {offset};
+        Returns:
+            Dict with full game details including description, ratings, etc.
         """
-        return self._post('games', igdb_query.strip())
-    
-    def get_games_by_genre(self, genre_id, limit=20, offset=0):
-        """Get games by genre ID"""
-        igdb_query = f"""
-            fields name, summary, cover.url, first_release_date, rating, rating_count,
-                   genres.name, platforms.name;
-            where genres = {genre_id};
-            sort rating desc;
-            limit {limit};
-            offset {offset};
+        return self._get(f'games/{game_id}')
+
+    def get_game_series(self, game_id, page=1, page_size=20):
         """
-        return self._post('games', igdb_query.strip())
-    
-    def get_games_by_platform(self, platform_id, limit=20, offset=0):
-        """Get games by platform ID"""
-        igdb_query = f"""
-            fields name, summary, cover.url, first_release_date, rating, rating_count,
-                   genres.name, platforms.name;
-            where platforms = {platform_id};
-            sort rating desc;
-            limit {limit};
-            offset {offset};
-        """
-        return self._post('games', igdb_query.strip())
-    
-    def get_genres(self, limit=100):
-        """Get all game genres"""
-        igdb_query = f"""
-            fields name;
-            limit {limit};
-        """
-        return self._post('genres', igdb_query.strip())
-    
-    def get_platforms(self, limit=200):
-        """Get all gaming platforms"""
-        igdb_query = f"""
-            fields name, abbreviation, alternative_name, generation, platform_logo.url;
-            limit {limit};
-        """
-        return self._post('platforms', igdb_query.strip())
-    
-    def get_companies(self, limit=100, offset=0):
-        """Get game companies (developers/publishers)"""
-        igdb_query = f"""
-            fields name, description, logo.url, websites.url, country;
-            limit {limit};
-            offset {offset};
-        """
-        return self._post('companies', igdb_query.strip())
-    
-    def get_game_covers(self, game_ids):
-        """Get cover images for multiple games"""
-        if isinstance(game_ids, list):
-            game_ids_str = ','.join(map(str, game_ids))
-        else:
-            game_ids_str = str(game_ids)
+        Get games that are part of the same series.
+        
+        Args:
+            game_id: RAWG game ID or slug
+            page: Page number
+            page_size: Results per page
             
-        igdb_query = f"""
-            fields game, url, width, height, image_id;
-            where game = ({game_ids_str});
+        Returns:
+            Dict with list of games in the series
         """
-        return self._post('covers', igdb_query.strip())
+        params = {
+            'page': page,
+            'page_size': page_size
+        }
+        return self._get(f'games/{game_id}/game-series', params=params)
     
-    def get_game_screenshots(self, game_id):
-        """Get screenshots for a specific game"""
-        igdb_query = f"""
-            fields game, url, width, height, image_id;
-            where game = {game_id};
+    def get_game_screenshots(self, game_id, page=1, page_size=20):
         """
-        return self._post('screenshots', igdb_query.strip())
-    
-    def get_similar_games(self, game_id, limit=10):
-        """Get games similar to the specified game"""
-        igdb_query = f"""
-            fields name, summary, cover.url, first_release_date, rating, rating_count,
-                   genres.name, platforms.name;
-            where similar_games = {game_id};
-            limit {limit};
-        """
-        return self._post('games', igdb_query.strip())
-    
-    def get_game_collections(self, limit=100, offset=0):
-        """Get game collections (IGDB 'collections' endpoint)"""
-        igdb_query = f"""
-            fields name, games.name, games.id;
-            limit {limit};
-            offset {offset};
-        """
-        return self._post('collections', igdb_query.strip())
-    
-    def get_game_franchises(self, limit=100, offset=0):
-        """Get game franchises (IGDB 'franchises' endpoint)"""
-        igdb_query = f"""
-            fields name, games.name, games.id;
-            limit {limit};
-            offset {offset};
-        """
-        return self._post('franchises', igdb_query.strip())
-    
-    def get_games_by_external_id(self, external_id, category):
-        """
-        Get game by external ID (Steam, GOG, etc.)
-        Category: 1 (Steam), 5 (GOG), 11 (Epic Games Store), etc.
-        """
-        igdb_query = f"""
-            fields game.name, game.id, uid, category;
-            where uid = "{external_id}" & category = {category};
-        """
-        return self._post('external_games', igdb_query.strip())
-    
-    def get_multiquery(self, queries):
-        """Execute multiple queries in a single request"""
-        # IGDB multiquery format allows multiple queries separated by specific syntax
-        query_body = ""
-        for name, query in queries.items():
-            query_body += f'query {name} "{query}";\n'
+        Get screenshots for a specific game.
         
-        return self._post('multiquery', query_body.strip())
+        Args:
+            game_id: RAWG game ID or slug
+            page: Page number
+            page_size: Results per page
+        
+        Returns:
+            Dict with screenshot results
+        """
+        params = {
+            'page': page,
+            'page_size': page_size,
+        }
+        return self._get(f'games/{game_id}/screenshots', params=params)
+    
+    def get_game_movies(self, game_id, page=1, page_size=20):
+        """
+        Get trailers/movies for a specific game.
+        
+        Args:
+            game_id: RAWG game ID or slug
+        
+        Returns:
+            Dict with video/trailer results
+        """
+        params = {
+            'page': page,
+            'page_size': page_size,
+        }
+        return self._get(f'games/{game_id}/movies', params=params)
+    
+    def get_game_additions(self, game_id, page=1, page_size=20):
+        """
+        Get DLCs and editions for a specific game.
+        
+        Args:
+            game_id: RAWG game ID or slug
+        
+        Returns:
+            Dict with DLC/edition results
+        """
+        params = {
+            'page': page,
+            'page_size': page_size,
+        }
+        return self._get(f'games/{game_id}/additions', params=params)
+    
+    def get_game_series(self, game_id, page=1, page_size=20):
+        """
+        Get games in the same series as the specified game.
+        
+        Args:
+            game_id: RAWG game ID or slug
+        
+        Returns:
+            Dict with games from the same series
+        """
+        params = {
+            'page': page,
+            'page_size': page_size,
+        }
+        return self._get(f'games/{game_id}/game-series', params=params)
+    
+    def get_game_parent(self, game_id):
+        """
+        Get parent game (for DLCs/editions).
+        
+        Args:
+            game_id: RAWG game ID or slug
+        
+        Returns:
+            Dict with parent game info
+        """
+        return self._get(f'games/{game_id}/parent-games')
+    
+    def get_game_achievements(self, game_id, page=1, page_size=20):
+        """
+        Get achievements for a specific game.
+        
+        Args:
+            game_id: RAWG game ID or slug
+        
+        Returns:
+            Dict with achievement results
+        """
+        params = {
+            'page': page,
+            'page_size': page_size,
+        }
+        return self._get(f'games/{game_id}/achievements', params=params)
+    
+    def get_game_stores(self, game_id):
+        """
+        Get store links for a specific game.
+        
+        Args:
+            game_id: RAWG game ID or slug
+        
+        Returns:
+            Dict with store links (Steam, GOG, Epic, etc.)
+        """
+        return self._get(f'games/{game_id}/stores')
+    
+    def get_game_reddit(self, game_id):
+        """
+        Get Reddit posts related to a specific game.
+        
+        Args:
+            game_id: RAWG game ID or slug
+        
+        Returns:
+            Dict with Reddit post results
+        """
+        return self._get(f'games/{game_id}/reddit')
+    
+    def get_game_suggested(self, game_id, page=1, page_size=10):
+        """
+        Get suggested games similar to the specified game.
+        
+        Args:
+            game_id: RAWG game ID or slug
+        
+        Returns:
+            Dict with suggested game results
+        """
+        params = {
+            'page': page,
+            'page_size': page_size,
+        }
+        return self._get(f'games/{game_id}/suggested', params=params)
+    
+    def get_popular_games(self, page_size=20, page=1, ordering='-rating'):
+        """
+        Get popular games based on rating.
+        
+        Args:
+            page_size: Number of results per page
+            page: Page number
+            ordering: Sort order (e.g., '-rating', '-added', '-released')
+        
+        Returns:
+            Dict with game results
+        """
+        params = {
+            'page_size': min(page_size, 40),
+            'page': page,
+            'ordering': ordering,
+            'metacritic': '70,100',  # Only games with metacritic score 70+
+        }
+        return self._get('games', params=params)
+    
+    def get_new_releases(self, page_size=20, page=1):
+        """
+        Get recently released games (last 30 days).
+        
+        Returns:
+            Dict with newly released games
+        """
+        today = datetime.now()
+        thirty_days_ago = today - timedelta(days=30)
+        
+        params = {
+            'page_size': min(page_size, 40),
+            'page': page,
+            'dates': f'{thirty_days_ago.strftime("%Y-%m-%d")},{today.strftime("%Y-%m-%d")}',
+            'ordering': '-released',
+        }
+        return self._get('games', params=params)
+    
+    def get_upcoming_games(self, page_size=20, page=1):
+        """
+        Get upcoming games (future release dates).
+        
+        Returns:
+            Dict with upcoming games
+        """
+        today = datetime.now()
+        one_year_later = today + timedelta(days=365)
+        
+        params = {
+            'page_size': min(page_size, 40),
+            'page': page,
+            'dates': f'{today.strftime("%Y-%m-%d")},{one_year_later.strftime("%Y-%m-%d")}',
+            'ordering': 'released',
+        }
+        return self._get('games', params=params)
+    
+    def get_games_by_genre(self, genre_slug, page_size=20, page=1, ordering='-rating'):
+        """
+        Get games by genre.
+        
+        Args:
+            genre_slug: Genre slug (e.g., 'action', 'adventure', 'rpg')
+            page_size: Number of results per page
+            page: Page number
+            ordering: Sort order
+        
+        Returns:
+            Dict with games of the specified genre
+        """
+        params = {
+            'genres': genre_slug,
+            'page_size': min(page_size, 40),
+            'page': page,
+            'ordering': ordering,
+        }
+        return self._get('games', params=params)
+    
+    def get_games_by_platform(self, platform_id, page_size=20, page=1, ordering='-rating'):
+        """
+        Get games by platform.
+        
+        Args:
+            platform_id: Platform ID (e.g., 4 for PC, 187 for PS5, 1 for Xbox One)
+            page_size: Number of results per page
+            page: Page number
+            ordering: Sort order
+        
+        Returns:
+            Dict with games for the specified platform
+        """
+        params = {
+            'platforms': platform_id,
+            'page_size': min(page_size, 40),
+            'page': page,
+            'ordering': ordering,
+        }
+        return self._get('games', params=params)
+    
+    def get_games_by_store(self, store_id, page_size=20, page=1, ordering='-rating'):
+        """
+        Get games by store.
+        
+        Args:
+            store_id: Store ID (e.g., 1 for Steam, 2 for Xbox Store, 3 for PlayStation Store)
+            page_size: Number of results per page
+            page: Page number
+            ordering: Sort order
+        
+        Returns:
+            Dict with games for the specified store
+        """
+        params = {
+            'stores': store_id,
+            'page_size': min(page_size, 40),
+            'page': page,
+            'ordering': ordering,
+        }
+        return self._get('games', params=params)
+    
+    def get_games_by_developer(self, developer_slug, page_size=20, page=1, ordering='-released'):
+        """
+        Get games by developer.
+        
+        Args:
+            developer_slug: Developer slug or ID
+            page_size: Number of results per page
+            page: Page number
+            ordering: Sort order
+        
+        Returns:
+            Dict with games by the specified developer
+        """
+        params = {
+            'developers': developer_slug,
+            'page_size': min(page_size, 40),
+            'page': page,
+            'ordering': ordering,
+        }
+        return self._get('games', params=params)
+    
+    def get_games_by_publisher(self, publisher_slug, page_size=20, page=1, ordering='-released'):
+        """
+        Get games by publisher.
+        
+        Args:
+            publisher_slug: Publisher slug or ID
+            page_size: Number of results per page
+            page: Page number
+            ordering: Sort order
+        
+        Returns:
+            Dict with games by the specified publisher
+        """
+        params = {
+            'publishers': publisher_slug,
+            'page_size': min(page_size, 40),
+            'page': page,
+            'ordering': ordering,
+        }
+        return self._get('games', params=params)
+    
+    def get_games_by_tag(self, tag_slug, page_size=20, page=1, ordering='-rating'):
+        """
+        Get games by tag.
+        
+        Args:
+            tag_slug: Tag slug (e.g., 'singleplayer', 'multiplayer', 'open-world')
+            page_size: Number of results per page
+            page: Page number
+            ordering: Sort order
+        
+        Returns:
+            Dict with games with the specified tag
+        """
+        params = {
+            'tags': tag_slug,
+            'page_size': min(page_size, 40),
+            'page': page,
+            'ordering': ordering,
+        }
+        return self._get('games', params=params)
+    
+    def get_genres(self, page=1, page_size=100, ordering='name'):
+        """
+        Get all game genres.
+        
+        Returns:
+            Dict with genre results including id, name, slug, games_count, image_background
+        """
+        params = {
+            'page': page,
+            'page_size': min(page_size, 100),
+            'ordering': ordering,
+        }
+        return self._get('genres', params=params)
+    
+    def get_genre_details(self, genre_id):
+        """
+        Get details about a specific genre.
+        
+        Args:
+            genre_id: Genre ID or slug
+        
+        Returns:
+            Dict with genre details
+        """
+        return self._get(f'genres/{genre_id}')
+    
+    def get_platforms(self, page=1, page_size=100, ordering='name'):
+        """
+        Get all gaming platforms.
+        
+        Returns:
+            Dict with platform results including id, name, slug, games_count
+        """
+        params = {
+            'page': page,
+            'page_size': min(page_size, 100),
+            'ordering': ordering,
+        }
+        return self._get('platforms', params=params)
+    
+    def get_platform_details(self, platform_id):
+        """
+        Get details about a specific platform.
+        
+        Args:
+            platform_id: Platform ID or slug
+        
+        Returns:
+            Dict with platform details
+        """
+        return self._get(f'platforms/{platform_id}')
+    
+    def get_platform_parent_list(self, page=1, page_size=20):
+        """
+        Get parent platform list (e.g., PC, PlayStation, Xbox, Nintendo, etc.)
+        
+        Returns:
+            Dict with parent platform results
+        """
+        params = {
+            'page': page,
+            'page_size': page_size,
+        }
+        return self._get('platforms/lists/parents', params=params)
+    
+    def get_stores(self, page=1, page_size=100, ordering='name'):
+        """
+        Get all game stores.
+        
+        Returns:
+            Dict with store results including id, name, slug, games_count
+        """
+        params = {
+            'page': page,
+            'page_size': min(page_size, 100),
+            'ordering': ordering,
+        }
+        return self._get('stores', params=params)
+    
+    def get_store_details(self, store_id):
+        """
+        Get details about a specific store.
+        
+        Args:
+            store_id: Store ID or slug
+        
+        Returns:
+            Dict with store details
+        """
+        return self._get(f'stores/{store_id}')
+    
+    def get_developers(self, page=1, page_size=20, ordering='-games_count'):
+        """
+        Get game developers.
+        
+        Returns:
+            Dict with developer results including id, name, slug, games_count
+        """
+        params = {
+            'page': page,
+            'page_size': min(page_size, 40),
+            'ordering': ordering,
+        }
+        return self._get('developers', params=params)
+    
+    def get_developer_details(self, developer_id):
+        """
+        Get details about a specific developer.
+        
+        Args:
+            developer_id: Developer ID or slug
+        
+        Returns:
+            Dict with developer details
+        """
+        return self._get(f'developers/{developer_id}')
+    
+    def get_publishers(self, page=1, page_size=20, ordering='-games_count'):
+        """
+        Get game publishers.
+        
+        Returns:
+            Dict with publisher results including id, name, slug, games_count
+        """
+        params = {
+            'page': page,
+            'page_size': min(page_size, 40),
+            'ordering': ordering,
+        }
+        return self._get('publishers', params=params)
+    
+    def get_publisher_details(self, publisher_id):
+        """
+        Get details about a specific publisher.
+        
+        Args:
+            publisher_id: Publisher ID or slug
+        
+        Returns:
+            Dict with publisher details
+        """
+        return self._get(f'publishers/{publisher_id}')
+    
+    def get_tags(self, page=1, page_size=40, ordering='-games_count'):
+        """
+        Get game tags.
+        
+        Returns:
+            Dict with tag results including id, name, slug, games_count
+        """
+        params = {
+            'page': page,
+            'page_size': min(page_size, 40),
+            'ordering': ordering,
+        }
+        return self._get('tags', params=params)
+    
+    def get_tag_details(self, tag_id):
+        """
+        Get details about a specific tag.
+        
+        Args:
+            tag_id: Tag ID or slug
+        
+        Returns:
+            Dict with tag details
+        """
+        return self._get(f'tags/{tag_id}')
+    
+    def get_creators(self, page=1, page_size=20):
+        """
+        Get game creators/developers (people).
+        
+        Returns:
+            Dict with creator results
+        """
+        params = {
+            'page': page,
+            'page_size': min(page_size, 40),
+        }
+        return self._get('creators', params=params)
+    
+    def get_creator_details(self, creator_id):
+        """
+        Get details about a specific creator.
+        
+        Args:
+            creator_id: Creator ID or slug
+        
+        Returns:
+            Dict with creator details including games, positions, etc.
+        """
+        return self._get(f'creators/{creator_id}')
+    
+    def get_creator_roles(self):
+        """
+        Get available creator roles (e.g., designer, writer, artist).
+        
+        Returns:
+            Dict with creator role results
+        """
+        return self._get('creator-roles')
+    
+    def advanced_search(
+        self,
+        search=None,
+        page=1,
+        page_size=20,
+        ordering='-rating',
+        dates=None,
+        platforms=None,
+        stores=None,
+        genres=None,
+        tags=None,
+        developers=None,
+        publishers=None,
+        metacritic=None,
+        exclude_additions=True,
+    ):
+        """
+        Advanced game search with multiple filters.
+        
+        Args:
+            search: Search query string
+            page: Page number
+            page_size: Results per page
+            ordering: Sort order ('-rating', '-released', '-added', 'name', etc.)
+            dates: Date range string (e.g., '2020-01-01,2024-12-31')
+            platforms: Comma-separated platform IDs
+            stores: Comma-separated store IDs
+            genres: Comma-separated genre slugs
+            tags: Comma-separated tag slugs
+            developers: Comma-separated developer slugs
+            publishers: Comma-separated publisher slugs
+            metacritic: Metacritic score range (e.g., '80,100')
+            exclude_additions: Exclude DLCs and editions
+        
+        Returns:
+            Dict with filtered game results
+        """
+        params = {
+            'page': page,
+            'page_size': min(page_size, 40),
+            'ordering': ordering,
+        }
+        
+        if search:
+            params['search'] = search
+            params['search_precise'] = True
+        if dates:
+            params['dates'] = dates
+        if platforms:
+            params['platforms'] = platforms
+        if stores:
+            params['stores'] = stores
+        if genres:
+            params['genres'] = genres
+        if tags:
+            params['tags'] = tags
+        if developers:
+            params['developers'] = developers
+        if publishers:
+            params['publishers'] = publishers
+        if metacritic:
+            params['metacritic'] = metacritic
+        if exclude_additions:
+            params['exclude_additions'] = 'true'
+        
+        return self._get('games', params=params)

@@ -296,6 +296,58 @@
             </div>
           </div>
         </div>
+
+        <!-- Games Section -->
+        <div class="accordion-section">
+          <div class="section-header" data-target="#games">
+            <h3 class="section-title">
+              <span class="chevron">▶</span> Games
+              <span class="item-count" id="gamesCount">({{ games|length }} items)</span>
+            </h3>
+          </div>
+          <div id="games" class="section-content">
+            <div class="sunken-panel content-panel">
+              <div class="content-grid" id="gamesContent">
+                {% for item in games %}
+                <div class="grid-item" data-media-id="{{ item.media_id }}">
+                  <a href="{% url 'game_detail' item.media_id %}" class="item-link">
+                    <div class="item-card">
+                      {% if item.media_poster %}
+                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      {% else %}
+                      <div class="item-poster no-image">
+                        <span>No Image</span>
+                      </div>
+                      {% endif %}
+                      <div class="item-body">
+                        <h5 class="item-title">{{ item.media_title }}</h5>
+                        <div class="item-meta">
+                          <span class="release-year">{{ item.media_release_date|date:"Y" }}</span>
+                        </div>
+                        
+                        <!-- Average Rating Badge -->
+                        {% if item.avg_rating %}
+                        <div class="avg-rating-badge">
+                          {{ item.avg_rating }} ({{ item.rating_count }})
+                        </div>
+                        {% endif %}
+                      </div>
+                      <button class="remove-item" data-id="{{ item.id }}">✕</button>
+                    </div>
+                  </a>
+                </div>
+                {% empty %}
+                <div class="no-content-message">
+                  <div class="message-content">
+                    <div class="message-icon">🎮</div>
+                    <div class="message-text">No games in your watchlist</div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
     </div>
     
     <!-- Status Bar -->

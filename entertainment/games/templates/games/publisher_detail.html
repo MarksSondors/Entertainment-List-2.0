@@ -1,4 +1,7 @@
-{% extends "components/base.html" %}
+{% extends 'components/base.html' %}
+{% load static %}
+
+{% block title %}{{ publisher.name }} | Entertainment List{% endblock %}
 
 {% block head %}
 <!-- Add viewport meta tag for proper mobile scaling -->
@@ -134,8 +137,6 @@ body::before {
 .title-bar-controls {
     display: flex;
 }
-
-
 
 .window-body {
     background-color: var(--window-bg);
@@ -452,61 +453,23 @@ body::before {
 <!-- Add a small attribution for the backdrop if available -->
 {% if random_backdrop %}
 <div class="backdrop-attribution">
-    Backdrop from {{ company.name }}'s productions
+    Backdrop from {{ publisher.name }}'s games
 </div>
 {% endif %}
 
-<!-- Company Profile Window -->
+<!-- Publisher Profile Window -->
 <div class="window">
     <div class="title-bar">
-        <div class="title-bar-text">{{ company.name }}</div>
+        <div class="title-bar-text">{{ publisher.name }}</div>
         <div class="title-bar-controls">
             <button aria-label="Minimize"></button>
             <button aria-label="Maximize"></button>
             <button aria-label="Close"></button>
         </div>
     </div>    <div class="window-body">
-        <div class="profile-container">
-            <div class="company-logo" onclick="openLogoModal()">
-                {% if company.logo_path %}
-                    <img src="{{ company.logo_path }}" alt="{{ company.name }} Logo">
-                {% else %}
-                    <div style="text-align: center; padding: 20px;">
-                        <span>No Logo Available</span>
-                    </div>
-                {% endif %}
-            </div>
-
-            <div class="profile-content">
-                <h1 style="margin: 0 0 10px 0; font-size: 18px;">{{ company.name }}</h1>
-                <div class="window-content">
-                    {% if company.country %}
-                    <p><strong>Country:</strong> {{ company.country.name }}</p>
-                    {% endif %}
-                    
-                    {% if average_rating is not None %}
-                    <p><strong>Average Rating of Productions (All Users):</strong> {{ average_rating }} / 10</p>
-                    {% endif %}
-
-                    {% if user_average_rating is not None %}
-                    <p><strong>Average Rating of Productions (Your Reviews):</strong> {{ user_average_rating }} / 10</p>
-                    {% endif %}
-                    
-                    {% if company.tmdb_id %}
-                    <p>
-                        <a href="https://www.themoviedb.org/company/{{ company.tmdb_id }}" target="_blank" style="text-decoration: none;">
-                            <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDB" style="height: 18px; vertical-align: middle;">
-                            View on TMDB
-                        </a>
-                    </p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        
-        <!-- Productions Section -->
+        <!-- Games Section -->
         <div class="productions-container">
-            <h2 style="margin: 0 0 10px 0; font-size: 18px;">Productions</h2>
+            <h2 style="margin: 0 0 10px 0; font-size: 18px;">Games</h2>
             
             <!-- Desktop Table View -->
             <div class="productions-desktop-view">
@@ -515,30 +478,22 @@ body::before {
                         <thead>
                             <tr>
                                 <th>Title</th>
-                                <th>Year</th>
-                                <th>Type</th>
-                                <th>Rating</th>
+                                <th>Release Date</th>
+                                <th>User Rating</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for item in productions %}
+                            {% for game in games %}
                             <tr>
                                 <td>
-                                    {% if item.type == 'movie' %}
-                                        <a href="{% url 'movie_page' item.tmdb_id %}" style="text-decoration: none; color: var(--text-color);">{{ item.title }}</a>
-                                    {% elif item.type == 'tvshow' %}
-                                        <a href="{% url 'tv_show_page' item.tmdb_id %}" style="text-decoration: none; color: var(--text-color);">{{ item.title }}</a>
-                                    {% else %}
-                                        {{ item.title }}
-                                    {% endif %}
+                                    <a href="{% url 'game_detail' game.pk %}" style="text-decoration: none; color: var(--text-color);">{{ game.title }}</a>
                                 </td>
-                                <td>{{ item.year|default:"-" }}</td>
-                                <td>{{ item.type_display }}</td>
-                                <td>{{ item.rating|default:"-" }}</td>
+                                <td>{{ game.release_date|date:"Y-m-d"|default:"-" }}</td>
+                                <td>{{ game.user_rating|default:"-" }}</td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="4">No productions available.</td>
+                                <td colspan="3">No games available.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -549,45 +504,36 @@ body::before {
             <!-- Mobile Grid View -->
             <div class="productions-mobile-view">
                 <div class="productions-grid">
-                    {% for item in productions %}
+                    {% for game in games %}
                     <div class="production-item">
                         <div class="production-card">
                             <div class="production-poster">
-                                {% if item.poster %}
-                                <img src="{{ item.poster }}" alt="{{ item.title }}" loading="lazy">
+                                {% if game.poster %}
+                                <img src="{{ game.poster }}" alt="{{ game.title }}" loading="lazy">
                                 {% else %}
-                                <div class="poster-placeholder">{{ item.title|first }}</div>
+                                <div class="poster-placeholder">{{ game.title|first }}</div>
                                 {% endif %}
                                 
                                 <!-- Rating Badge -->
-                                {% if item.rating %}
-                                <div class="user-rating-badge {% if item.rating >= 7 %}high-rating{% elif item.rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
-                                    {{ item.rating }}<span class="rating-max">/10</span>
+                                {% if game.user_rating %}
+                                <div class="user-rating-badge {% if game.user_rating >= 8 %}high-rating{% elif game.user_rating >= 5 %}mid-rating{% else %}low-rating{% endif %}">
+                                    {{ game.user_rating }}<span class="rating-max">/10</span>
                                 </div>
                                 {% endif %}
                             </div>
                             <div class="production-info">
                                 <div class="production-title">
-                                    {% if item.type == 'movie' %}
-                                        <a href="{% url 'movie_page' item.tmdb_id %}">{{ item.title }}</a>
-                                    {% elif item.type == 'tvshow' %}
-                                        <a href="{% url 'tv_show_page' item.tmdb_id %}">{{ item.title }}</a>
-                                    {% else %}
-                                        {{ item.title }}
-                                    {% endif %}
+                                    <a href="{% url 'game_detail' game.pk %}">{{ game.title }}</a>
                                 </div>
                                 <div class="production-year">
-                                    {{ item.year|default:"-" }}
-                                </div>
-                                <div class="production-type">
-                                    {{ item.type_display }}
+                                    {{ game.release_date|date:"Y"|default:"-" }}
                                 </div>
                             </div>
                         </div>
                     </div>
                     {% empty %}
                     <div style="grid-column: 1 / -1; text-align: center; padding: 20px;">
-                        <p>No productions available.</p>
+                        <p>No games available.</p>
                     </div>
                     {% endfor %}
                 </div>
@@ -595,39 +541,12 @@ body::before {
         </div>
     </div>
     <div class="status-bar">
-        <span>{{ company.name }}</span>
-        <span>{{ productions|length }} production{{ productions|length|pluralize }}</span>
-    </div>
-</div>
-
-<!-- Logo Modal -->
-<div id="logoModal">
-    <div class="title-bar">
-        <div class="title-bar-text">{{ company.name }} Logo</div>
-        <div class="title-bar-controls">
-            <button aria-label="Close" onclick="closeLogoModal()"></button>
-        </div>
-    </div>
-    <div style="padding: 10px; text-align: center; background-color: var(--modal-bg);">
-        {% if company.logo_path %}
-            <img src="{{ company.logo_path }}" alt="{{ company.name }} Logo" style="max-width: 100%; max-height: 80vh;">
-        {% else %}
-            <div style="padding: 40px; text-align: center; color: var(--text-color);">
-                <span>No Logo Available</span>
-            </div>
-        {% endif %}
+        <span>{{ publisher.name }}</span>
+        <span>{{ games|length }} game{{ games|length|pluralize }}</span>
     </div>
 </div>
 
 <script>
-    function openLogoModal() {
-        document.getElementById('logoModal').style.display = 'block';
-    }
-
-    function closeLogoModal() {
-        document.getElementById('logoModal').style.display = 'none';
-    }
-
     document.querySelectorAll('table.interactive').forEach(element => {
         element.addEventListener('click', (event) => {
             const highlightedClass = 'highlighted';
