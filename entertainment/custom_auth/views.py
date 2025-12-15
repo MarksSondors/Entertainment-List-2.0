@@ -34,6 +34,10 @@ from custom_auth.models import Review, Person
 import re
 
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank, TrigramSimilarity
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from .services.cross_media_recommendation import CrossMediaRecommender
 
 logger = logging.getLogger(__name__)
 
@@ -3471,3 +3475,20 @@ def production_company_detail(request, company_id):
     }
     
     return render(request, 'production_company_page.html', context)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def combined_recommendations(request):
+    """Get combined recommendations across all media types"""
+    limit = int(request.GET.get('limit', 20))
+    recommender = CrossMediaRecommender()
+    
+    # Get discovery feed which mixes all content types
+    feed_items = recommender.get_discovery_feed(
+        request.user, 
+        total_items=limit,
+        media_types=['movies', 'tvshows', 'games']
+    )
+    
+    # The feed items are already normalized by the service
+    return Response(feed_items)

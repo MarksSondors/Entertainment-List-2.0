@@ -48,6 +48,10 @@ urlpatterns = [    # discover page
 
     # statistics
     path('statistics/', views.statistics_page, name='statistics_page'),
+
+    # recommendations
+    path('api/recommendations/combined/', views.combined_recommendations, name='combined_recommendations'),
+
     # release calendar
     path('calendar/', views.release_calendar, name='release_calendar'),
 
