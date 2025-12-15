@@ -1,6 +1,6 @@
 {% load static %}
 
-<!-- Recommended Movies Component -->
+<!-- Recommended Content Component -->
 <div class="window" style="width: 100%;">
     <div class="title-bar">
         <div class="title-bar-text">Recommended For You</div>
@@ -10,51 +10,220 @@
             <button aria-label="Close"></button>
         </div>
     </div>
-    <div class="window-body" style="padding: 8px; background-color: var(--window-bg);">        <div class="scrollable-row" id="recommended_movies_block">            <div class="poster-item" style="width: 100%; height: 200px;">
-                <div class="poster-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; height: 100%; width: 100%;">
-                    <img src="{% static 'images/loading-recommendations.gif' %}" alt="Loading..." style="width: 160px; height: 160px; margin-bottom: 10px;">
-                    <span>Loading recommendations...</span>
+    
+    <!-- Tabs -->
+    <div class="window-body" style="padding: 8px 8px 0 8px; background-color: var(--win98-gray);">
+        <div class="tabs-row">
+            <button class="tab-btn active" onclick="loadRecommendations('movies', this)" data-tab="movies">Movies</button>
+            <button class="tab-btn" onclick="loadRecommendations('tvshows', this)" data-tab="tvshows">TV Shows</button>
+            <button class="tab-btn" onclick="loadRecommendations('games', this)" data-tab="games">Games</button>
+        </div>
+    </div>
+
+    <div class="window-body" style="padding: 0 8px 8px 8px; background-color: var(--win98-gray);">
+        <div class="tab-content-container">
+            <div class="scrollable-row" id="recommendations_container">
+                <div class="poster-item" style="width: 100%; height: 200px;">
+                    <div class="poster-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; height: 100%; width: 100%;">
+                        <img src="{% static 'images/loading-recommendations.gif' %}" alt="Loading..." style="width: 160px; height: 160px; margin-bottom: 10px;">
+                        <span>Loading recommendations...</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     <div class="status-bar">
-        <div class="status-bar-field">Based on your ratings and preferences</div>
+        <div class="status-bar-field" id="rec_status_text">Based on your ratings across all media</div>
     </div>
 </div>
 
+<style>
+    .tabs-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+        margin-bottom: -2px; /* Overlap with content border */
+        position: relative;
+        z-index: 1;
+    }
+
+    .tab-btn {
+        flex: 1;
+        min-width: 80px;
+        padding: 4px 8px;
+        background: var(--win98-gray);
+        color: var(--win98-text);
+        border-top: 1.5px solid var(--win98-light);
+        border-left: 1.5px solid var(--win98-light);
+        border-right: 1.5px solid var(--win98-dark);
+        border-bottom: 1.5px solid var(--win98-dark);
+        border-radius: 4px 4px 0 0;
+        font-family: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        position: relative;
+        margin-top: 2px;
+    }
+
+    .tab-btn:active {
+        padding: 5px 7px 3px 9px; /* Shift text on click */
+    }
+
+    .tab-btn.active {
+        border-bottom: 1.5px solid var(--win98-gray); /* Blend with content */
+        margin-top: 0;
+        padding-bottom: 6px; /* Extend down */
+        padding-top: 6px;
+        z-index: 2;
+        font-weight: bold;
+    }
+
+    .tab-content-container {
+        border-top: 1.5px solid var(--win98-light);
+        border-left: 1.5px solid var(--win98-light);
+        border-right: 1.5px solid var(--win98-dark);
+        border-bottom: 1.5px solid var(--win98-dark);
+        background: var(--win98-gray);
+        padding: 8px;
+        box-shadow: 1px 1px 0 var(--win98-black); /* Outer shadow */
+        position: relative;
+        z-index: 0;
+    }
+
+    /* Mobile responsiveness */
+    @media (max-width: 600px) {
+        .tabs-row {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 0;
+            -webkit-overflow-scrolling: touch;
+            /* Hide scrollbar */
+            scrollbar-width: none; 
+            -ms-overflow-style: none;
+        }
+        .tabs-row::-webkit-scrollbar { 
+            display: none; 
+        }
+        
+        .tab-btn {
+            flex: 0 0 auto; /* Don't shrink */
+            min-width: auto;
+            padding: 4px 12px;
+        }
+    }
+</style>
+
 <script>
-    // Fetch movie recommendations
-    fetch('/movies/recommendations/')
-        .then(response => response.json())
-        .then(data => {
-            const movieList = document.getElementById('recommended_movies_block');
-            movieList.innerHTML = '';
-            if (data.length === 0) {
-                movieList.innerHTML = '<div class="poster-item"><div class="poster-card" style="padding: 20px; text-align: center; height: 120px; display: flex; align-items: center; justify-content: center;">No recommendations yet. Rate more movies to get personalized suggestions!</div></div>';
-                return;
-            }
-            data.slice(0, 15).forEach(movie => {
-                const movieItem = document.createElement('div');
-                movieItem.className = 'poster-item';
-                movieItem.innerHTML = `
-                    <div class="poster-card">
-                        <a href="/movies/${movie.tmdb_id}" style="text-decoration:none; color:inherit; display:block; height:100%;">
-                            <img src="${movie.poster || '{% static "images/no-poster.png" %}'}" 
-                                 alt="${movie.title}">
-                            <div class="info-overlay">
-                                <div class="title">${movie.title}</div>
-                                <div class="rating">${movie.rating}/10</div>
-                            </div>
-                        </a>
-                    </div>
-                `;
-                movieList.appendChild(movieItem);
+    // Cache for recommendations to avoid refetching
+    const recCache = {};
+
+    function loadRecommendations(type, btnElement) {
+        // Update tabs
+        if (btnElement) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+        }
+
+        const container = document.getElementById('recommendations_container');
+        const statusText = document.getElementById('rec_status_text');
+        
+        // Update status text
+        if (type === 'combined') statusText.textContent = 'Based on your ratings across all media';
+        else if (type === 'movies') statusText.textContent = 'Based on your movie ratings';
+        else if (type === 'tvshows') statusText.textContent = 'Based on your TV show ratings';
+        else if (type === 'games') statusText.textContent = 'Based on your game ratings';
+
+        // Check cache
+        if (recCache[type]) {
+            renderRecommendations(recCache[type], type);
+            return;
+        }
+
+        // Show loading
+        container.innerHTML = `
+            <div class="poster-item" style="width: 100%; height: 200px;">
+                <div class="poster-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; height: 100%; width: 100%;">
+                    <img src="{% static 'images/loading-recommendations.gif' %}" alt="Loading..." style="width: 160px; height: 160px; margin-bottom: 10px;">
+                    <span>Loading recommendations...</span>
+                </div>
+            </div>
+        `;
+
+        // Determine endpoint
+        let endpoint = '';
+        if (type === 'combined') endpoint = '/api/recommendations/combined/';
+        else if (type === 'movies') endpoint = '/movies/recommendations/';
+        else if (type === 'tvshows') endpoint = '/tvshows/recommendations/';
+        else if (type === 'games') endpoint = '/games/recommendations/';
+
+        fetch(endpoint)
+            .then(response => response.json())
+            .then(data => {
+                recCache[type] = data;
+                renderRecommendations(data, type);
+            })
+            .catch(error => {
+                console.error(`Error fetching ${type} recommendations:`, error);
+                container.innerHTML = '<div class="poster-item"><div class="poster-card" style="padding: 20px; text-align: center; height: 120px; display: flex; align-items: center; justify-content: center;">Failed to load recommendations.</div></div>';
             });
-        })
-        .catch(error => {
-            console.error('Error fetching movie recommendations:', error);
-            document.getElementById('recommended_movies_block').innerHTML = 
-                '<div class="poster-item"><div class="poster-card" style="padding: 20px; text-align: center; height: 120px; display: flex; align-items: center; justify-content: center;">Failed to load recommendations. Please try again later.</div></div>';
+    }
+
+    function renderRecommendations(data, type) {
+        const container = document.getElementById('recommendations_container');
+        container.innerHTML = '';
+
+        if (data.length === 0) {
+            container.innerHTML = '<div class="poster-item"><div class="poster-card" style="padding: 20px; text-align: center; height: 120px; display: flex; align-items: center; justify-content: center;">No recommendations yet. Rate more content to get personalized suggestions!</div></div>';
+            return;
+        }
+
+        data.slice(0, 15).forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'poster-item';
+            
+            let url = '';
+            let poster = item.poster;
+            let title = item.title;
+            let rating = item.rating;
+            let mediaTypeLabel = '';
+
+            if (type === 'combined') {
+                url = item.url;
+                // Add media type badge for combined view
+                if (item.media_type === 'movies') mediaTypeLabel = '🎬 Movie';
+                else if (item.media_type === 'tvshows') mediaTypeLabel = '📺 TV';
+                else if (item.media_type === 'games') mediaTypeLabel = '🎮 Game';
+            } else if (type === 'movies') {
+                url = `/movies/${item.tmdb_id}/`;
+            } else if (type === 'tvshows') {
+                url = `/tvshows/${item.tmdb_id}/`;
+            } else if (type === 'games') {
+                url = `/games/${item.id}/`;
+            }
+
+            // Fallback poster
+            if (!poster) poster = '{% static "images/no-poster.png" %}';
+
+            el.innerHTML = `
+                <div class="poster-card">
+                    <a href="${url}" style="text-decoration:none; color:inherit; display:block; height:100%;">
+                        <img src="${poster}" alt="${title}">
+                        <div class="info-overlay">
+                            <div class="title">${title}</div>
+                            <div class="rating">
+                                ${rating ? rating + '/10' : 'N/A'}
+                                ${mediaTypeLabel ? `<br><span style="font-size:0.8em; opacity:0.8">${mediaTypeLabel}</span>` : ''}
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            `;
+            container.appendChild(el);
         });
+    }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+        loadRecommendations('movies', document.querySelector('.tab-btn[data-tab="movies"]'));
+    });
 </script>

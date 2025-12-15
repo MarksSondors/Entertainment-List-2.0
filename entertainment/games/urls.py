@@ -16,6 +16,7 @@ urlpatterns = [
     path('collection/<int:pk>/', views.collection_detail, name='game_collection_detail'),
     
     # API endpoints
+    path('recommendations/', views.game_recommendations, name='game_recommendations'),
     path('search/', RAWGSearchView.as_view(), name='rawg_search'),
     path('screenshots/', GameScreenshotsView.as_view(), name='game_screenshots'),
     path('backdrops/', GameBackdropsView.as_view(), name='game_backdrops'),

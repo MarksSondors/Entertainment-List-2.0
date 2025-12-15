@@ -11,6 +11,7 @@ urlpatterns = [
     path('<int:show_id>/', views.tv_show_page, name='tv_show_page'),
     
     # API endpoints
+    path('recommendations/', views.tv_show_recommendations, name='tv_show_recommendations'),
     path('search/', TMDBTVSearchView.as_view(), name='tmdb_tv_search'),
     path('popular/', cache_page(60*60)(PopularTVShowsView.as_view()), name='popular_tv_shows'),
     path('images/', views.TVShowImagesView.as_view(), name='tv_show_images'),

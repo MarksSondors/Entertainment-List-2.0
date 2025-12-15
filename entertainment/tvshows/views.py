@@ -22,6 +22,8 @@ from custom_auth.models import Watchlist, Genre, Review
 from .tasks import create_tvshow_async
 
 from django.db.models import Prefetch, Count, Q, OuterRef, Subquery, F
+from rest_framework.decorators import api_view, permission_classes
+from .services.recommendation import TVShowRecommender
 
 # Create your views here.
 
@@ -1175,3 +1177,26 @@ class TVShowReviewView(APIView):
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def tv_show_recommendations(request):
+    """Get personalized TV show recommendations for the current user"""
+    limit = int(request.GET.get('limit', 10))
+    recommender = TVShowRecommender()
+    recommendations = recommender.get_recommendations_for_user(request.user.id, limit)
+    
+    # Format the response data
+    data = []
+    for show, score in recommendations:
+        data.append({
+            'id': show.id,
+            'tmdb_id': show.tmdb_id,
+            'title': show.title,
+            'poster': show.poster,
+            'first_air_date': show.first_air_date,
+            'rating': show.rating,
+            'score': score
+        })
+    
+    return Response(data)

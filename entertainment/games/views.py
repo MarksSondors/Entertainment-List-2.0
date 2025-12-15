@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
@@ -18,6 +19,7 @@ from .models import Game, GameGenre, Platform, GameDeveloper, GamePublisher, Gam
 from custom_auth.models import Review, Watchlist, Keyword
 from api.services.games import GamesService
 from api.services.steamgriddb import SteamGridDBService
+from .services.recommendation import GameRecommender
 
 User = get_user_model()
 
@@ -847,3 +849,27 @@ def collection_detail(request, pk):
         game.user_rating = review_map.get(game.id)
         
     return render(request, 'games/collection_detail.html', {'collection': collection, 'games': games})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def game_recommendations(request):
+    """Get personalized game recommendations for the current user"""
+    limit = int(request.GET.get('limit', 10))
+    recommender = GameRecommender()
+    recommendations = recommender.get_recommendations_for_user(request.user.id, limit)
+    
+    # Format the response data
+    data = []
+    for game, score in recommendations:
+        data.append({
+            'id': game.id,
+            'rawg_id': game.rawg_id,
+            'title': game.title,
+            'poster': game.poster,
+            'release_date': game.release_date,
+            'rating': game.rating * 2 if game.rating else None,
+            'score': score
+        })
+    
+    return Response(data)
+
