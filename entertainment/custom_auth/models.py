@@ -372,3 +372,23 @@ def send_review_notification(sender, instance, created, **kwargs):
     if created:
         from django_q.tasks import async_task
         async_task('custom_auth.tasks.process_review_notification', instance.id)
+
+
+class Meme(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='memes')
+    tiktok_url = models.URLField(help_text="Paste the full TikTok video URL here")
+    video_id = models.CharField(max_length=50)
+    caption = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Link to Media (Movie, TVShow, etc.)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    media = GenericForeignKey('content_type', 'object_id')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Meme by {self.user.username} ({self.video_id})"

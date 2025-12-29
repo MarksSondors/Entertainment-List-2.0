@@ -50,6 +50,15 @@
     padding: 20px;
 }
 
+/* Force dark background on TikTok embeds */
+iframe[src*="tiktok.com"] {
+    background-color: #000 !important;
+    border: none !important;
+}
+.tiktok-embed {
+    background-color: #000 !important;
+}
+
 /* Backdrop overlay */
 .backdrop-overlay {
     position: fixed;
@@ -712,6 +721,59 @@
             </div>
         </div>
     </div>
+
+    <!-- Memes Section -->
+    <div class="window" style="margin-top: 20px;">
+        <div class="title-bar">
+            <div class="title-bar-text">Memes & TikToks</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            {% if memes %}
+                <div class="meme-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+                    {% for meme in memes %}
+                        <div class="meme-item" style="background: var(--window-bg); border: 2px solid var(--border-light); border-right-color: var(--border-dark); border-bottom-color: var(--border-dark); padding: 2px;">
+                            <div class="title-bar" style="margin-bottom: 5px; background: navy; height: 20px; min-height: 20px;">
+                                <div class="title-bar-text" style="font-size: 12px;">@{{ meme.user.username }}</div>
+                            </div>
+                            <div style="display: flex; justify-content: center; background: #000; overflow: hidden; color-scheme: dark;">
+                                <blockquote 
+                                    class="tiktok-embed" 
+                                    cite="{{ meme.tiktok_url }}" 
+                                    data-video-id="{{ meme.video_id }}" 
+                                    data-theme="dark"
+                                    style="max-width: 100%; min-width: 300px; margin: 0; background-color: black; color: white;" 
+                                > 
+                                    <section> 
+                                        <a target="_blank" title="@{{ meme.user.username }}" href="https://www.tiktok.com/@{{ meme.user.username }}?refer=embed" style="color: white;">@{{ meme.user.username }}</a> 
+                                    </section> 
+                                </blockquote> 
+                            </div>
+                            {% if meme.caption %}
+                                <div style="padding: 5px; font-size: 12px;">{{ meme.caption }}</div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+                <script async src="https://www.tiktok.com/embed.js"></script>
+            {% else %}
+                <p style="text-align: center; padding: 20px;">No memes yet. Be the first to add one!</p>
+            {% endif %}
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">{{ memes|length }} Meme{{ memes|length|pluralize }}</div>
+            <div class="status-bar-field">
+                <a href="{% url 'add_meme' content_type_id=content_type_id object_id=movie.id %}" class="retro-btn" style="text-decoration: none; font-size: 12px; padding: 2px 8px;">
+                    Add TikTok Meme
+                </a>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- Review Detail Modal -->
@@ -1221,5 +1283,5 @@
     }
 </script>
 
-<!-- ... rest of your HTML ... -->
+
 {% endblock %}

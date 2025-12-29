@@ -3492,3 +3492,35 @@ def combined_recommendations(request):
     
     # The feed items are already normalized by the service
     return Response(feed_items)
+
+from .forms import MemeForm
+from django.contrib import messages
+
+@login_required
+def add_meme(request, content_type_id, object_id):
+    content_type = get_object_or_404(ContentType, id=content_type_id)
+    model_class = content_type.model_class()
+    obj = get_object_or_404(model_class, id=object_id)
+    
+    if request.method == 'POST':
+        form = MemeForm(request.POST)
+        if form.is_valid():
+            meme = form.save(commit=False)
+            meme.user = request.user
+            meme.content_type = content_type
+            meme.object_id = object_id
+            meme.save()
+            messages.success(request, "Meme added successfully!")
+            
+            # Redirect logic
+            if content_type.model == 'movie':
+                return redirect('movie_page', movie_id=obj.tmdb_id)
+            elif content_type.model == 'tvshow':
+                return redirect('tv_show_page', tv_show_id=obj.tmdb_id)
+            # Add other models as needed
+            
+            return redirect('/')
+    else:
+        form = MemeForm()
+
+    return render(request, 'custom_auth/add_meme.html', {'form': form, 'object': obj})
