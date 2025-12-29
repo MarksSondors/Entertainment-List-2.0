@@ -1,0 +1,113 @@
+{% extends "components/base.html" %}
+
+{% block content %}
+<style>
+/* Theme-adaptive CSS variables */
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --progress-bg: #fff;
+    --progress-bar: #008080;
+    --shadow-color: rgba(0,0,0,0.25);
+    --poster-border: #a0a0a0;
+    --backdrop-overlay: rgba(192, 192, 192, 0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --progress-bg: #2a2a2a;
+        --progress-bar: #00a0a0;
+        --shadow-color: rgba(0,0,0,0.5);
+        --poster-border: #606060;
+        --backdrop-overlay: rgba(56, 56, 56, 0.9);
+    }
+}
+
+/* Apply variables to window elements */
+.window {
+    background-color: var(--window-bg) !important;
+    color: var(--text-color) !important;
+}
+
+.window-body {
+    color: var(--text-color) !important;
+}
+
+button {
+    background-color: var(--button-bg) !important;
+    color: var(--button-text) !important;
+}
+
+input[type="text"], input[type="url"] {
+    background-color: var(--progress-bg) !important;
+    color: var(--text-color) !important;
+    border: 2px inset var(--border-dark) !important;
+}
+
+input::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 1;
+}
+</style>
+
+<div class="window" style="max-width: 500px; margin: 50px auto;">
+    <div class="title-bar">
+        <div class="title-bar-text">Add TikTok Meme</div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize"></button>
+            <button aria-label="Maximize"></button>
+            <button aria-label="Close"></button>
+        </div>
+    </div>
+    <div class="window-body">
+        <p>Paste a TikTok video URL to add it to this page.</p>
+        
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="field-row-stacked" style="margin-bottom: 15px;">
+                <label for="{{ form.tiktok_url.id_for_label }}">TikTok URL:</label>
+                {{ form.tiktok_url }}
+                {% if form.tiktok_url.help_text %}
+                    <div style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">{{ form.tiktok_url.help_text }}</div>
+                {% endif %}
+                {% if form.tiktok_url.errors %}
+                    <div style="color: red; font-size: 12px;">{{ form.tiktok_url.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="field-row-stacked" style="margin-bottom: 15px;">
+                <label for="{{ form.caption.id_for_label }}">Caption (Optional):</label>
+                {{ form.caption }}
+                {% if form.caption.help_text %}
+                    <div style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">{{ form.caption.help_text }}</div>
+                {% endif %}
+                {% if form.caption.errors %}
+                    <div style="color: red; font-size: 12px;">{{ form.caption.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button type="button" onclick="history.back()" style="min-width: 80px;">Cancel</button>
+                <button type="submit" style="min-width: 80px; font-weight: bold;">Add Meme</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -57,4 +57,7 @@ urlpatterns = [    # discover page
 
     path('production_companies/<int:company_id>/', views.production_company_detail, name='production_company_detail'),
 
+    # memes
+    path('memes/add/<int:content_type_id>/<int:object_id>/', views.add_meme, name='add_meme'),
+
 ]

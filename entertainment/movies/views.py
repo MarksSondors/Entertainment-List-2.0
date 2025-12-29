@@ -94,6 +94,13 @@ def movie_page(request, movie_id):
     if user_avg_rating is not None:
         user_avg_rating = round(user_avg_rating, 1)
     
+    # Fetch memes
+    from custom_auth.models import Meme
+    memes = Meme.objects.filter(
+        content_type=content_type,
+        object_id=movie_db.id
+    )
+
     context = {
         'movie': movie_db,
         'user_watchlist': user_watchlist,
@@ -101,6 +108,8 @@ def movie_page(request, movie_id):
         'watchlist_users': watchlist_users,
         'user_avg_rating': user_avg_rating,
         'user_rating_count': user_rating_count,
+        'memes': memes,
+        'content_type_id': content_type.id,
     }
     return render(request, 'movie_page.html', context)
 
