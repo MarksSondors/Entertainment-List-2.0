@@ -188,7 +188,7 @@ def import_imdb_data(user_id, items):
                     if movie_results:
                         tmdb_id = movie_results[0]['id']
                         # Create Movie
-                        media_object = create_movie_fast(tmdb_id, user_id=None, add_to_watchlist=False)
+                        media_object = create_movie_fast(tmdb_id, user_id=user.id, add_to_watchlist=False)
                     else:
                         logger.warning(f"Could not find movie for IMDb ID {imdb_id}")
                         failed_count += 1
