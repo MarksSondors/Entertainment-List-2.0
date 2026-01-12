@@ -120,3 +120,155 @@ def process_review_notification(review_id):
     
     logger.info(f"Review notification complete: {result}")
     return result
+
+
+def import_imdb_data(user_id, items):
+    """
+    Background task to import IMDb data (fetch new items + create reviews/watchlist).
+    
+    Args:
+        user_id: ID of the user
+        items: List of dictionaries with keys:
+               - imdb_id
+               - type ('movie' or 'tv')
+               - rating (optional)
+               - watchlist (boolean, optional - implied if not rating)
+    """
+    from django.contrib.auth import get_user_model
+    from movies.models import Movie
+    from tvshows.models import TVShow
+    from custom_auth.models import Review, Watchlist
+    from api.services.movies import MoviesService
+    from django.contrib.contenttypes.models import ContentType
+    
+    # We need to import create functions here to avoid circular imports if they assume models are ready
+    from movies.tasks import create_movie_fast
+    
+    logger.info(f"Starting IMDb import for user {user_id} with {len(items)} items")
+    
+    User = get_user_model()
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        logger.error(f"User {user_id} not found for IMDb import")
+        return
+
+    movie_service = MoviesService()
+    movie_ct = ContentType.objects.get_for_model(Movie)
+    tv_ct = ContentType.objects.get_for_model(TVShow)
+    
+    success_count = 0
+    failed_count = 0
+    
+    for item in items:
+        imdb_id = item.get('imdb_id')
+        media_type = item.get('type') # 'movie' or 'tv'
+        rating = item.get('rating')
+        is_watchlist = item.get('watchlist', False)
+        
+        if not imdb_id:
+            continue
+            
+        try:
+            # 1. Resolve IMDb ID -> TMDB ID if needed
+            tmdb_id = None
+            media_object = None
+            ct = None
+            
+            if media_type == 'movie':
+                ct = movie_ct
+                # Check if exists locally first
+                media_object = Movie.objects.filter(imdb_id=imdb_id).first()
+                
+                if not media_object:
+                    # Fetch TMDB ID
+                    # Use _get directly to avoid potential worker reload issues with new methods
+                    results = movie_service._get(f'find/{imdb_id}', params={'external_source': 'imdb_id'})
+                    movie_results = results.get('movie_results', []) if results else []
+                    if movie_results:
+                        tmdb_id = movie_results[0]['id']
+                        # Create Movie
+                        media_object = create_movie_fast(tmdb_id, user_id=None, add_to_watchlist=False)
+                    else:
+                        logger.warning(f"Could not find movie for IMDb ID {imdb_id}")
+                        failed_count += 1
+                        continue
+            
+            elif media_type == 'tv':
+                ct = tv_ct
+                # Check if exists locally
+                media_object = TVShow.objects.filter(imdb_id=imdb_id).first()
+                
+                if not media_object:
+                    # Fetch TMDB ID
+                    # Use _get directly to avoid potential worker reload issues with new methods
+                    results = movie_service._get(f'find/{imdb_id}', params={'external_source': 'imdb_id'})
+                    tv_results = results.get('tv_results', []) if results else []
+                    
+                    if tv_results:
+                        tmdb_id = tv_results[0]['id']
+                        # Try to create TV Show inline using logic similar to tasks
+                        # Since we can't easily import 'create_tvshow' if it doesn't exist plainly,
+                        # We will use create_tvshow_async but wait? No, that's bad.
+                        # Let's trust that 'from tvshows.parsers import create_tvshow' works as implied by tvshows/tasks.py
+                        try:
+                            from tvshows.parsers import create_tvshow
+                            media_object = create_tvshow(tmdb_id, user=user) 
+                        except ImportError:
+                             # Fallback if parsers doesn't have it (maybe it's in views?) 
+                             # But tvshows/views.py imports it from .parsers
+                             logger.error("Could not import create_tvshow from tvshows.parsers")
+                             failed_count += 1
+                             continue
+                    else:
+                        logger.warning(f"Could not find TV show for IMDb ID {imdb_id}")
+                        failed_count += 1
+                        continue
+
+            if not media_object:
+                failed_count += 1
+                continue
+
+            # 2. Add Rating (Review)
+            if rating:
+                # Force strictly no watchlist if rated
+                is_watchlist = False 
+                
+                # Only if Review doesn't exist
+                if not Review.objects.filter(user=user, content_type=ct, object_id=media_object.id).exists():
+                    review = Review.objects.create(
+                        user=user,
+                        content_type=ct,
+                        object_id=media_object.id,
+                        rating=rating,
+                        review_text="Imported from IMDb"
+                    )
+                    if item.get('date'):
+                        review.date_added = item['date']
+                        review.save(update_fields=['date_added'])
+
+            # 3. Add to Watchlist
+            if is_watchlist:
+                 watchlist_item, created = Watchlist.objects.get_or_create(
+                    user=user,
+                    content_type=ct,
+                    object_id=media_object.id
+                )
+                 if item.get('date'):
+                    watchlist_item.date_added = item['date']
+                    watchlist_item.save(update_fields=['date_added'])
+            
+            success_count += 1
+            
+        except Exception as e:
+            logger.error(f"Error processing IMDb import item {imdb_id}: {e}")
+            failed_count += 1
+
+    from notifications.utils import send_notification_to_user
+    send_notification_to_user(
+        user_id=user_id,
+        title="IMDb Import Complete",
+        body=f"Processed {len(items)} items. Success: {success_count}, Failed: {failed_count}",
+        notification_type="system"
+    )
+

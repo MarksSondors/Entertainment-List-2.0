@@ -1,0 +1,196 @@
+{% extends 'components/base.html' %}
+
+{% block title %}Preview Import | Entertainment List{% endblock %}
+
+{% block content %}
+<style>
+    /* Styling consistent with Settings page */
+    .window {
+        background-color: var(--win98-gray);
+        box-shadow: 1px 1px 0 var(--win98-black); 
+    }
+    
+    .title-bar {
+        background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+    }
+    
+    .window-body {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        padding: 15px;
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+    }
+    
+    .sunken-panel {
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        background-color: var(--win98-input-bg);
+        color: var(--win98-text);
+        padding: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .btn {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+        text-align: center;
+        min-width: 75px;
+        padding: 4px 12px;
+        border-top: 1px solid var(--win98-light);
+        border-left: 1px solid var(--win98-light);
+        border-right: 1px solid var(--win98-black);
+        border-bottom: 1px solid var(--win98-black);
+        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+    }
+    
+    .btn:active {
+        border-top: 1px solid var(--win98-black);
+        border-left: 1px solid var(--win98-black);
+        border-right: 1px solid var(--win98-light);
+        border-bottom: 1px solid var(--win98-light);
+        box-shadow: inset 1px 1px 0 var(--win98-dark);
+        padding-top: 5px;
+        padding-left: 13px;
+    }
+
+    fieldset {
+        border: 2px solid;
+        border-color: var(--win98-light) var(--win98-dark) var(--win98-dark) var(--win98-light);
+        color: var(--win98-text);
+        padding: 10px;
+        margin-bottom: 15px;
+    }
+
+    legend {
+        color: var(--win98-text);
+        padding: 0 4px;
+    }
+    
+    ul, li, span, h4, summary {
+        color: var(--win98-text);
+    }
+    
+    details {
+        margin-top: 8px;
+    }
+    
+    summary:focus {
+        outline: 1px dotted var(--win98-black);
+    }
+</style>
+
+<div class="container py-4">
+    <div class="window" style="max-width: 800px; margin: 0 auto;">
+        <div class="title-bar">
+            <div class="title-bar-text">Import Preview</div>
+        </div>
+        <div class="window-body">
+            <h4 style="margin-top: 0;">Import Summary</h4>
+            
+            {% if ratings %}
+            <fieldset style="margin-bottom: 15px;">
+                <legend>Ratings Import</legend>
+                <div class="field-row">
+                    <span>✅ Ready to import: <strong>{{ ratings.imported|length }}</strong></span>
+                </div>
+                <div class="field-row">
+                    <span>📥 To be fetched (New): <strong>{{ ratings.to_fetch|length }}</strong></span>
+                </div>
+                <div class="field-row">
+                    <span>⚠️ Conflicts (Skipped): <strong>{{ ratings.conflicts|length }}</strong></span>
+                </div>
+                <div class="field-row">
+                    <span>⏭️ Skipped (TV/Exists): <strong>{{ ratings.skipped|length }}</strong></span>
+                </div>
+
+                {% if ratings.conflicts %}
+                <details>
+                    <summary>View Conflicts (Rating Mismatch)</summary>
+                    <ul style="max-height: 150px; overflow-y: auto;">
+                        {% for item in ratings.conflicts %}
+                        <li>{{ item.title }} (Local: {{ item.local_rating }}, IMDb: {{ item.imdb_rating }})</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+
+                {% if ratings.to_fetch %}
+                <details>
+                    <summary>View Items to Fetch ({{ ratings.to_fetch|length }})</summary>
+                    <ul style="max-height: 150px; overflow-y: auto;">
+                        {% for item in ratings.to_fetch %}
+                        <li>{{ item.title }} (Rating: {{ item.rating }})</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+
+                {% if ratings.imported %}
+                <details>
+                    <summary>View Ready to Import ({{ ratings.imported|length }})</summary>
+                    <ul style="max-height: 150px; overflow-y: auto;">
+                        {% for item in ratings.imported %}
+                        <li>{{ item.title }} (Rating: {{ item.rating }})</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+            </fieldset>
+            {% endif %}
+
+            {% if watchlist %}
+            <fieldset style="margin-bottom: 15px;">
+                <legend>Watchlist Import</legend>
+                <div class="field-row">
+                    <span>✅ Ready to import: <strong>{{ watchlist.imported|length }}</strong></span>
+                </div>
+                <div class="field-row">
+                    <span>📥 To be fetched (New): <strong>{{ watchlist.to_fetch|length }}</strong></span>
+                </div>
+                <div class="field-row">
+                    <span>⏭️ Skipped (Existing): <strong>{{ watchlist.skipped|length }}</strong></span>
+                </div>
+
+                {% if watchlist.to_fetch %}
+                <details>
+                    <summary>View Items to Fetch ({{ watchlist.to_fetch|length }})</summary>
+                    <ul style="max-height: 150px; overflow-y: auto;">
+                        {% for item in watchlist.to_fetch %}
+                        <li>{{ item.title }} ({{ item.type|title }})</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+
+                {% if watchlist.imported %}
+                <details>
+                    <summary>View Ready to Import ({{ watchlist.imported|length }})</summary>
+                    <ul style="max-height: 150px; overflow-y: auto;">
+                        {% for item in watchlist.imported %}
+                        <li>{{ item.title }} ({{ item.type|title }})</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+            </fieldset>
+            {% endif %}
+
+            <div class="status-bar" style="margin-top: 15px;">
+                <p class="status-bar-field">New items will be fetched in the background. This may take a while.</p>
+            </div>
+
+            <form method="post" action="{% url 'imdb_import_confirm' %}">
+                {% csrf_token %}
+                <div class="field-row" style="justify-content: flex-end; margin-top: 20px;">
+                    <a href="{% url 'imdb_import_page' %}" class="btn" style="margin-right: 10px; text-decoration: none; display: inline-block; padding: 3px 6px;">Back / Upload Again</a>
+                    <button type="submit" class="btn" {% if not ratings.imported and not watchlist.imported and not ratings.to_fetch and not watchlist.to_fetch %}disabled{% endif %}>Confirm Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

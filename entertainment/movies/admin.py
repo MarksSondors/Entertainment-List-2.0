@@ -1,6 +1,7 @@
 from django.contrib import admin
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 from django.contrib.contenttypes.models import ContentType
+from django.urls import reverse
 
 from .models import *
 
@@ -82,19 +83,25 @@ class MovieAdmin(admin.ModelAdmin):
         for mp in media_persons:
             by_role[mp.role].append(mp)
         
-        html = ""
+        parts = []
         for role, people in by_role.items():
-            html += f"<strong>{role}:</strong><br>"
+            parts.append(format_html("<strong>{}:</strong><br>", role))
             for mp in people[:10]:  # Max 10 per role
+                try:
+                    url = reverse('admin:custom_auth_person_change', args=[mp.person.id])
+                    person_link = format_html('<a href="{}">{}</a>', url, mp.person.name)
+                except Exception:
+                    person_link = format_html('{}', mp.person.name)
+
                 if mp.character_name:
-                    html += f"&nbsp;&nbsp;• {mp.person.name} as {mp.character_name}<br>"
+                    parts.append(format_html("&nbsp;&nbsp;• {} as {}<br>", person_link, mp.character_name))
                 else:
-                    html += f"&nbsp;&nbsp;• {mp.person.name}<br>"
+                    parts.append(format_html("&nbsp;&nbsp;• {}<br>", person_link))
             if len(people) > 10:
-                html += f"&nbsp;&nbsp;<em>... and {len(people) - 10} more</em><br>"
-            html += "<br>"
+                parts.append(format_html("&nbsp;&nbsp;<em>... and {} more</em><br>", len(people) - 10))
+            parts.append(mark_safe("<br>"))
         
-        return format_html(html)
+        return mark_safe("".join(parts))
     display_cast_crew.short_description = "Cast & Crew"
 
 admin.site.register(Movie, MovieAdmin)
