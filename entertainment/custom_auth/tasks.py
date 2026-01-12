@@ -207,19 +207,28 @@ def import_imdb_data(user_id, items):
                     
                     if tv_results:
                         tmdb_id = tv_results[0]['id']
-                        # Try to create TV Show inline using logic similar to tasks
-                        # Since we can't easily import 'create_tvshow' if it doesn't exist plainly,
-                        # We will use create_tvshow_async but wait? No, that's bad.
-                        # Let's trust that 'from tvshows.parsers import create_tvshow' works as implied by tvshows/tasks.py
-                        try:
-                            from tvshows.parsers import create_tvshow
-                            media_object = create_tvshow(tmdb_id, user=user) 
-                        except ImportError:
-                             # Fallback if parsers doesn't have it (maybe it's in views?) 
-                             # But tvshows/views.py imports it from .parsers
-                             logger.error("Could not import create_tvshow from tvshows.parsers")
-                             failed_count += 1
-                             continue
+                        
+                        # Check if TV Show already exists by TMDb ID
+                        media_object = TVShow.objects.filter(tmdb_id=tmdb_id).first()
+                        
+                        if media_object:
+                            # Update IMDb ID if missing
+                            if not media_object.imdb_id:
+                                media_object.imdb_id = imdb_id
+                                media_object.save(update_fields=['imdb_id'])
+                        else:
+                            # Try to create TV Show inline using logic similar to tasks
+                            try:
+                                from tvshows.parsers import create_tvshow
+                                media_object = create_tvshow(tmdb_id, user_id=user.id, add_to_watchlist=False)
+                            except ImportError:
+                                logger.error("Could not import create_tvshow from tvshows.parsers")
+                                failed_count += 1
+                                continue
+                            except Exception as e:
+                                logger.error(f"Error creating TV Show {tmdb_id}: {e}")
+                                failed_count += 1
+                                continue
                     else:
                         logger.warning(f"Could not find TV show for IMDb ID {imdb_id}")
                         failed_count += 1

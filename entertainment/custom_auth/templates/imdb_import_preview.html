@@ -118,6 +118,17 @@
                 </details>
                 {% endif %}
 
+                {% if ratings.skipped %}
+                <details>
+                    <summary>View Skipped Items ({{ ratings.skipped|length }})</summary>
+                    <ul style="max-height: 150px; overflow-y: auto;">
+                        {% for item in ratings.skipped %}
+                        <li>{{ item.title }} ({{ item.reason }})</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+
                 {% if ratings.to_fetch %}
                 <details>
                     <summary>View Items to Fetch ({{ ratings.to_fetch|length }})</summary>
@@ -154,6 +165,17 @@
                 <div class="field-row">
                     <span>⏭️ Skipped (Existing): <strong>{{ watchlist.skipped|length }}</strong></span>
                 </div>
+
+                {% if watchlist.skipped %}
+                <details>
+                    <summary>View Skipped Items ({{ watchlist.skipped|length }})</summary>
+                    <ul style="max-height: 150px; overflow-y: auto;">
+                        {% for item in watchlist.skipped %}
+                        <li>{{ item.title }} ({{ item.reason }})</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
 
                 {% if watchlist.to_fetch %}
                 <details>

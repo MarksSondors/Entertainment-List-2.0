@@ -54,7 +54,8 @@ class ImdbImporter:
             review_date = row[date_column] if date_column else None
 
             # Ignore TV show RATINGS as per requirement
-            if title_type not in ['movie', 'tvmovie', 'video', 'short']:
+            # Updated to include space variants
+            if title_type not in ['movie', 'tvmovie', 'video', 'short', 'tv movie']:
                 results['skipped'].append({
                     'title': title,
                     'reason': f'Ignored type: {title_type}'
@@ -133,11 +134,11 @@ class ImdbImporter:
             ct = None
             media_type = None
             
-            if title_type in ['movie', 'tvmovie', 'video', 'short']:
+            if title_type in ['movie', 'tvmovie', 'video', 'short', 'tv movie']:
                 content_object = Movie.objects.filter(imdb_id=imdb_id).first()
                 ct = self.movie_ct
                 media_type = 'movie'
-            elif title_type in ['tvseries', 'tvminiseries', 'tvspecial']:
+            elif title_type in ['tvseries', 'tvminiseries', 'tvspecial', 'tv series', 'tv mini series', 'tv special']:
                 content_object = TVShow.objects.filter(imdb_id=imdb_id).first()
                 ct = self.tv_ct
                 media_type = 'tv'
