@@ -90,14 +90,16 @@ class MoviesService(BaseService):
         """Get all movie credits for a person"""
         return self._get(f'person/{person_id}/movie_credits')
     
+    def find_by_external_id(self, external_id, source="imdb_id"):
+        """Find media by external ID (IMDb, TVDB, etc.)"""
+        return self._get(f'find/{external_id}', params={'external_source': source})
+
     def get_movie_details_with_imdb_id(self, imdb_id):
-        # First, search for the movie using the IMDb ID
-        # Use the find endpoint with the IMDB ID
-        search_results = self._get(f'find/{imdb_id}', params={'external_source': 'imdb_id'})
+        """Get movie details using IMDb ID"""
+        search_results = self.find_by_external_id(imdb_id)
         
-        # Check if any results were found
-        if search_results and 'results' in search_results and len(search_results['results']) > 0:
-            movie_id = search_results['results'][0]['id']
+        if search_results and search_results.get('movie_results'):
+            movie_id = search_results['movie_results'][0]['id']
             return self.get_movie_details(movie_id)
         
         return None

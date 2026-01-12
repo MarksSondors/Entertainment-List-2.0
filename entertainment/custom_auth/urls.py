@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import views_imdb
 
 urlpatterns = [    # discover page
     path('discover/', views.discover_page, name='discover_page'),
@@ -27,6 +28,9 @@ urlpatterns = [    # discover page
     path('profile/', views.profile_page, name='profile_page'),
     path('profile/<str:username>/', views.profile_page, name='profile_with_username'),
     path('settings/', views.settings_page, name='settings_page'),
+    path('settings/import/imdb/', views_imdb.imdb_import_page, name='imdb_import_page'),
+    path('settings/import/imdb/preview/', views_imdb.imdb_import_preview, name='imdb_import_preview'),
+    path('settings/import/imdb/confirm/', views_imdb.imdb_import_confirm, name='imdb_import_confirm'),
     path('settings/stremio/', views.stremio_addon_page, name='stremio_addon_page'),
 
     # watchlist

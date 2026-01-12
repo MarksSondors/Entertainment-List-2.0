@@ -1,0 +1,126 @@
+{% extends 'components/base.html' %}
+
+{% block title %}Import IMDb Data | Entertainment List{% endblock %}
+
+{% block content %}
+<style>
+    /* Styling consistent with Settings page */
+    .window {
+        background-color: var(--win98-gray);
+        box-shadow: 1px 1px 0 var(--win98-black); 
+    }
+    
+    .title-bar {
+        background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+    }
+    
+    .window-body {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        padding: 15px;
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+    }
+    
+    .sunken-panel {
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        background-color: var(--win98-input-bg);
+        color: var(--win98-text);
+        padding: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .btn {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+        text-align: center;
+        min-width: 75px;
+        padding: 4px 12px;
+        border-top: 1px solid var(--win98-light);
+        border-left: 1px solid var(--win98-light);
+        border-right: 1px solid var(--win98-black);
+        border-bottom: 1px solid var(--win98-black);
+        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+    }
+    
+    .btn:active {
+        border-top: 1px solid var(--win98-black);
+        border-left: 1px solid var(--win98-black);
+        border-right: 1px solid var(--win98-light);
+        border-bottom: 1px solid var(--win98-light);
+        box-shadow: inset 1px 1px 0 var(--win98-dark);
+        padding-top: 5px;
+        padding-left: 13px;
+    }
+
+    input[type="file"] {
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+        width: 100%;
+        color: var(--win98-text);
+    }
+    
+    /* Message styling adapted for themes */
+    .msg-error { background-color: rgba(255, 0, 0, 0.15); border: 1px solid rgba(255, 0, 0, 0.3); }
+    .msg-warning { background-color: rgba(255, 255, 0, 0.15); border: 1px solid rgba(255, 255, 0, 0.3); }
+    .msg-success { background-color: rgba(0, 255, 0, 0.15); border: 1px solid rgba(0, 255, 0, 0.3); }
+
+    ul, li, p, label, small {
+        color: var(--win98-text);
+    }
+</style>
+
+<div class="container py-4">
+    <div class="window" style="max-width: 600px; margin: 0 auto;">
+        <div class="title-bar">
+            <div class="title-bar-text">Import IMDb Data</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" onclick="window.history.back()"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            {% if messages %}
+                {% for message in messages %}
+                <div class="sunken-panel {% if 'error' in message.tags %}msg-error{% elif 'warning' in message.tags %}msg-warning{% elif 'success' in message.tags %}msg-success{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            <p>Upload your IMDb export files (.csv) to import your ratings and watchlist.</p>
+            <p style="font-size: 12px; opacity: 0.8;">
+                Note: 
+                <ul>
+                    <li>Only Movie ratings will be imported. TV Show ratings are ignored.</li>
+                    <li>If you have already rated a movie locally and the rating differs from IMDb, the import for that movie will be skipped (conflict).</li>
+                </ul>
+            </p>
+
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="field-row-stacked" style="margin-bottom: 15px;">
+                    <label for="{{ form.ratings_file.id_for_label }}">{{ form.ratings_file.label }}</label>
+                    {{ form.ratings_file }}
+                    <small style="opacity: 0.7;">{{ form.ratings_file.help_text }}</small>
+                </div>
+
+                <div class="field-row-stacked" style="margin-bottom: 15px;">
+                    <label for="{{ form.watchlist_file.id_for_label }}">{{ form.watchlist_file.label }}</label>
+                    {{ form.watchlist_file }}
+                    <small style="opacity: 0.7;">{{ form.watchlist_file.help_text }}</small>
+                </div>
+                
+                <div class="field-row" style="justify-content: flex-end; margin-top: 20px;">
+                    <button type="button" class="btn" onclick="window.history.back()" style="margin-right: 10px;">Cancel</button>
+                    <button type="submit" class="btn">Parse & Preview</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

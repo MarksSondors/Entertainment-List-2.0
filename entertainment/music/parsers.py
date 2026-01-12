@@ -131,17 +131,23 @@ def create_album_from_musicbrainz(musicbrainz_id):
                                 try:
                                     tvshow = tvshow.objects.get(imdb_id=imdb_id)
                                 except tvshow.DoesNotExist:
-                                    # get_movie_details_with_imdb_id
+                                    # Use find_by_external_id to get correct media type
                                     movie_service = MoviesService()
-                                    movie = movie_service.get_movie_details_with_imdb_id(imdb_id)
-                                    if movie:
-                                        # check type of the movie, if its a movie or tvshow
-                                        if movie.get('media_type') == 'movie':
-                                            # create movie entry
-                                            entity = create_movie(movie)
-                                        elif movie.get('media_type') == 'tv':
-                                            # create tvshow entry
-                                            entity = create_tv_show(movie)
+                                    find_results = movie_service.find_by_external_id(imdb_id)
+                                    
+                                    if find_results:
+                                        if find_results.get('movie_results'):
+                                            item = find_results['movie_results'][0]
+                                            entity = create_movie(item['id'])
+                                            
+                                        elif find_results.get('tv_results'):
+                                            item = find_results['tv_results'][0]
+                                            entity = create_tvshow(item['id'])
+                                            
+                                    # Original code was:
+                                    # movie = movie_service.get_movie_details_with_imdb_id(imdb_id)
+                                    # if movie.get('media_type') == 'movie': create_movie(movie)
+
                         if entity:
                             media_type = ContentType.objects.get_for_model(entity)
                             # Store the entity info to create relationship after album is created
