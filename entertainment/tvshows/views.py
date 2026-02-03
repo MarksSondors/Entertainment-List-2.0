@@ -404,6 +404,12 @@ def tv_show_page(request, show_id):
         reviewer_id=Subquery(user_reviews.values('user_id')[:1])
     )
 
+    # Get all users who have this TV show in their watchlist
+    watchlist_users = CustomUser.objects.filter(
+        watchlist_items__content_type=tv_show_content_type,
+        watchlist_items__object_id=tv_show_db.id
+    ).distinct()
+
     # Add to context (replace tv_show.seasons with this)
     context = {
         'tv_show': tv_show_db,
@@ -413,7 +419,8 @@ def tv_show_page(request, show_id):
         'total_regular_episodes': total_regular_episodes,
         'users_progress': users_progress,
         'combined_average_rating': combined_average_rating,  # Add combined average to context
-        'seasons_with_reviews': seasons
+        'seasons_with_reviews': seasons,
+        'watchlist_users': watchlist_users,
     }
     
     return render(request, 'tv_show_page.html', context)

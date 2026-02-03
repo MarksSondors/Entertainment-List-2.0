@@ -659,6 +659,36 @@
     background-color: #000080;
     color: white;
 }
+
+/* Fellow hoarder section */
+.fellow-hoarders {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    max-height: 80px;
+    overflow-y: auto;
+    background-color: var(--progress-bg);
+    padding: 5px;
+    border: 1px inset var(--border-dark);
+}
+
+.hoarder-badge {
+    text-decoration: none;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 3px 6px;
+    border: 1px outset var(--border-light);
+    font-size: 12px;
+    white-space: nowrap;
+    display: inline-block;
+    margin-bottom: 3px;
+}
+
+.hoarder-badge:hover {
+    background-color: var(--button-hover);
+    color: var(--text-color);
+    text-decoration: none;
+}
 </style>
 
 <!-- Backdrop overlay -->
@@ -755,6 +785,20 @@
                     {% endfor %}
                 </div>
             </div>
+
+            <!-- Fellow TV Show Hoarders section -->
+            {% if watchlist_users %}
+            <div style="margin-top: 10px;">
+                <p style="font-weight: bold; margin-bottom: 5px; color: var(--text-color);">Fellow TV Show Hoarders:</p>
+                <div class="fellow-hoarders">
+                    {% for user in watchlist_users %}
+                        <a href="/profile/{{ user.username }}/" class="hoarder-badge">
+                            {{ user.username }}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
             
             <!-- Action buttons -->
             <div style="margin-top: 15px;" class="button-container" style="display: flex; gap: 10px; flex-wrap: wrap;">
