@@ -156,22 +156,6 @@ class GamesService(BaseService):
         }
         return self._get(f'games/{game_id}/additions', params=params)
     
-    def get_game_series(self, game_id, page=1, page_size=20):
-        """
-        Get games in the same series as the specified game.
-        
-        Args:
-            game_id: RAWG game ID or slug
-        
-        Returns:
-            Dict with games from the same series
-        """
-        params = {
-            'page': page,
-            'page_size': page_size,
-        }
-        return self._get(f'games/{game_id}/game-series', params=params)
-    
     def get_game_parent(self, game_id):
         """
         Get parent game (for DLCs/editions).

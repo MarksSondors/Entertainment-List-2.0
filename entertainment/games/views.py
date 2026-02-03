@@ -470,6 +470,11 @@ class GameViewSet(viewsets.ViewSet):
                 series_games = series_response.get('results', [])
                 
                 if series_games:
+                    # Add current game to list to ensure we always pick the true first game
+                    # This consistently identifies the same collection root regardless of import order
+                    if not any(g.get('id') == game_data['id'] for g in series_games):
+                        series_games.append(game_data)
+
                     # Filter out games with no release date and sort by release date
                     valid_games = [g for g in series_games if g.get('released')]
                     if valid_games:
