@@ -1,5 +1,6 @@
 import base64
 import json
+import urllib.parse
 
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
@@ -12,7 +13,7 @@ from .formatters import to_stremio_meta, to_stremio_catalog_item
 
 from movies.models import Movie, MovieOfWeekPick
 from tvshows.models import TVShow, Season
-from custom_auth.models import Watchlist, Review
+from custom_auth.models import Watchlist, Review, Genre
 from movies.services.recommendation import MovieRecommender
 
 
@@ -80,6 +81,14 @@ def manifest(request, config: str = None):
     if config:
         user = get_user_from_config(config)
         is_configured = user is not None
+
+    # Fetch all genre names for filtering
+    genre_names = list(Genre.objects.values_list('name', flat=True).distinct().order_by('name'))
+    
+    filter_extra = [
+        {'name': 'genre', 'options': genre_names, 'isRequired': False},
+        {'name': 'skip', 'isRequired': False}
+    ]
     
     manifest_data = {
         'id': 'com.entertainment-list.addon',
@@ -101,13 +110,13 @@ def manifest(request, config: str = None):
                 'id': 'watchlist-movies',
                 'name': 'My Watchlist',
                 'type': 'movie',
-                'extra': [{'name': 'skip', 'isRequired': False}]
+                'extra': filter_extra
             },
             {
                 'id': 'watchlist-series',
                 'name': 'My Watchlist',
                 'type': 'series',
-                'extra': [{'name': 'skip', 'isRequired': False}]
+                'extra': filter_extra
             },
             {
                 'id': 'community-picks',
@@ -124,7 +133,13 @@ def manifest(request, config: str = None):
                 'id': 'top-rated',
                 'name': 'Top Rated (Unseen)',
                 'type': 'movie',
-                'extra': [{'name': 'skip', 'isRequired': False}]
+                'extra': filter_extra
+            },
+            {
+                'id': 'top-rated',
+                'name': 'Top Rated (Unseen)',
+                'type': 'series',
+                'extra': filter_extra
             },
         ],
         'behaviorHints': {
@@ -155,8 +170,9 @@ def catalog(request, config: str, media_type: str, catalog_id: str, extra: str =
         return cors_preflight_response()
     user = request.stremio_user
     
-    # Parse skip from extra (format: "skip=100")
+    # Parse skip and genre from extra
     skip = 0
+    genre = None
     if extra:
         for part in extra.split('&'):
             if part.startswith('skip='):
@@ -164,15 +180,21 @@ def catalog(request, config: str, media_type: str, catalog_id: str, extra: str =
                     skip = int(part.split('=')[1])
                 except (ValueError, IndexError):
                     pass
+            elif part.startswith('genre='):
+                try:
+                    genre = urllib.parse.unquote(part.split('=')[1])
+                except (ValueError, IndexError):
+                    pass
     
     # Route to appropriate catalog handler
     catalog_handlers = {
         ('series', 'continue-watching'): lambda: get_continue_watching(user, skip),
-        ('movie', 'watchlist-movies'): lambda: get_watchlist_movies(user, skip),
-        ('series', 'watchlist-series'): lambda: get_watchlist_series(user, skip),
+        ('movie', 'watchlist-movies'): lambda: get_watchlist_movies(user, skip, genre),
+        ('series', 'watchlist-series'): lambda: get_watchlist_series(user, skip, genre),
         ('movie', 'community-picks'): lambda: get_community_picks(user, skip),
         ('movie', 'recommendations'): lambda: get_recommendations(user),
-        ('movie', 'top-rated'): lambda: get_top_rated(user, skip),
+        ('movie', 'top-rated'): lambda: get_top_rated(user, skip, genre),
+        ('series', 'top-rated'): lambda: get_top_rated_series(user, skip, genre),
     }
     
     handler = catalog_handlers.get((media_type, catalog_id))
@@ -183,32 +205,64 @@ def catalog(request, config: str, media_type: str, catalog_id: str, extra: str =
     return cors_response({'metas': metas})
 
 
-def get_watchlist_movies(user, skip: int = 0) -> list[dict]:
+def get_watchlist_movies(user, skip: int = 0, genre: str = None) -> list[dict]:
     """Get movies from user's watchlist."""
     movie_ct = ContentType.objects.get_for_model(Movie)
     
-    watchlist_items = Watchlist.objects.filter(
-        user=user,
-        content_type=movie_ct
-    ).order_by('-date_added')[skip:skip + PAGE_SIZE]
-    
-    movie_ids = [item.object_id for item in watchlist_items]
-    movies = Movie.objects.filter(
-        id__in=movie_ids
-    ).exclude(
-        Q(imdb_id__isnull=True) | Q(imdb_id='')
-    ).prefetch_related('genres')
-    
-    # Preserve watchlist order
-    movie_dict = {m.id: m for m in movies}
-    metas = []
-    for movie_id in movie_ids:
-        if movie_id in movie_dict:
-            item = to_stremio_catalog_item(movie_dict[movie_id], 'movie')
+    if genre:
+        # If filtering by genre, we must fetch all valid items, sort manually, and then paginate
+        watchlist_items = Watchlist.objects.filter(
+            user=user,
+            content_type=movie_ct
+        )
+        
+        # Map object_id -> date_added for sorting
+        date_map = {item.object_id: item.date_added for item in watchlist_items}
+        
+        movies = Movie.objects.filter(
+            id__in=date_map.keys(),
+            genres__name=genre
+        ).exclude(
+            Q(imdb_id__isnull=True) | Q(imdb_id='')
+        ).prefetch_related('genres')
+        
+        # Sort by date_added descending
+        sorted_movies = sorted(movies, key=lambda m: date_map.get(m.id), reverse=True)
+        
+        # Apply pagination
+        paginated_movies = sorted_movies[skip:skip + PAGE_SIZE]
+        
+        metas = []
+        for movie in paginated_movies:
+            item = to_stremio_catalog_item(movie, 'movie')
             if item:
                 metas.append(item)
-    
-    return metas
+        return metas
+
+    else:
+        # Standard efficient pagination
+        watchlist_items = Watchlist.objects.filter(
+            user=user,
+            content_type=movie_ct
+        ).order_by('-date_added')[skip:skip + PAGE_SIZE]
+        
+        movie_ids = [item.object_id for item in watchlist_items]
+        movies = Movie.objects.filter(
+            id__in=movie_ids
+        ).exclude(
+            Q(imdb_id__isnull=True) | Q(imdb_id='')
+        ).prefetch_related('genres')
+        
+        # Preserve watchlist order
+        movie_dict = {m.id: m for m in movies}
+        metas = []
+        for movie_id in movie_ids:
+            if movie_id in movie_dict:
+                item = to_stremio_catalog_item(movie_dict[movie_id], 'movie')
+                if item:
+                    metas.append(item)
+        
+        return metas
 
 
 def get_continue_watching(user, skip: int = 0) -> list[dict]:
@@ -297,52 +351,91 @@ def get_continue_watching(user, skip: int = 0) -> list[dict]:
     return metas
 
 
-def get_watchlist_series(user, skip: int = 0) -> list[dict]:
+def get_watchlist_series(user, skip: int = 0, genre: str = None) -> list[dict]:
     """Get TV shows from user's watchlist that are not fully watched."""
     tvshow_ct = ContentType.objects.get_for_model(TVShow)
     
-    watchlist_items = Watchlist.objects.filter(
-        user=user,
-        content_type=tvshow_ct
-    ).order_by('-date_added')
-    
-    tvshow_ids = [item.object_id for item in watchlist_items]
-    tvshows = TVShow.objects.filter(
-        id__in=tvshow_ids
-    ).exclude(
-        Q(imdb_id__isnull=True) | Q(imdb_id='')
-    ).prefetch_related('genres', 'seasons__episodes')
-    
-    # Build dict for ordering
-    tvshow_dict = {t.id: t for t in tvshows}
-    
-    # Filter out fully watched shows and apply pagination
-    metas = []
-    skipped = 0
-    
-    for tvshow_id in tvshow_ids:
-        if tvshow_id not in tvshow_dict:
-            continue
+    if genre:
+        watchlist_items = Watchlist.objects.filter(
+            user=user,
+            content_type=tvshow_ct
+        )
+        date_map = {item.object_id: item.date_added for item in watchlist_items}
         
-        tvshow = tvshow_dict[tvshow_id]
+        tvshows = TVShow.objects.filter(
+            id__in=date_map.keys(),
+            genres__name=genre
+        ).exclude(
+            Q(imdb_id__isnull=True) | Q(imdb_id='')
+        ).prefetch_related('genres', 'seasons__episodes')
+
+        # Sort by date added
+        tvshows_sorted = sorted(tvshows, key=lambda t: date_map.get(t.id), reverse=True)
         
-        # Check if show is fully watched (100% progress)
-        watch_progress = user.get_watch_progress(tvshow)
-        if watch_progress >= 100:
-            continue  # Skip fully watched shows
+        metas = []
+        skipped = 0
         
-        # Handle pagination
-        if skipped < skip:
-            skipped += 1
-            continue
+        for tvshow in tvshows_sorted:
+            # Check if show is fully watched (100% progress)
+            watch_progress = user.get_watch_progress(tvshow)
+            if watch_progress >= 100:
+                continue
+            
+            # Handle pagination
+            if skipped < skip:
+                skipped += 1
+                continue
+            
+            item = to_stremio_catalog_item(tvshow, 'series')
+            if item:
+                metas.append(item)
+                if len(metas) >= PAGE_SIZE:
+                    break
+        return metas
+
+    else:
+        watchlist_items = Watchlist.objects.filter(
+            user=user,
+            content_type=tvshow_ct
+        ).order_by('-date_added')
         
-        item = to_stremio_catalog_item(tvshow, 'series')
-        if item:
-            metas.append(item)
-            if len(metas) >= PAGE_SIZE:
-                break
-    
-    return metas
+        tvshow_ids = [item.object_id for item in watchlist_items]
+        tvshows = TVShow.objects.filter(
+            id__in=tvshow_ids
+        ).exclude(
+            Q(imdb_id__isnull=True) | Q(imdb_id='')
+        ).prefetch_related('genres', 'seasons__episodes')
+        
+        # Build dict for ordering
+        tvshow_dict = {t.id: t for t in tvshows}
+        
+        # Filter out fully watched shows and apply pagination
+        metas = []
+        skipped = 0
+        
+        for tvshow_id in tvshow_ids:
+            if tvshow_id not in tvshow_dict:
+                continue
+            
+            tvshow = tvshow_dict[tvshow_id]
+            
+            # Check if show is fully watched (100% progress)
+            watch_progress = user.get_watch_progress(tvshow)
+            if watch_progress >= 100:
+                continue  # Skip fully watched shows
+            
+            # Handle pagination
+            if skipped < skip:
+                skipped += 1
+                continue
+            
+            item = to_stremio_catalog_item(tvshow, 'series')
+            if item:
+                metas.append(item)
+                if len(metas) >= PAGE_SIZE:
+                    break
+        
+        return metas
 
 
 def get_community_picks(user, skip: int = 0) -> list[dict]:
@@ -406,7 +499,7 @@ def get_recommendations(user) -> list[dict]:
     return metas
 
 
-def get_top_rated(user, skip: int = 0) -> list[dict]:
+def get_top_rated(user, skip: int = 0, genre: str = None) -> list[dict]:
     """Get highest rated movies that the user hasn't reviewed."""
     movie_ct = ContentType.objects.get_for_model(Movie)
     
@@ -418,12 +511,20 @@ def get_top_rated(user, skip: int = 0) -> list[dict]:
         ).values_list('object_id', flat=True)
     )
     
-    # Get movies with average ratings, excluding user's reviewed
-    rated_movies = Review.objects.filter(
+    # Base query for reviews
+    reviews_query = Review.objects.filter(
         content_type=movie_ct
     ).exclude(
         object_id__in=user_reviewed_ids
-    ).values('object_id').annotate(
+    )
+
+    if genre:
+        # Restrict to movies with the specific genre
+        movie_ids_with_genre = Movie.objects.filter(genres__name=genre).values_list('id', flat=True)
+        reviews_query = reviews_query.filter(object_id__in=movie_ids_with_genre)
+
+    # Get movies with average ratings
+    rated_movies = reviews_query.values('object_id').annotate(
         avg_rating=Avg('rating')
     ).order_by('-avg_rating')[skip:skip + PAGE_SIZE]
     
@@ -441,6 +542,59 @@ def get_top_rated(user, skip: int = 0) -> list[dict]:
     for movie_id in movie_ids:
         if movie_id in movie_dict:
             item = to_stremio_catalog_item(movie_dict[movie_id], 'movie')
+            if item:
+                metas.append(item)
+    
+    return metas
+
+
+def get_top_rated_series(user, skip: int = 0, genre: str = None) -> list[dict]:
+    """Get highest rated TV shows that the user hasn't reviewed."""
+    tvshow_ct = ContentType.objects.get_for_model(TVShow)
+    
+    # Get user's reviewed show IDs
+    # Reviews for shows can be on 'series', 'season', etc., but top-rated usually aggregates show-level id reviews or similar.
+    # The requirement says: "Aggregation based on `object_id` (Show ID) is correct as finding average rating across all seasons."
+    # We should exclude shows if the user has reviewed them.
+    
+    user_reviewed_ids = set(
+        Review.objects.filter(
+            user=user,
+            content_type=tvshow_ct
+        ).values_list('object_id', flat=True)
+    )
+    
+    # Base query for reviews
+    reviews_query = Review.objects.filter(
+        content_type=tvshow_ct
+    ).exclude(
+        object_id__in=user_reviewed_ids
+    )
+
+    if genre:
+        # Restrict to shows with the specific genre
+        show_ids_with_genre = TVShow.objects.filter(genres__name=genre).values_list('id', flat=True)
+        reviews_query = reviews_query.filter(object_id__in=show_ids_with_genre)
+
+    # Get shows with average ratings
+    rated_shows = reviews_query.values('object_id').annotate(
+        avg_rating=Avg('rating')
+    ).order_by('-avg_rating')[skip:skip + PAGE_SIZE]
+    
+    show_ids = [r['object_id'] for r in rated_shows]
+    
+    shows = TVShow.objects.filter(
+        id__in=show_ids
+    ).exclude(
+        Q(imdb_id__isnull=True) | Q(imdb_id='')
+    ).prefetch_related('genres')
+    
+    # Preserve rating order
+    show_dict = {s.id: s for s in shows}
+    metas = []
+    for show_id in show_ids:
+        if show_id in show_dict:
+            item = to_stremio_catalog_item(show_dict[show_id], 'series')
             if item:
                 metas.append(item)
     
