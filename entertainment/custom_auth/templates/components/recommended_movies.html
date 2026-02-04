@@ -229,7 +229,7 @@
             let poster = item.poster;
             let title = item.title;
             let rating = item.rating;
-            let predictedRating = item.predicted_rating;
+            let predictedRating = item.predicted_rating ? Number(item.predicted_rating).toFixed(1) : null;
             let mediaTypeLabel = '';
 
             // Handle structure differences for external TMDB results
