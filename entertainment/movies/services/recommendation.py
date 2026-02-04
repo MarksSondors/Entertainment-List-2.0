@@ -36,12 +36,14 @@ class MovieRecommender:
                     # New Bias Terms
                     self.item_biases = self.model_data.get('item_biases', {})
                     self.user_biases = self.model_data.get('user_biases', {})
+                    self.year_biases = self.model_data.get('year_biases', {})
+                    self.tmdb_id_to_year = self.model_data.get('tmdb_id_to_year', {})
                     self.global_mean = self.model_data.get('global_mean', 3.5)
         except Exception:
             pass
     
-    def predict_rating(self, user_id_str, tmdb_id_int):
-        """Predict rating using SVD + Biases: score = Global + b_i + b_u + (U[user] . Sigma . Vt[:, item])"""
+    def predict_rating(self, user_id_str, tmdb_id_int, year=None):
+        """Predict rating using SVD + Biases: score = Global + b_i + b_u + b_year + (U[user] . Sigma . Vt[:, item])"""
         if not self.model_data:
             return 0
             
@@ -52,6 +54,14 @@ class MovieRecommender:
         # But if item/user is totally new, bias is 0.
         b_i = self.item_biases.get(tmdb_id_int, 0.0)
         b_u = self.user_biases.get(user_id_str, 0.0)
+        
+        # Year Bias
+        b_y = 0.0
+        if year is None:
+            year = self.tmdb_id_to_year.get(tmdb_id_int)
+
+        if year is not None:
+             b_y = self.year_biases.get(year, 0.0)
         
         interaction = 0.0
         
@@ -64,7 +74,7 @@ class MovieRecommender:
             interaction = np.dot(np.dot(user_vec, self.Sigma), item_vec)
         
         # Final Score
-        score = self.global_mean + b_i + b_u + interaction
+        score = self.global_mean + b_i + b_u + b_y + interaction
         
         return score
 
@@ -95,7 +105,7 @@ class MovieRecommender:
                 id__in=user_rated_movie_ids
             ).filter(
                 tmdb_id__isnull=False
-            ).values('id', 'tmdb_id')
+            ).values('id', 'tmdb_id', 'release_date')
             
             predictions = []
             user_id_str = f"loc_{user_id}"
@@ -106,7 +116,10 @@ class MovieRecommender:
 
             for movie in candidates:
                 tmdb_id = movie['tmdb_id']
-                est = self.predict_rating(user_id_str, tmdb_id)
+                release_date = movie['release_date']
+                year = release_date.year if release_date else None
+                
+                est = self.predict_rating(user_id_str, tmdb_id, year=year)
                 
                 if est == 0:
                     continue
