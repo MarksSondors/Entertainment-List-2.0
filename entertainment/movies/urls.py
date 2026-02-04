@@ -17,9 +17,12 @@ urlpatterns = [
     path('popular/', cache_page(60 * 60)(PopularMoviesView.as_view()), name='popular_movies'),
     path('images/', views.MovieImagesView.as_view(), name='movie_images'),
     path('watchlist/', views.WatchlistMovie.as_view(), name='watchlist'),
+    path('recommendations/external/', views.ExternalRecommendationsView.as_view(), name='external_recommendations'),
     path('reviews/', views.MovieReviewView.as_view(), name='movie_reviews'),
     path('recommendations/', views.movie_recommendations, name='movie_recommendations'),
     path('task-status/', MovieTaskStatusView.as_view(), name='movie-task-status'),
+    path('train-model/', views.train_model, name='train_model'),
+    path('download-dataset/', views.download_dataset, name='download_dataset'),
     path('search-local/', views.movie_search, name='movie_search_local'),
 
     # almost API

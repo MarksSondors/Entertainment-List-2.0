@@ -48,6 +48,11 @@ coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
+
+# Data
+entertainment/data/
+entertainment/movies/ml_models/
+
 .pytest_cache/
 cover/
 

@@ -185,6 +185,37 @@
                 </div>
             </div>
 
+            {% if request.user.is_superuser or request.user.is_staff %}
+            <!-- ML Model Training (Admin Only) -->
+            <div class="field-row-stacked" style="margin-bottom: 15px;">
+                <h4>Machine Learning Model</h4>
+                <div class="sunken-panel" style="padding: 10px;">
+                    <p style="margin-bottom: 10px;">Manage the Movie Recommendation System (SVD Model).</p>
+                    
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <!-- Download Button -->
+                         <form action="{% url 'download_dataset' %}" method="post">
+                            {% csrf_token %}
+                            <div class="field-row" style="justify-content: flex-start;">
+                                <button type="submit" class="btn" onclick="return confirm('Download ~240MB dataset? This runs in the background.')">⬇️ Download MovieLens 32M</button>
+                            </div>
+                        </form>
+            
+                        <!-- Train Button -->
+                        <form action="{% url 'train_model' %}" method="post">
+                            {% csrf_token %}
+                            <div class="field-row" style="justify-content: flex-start;">
+                                <button type="submit" class="btn">🔄 Train Recommender Model</button>
+                            </div>
+                        </form>
+                    </div>
+                    <p style="margin-top: 5px; font-size: 11px; color: var(--text-muted);">
+                        Download the dataset first (240MB), then train the model to enable recommendations.
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Import Section -->
             <div class="field-row-stacked" style="margin-bottom: 15px;">
                 <h4>📥 Data Import</h4>
