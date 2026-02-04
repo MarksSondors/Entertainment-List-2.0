@@ -1520,14 +1520,21 @@ class ExternalRecommendationsView(APIView):
 
 @staff_member_required
 def train_model(request):
+    optimize = request.POST.get('optimize') == 'on'
     try:
         # Check if django-q is definitely installed/working by importing
         import django_q
-        async_task('django.core.management.call_command', 'train_recommender')
-        messages.success(request, 'Model training started in background.')
+        if optimize:
+            # Pass optimize=True as kwarg to call_command
+            # Set timeout to 24h (86400s) to prevent worker timeout during optimization
+            async_task('django.core.management.call_command', 'train_recommender', optimize=True, timeout=86400)
+            messages.success(request, 'Model optimization and training started in background. This may take 10-20 minutes.')
+        else:
+            async_task('django.core.management.call_command', 'train_recommender', timeout=86400)
+            messages.success(request, 'Model training started in background.')
     except:
         # Fallback to sync run (not recommended but functional)
-        call_command('train_recommender')
+        call_command('train_recommender', optimize=optimize)
         messages.success(request, 'Model trained successfully.')
     return redirect('settings_page')
 
@@ -1535,7 +1542,8 @@ def train_model(request):
 def download_dataset(request):
     try:
         import django_q
-        async_task('django.core.management.call_command', 'download_movielens')
+        # Set timeout to 1h for slow connections
+        async_task('django.core.management.call_command', 'download_movielens', timeout=3600)
         messages.success(request, 'Dataset download started in background. This may take a few minutes.')
     except:
         call_command('download_movielens')
