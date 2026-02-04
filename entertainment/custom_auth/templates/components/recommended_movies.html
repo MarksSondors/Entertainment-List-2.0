@@ -17,6 +17,12 @@
             <button class="tab-btn active" onclick="loadRecommendations('movies', this)" data-tab="movies">Movies</button>
             <button class="tab-btn" onclick="loadRecommendations('tvshows', this)" data-tab="tvshows">TV Shows</button>
             <button class="tab-btn" onclick="loadRecommendations('games', this)" data-tab="games">Games</button>
+            <!-- Separator -->
+            <div style="width: 10px;"></div>
+            <button class="tab-btn" onclick="loadRecommendations('external', this)" data-tab="external">
+                <img src="{% static 'images/win98/world.png' %}" alt="" style="width: 12px; height: 12px; vertical-align: text-bottom; margin-right: 2px;">
+                Discover
+            </button>
         </div>
     </div>
 
@@ -38,6 +44,42 @@
 </div>
 
 <style>
+    .tmdb-add-button {
+        width: 100%;
+        padding: 4px;
+        background-color: #4CAF50;
+        color: white;
+        border: 1px outset #4CAF50;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 11px;
+        text-align: center;
+        box-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        z-index: 10;
+        position: relative; /* Ensure it's clickable */
+    }
+
+    .tmdb-add-button:hover {
+        background-color: #45a049;
+    }
+
+    .tmdb-add-button:active {
+        border: 1px inset #4CAF50;
+    }
+
+    .tmdb-add-button:disabled {
+        background-color: #cccccc;
+        color: #666666;
+        border: 1px solid #999;
+        cursor: not-allowed;
+    }
+
+    .video-poster-wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+
     .tabs-row {
         display: flex;
         flex-wrap: wrap;
@@ -132,6 +174,7 @@
         else if (type === 'movies') statusText.textContent = 'Based on your movie ratings';
         else if (type === 'tvshows') statusText.textContent = 'Based on your TV show ratings';
         else if (type === 'games') statusText.textContent = 'Based on your game ratings';
+        else if (type === 'external') statusText.textContent = 'Personalized picks from TMDB. These movies are not in your library yet.';
 
         // Check cache
         if (recCache[type]) {
@@ -155,6 +198,7 @@
         else if (type === 'movies') endpoint = '/movies/recommendations/';
         else if (type === 'tvshows') endpoint = '/tvshows/recommendations/';
         else if (type === 'games') endpoint = '/games/recommendations/';
+        else if (type === 'external') endpoint = '/movies/recommendations/external/';
 
         fetch(endpoint)
             .then(response => response.json())
@@ -185,7 +229,19 @@
             let poster = item.poster;
             let title = item.title;
             let rating = item.rating;
+            let predictedRating = item.predicted_rating;
             let mediaTypeLabel = '';
+
+            // Handle structure differences for external TMDB results
+            if (type === 'external') {
+                // External items come from TMDB directly
+                if (item.poster_path) {
+                    poster = `https://image.tmdb.org/t/p/w342${item.poster_path}`;
+                } else {
+                    poster = null;
+                }
+                rating = item.vote_average ? Math.round(item.vote_average * 10) / 10 : null;
+            }
 
             if (type === 'combined') {
                 url = item.url;
@@ -199,27 +255,89 @@
                 url = `/tvshows/${item.tmdb_id}/`;
             } else if (type === 'games') {
                 url = `/games/${item.id}/`;
+            } else if (type === 'external') {
+                // Link to create/view movie page by TMDB ID
+                // The backend creates it if missing when accessed via /movies/<tmdb_id>/
+                url = `/movies/${item.id}/`;
             }
 
             // Fallback poster
             if (!poster) poster = '{% static "images/no-poster.png" %}';
 
             el.innerHTML = `
-                <div class="poster-card">
-                    <a href="${url}" style="text-decoration:none; color:inherit; display:block; height:100%;">
-                        <img src="${poster}" alt="${title}">
+                <div class="poster-card" style="display: flex; flex-direction: column; height: 100%;">
+                    <a href="${url}" style="text-decoration:none; color:inherit; display:block; flex-grow: 1; position: relative;">
+                        <img src="${poster}" alt="${title}" style="height: 100%; width: 100%; object-fit: cover;">
                         <div class="info-overlay">
                             <div class="title">${title}</div>
                             <div class="rating">
-                                ${rating ? rating + '/10' : 'N/A'}
+                                ${rating ? 'TMDB: ' + rating : 'N/A'}
+                                ${predictedRating ? `<br><span style="background-color: var(--button-highlight); color: white; padding: 1px 4px; border-radius: 3px; font-size: 0.9em;">For You: ${predictedRating}</span>` : ''}
                                 ${mediaTypeLabel ? `<br><span style="font-size:0.8em; opacity:0.8">${mediaTypeLabel}</span>` : ''}
                             </div>
                         </div>
                     </a>
+                    ${type === 'external' ? `
+                        <button onclick="addToWatchlist(event, ${item.id}, this)" class="tmdb-add-button">
+                            + Watchlist
+                        </button>
+                    ` : ''}
                 </div>
             `;
             container.appendChild(el);
         });
+    }
+
+    function addToWatchlist(event, tmdbId, btn) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+        
+        fetch('/movies/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                id: tmdbId,
+                add_to_watchlist: true
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                btn.textContent = '✓ Added';
+                btn.disabled = true;
+                // Remove from local recommendations cache to update state if reloaded?
+                // Or just leave it marked as added.
+            } else {
+                btn.textContent = 'Error';
+                btn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error adding to watchlist:', error);
+            btn.textContent = 'Error';
+            btn.disabled = false;
+        });
+    }
+
+    // CSRF Token Helper
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
     }
 
     // Initial load

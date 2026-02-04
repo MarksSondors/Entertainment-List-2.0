@@ -150,6 +150,22 @@ docker-compose -f docker-compose.prod.yml up -d
 docker-compose up -d
 ```
 
+## Recommender System Setup
+
+To enable the personalized movie recommender system:
+
+1.  **Download Dataset:**
+    -   Download the [MovieLens 32M Dataset](https://grouplens.org/datasets/movielens/32m/).
+    -   Extract the contents (specifically `ratings.csv` and `links.csv`) to `entertainment/data/ml-32m/`.
+
+2.  **Train the Model:**
+    -   Run the training command to build the SVD model:
+        ```bash
+        python manage.py train_recommender
+        ```
+    -   This should be run periodically (e.g., weekly) to update recommendations based on new user interactions.
+
+
 4. **Access the application:**
    - Development: http://localhost:8000
    - Production: https://yourdomain.com (with Traefik)
@@ -321,3 +337,25 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Hardcover** for book and literature data
 - **Django Community** for the excellent framework and packages
 - **Contributors** who have helped improve this project
+## Recommender System Setup
+
+To enable the advanced hybrid recommender system (Collaborative Filtering + Content Based + SVD), you need to set up the Machine Learning environment.
+
+1.  **Download Data**:
+    *   Go to [GroupLens MovieLens Datasets](https://grouplens.org/datasets/movielens/).
+    *   Download the **MovieLens 32M** dataset (or the latest Small dataset for development).
+    *   Extract 
+atings.csv and links.csv into entertainment/data/ml-32m/.
+
+2.  **Training**:
+    *   Run the training command to generate the model:
+        \\\ash
+        python manage.py train_recommender
+        \\\
+    *   This command merges the external MovieLens data with your local user reviews and trains an SVD model.
+    *   The model and mapping files are saved to entertainment/movies/ml_models/svd_model.pkl.
+
+3.  **Usage**:
+    *   The system automatically uses the model for recommendations on the dashboard.
+    *   Use the \/api/movies/recommendations/external/\ endpoint to get recommendations for movies *not* yet in your database (discovery mode).
+

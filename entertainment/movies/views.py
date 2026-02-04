@@ -10,6 +10,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 
 import json
 import random
+from concurrent.futures import ThreadPoolExecutor
 
 from .serializers import MovieSerializer
 from .parsers import create_movie
@@ -27,6 +28,9 @@ from .services.recommendation import MovieRecommender
 from .tasks import create_movie_async, create_movie_fast
 from datetime import timedelta
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
+from django.core.management import call_command
+from django_q.tasks import async_task
 from custom_auth.models import CustomUser, Review
 from django.db.models import Avg, Count, F
 from collections import defaultdict, Counter
@@ -37,6 +41,7 @@ import json
 
 @login_required
 def movie_page(request, movie_id):
+
     if request.user.is_authenticated:
         try:
             user_settings = request.user.settings
@@ -101,6 +106,20 @@ def movie_page(request, movie_id):
         object_id=movie_db.id
     )
 
+    # Calculate predicted rating
+    predicted_rating = None
+    if request.user.is_authenticated and movie_db.tmdb_id:
+        try:
+            recommender = MovieRecommender()
+            # Assuming recommender uses "loc_ID" format
+            est = recommender.predict_rating(f"loc_{request.user.id}", int(movie_db.tmdb_id))
+            if est > 0:
+                 # Clamp and scale
+                 est = max(0.5, min(5.0, est))
+                 predicted_rating = round(est * 2, 1)
+        except Exception:
+            pass
+
     context = {
         'movie': movie_db,
         'user_watchlist': user_watchlist,
@@ -110,6 +129,7 @@ def movie_page(request, movie_id):
         'user_rating_count': user_rating_count,
         'memes': memes,
         'content_type_id': content_type.id,
+        'predicted_rating': predicted_rating,
     }
     return render(request, 'movie_page.html', context)
 
@@ -177,6 +197,55 @@ class TMDBSearchView(APIView):
             
         movies['results'] = sorted_movies
         return Response(movies, status=status.HTTP_200_OK)
+
+class ExternalRecommendationsAPIView(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Get External Recommendations",
+        description="Get movie recommendations for movies NOT in the local database, using the recommender model.",
+        parameters=[
+            OpenApiParameter(name="limit", description="Number of recommendations (default 10)", required=False, type=int),
+        ]
+    )
+    def get(self, request):
+        limit = int(request.GET.get('limit', 10))
+        recommender = MovieRecommender()
+        
+        # Get recommendations (list of {tmdb_id, predicted_rating})
+        recommendations = recommender.get_recommendations_for_user(request.user.id, limit, scope='external')
+        
+        if not recommendations:
+            return Response({"results": []}, status=status.HTTP_200_OK)
+
+        movies_service = MoviesService()
+        
+        # Helper for parallel fetching
+        def fetch_details(item):
+            tmdb_id = item['tmdb_id']
+            try:
+                # Fetch minimal details to show cards
+                details = movies_service.get_movie_details(tmdb_id)
+                if details:
+                    # Attach our predicted rating
+                    details['predicted_rating'] = item['predicted_rating']
+                    # Flags for UI
+                    details['in_database'] = False
+                    details['in_watchlist'] = False # External recommendations are by definition not tracked
+                return details
+            except Exception:
+                return None
+
+        # Fetch details in parallel
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            fetched_results = list(executor.map(fetch_details, recommendations))
+        
+        # Filter out failed fetches
+        results = [r for r in fetched_results if r]
+        
+        return Response({"results": results}, status=status.HTTP_200_OK)
+
 
 class MovieViewSet(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, BasicAuthentication]
@@ -813,6 +882,7 @@ def movie_recommendations(request):
             'poster': movie.poster,
             'release_date': movie.release_date,
             'rating': movie.rating,
+            'predicted_rating': getattr(movie, 'predicted_rating', None),
             'collection': movie.collection.name if movie.collection else None
         })
     
@@ -1406,3 +1476,69 @@ def network_graph_data(request):
                 edge['to'] = edge.pop('target')
     
     return Response(data)
+class ExternalRecommendationsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Get recommendations for movies outside the local library',
+        description='Returns a list of movies from TMDB that are not in the database but predicted to be liked by the user.',
+    )
+    def get(self, request):
+        recommender = MovieRecommender()
+        # Get {tmdb_id, predicted_rating}
+        recommendations = recommender.get_recommendations_for_user(request.user.id, max_recommendations=12, scope='external')
+        
+        if not recommendations:
+            return Response([])
+
+        # Fetch details from TMDB
+        tmdb_service = MoviesService()
+        results = []
+
+        def fetch_details(rec):
+            try:
+                # Fetch minimal details to show a card
+                details = tmdb_service.get_movie_details(rec['tmdb_id'])
+                if details:
+                    details['predicted_rating'] = rec['predicted_rating']
+                    return details
+            except Exception:
+                return None
+            return None
+
+        # Threaded fetch to make it faster
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(fetch_details, rec) for rec in recommendations]
+            for future in futures:
+                res = future.result()
+                if res:
+                    results.append(res)
+
+        return Response(results)
+
+
+
+@staff_member_required
+def train_model(request):
+    try:
+        # Check if django-q is definitely installed/working by importing
+        import django_q
+        async_task('django.core.management.call_command', 'train_recommender')
+        messages.success(request, 'Model training started in background.')
+    except:
+        # Fallback to sync run (not recommended but functional)
+        call_command('train_recommender')
+        messages.success(request, 'Model trained successfully.')
+    return redirect('settings_page')
+
+@staff_member_required
+def download_dataset(request):
+    try:
+        import django_q
+        async_task('django.core.management.call_command', 'download_movielens')
+        messages.success(request, 'Dataset download started in background. This may take a few minutes.')
+    except:
+        call_command('download_movielens')
+        messages.success(request, 'Dataset downloaded successfully.')
+    return redirect('settings_page')
+
