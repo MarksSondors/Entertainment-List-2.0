@@ -32,46 +32,39 @@ class MovieRecommender:
                     self.U = self.model_data.get('U')
                     self.Sigma = self.model_data.get('Sigma')
                     self.Vt = self.model_data.get('Vt')
-                    self.user_means = self.model_data.get('user_means', {})
+                    
+                    # New Bias Terms
+                    self.item_biases = self.model_data.get('item_biases', {})
+                    self.user_biases = self.model_data.get('user_biases', {})
                     self.global_mean = self.model_data.get('global_mean', 3.5)
         except Exception:
             pass
     
     def predict_rating(self, user_id_str, tmdb_id_int):
-        """Predict rating using SVD matrices + Mean: score = Mean + U[user] . Sigma . Vt[:, item]"""
+        """Predict rating using SVD + Biases: score = Global + b_i + b_u + (U[user] . Sigma . Vt[:, item])"""
         if not self.model_data:
             return 0
             
         u_idx = self.user_to_idx.get(user_id_str)
         i_idx = self.item_to_idx.get(tmdb_id_int)
         
-        if u_idx is None or i_idx is None:
-            return 0
+        # Biases always exist even if user/item is not in matrix (if we loaded them correctly)
+        # But if item/user is totally new, bias is 0.
+        b_i = self.item_biases.get(tmdb_id_int, 0.0)
+        b_u = self.user_biases.get(user_id_str, 0.0)
+        
+        interaction = 0.0
+        
+        if u_idx is not None and i_idx is not None:
+             # Interaction Term
+            user_vec = self.U[u_idx, :]
+            item_vec = self.Vt[:, i_idx]
             
-        # Prediction
-        # user_vector = U[u_idx] (1 x k)
-        # item_vector = Vt[:, i_idx] (k x 1)
-        # score = user_vector . Sigma . item_vector
+            # Dot Product with Sigma
+            interaction = np.dot(np.dot(user_vec, self.Sigma), item_vec)
         
-        user_vec = self.U[u_idx, :]
-        item_vec = self.Vt[:, i_idx]
-        
-        if np.all(user_vec == 0) or np.all(item_vec == 0):
-            return 0
-
-        # Sigma is diagonal, so we can do element-wise mult
-        # or just dot product
-        # user_features_weighted = np.dot(user_vec, self.Sigma)
-        # score = np.dot(user_features_weighted, item_vec)
-        
-        # Optimization: Sigma is diagonal KxK
-        # score = sum( U[u][k] * Sigma[k][k] * Vt[k][i] )
-        # Since Sigma is stored as full matrix in my save script, use dot
-        dot_product = np.dot(np.dot(user_vec, self.Sigma), item_vec)
-        
-        # Add Mean back
-        user_mean = self.user_means.get(user_id_str, self.global_mean)
-        score = user_mean + dot_product
+        # Final Score
+        score = self.global_mean + b_i + b_u + interaction
         
         return score
 

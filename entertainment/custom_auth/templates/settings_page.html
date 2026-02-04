@@ -204,8 +204,12 @@
                         <!-- Train Button -->
                         <form action="{% url 'train_model' %}" method="post">
                             {% csrf_token %}
-                            <div class="field-row" style="justify-content: flex-start;">
+                            <div class="field-row" style="justify-content: flex-start; align-items: center; gap: 8px;">
                                 <button type="submit" class="btn">🔄 Train Recommender Model</button>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" id="optimize_model" name="optimize">
+                                    <label for="optimize_model" title="Runs Grid Search to find best k. Takes longer.">Optimize</label>
+                                </div>
                             </div>
                         </form>
                     </div>
