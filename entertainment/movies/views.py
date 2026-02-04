@@ -112,7 +112,11 @@ def movie_page(request, movie_id):
         try:
             recommender = MovieRecommender()
             # Assuming recommender uses "loc_ID" format
-            est = recommender.predict_rating(f"loc_{request.user.id}", int(movie_db.tmdb_id))
+            est = recommender.predict_rating(
+                f"loc_{request.user.id}", 
+                int(movie_db.tmdb_id),
+                year=movie_db.release_date.year if movie_db.release_date else None
+            )
             if est > 0:
                  # Clamp and scale
                  est = max(0.5, min(5.0, est))
