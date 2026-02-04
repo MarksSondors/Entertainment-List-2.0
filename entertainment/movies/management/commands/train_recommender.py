@@ -120,6 +120,7 @@ class Command(BaseCommand):
         """
         Computes Global Mean, Year Biases, Item Biases, and User Biases using Damped Least Squares.
         Score = Global + b_y + b_i + b_u + Interaction
+        Does NOT modify df in-place to save memory.
         """
         self.stdout.write('Computing biases...')
         
@@ -127,35 +128,42 @@ class Command(BaseCommand):
         global_mean = df['rating'].mean()
 
         # 2. Year Biases
-        # Year Bias = Mean(Rating for year) - Global Mean
         year_stats = df.groupby('year')['rating'].agg(['sum', 'count'])
         year_stats['bias'] = (year_stats['sum'] - (year_stats['count'] * global_mean)) / (year_stats['count'] + damping)
         year_biases = year_stats['bias'].to_dict()
 
-        # Map Year Bias to DF
-        df['year_bias'] = df['year'].map(year_biases).fillna(0)
-        
         # 3. Item Biases
         # b_i = sum(r - global - year_bias) / (count + damping)
-        df['item_resid'] = df['rating'] - global_mean - df['year_bias']
-        item_stats = df.groupby('tmdbId')['item_resid'].agg(['sum', 'count'])
+        # Use series arithmetic instead of column assignment to save memory
+        y_bias_series = df['year'].map(year_biases).fillna(0).astype('float32')
+        item_resid_series = (df['rating'] - global_mean - y_bias_series).astype('float32')
+        
+        item_stats = item_resid_series.groupby(df['tmdbId']).agg(['sum', 'count'])
         item_stats['bias'] = item_stats['sum'] / (item_stats['count'] + damping)
         item_biases = item_stats['bias'].to_dict()
         
+        # Clean up
+        del y_bias_series
+        del item_resid_series
+        del item_stats
+        
         # 4. User Biases
-        # Subtract global, year and item bias to get residuals for user bias calculation
-        # Map item bias to original df
-        df['item_bias'] = df['tmdbId'].map(item_biases).fillna(0)
-        
         # Residual = Rating - Global - YearBias - ItemBias
-        df['user_resid'] = df['rating'] - global_mean - df['year_bias'] - df['item_bias']
+        # We need to recompute biases series (CPU trade-off for Memory)
+        y_bias_series = df['year'].map(year_biases).fillna(0).astype('float32')
+        i_bias_series = df['tmdbId'].map(item_biases).fillna(0).astype('float32')
         
-        user_stats = df.groupby('userId')['user_resid'].agg(['sum', 'count'])
+        user_resid_series = (df['rating'] - global_mean - y_bias_series - i_bias_series).astype('float32')
+        
+        user_stats = user_resid_series.groupby(df['userId']).agg(['sum', 'count'])
         user_stats['bias'] = user_stats['sum'] / (user_stats['count'] + damping)
         user_biases = user_stats['bias'].to_dict()
         
-        # Cleanup temp columns
-        df.drop(columns=['year_bias', 'item_resid', 'item_bias', 'user_resid'], inplace=True, errors='ignore')
+        del y_bias_series
+        del i_bias_series
+        del user_resid_series
+        del user_stats
+        gc.collect()
 
         return global_mean, year_biases, item_biases, user_biases
 
@@ -166,17 +174,16 @@ class Command(BaseCommand):
         """
         self.stdout.write('Preparing residuals for SVD...')
         
-        # Compute normalized rating (Residual)
-        # We need to map dicts efficiently
-        # Since df can be huge, map() is slow. 
-        # But we already have groupbys.
+        y_bias_series = df['year'].map(year_biases).fillna(0).astype('float32')
+        i_bias_series = df['tmdbId'].map(item_biases).fillna(0).astype('float32')
+        u_bias_series = df['userId'].map(user_biases).fillna(0).astype('float32')
         
-        # Map biases
-        y_bias_series = df['year'].map(year_biases).fillna(0)
-        i_bias_series = df['tmdbId'].map(item_biases).fillna(0)
-        u_bias_series = df['userId'].map(user_biases).fillna(0)
+        residuals = (df['rating'] - global_mean - y_bias_series - i_bias_series - u_bias_series).astype('float32').values
         
-        df['residual'] = df['rating'] - global_mean - y_bias_series - i_bias_series - u_bias_series
+        del y_bias_series
+        del i_bias_series
+        del u_bias_series
+        gc.collect()
         
         # Create Indices
         unique_users = df['userId'].unique()
@@ -187,33 +194,49 @@ class Command(BaseCommand):
         
         user_indices = df['userId'].map(user_to_idx).values
         item_indices = df['tmdbId'].map(item_to_idx).values
-        ratings_array = df['residual'].values
         
         self.stdout.write('Building sparse matrix...')
         R_sparse = coo_matrix(
-            (ratings_array, (user_indices, item_indices)), 
-            shape=(len(user_to_idx), len(item_to_idx))
+            (residuals, (user_indices, item_indices)), 
+            shape=(len(user_to_idx), len(item_to_idx)),
+            dtype=np.float32
         ).tocsr()
         
         return R_sparse, user_to_idx, item_to_idx
 
     def evaluate_model(self, df_train, df_test, k, damping=5):
         """Trains on Train set, computes RMSE on Test set"""
-        # Compute biases on TRAIN data only
-        global_mean, year_biases, item_biases, user_biases = self.compute_biases(df_train.copy(), damping=damping)
+        # NO COPIES: Pass df_train directly, compute_biases and create_sparse_matrix will not modify it
+        global_mean, year_biases, item_biases, user_biases = self.compute_biases(df_train, damping=damping)
         
         # Build Matrix
-        R_sparse, user_to_idx, item_to_idx = self.create_sparse_matrix(df_train.copy(), global_mean, year_biases, item_biases, user_biases)
+        R_sparse, user_to_idx, item_to_idx = self.create_sparse_matrix(df_train, global_mean, year_biases, item_biases, user_biases)
         
         # SVD
         try:
+            # Optimize k if it's too large for the matrix dims
+            min_dim = min(R_sparse.shape)
+            if k >= min_dim:
+                k = max(1, min_dim - 1)
+
             u, s, vt = svds(R_sparse, k=k)
+            
+            # Reduce precision immediately
+            u = u.astype(np.float32)
+            s = s.astype(np.float32)
+            vt = vt.astype(np.float32)
+            
             # Reorder singular values
             u = u[:, ::-1]
             s = s[::-1]
             vt = vt[::-1, :]
             sigma = np.diag(s)
+            
+            del R_sparse
+            gc.collect()
+            
         except Exception as e:
+            self.stdout.write(self.style.ERROR(f"SVD Failed: {e}"))
             return float('inf')
 
         # Evaluate
@@ -231,20 +254,26 @@ class Command(BaseCommand):
 
         test_u_indices = df_test_filtered['userId'].map(user_to_idx).values
         test_i_indices = df_test_filtered['tmdbId'].map(item_to_idx).values
-        actual_ratings = df_test_filtered['rating'].values
+        actual_ratings = df_test_filtered['rating'].values.astype(np.float32)
         
         # Get biases
-        test_g_mean = global_mean
-        test_y_biases = df_test_filtered['year'].map(year_biases).fillna(0).values
-        test_i_biases = df_test_filtered['tmdbId'].map(item_biases).fillna(0).values
-        test_u_biases = df_test_filtered['userId'].map(user_biases).fillna(0).values
+        test_g_mean = float(global_mean)
+        
+        if 'year' in df_test_filtered.columns:
+             test_y_biases = df_test_filtered['year'].map(year_biases).fillna(0).values.astype(np.float32)
+        else:
+             test_y_biases = np.zeros(len(df_test_filtered), dtype=np.float32)
+
+        test_i_biases = df_test_filtered['tmdbId'].map(item_biases).fillna(0).values.astype(np.float32)
+        test_u_biases = df_test_filtered['userId'].map(user_biases).fillna(0).values.astype(np.float32)
         
         # Get Dot Product Predictions
         batch_u = u[test_u_indices] # Shape (N, k)
         batch_v = vt[:, test_i_indices] # Shape (k, N)
         
-        # interaction = sum( (u*s) * v.T )
-        interaction_scores = np.sum(np.dot(batch_u, sigma) * batch_v.T, axis=1)
+        # Optimized: interaction = sum( (U . Sigma) * V.T, axis=1 )
+        u_weighted = np.dot(batch_u, sigma)
+        interaction_scores = np.sum(u_weighted * batch_v.T, axis=1)
         
         predictions = test_g_mean + test_y_biases + test_i_biases + test_u_biases + interaction_scores
         
@@ -253,6 +282,9 @@ class Command(BaseCommand):
         
         mse = np.mean((predictions - actual_ratings) ** 2)
         rmse = np.sqrt(mse)
+        
+        del u, s, vt, sigma, batch_u, batch_v, u_weighted, interaction_scores
+        gc.collect()
         
         return rmse
 
