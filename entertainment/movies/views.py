@@ -202,7 +202,7 @@ class TMDBSearchView(APIView):
         movies['results'] = sorted_movies
         return Response(movies, status=status.HTTP_200_OK)
 
-class ExternalRecommendationsAPIView(APIView):
+class ExternalRecommendationsView(APIView):
     authentication_classes = [SessionAuthentication, BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -210,20 +210,27 @@ class ExternalRecommendationsAPIView(APIView):
         summary="Get External Recommendations",
         description="Get movie recommendations for movies NOT in the local database, using the recommender model.",
         parameters=[
-            OpenApiParameter(name="limit", description="Number of recommendations (default 10)", required=False, type=int),
+            OpenApiParameter(name="limit", description="Number of recommendations (default 25)", required=False, type=int),
         ]
     )
     def get(self, request):
-        limit = int(request.GET.get('limit', 10))
+        # Default to 25
+        target_limit = int(request.GET.get('limit', 25))
+        
+        # Request 3x the candidates to handle dead links or TMDB lookup failures
+        candidate_limit = target_limit * 3
+        
         recommender = MovieRecommender()
         
-        # Get recommendations (list of {tmdb_id, predicted_rating})
-        recommendations = recommender.get_recommendations_for_user(request.user.id, limit, scope='external')
+        # Get raw ID recommendations (tmdb_id, predicted_rating)
+        recommendations = recommender.get_recommendations_for_user(request.user.id, candidate_limit, scope='external')
         
         if not recommendations:
-            return Response({"results": []}, status=status.HTTP_200_OK)
+            return Response([], status=status.HTTP_200_OK)
 
         movies_service = MoviesService()
+        
+        results = []
         
         # Helper for parallel fetching
         def fetch_details(item):
@@ -237,18 +244,29 @@ class ExternalRecommendationsAPIView(APIView):
                     # Flags for UI
                     details['in_database'] = False
                     details['in_watchlist'] = False # External recommendations are by definition not tracked
-                return details
+                    return details
             except Exception:
                 return None
+            return None
 
         # Fetch details in parallel
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            fetched_results = list(executor.map(fetch_details, recommendations))
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            # Submit all tasks
+            future_to_item = {executor.submit(fetch_details, item): item for item in recommendations}
+            
+            from concurrent.futures import as_completed
+            for future in as_completed(future_to_item):
+                data = future.result()
+                if data:
+                    results.append(data)
         
-        # Filter out failed fetches
-        results = [r for r in fetched_results if r]
+        # Sort by predicted rating (high to low)
+        results.sort(key=lambda x: x.get('predicted_rating', 0), reverse=True)
         
-        return Response({"results": results}, status=status.HTTP_200_OK)
+        # Return exactly the target limit
+        final_results = results[:target_limit]
+        
+        return Response(final_results, status=status.HTTP_200_OK)
 
 
 class MovieViewSet(viewsets.ViewSet):
@@ -1480,45 +1498,6 @@ def network_graph_data(request):
                 edge['to'] = edge.pop('target')
     
     return Response(data)
-class ExternalRecommendationsView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        summary='Get recommendations for movies outside the local library',
-        description='Returns a list of movies from TMDB that are not in the database but predicted to be liked by the user.',
-    )
-    def get(self, request):
-        recommender = MovieRecommender()
-        # Get {tmdb_id, predicted_rating}
-        recommendations = recommender.get_recommendations_for_user(request.user.id, max_recommendations=12, scope='external')
-        
-        if not recommendations:
-            return Response([])
-
-        # Fetch details from TMDB
-        tmdb_service = MoviesService()
-        results = []
-
-        def fetch_details(rec):
-            try:
-                # Fetch minimal details to show a card
-                details = tmdb_service.get_movie_details(rec['tmdb_id'])
-                if details:
-                    details['predicted_rating'] = rec['predicted_rating']
-                    return details
-            except Exception:
-                return None
-            return None
-
-        # Threaded fetch to make it faster
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = [executor.submit(fetch_details, rec) for rec in recommendations]
-            for future in futures:
-                res = future.result()
-                if res:
-                    results.append(res)
-
-        return Response(results)
 
 
 
