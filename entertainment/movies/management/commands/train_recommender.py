@@ -402,7 +402,7 @@ class Command(BaseCommand):
             df, tmdb_to_genres = self.load_data()
             if df is None: return
 
-            best_k, best_damping = 50, 5
+            best_k, best_damping = 120, 15
             
             if options['optimize']:
                 try:
