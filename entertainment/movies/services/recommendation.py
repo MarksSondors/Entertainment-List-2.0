@@ -235,22 +235,31 @@ class MovieRecommender:
                 est = max(0.5, min(5.0, est))
                 predicted_rating = round(est * 2, 1)
                 
-                predictions.append((movie['id'], predicted_rating))
+                predictions.append({
+                    'id': movie['id'],
+                    'tmdb_id': tmdb_id,
+                    'predicted_rating': predicted_rating
+                })
             
             # Sort by predicted rating
-            predictions.sort(key=lambda x: x[1], reverse=True)
-            top_predictions = predictions[:max_recommendations]
+            predictions.sort(key=lambda x: x['predicted_rating'], reverse=True)
+            
+            # MMR Re-ranking for Local (Diversity Check)
+            pool_size = max_recommendations * 3
+            pool = predictions[:pool_size]
+            top_predictions = self._rerank_mmr(pool, max_recommendations)
             
             # Fetch predicted movies
-            top_movie_ids = [p[0] for p in top_predictions]
+            top_movie_ids = [p['id'] for p in top_predictions]
             movies = list(Movie.objects.filter(id__in=top_movie_ids))
             movies_dict = {m.id: m for m in movies}
             
             recommendations = []
-            for m_id, score in top_predictions:
+            for item in top_predictions:
+                m_id = item['id']
                 if m_id in movies_dict:
                     movie = movies_dict[m_id]
-                    movie.predicted_rating = score
+                    movie.predicted_rating = item['predicted_rating']
                     recommendations.append(movie)
             
             if not recommendations:
