@@ -294,10 +294,10 @@ CACHE_MIDDLEWARE_SECONDS = 900  # 15 minutes
 # Django Q configuration
 Q_CLUSTER = {
     'name': 'entertainment',
-    'workers': 4,
+    'workers': 3,
     'recycle': 500,
-    'timeout': 300, 
-    'retry': 600,   
+    'timeout': 600, 
+    'retry': 700,   
     'compress': True,
     'save_limit': 250,
     'queue_limit': 500,
