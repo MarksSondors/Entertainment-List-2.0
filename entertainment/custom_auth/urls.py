@@ -64,4 +64,7 @@ urlpatterns = [    # discover page
     # memes
     path('memes/add/<int:content_type_id>/<int:object_id>/', views.add_meme, name='add_meme'),
 
+    # database export
+    path('api/db-export/', views.database_export, name='database_export'),
+
 ]
