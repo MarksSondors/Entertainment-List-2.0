@@ -10,6 +10,7 @@ http:
       middlewares:
         - redirect-to-https
         - security-headers
+        - large-upload
 
     entertainment-http:
       rule: "Host(`${DOMAIN:-localhost}`)"
@@ -60,6 +61,10 @@ http:
           # Generate these with: htpasswd -nb admin secure_password
           # The below is example only - replace with your own credentials!
           - "admin:$apr1$ruca84Hq$mbjdMZBAG.KWn7vfN/SNK/"  
+
+    large-upload:
+      buffering:
+        maxRequestBodyBytes: 524288000  # 500 MB
 
 entryPoints:
   web:
