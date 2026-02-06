@@ -18,7 +18,7 @@ from games.models import Game
 from datetime import date # Import date
 import random
 
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 
 # Add these imports if they're not already at the top  
 from django.db import models
