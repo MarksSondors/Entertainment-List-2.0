@@ -567,9 +567,6 @@ iframe[src*="tiktok.com"] {
                     {% else %}
                     <p><strong>User Rating:</strong> <em style="color: var(--text-muted);">No user reviews yet</em></p>
                     {% endif %}
-                    {% if predicted_rating %}
-                    <p><strong>Predicted Score:</strong> <span style="background-color: var(--button-highlight); color: white; padding: 2px 6px; border-radius: 4px;">{{ predicted_rating }}</span> <small style="color: var(--text-muted);">(based on your taste)</small></p>
-                    {% endif %}
                     <p><strong>Runtime:</strong> {{ movie.minutes_to_hours }}</p>
                     <p><strong>Country:</strong> 
                         {% for country in movie.countries.all %}

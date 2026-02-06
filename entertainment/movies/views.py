@@ -106,24 +106,6 @@ def movie_page(request, movie_id):
         object_id=movie_db.id
     )
 
-    # Calculate predicted rating
-    predicted_rating = None
-    if request.user.is_authenticated and movie_db.tmdb_id:
-        try:
-            recommender = MovieRecommender()
-            # Assuming recommender uses "loc_ID" format
-            est = recommender.predict_rating(
-                f"loc_{request.user.id}", 
-                int(movie_db.tmdb_id),
-                year=movie_db.release_date.year if movie_db.release_date else None
-            )
-            if est > 0:
-                 # Clamp and scale
-                 est = max(0.5, min(5.0, est))
-                 predicted_rating = round(est * 2, 1)
-        except Exception:
-            pass
-
     context = {
         'movie': movie_db,
         'user_watchlist': user_watchlist,
@@ -133,7 +115,6 @@ def movie_page(request, movie_id):
         'user_rating_count': user_rating_count,
         'memes': memes,
         'content_type_id': content_type.id,
-        'predicted_rating': predicted_rating,
     }
     return render(request, 'movie_page.html', context)
 
