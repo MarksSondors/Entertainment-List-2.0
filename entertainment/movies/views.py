@@ -9,6 +9,7 @@ from rest_framework.authentication import SessionAuthentication, BasicAuthentica
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 import json
+import os
 import random
 from concurrent.futures import ThreadPoolExecutor
 
@@ -21,7 +22,7 @@ from django.http import JsonResponse
 
 from django.db.models import Count, Q, Min
 from django.utils import timezone
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .services.recommendation import MovieRecommender
@@ -1503,6 +1504,8 @@ def train_model(request):
     return redirect('settings_page')
 
 @api_view(['POST'])
+@authentication_classes([])
+@permission_classes([])
 def upload_model(request):
     """Accept a trained SVD model (.pkl) upload secured by a shared secret.
     
@@ -1511,6 +1514,11 @@ def upload_model(request):
     """
     from django.conf import settings as django_settings
     import shutil
+    import pickle
+    import logging
+    from datetime import datetime
+
+    logger = logging.getLogger(__name__)
 
     upload_key = getattr(django_settings, 'MODEL_UPLOAD_KEY', '')
     if not upload_key:
@@ -1537,46 +1545,55 @@ def upload_model(request):
         return Response({'error': 'File too large (max 500 MB).'},
                         status=status.HTTP_400_BAD_REQUEST)
 
-    model_dir = os.path.join(django_settings.BASE_DIR, 'movies', 'ml_models')
-    os.makedirs(model_dir, exist_ok=True)
-
-    # Validate pickle contains expected keys before committing
-    import pickle
     try:
-        data = pickle.load(model_file)
+        model_dir = os.path.join(django_settings.BASE_DIR, 'movies', 'ml_models')
+        os.makedirs(model_dir, exist_ok=True)
+
+        # Write uploaded file directly to disk (stream, no full-memory deserialize)
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        versioned_name = f'svd_model_{ts}.pkl'
+        versioned_path = os.path.join(model_dir, versioned_name)
+
+        with open(versioned_path, 'wb') as dest:
+            for chunk in model_file.chunks(chunk_size=8 * 1024 * 1024):  # 8 MB chunks
+                dest.write(chunk)
+
+        logger.info(f'Model file written to {versioned_path} ({model_file.size / 1024 / 1024:.1f} MB)')
+
+        # Validate the saved file by loading just the keys
+        with open(versioned_path, 'rb') as f:
+            data = pickle.load(f)
+
         required_keys = {'global_mean', 'U', 'Sigma', 'Vt', 'user_to_idx', 'item_to_idx'}
         if not required_keys.issubset(data.keys()):
             missing = required_keys - data.keys()
+            os.remove(versioned_path)
             return Response({'error': f'Invalid model: missing keys {missing}'},
                             status=status.HTTP_400_BAD_REQUEST)
+
+        metadata = data.get('metadata', {})
+        # Free memory before copying
+        del data
+
+        # Copy to latest + legacy
+        latest_path = os.path.join(model_dir, 'svd_model_latest.pkl')
+        legacy_path = os.path.join(model_dir, 'svd_model.pkl')
+        shutil.copy2(versioned_path, latest_path)
+        shutil.copy2(versioned_path, legacy_path)
+
+        return Response({
+            'status': 'ok',
+            'saved_as': versioned_name,
+            'model_version': metadata.get('model_version', 'unknown'),
+            'trained_at': metadata.get('trained_at', 'unknown'),
+            'n_items': metadata.get('n_items'),
+            'n_local_users': metadata.get('n_local_users'),
+        }, status=status.HTTP_201_CREATED)
+
     except Exception as e:
-        return Response({'error': f'Failed to deserialize model: {e}'},
-                        status=status.HTTP_400_BAD_REQUEST)
-
-    # Write timestamped version
-    from datetime import datetime
-    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-    versioned_name = f'svd_model_{ts}.pkl'
-    versioned_path = os.path.join(model_dir, versioned_name)
-
-    with open(versioned_path, 'wb') as f:
-        pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    # Atomic-ish copy to latest + legacy symlinks
-    latest_path = os.path.join(model_dir, 'svd_model_latest.pkl')
-    legacy_path = os.path.join(model_dir, 'svd_model.pkl')
-    shutil.copy2(versioned_path, latest_path)
-    shutil.copy2(versioned_path, legacy_path)
-
-    metadata = data.get('metadata', {})
-    return Response({
-        'status': 'ok',
-        'saved_as': versioned_name,
-        'model_version': metadata.get('model_version', 'unknown'),
-        'trained_at': metadata.get('trained_at', 'unknown'),
-        'n_items': metadata.get('n_items'),
-        'n_local_users': metadata.get('n_local_users'),
-    }, status=status.HTTP_201_CREATED)
+        logger.exception('Model upload failed')
+        return Response({'error': f'Server error: {str(e)}'},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @staff_member_required
