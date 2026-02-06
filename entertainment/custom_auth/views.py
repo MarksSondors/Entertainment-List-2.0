@@ -2,11 +2,12 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout  # Import the logout function
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.db.models import Q, Avg
 from django.contrib.contenttypes.models import ContentType
 
 from django.utils import timezone
+import subprocess
 # Create your views here.
 # import services
 
@@ -3524,3 +3525,49 @@ def add_meme(request, content_type_id, object_id):
         form = MemeForm()
 
     return render(request, 'custom_auth/add_meme.html', {'form': form, 'object': obj})
+
+
+@require_http_methods(["GET"])
+def database_export(request):
+    """Stream a pg_dump of the database. Requires superuser API key via Authorization header."""
+    api_key = request.headers.get('Authorization', '').removeprefix('Bearer ').strip()
+    if not api_key:
+        return JsonResponse({'error': 'Missing API key'}, status=401)
+
+    try:
+        user = CustomUser.objects.get(api_key=api_key)
+    except CustomUser.DoesNotExist:
+        return JsonResponse({'error': 'Invalid API key'}, status=401)
+
+    if not user.is_superuser:
+        return JsonResponse({'error': 'Insufficient permissions'}, status=403)
+
+    from django.conf import settings as django_settings
+    import os
+
+    db = django_settings.DATABASES['default']
+    cmd = [
+        'pg_dump',
+        '-h', db['HOST'],
+        '-p', str(db['PORT']),
+        '-U', db['USER'],
+        '-d', db['NAME'],
+        '-F', 'c',
+    ]
+    env = {**os.environ, 'PGPASSWORD': db['PASSWORD']}
+
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+
+    def stream():
+        try:
+            while True:
+                chunk = process.stdout.read(8192)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            process.wait()
+
+    response = StreamingHttpResponse(stream(), content_type='application/octet-stream')
+    response['Content-Disposition'] = 'attachment; filename="backup.dump"'
+    return response
