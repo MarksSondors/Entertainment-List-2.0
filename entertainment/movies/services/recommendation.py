@@ -1,6 +1,7 @@
 import numpy as np
 import pickle
 import os
+import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
@@ -9,18 +10,25 @@ from movies.models import Movie
 from custom_auth.models import Review
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 class MovieRecommender:
     def __init__(self):
         self.movie_content_type = ContentType.objects.get_for_model(Movie)
         self.model_data = None
         self.known_tmdb_ids = set()
+        self._genre_combo_avg_bias = {}  # Pre-built lookup for cold-item estimation
         self._load_model()
         
     def _load_model(self):
         """Load the Scipy SVD model and mappings"""
         try:
-            model_path = os.path.join(settings.BASE_DIR, 'movies', 'ml_models', 'svd_model.pkl')
+            model_dir = os.path.join(settings.BASE_DIR, 'movies', 'ml_models')
+            # Try versioned name first, fall back to legacy name
+            model_path = os.path.join(model_dir, 'svd_model_latest.pkl')
+            if not os.path.exists(model_path):
+                model_path = os.path.join(model_dir, 'svd_model.pkl')
+
             if os.path.exists(model_path):
                 with open(model_path, 'rb') as f:
                     self.model_data = pickle.load(f)
@@ -33,32 +41,111 @@ class MovieRecommender:
                     self.Sigma = self.model_data.get('Sigma')
                     self.Vt = self.model_data.get('Vt')
                     
-                    # New Bias Terms
+                    # Bias Terms
                     self.item_biases = self.model_data.get('item_biases', {})
                     self.user_biases = self.model_data.get('user_biases', {})
                     self.year_biases = self.model_data.get('year_biases', {})
                     self.user_genre_biases = self.model_data.get('user_genre_biases', {})
-                    # [NEW] Load Decade Biases
                     self.user_decade_biases = self.model_data.get('user_decade_biases', {})
                     
                     self.tmdb_to_genres = self.model_data.get('tmdb_to_genres', {})
-                    self.genre_mapping = self.model_data.get('genre_mapping', {}) # TMDB -> ML mapping
+                    self.genre_mapping = self.model_data.get('genre_mapping', {})
                     
                     self.tmdb_id_to_year = self.model_data.get('tmdb_id_to_year', {})
                     self.global_mean = self.model_data.get('global_mean', 3.5)
+
+                    # Log metadata if available
+                    metadata = self.model_data.get('metadata', {})
+                    if metadata:
+                        logger.info(
+                            f"Loaded SVD model v{metadata.get('model_version', '?')} "
+                            f"trained {metadata.get('trained_at', '?')} | "
+                            f"k={metadata.get('k')}, {metadata.get('n_items')} items, "
+                            f"{metadata.get('n_local_users', 0)} local users"
+                        )
+
+                    # Pre-build genre_combo → avg_bias lookup for cold-item estimation
+                    self._build_cold_item_lookup()
         except Exception:
             pass
+
+    def _build_cold_item_lookup(self):
+        """
+        Pre-build a lookup from frozenset(genres) → average item_bias
+        for estimating bias of movies not in the training data (post-2023).
+        Groups known movies by their genre combination and averages their item biases.
+        """
+        if not self.item_biases or not self.tmdb_to_genres:
+            return
+
+        from collections import defaultdict
+        combo_biases = defaultdict(list)  # frozenset(genres) -> [bias1, bias2, ...]
+
+        for tmdb_id, genres_list in self.tmdb_to_genres.items():
+            if tmdb_id not in self.item_biases:
+                continue
+            genre_set = frozenset(genres_list)
+            if genre_set:
+                combo_biases[genre_set].append(self.item_biases[tmdb_id])
+
+        # Average bias per exact genre combination
+        self._genre_combo_avg_bias = {
+            combo: float(np.mean(biases))
+            for combo, biases in combo_biases.items()
+            if biases
+        }
     
+    def _estimate_cold_item_bias(self, tmdb_id_int):
+        """
+        For movies not in the training data (post-2023), estimate item bias
+        from pre-built genre_combo → avg_bias lookup.
+        Falls back to Jaccard-based matching if no exact combo match exists.
+        """
+        movie_genres = self.tmdb_to_genres.get(tmdb_id_int, [])
+        if not movie_genres:
+            return 0.0
+
+        # Map to ML genre names
+        ml_genres = set()
+        for g in movie_genres:
+            mapped = self.genre_mapping.get(g, g)
+            if mapped:
+                ml_genres.add(mapped)
+
+        if not ml_genres:
+            return 0.0
+
+        target = frozenset(ml_genres)
+
+        # Try exact combo match first (fast path)
+        if target in self._genre_combo_avg_bias:
+            return self._genre_combo_avg_bias[target]
+
+        # Fallback: find combos with ≥50% Jaccard overlap and average their biases
+        matching_biases = []
+        for combo, avg_bias in self._genre_combo_avg_bias.items():
+            inter = len(target & combo)
+            union = len(target | combo)
+            if union > 0 and inter / union >= 0.5:
+                matching_biases.append(avg_bias)
+
+        if matching_biases:
+            return float(np.mean(matching_biases))
+        return 0.0
+
     def predict_rating(self, user_id_str, tmdb_id_int, year=None):
-        """Predict rating using SVD + Biases: score = Global + b_i + b_u + b_year + b_genre + Interaction"""
+        """Predict rating using SVD + Biases with cold-item fallback."""
         if not self.model_data:
             return 0
             
         u_idx = self.user_to_idx.get(user_id_str)
         i_idx = self.item_to_idx.get(tmdb_id_int)
         
-        # Biases
-        b_i = self.item_biases.get(tmdb_id_int, 0.0)
+        # Item Bias: use learned bias if available, otherwise estimate from genre peers
+        b_i = self.item_biases.get(tmdb_id_int)
+        if b_i is None:
+            b_i = self._estimate_cold_item_bias(tmdb_id_int)
+
         b_u = self.user_biases.get(user_id_str, 0.0)
         
         # Year & Decade Bias
@@ -69,41 +156,21 @@ class MovieRecommender:
             year = self.tmdb_id_to_year.get(tmdb_id_int)
         if year is not None:
              b_y = self.year_biases.get(year, 0.0)
-             if hasattr(self, 'user_decade_biases') and self.user_decade_biases:
+             if self.user_decade_biases:
                  decade = (int(year) // 10) * 10
                  b_dec = self.user_decade_biases.get(decade, {}).get(user_id_str, 0.0)
 
-        # Genre Bias
-        # Looking up genres for this movie to apply specific user tastes
+        # Genre Bias — sum all matching genre biases (matches training subtraction pattern)
         b_g = 0.0
-        
-        # Local lookup first (from tmdb_to_genres loaded map)
         movie_genres = self.tmdb_to_genres.get(tmdb_id_int, [])
         
-        # If movie_genres are TMDB names, we must map them to MovieLens names
-        # Note: If they came from local DB (via view passing them), we could support that too, 
-        # but for now we rely on the static map for consistency.
-        
         if movie_genres and self.user_genre_biases:
-            valid_count = 0
-            total_bias = 0.0
-            
             for g_raw in movie_genres:
-                # If genre is "Action", map to "Action"
-                # If genre is "Science Fiction", map to "Sci-Fi"
-                # If genre is "Children", map to "Children's"
-                
-                # Check mapping first (TMDB -> ML)
                 ml_genre = self.genre_mapping.get(g_raw, g_raw) 
-                
                 if ml_genre and ml_genre in self.user_genre_biases:
                      genre_map = self.user_genre_biases[ml_genre]
                      if user_id_str in genre_map:
-                         total_bias += genre_map[user_id_str]
-                         valid_count += 1
-            
-            if valid_count > 0:
-                b_g = total_bias / valid_count
+                         b_g += genre_map[user_id_str]
         
         interaction = 0.0
         

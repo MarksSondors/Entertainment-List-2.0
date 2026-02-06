@@ -1521,6 +1521,83 @@ def train_model(request):
         messages.success(request, 'Model trained successfully.')
     return redirect('settings_page')
 
+@api_view(['POST'])
+def upload_model(request):
+    """Accept a trained SVD model (.pkl) upload secured by a shared secret.
+    
+    Usage from local machine:
+        python manage.py upload_model --url https://yoursite.com/movies/upload-model/
+    """
+    from django.conf import settings as django_settings
+    import shutil
+
+    upload_key = getattr(django_settings, 'MODEL_UPLOAD_KEY', '')
+    if not upload_key:
+        return Response({'error': 'Model upload is not configured on this server.'},
+                        status=status.HTTP_501_NOT_IMPLEMENTED)
+
+    # Validate Bearer token
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if not auth_header.startswith('Bearer ') or auth_header[7:] != upload_key:
+        return Response({'error': 'Invalid or missing authorization.'},
+                        status=status.HTTP_403_FORBIDDEN)
+
+    model_file = request.FILES.get('model')
+    if not model_file:
+        return Response({'error': 'No model file provided. Use field name "model".'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    if not model_file.name.endswith('.pkl'):
+        return Response({'error': 'Only .pkl files are accepted.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # Size guard – reject files > 500 MB
+    if model_file.size > 500 * 1024 * 1024:
+        return Response({'error': 'File too large (max 500 MB).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    model_dir = os.path.join(django_settings.BASE_DIR, 'movies', 'ml_models')
+    os.makedirs(model_dir, exist_ok=True)
+
+    # Validate pickle contains expected keys before committing
+    import pickle
+    try:
+        data = pickle.load(model_file)
+        required_keys = {'global_mean', 'U', 'Sigma', 'Vt', 'user_to_idx', 'item_to_idx'}
+        if not required_keys.issubset(data.keys()):
+            missing = required_keys - data.keys()
+            return Response({'error': f'Invalid model: missing keys {missing}'},
+                            status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': f'Failed to deserialize model: {e}'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # Write timestamped version
+    from datetime import datetime
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    versioned_name = f'svd_model_{ts}.pkl'
+    versioned_path = os.path.join(model_dir, versioned_name)
+
+    with open(versioned_path, 'wb') as f:
+        pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # Atomic-ish copy to latest + legacy symlinks
+    latest_path = os.path.join(model_dir, 'svd_model_latest.pkl')
+    legacy_path = os.path.join(model_dir, 'svd_model.pkl')
+    shutil.copy2(versioned_path, latest_path)
+    shutil.copy2(versioned_path, legacy_path)
+
+    metadata = data.get('metadata', {})
+    return Response({
+        'status': 'ok',
+        'saved_as': versioned_name,
+        'model_version': metadata.get('model_version', 'unknown'),
+        'trained_at': metadata.get('trained_at', 'unknown'),
+        'n_items': metadata.get('n_items'),
+        'n_local_users': metadata.get('n_local_users'),
+    }, status=status.HTTP_201_CREATED)
+
+
 @staff_member_required
 def download_dataset(request):
     try:
