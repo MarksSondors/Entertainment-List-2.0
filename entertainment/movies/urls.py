@@ -22,6 +22,7 @@ urlpatterns = [
     path('recommendations/', views.movie_recommendations, name='movie_recommendations'),
     path('task-status/', MovieTaskStatusView.as_view(), name='movie-task-status'),
     path('train-model/', views.train_model, name='train_model'),
+    path('upload-model/', views.upload_model, name='upload_model'),
     path('download-dataset/', views.download_dataset, name='download_dataset'),
     path('search-local/', views.movie_search, name='movie_search_local'),
 

@@ -316,3 +316,6 @@ WEBPUSH_VAPID_PRIVATE_KEY = config('WEBPUSH_VAPID_PRIVATE_KEY', default='')
 WEBPUSH_VAPID_ADMIN_EMAIL = config('WEBPUSH_VAPID_ADMIN_EMAIL', default='admin@entertainment-list.com')
 
 SESSION_COOKIE_AGE = 1209600 * 3
+
+# Shared secret for uploading trained SVD model from local → production
+MODEL_UPLOAD_KEY = config('MODEL_UPLOAD_KEY', default='')
