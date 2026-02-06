@@ -65,6 +65,23 @@ class Command(BaseCommand):
             env = {**os.environ, 'PGPASSWORD': db['PASSWORD']}
             pg_args = ['-h', db['HOST'], '-p', str(db['PORT']), '-U', db['USER']]
 
+            # Close Django's own database connections first
+            self.stdout.write('Closing local Django DB connections...')
+            from django.db import connections
+            for conn_name in connections:
+                connections[conn_name].close()
+
+            # Terminate all other sessions connected to this database
+            self.stdout.write('Terminating other database sessions...')
+            subprocess.run(
+                [
+                    'psql', *pg_args, '-d', 'postgres', '-c',
+                    f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    f"WHERE datname = '{db['NAME']}' AND pid <> pg_backend_pid();"
+                ],
+                env=env, check=True, capture_output=True,
+            )
+
             # Drop and recreate
             self.stdout.write('Dropping and recreating local database...')
             subprocess.run(
