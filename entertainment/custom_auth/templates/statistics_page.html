@@ -192,6 +192,106 @@
     min-height: 280px;
 }
 
+/* ── Summary Cards ── */
+.stats-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+    .stats-summary {
+        grid-template-columns: 1fr;
+    }
+}
+
+.summary-card {
+    border: 2px inset var(--bg-color);
+    background: var(--window-bg);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.summary-card .win98-icon {
+    width: 32px;
+    height: 32px;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+
+.summary-card .summary-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.summary-card .summary-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: var(--text-color);
+    font-family: 'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif;
+    line-height: 1.2;
+}
+
+.summary-card .summary-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif;
+}
+
+/* ── Top Directors List ── */
+.top-directors-list {
+    width: 100%;
+    font-family: 'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif;
+    font-size: 12px;
+}
+
+.top-directors-list .director-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-dark);
+    gap: 8px;
+}
+
+.top-directors-list .director-row:last-child {
+    border-bottom: none;
+}
+
+.top-directors-list .director-rank {
+    width: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.top-directors-list .director-name {
+    flex: 1;
+    color: var(--text-color);
+}
+
+.top-directors-list .director-count {
+    color: var(--text-muted);
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.top-directors-list .director-rating {
+    color: #008080;
+    font-weight: bold;
+    white-space: nowrap;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* ── Full-width chart ── */
+.stats-grid .full-width {
+    grid-column: 1 / -1;
+}
+
 /* ── Empty State (Win98 Error Dialog) ── */
 .stats-empty-state {
     display: flex;
@@ -340,6 +440,31 @@
                 </div>
             </div>
 
+            <!-- Summary cards -->
+            <div class="stats-summary" id="stats-summary">
+                <div class="summary-card">
+                    <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="" class="win98-icon">
+                    <div class="summary-info">
+                        <span class="summary-value" id="summary-total">0</span>
+                        <span class="summary-label">Total Rated</span>
+                    </div>
+                </div>
+                <div class="summary-card" id="summary-hours-card">
+                    <img src="{% static 'images/win98/clock.png' %}" alt="" class="win98-icon">
+                    <div class="summary-info">
+                        <span class="summary-value" id="summary-hours">0</span>
+                        <span class="summary-label">Hours</span>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <img src="{% static 'images/win98/favorites.png' %}" alt="" class="win98-icon">
+                    <div class="summary-info">
+                        <span class="summary-value" id="summary-avg">0</span>
+                        <span class="summary-label">Avg Rating</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Chart panels grid -->
             <div class="stats-grid" id="stats-grid">
                 <!-- Rating Distribution -->
@@ -381,12 +506,12 @@
                     </div>
                 </div>
 
-                <!-- Average Rating by Year -->
+                <!-- Average Rating by Release Year -->
                 <div class="window">
                     <div class="title-bar">
                         <div class="title-bar-text">
                             <img src="{% static 'images/win98/calendar.png' %}" alt="" class="win98-icon">
-                            Average Rating by Year
+                            Avg Rating by Release Year
                         </div>
                     </div>
                     <div class="window-body">
@@ -417,6 +542,71 @@
                     </div>
                     <div class="window-body">
                         <div id="chart-genre-avg" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <!-- Watch Time by Month (Movies & TV only) -->
+                <div class="window full-width" id="watch-time-window">
+                    <div class="title-bar">
+                        <div class="title-bar-text">
+                            <img src="{% static 'images/win98/clock.png' %}" alt="" class="win98-icon">
+                            Watch Time by Month
+                        </div>
+                    </div>
+                    <div class="window-body">
+                        <div id="chart-watch-time" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <!-- Top Directors by Count (Movies only) -->
+                <div class="window directors-panel" id="top-directors-window">
+                    <div class="title-bar">
+                        <div class="title-bar-text">
+                            <img src="{% static 'images/win98/users.png' %}" alt="" class="win98-icon">
+                            Top Directors (Most Films)
+                        </div>
+                    </div>
+                    <div class="window-body">
+                        <div id="top-directors-container" class="chart-container" style="min-height: auto;"></div>
+                    </div>
+                </div>
+
+                <!-- Top Directors by Rating (Movies only) -->
+                <div class="window directors-panel" id="top-directors-rating-window">
+                    <div class="title-bar">
+                        <div class="title-bar-text">
+                            <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="" class="win98-icon">
+                            Top Directors (By Rating)
+                        </div>
+                    </div>
+                    <div class="window-body">
+                        <div id="top-directors-rating-container" class="chart-container" style="min-height: auto;"></div>
+                    </div>
+                </div>
+
+                <!-- Top Actors by Count (Movies & TV) -->
+                <div class="window actors-panel" id="top-actors-window">
+                    <div class="title-bar">
+                        <div class="title-bar-text">
+                            <img src="{% static 'images/win98/users.png' %}" alt="" class="win98-icon">
+                            Top Actors (Most Films)
+                        </div>
+                    </div>
+                    <div class="window-body">
+                        <div id="top-actors-container" class="chart-container" style="min-height: auto;"></div>
+                    </div>
+                </div>
+
+                <!-- Top Actors by Rating (Movies & TV) -->
+                <div class="window actors-panel" id="top-actors-rating-window">
+                    <div class="title-bar">
+                        <div class="title-bar-text">
+                            <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="" class="win98-icon">
+                            Top Actors (By Rating)
+                        </div>
+                    </div>
+                    <div class="window-body">
+                        <div id="top-actors-rating-container" class="chart-container" style="min-height: auto;"></div>
                     </div>
                 </div>
             </div>
@@ -528,12 +718,18 @@
 
         if (year === 'all') {
             return {
-                rating_distribution: media.rating_distribution,
-                ratings_over_time:   media.ratings_over_time,
+                summary:              media.summary,
+                rating_distribution:  media.rating_distribution,
+                ratings_over_time:    media.ratings_over_time,
                 release_year_distribution: media.release_year_distribution,
-                avg_rating_by_year:  media.avg_rating_by_year,
-                count_by_genre:      media.count_by_genre,
-                avg_rating_by_genre: media.avg_rating_by_genre,
+                avg_rating_by_release_year: media.avg_rating_by_release_year,
+                count_by_genre:       media.count_by_genre,
+                avg_rating_by_genre:  media.avg_rating_by_genre,
+                watch_time_by_month:  media.watch_time_by_month,
+                top_directors:        media.top_directors,
+                top_directors_by_rating: media.top_directors_by_rating,
+                top_actors:           media.top_actors,
+                top_actors_by_rating: media.top_actors_by_rating,
             };
         }
 
@@ -567,7 +763,19 @@
         });
     }
 
-    // ── Render all six charts ──
+    // ── Update summary cards ──
+    function updateSummary(data, mediaType) {
+        const summary = data ? data.summary : null;
+        document.getElementById('summary-total').textContent = summary ? summary.total_rated : 0;
+        document.getElementById('summary-hours').textContent = summary ? summary.total_hours : 0;
+        document.getElementById('summary-avg').textContent = summary ? summary.avg_rating : 0;
+
+        // Hide hours card for games (no runtime)
+        const hoursCard = document.getElementById('summary-hours-card');
+        hoursCard.style.display = mediaType === 'games' ? 'none' : '';
+    }
+
+    // ── Render all charts ──
     function renderCharts(mediaType, year) {
         destroyCharts();
 
@@ -579,6 +787,13 @@
         document.getElementById('total-reviews').textContent = total + ' ' + label + ' Rated';
         document.getElementById('status-bar-info').textContent = label + ' Statistics';
         document.getElementById('status-bar-count').textContent = total + ' items';
+
+        // Show/hide watch time panel
+        const watchTimeWindow = document.getElementById('watch-time-window');
+        watchTimeWindow.style.display = mediaType === 'games' ? 'none' : '';
+
+        // Update summary cards
+        updateSummary(data, mediaType);
 
         if (!data) {
             showEmptyState();
@@ -593,6 +808,13 @@
         }
 
         hideEmptyState();
+
+        // Show/hide people panels based on media type (after hideEmptyState which resets display)
+        const directorPanels = document.querySelectorAll('.directors-panel');
+        const actorPanels = document.querySelectorAll('.actors-panel');
+        directorPanels.forEach(p => p.style.display = mediaType === 'movies' ? '' : 'none');
+        actorPanels.forEach(p => p.style.display = mediaType === 'games' ? 'none' : '');
+
         const c = getColors();
 
         // 1. Rating Distribution — bar chart
@@ -666,9 +888,9 @@
         );
         charts.releaseYears.render();
 
-        // 4. Average Rating by Year — line chart
-        const avgYearLabels = Object.keys(data.avg_rating_by_year);
-        const avgYearValues = Object.values(data.avg_rating_by_year);
+        // 4. Average Rating by Release Year — line chart
+        const avgYearLabels = Object.keys(data.avg_rating_by_release_year || {});
+        const avgYearValues = Object.values(data.avg_rating_by_release_year || {});
         charts.avgYear = new ApexCharts(
             document.querySelector('#chart-avg-year'),
             baseOptions({
@@ -676,7 +898,7 @@
                 series: [{ name: 'Avg Rating', data: avgYearValues }],
                 xaxis: {
                     categories: avgYearLabels,
-                    title: { text: 'Year Rated', style: { color: c.text, fontSize: '10px' } },
+                    title: { text: 'Release Year', style: { color: c.text, fontSize: '10px' } },
                     labels: { style: { colors: c.text, fontSize: '10px' } },
                     axisBorder: { color: c.gridLine }, axisTicks: { color: c.gridLine },
                 },
@@ -742,6 +964,73 @@
             })
         );
         charts.genreAvg.render();
+
+        // 7. Watch Time by Month — area chart (Movies & TV only)
+        if (mediaType !== 'games') {
+            const wtData = data.watch_time_by_month || [];
+            if (Array.isArray(wtData) && wtData.length > 0) {
+                const wtLabels = wtData.map(d => d.month);
+                const wtValues = wtData.map(d => d.hours);
+                charts.watchTime = new ApexCharts(
+                    document.querySelector('#chart-watch-time'),
+                    baseOptions({
+                        chart: { type: 'area', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false } },
+                        series: [{ name: 'Hours', data: wtValues }],
+                        xaxis: {
+                            categories: wtLabels,
+                            title: { text: 'Month', style: { color: c.text, fontSize: '10px' } },
+                            labels: { style: { colors: c.text, fontSize: '10px' }, rotate: -45, rotateAlways: wtLabels.length > 10 },
+                            axisBorder: { color: c.gridLine }, axisTicks: { color: c.gridLine },
+                        },
+                        yaxis: {
+                            title: { text: 'Hours', style: { color: c.text, fontSize: '10px' } },
+                            labels: { style: { colors: c.text, fontSize: '10px' } },
+                        },
+                        colors: ['#008080'],
+                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1 } },
+                        stroke: { width: 2, curve: 'smooth' },
+                        dataLabels: { enabled: false },
+                    })
+                );
+                charts.watchTime.render();
+            } else {
+                document.querySelector('#chart-watch-time').innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:40px;">No watch time data available</div>';
+            }
+        }
+
+        // 8. Top Directors (Movies only)
+        if (mediaType === 'movies') {
+            renderPeopleList('top-directors-container', data.top_directors, 'No director data', 'film');
+            renderPeopleList('top-directors-rating-container', data.top_directors_by_rating, 'Not enough data (min 2 films per director)', 'film');
+        }
+
+        // 9. Top Actors (Movies & TV)
+        if (mediaType !== 'games') {
+            const itemLabel = mediaType === 'movies' ? 'film' : 'show';
+            renderPeopleList('top-actors-container', data.top_actors, 'No actor data', itemLabel);
+            renderPeopleList('top-actors-rating-container', data.top_actors_by_rating, 'Not enough data (min 2 titles per actor)', itemLabel);
+        }
+    }
+
+    function renderPeopleList(containerId, people, emptyMsg, itemLabel) {
+        const container = document.getElementById(containerId);
+        const list = people || [];
+        if (list.length > 0) {
+            let html = '<div class="top-directors-list">';
+            list.forEach((d, i) => {
+                const plural = d.count !== 1 ? (itemLabel + 's') : itemLabel;
+                html += `<div class="director-row">
+                    <span class="director-rank">${i + 1}</span>
+                    <span class="director-name">${d.name}</span>
+                    <span class="director-count">${d.count} ${plural}</span>
+                    <span class="director-rating">★ ${d.avg_rating}</span>
+                </div>`;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:40px;">' + emptyMsg + '</div>';
+        }
     }
 
     // ── Tab switching ──

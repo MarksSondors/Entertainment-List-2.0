@@ -5,7 +5,7 @@ import secrets
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.db.models.signals import pre_delete, post_save
+from django.db.models.signals import pre_delete, post_save, post_delete
 from django.dispatch import receiver
 
 
@@ -372,6 +372,20 @@ def send_review_notification(sender, instance, created, **kwargs):
     if created:
         from django_q.tasks import async_task
         async_task('custom_auth.tasks.process_review_notification', instance.id)
+
+
+@receiver(post_save, sender=Review)
+def invalidate_stats_on_review_save(sender, instance, **kwargs):
+    """Invalidate statistics cache when a review is created or updated."""
+    from custom_auth.services.statistics import invalidate_stats_cache
+    invalidate_stats_cache(instance.user_id)
+
+
+@receiver(post_delete, sender=Review)
+def invalidate_stats_on_review_delete(sender, instance, **kwargs):
+    """Invalidate statistics cache when a review is deleted."""
+    from custom_auth.services.statistics import invalidate_stats_cache
+    invalidate_stats_cache(instance.user_id)
 
 
 class Meme(models.Model):
