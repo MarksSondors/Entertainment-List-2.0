@@ -106,10 +106,59 @@ class Command(BaseCommand):
 
         return meta_df[['movieId', 'tmdbId', 'year', 'genres']], tmdb_to_genres
 
+    def load_tmdb_catalog(self):
+        """
+        Loads the TMDB movie catalog CSV for enrichment data.
+        Provides: vote_average, vote_count, runtime, budget, revenue,
+        original_language, status — used for new bias layers and cold-start priors.
+        """
+        self.log_memory("Start TMDB Catalog Load")
+        catalog_file = settings.BASE_DIR / 'data' / 'TMDB_movie_dataset_v11.csv'
+
+        if not catalog_file.exists():
+            self.stdout.write(self.style.WARNING(
+                f'TMDB catalog not found at {catalog_file}. Skipping enrichment.'))
+            return None
+
+        catalog = pd.read_csv(
+            catalog_file,
+            usecols=['id', 'vote_average', 'vote_count', 'runtime',
+                     'budget', 'revenue', 'original_language', 'status'],
+            dtype={'id': 'float64'},  # Handle NaN IDs gracefully
+        )
+        catalog = catalog.dropna(subset=['id'])
+        catalog['id'] = catalog['id'].astype('int32')
+        catalog = catalog.rename(columns={'id': 'tmdbId'})
+
+        # Coerce numeric columns
+        for col in ['vote_average', 'vote_count', 'runtime', 'budget', 'revenue']:
+            catalog[col] = pd.to_numeric(catalog[col], errors='coerce').fillna(0)
+
+        catalog['vote_count'] = catalog['vote_count'].astype('int32')
+        catalog['runtime'] = catalog['runtime'].astype('float32')
+        catalog['vote_average'] = catalog['vote_average'].astype('float32')
+        catalog['original_language'] = catalog['original_language'].fillna('en').astype(str)
+        catalog['status'] = catalog['status'].fillna('Unknown').astype(str)
+
+        # Compute runtime buckets
+        conditions = [
+            catalog['runtime'] <= 0,
+            catalog['runtime'] <= 90,
+            catalog['runtime'] <= 120,
+            catalog['runtime'] <= 150,
+        ]
+        choices = ['standard', 'short', 'standard', 'long']
+        catalog['runtime_bucket'] = np.select(conditions, choices, default='epic')
+
+        released_count = (catalog['status'] == 'Released').sum()
+        self.stdout.write(f"TMDB catalog: {len(catalog)} total, {released_count} Released")
+        self.log_memory("TMDB Catalog Loaded")
+        return catalog
+
     def load_data(self):
-        """Loads Ratings and merges with Metadata"""
+        """Loads Ratings and merges with Metadata + TMDB catalog enrichment"""
         meta_df, tmdb_to_genres = self.load_metadata_and_genres()
-        if meta_df is None: return None, None
+        if meta_df is None: return None, None, None, None, None
 
         self.log_memory("Loading Ratings")
         data_dir = settings.BASE_DIR / 'data' / 'ml-32m'
@@ -144,6 +193,37 @@ class Command(BaseCommand):
         # Create Decade Column
         df['decade'] = (df['year'] // 10) * 10
         df = df[['userId', 'tmdbId', 'rating', 'timestamp', 'year', 'decade', 'genres']]
+
+        # --- TMDB Catalog Enrichment ---
+        tmdb_catalog = self.load_tmdb_catalog()
+        tmdb_vote_data = {}
+        catalog_language = {}
+        catalog_runtime_bucket = {}
+
+        if tmdb_catalog is not None:
+            # Filter training data to Released movies only
+            released_ids = set(tmdb_catalog.loc[tmdb_catalog['status'] == 'Released', 'tmdbId'])
+            before_count = len(df)
+            df = df[df['tmdbId'].isin(released_ids)]
+            self.stdout.write(f"Status filter: {before_count} -> {len(df)} ratings (removed non-Released)")
+
+            # Merge enrichment columns
+            enrich_cols = tmdb_catalog[['tmdbId', 'runtime_bucket', 'original_language']].drop_duplicates('tmdbId')
+            df = pd.merge(df, enrich_cols, on='tmdbId', how='left')
+            df['runtime_bucket'] = df['runtime_bucket'].fillna('standard')
+            df['original_language'] = df['original_language'].fillna('en')
+
+            # Build lookup dicts for cold-start and prediction
+            for row in tmdb_catalog.itertuples(index=False):
+                tmdb_vote_data[row.tmdbId] = (float(row.vote_average), int(row.vote_count))
+                catalog_language[row.tmdbId] = str(row.original_language)
+                catalog_runtime_bucket[row.tmdbId] = str(row.runtime_bucket)
+
+            del tmdb_catalog
+            gc.collect()
+        else:
+            df['runtime_bucket'] = 'standard'
+            df['original_language'] = 'en'
 
         # Load Local Reviews
         self.stdout.write('Loading local reviews...')
@@ -184,6 +264,8 @@ class Command(BaseCommand):
                     'year': year,
                     'decade': (year // 10) * 10,
                     'genres': local_genre_map.get(tmdb_id, ''),
+                    'runtime_bucket': catalog_runtime_bucket.get(tmdb_id, 'standard'),
+                    'original_language': catalog_language.get(tmdb_id, 'en'),
                 })
         
         if local_data:
@@ -206,7 +288,7 @@ class Command(BaseCommand):
             del local_df
 
         self.log_memory("Data Merged")
-        return df, tmdb_to_genres
+        return df, tmdb_to_genres, tmdb_vote_data, catalog_language, catalog_runtime_bucket
 
     # Standard MovieLens genre vocabulary
     GENRES_LIST = [
@@ -214,6 +296,8 @@ class Command(BaseCommand):
         "Documentary", "Drama", "Fantasy", "Film-Noir", "Horror", "Musical",
         "Mystery", "Romance", "Sci-Fi", "Thriller", "War", "Western"
     ]
+
+    RUNTIME_BUCKETS = ['short', 'standard', 'long', 'epic']
 
     def _apply_time_decay(self, df, half_life_days=365 * 3):
         """
@@ -276,6 +360,26 @@ class Command(BaseCommand):
                 decade_masks[int(decade)] = mask
         return decade_masks
 
+    def _build_language_masks(self, df):
+        """Pre-build boolean mask arrays for languages with meaningful data (≥100 ratings)."""
+        lang_counts = df['original_language'].value_counts()
+        significant_langs = lang_counts[lang_counts >= 100].index
+        language_masks = {}
+        for lang in significant_langs:
+            mask = (df['original_language'] == lang).values
+            if mask.any():
+                language_masks[str(lang)] = mask
+        return language_masks
+
+    def _build_runtime_masks(self, df):
+        """Pre-build boolean mask arrays for each runtime bucket."""
+        runtime_masks = {}
+        for bucket in self.RUNTIME_BUCKETS:
+            mask = (df['runtime_bucket'] == bucket).values
+            if mask.any():
+                runtime_masks[bucket] = mask
+        return runtime_masks
+
     def compute_biases(self, df, damping=5):
         """
         Compute Global, Year, Item, User, User-Genre, and User-Decade biases.
@@ -291,9 +395,11 @@ class Command(BaseCommand):
         weights = self._apply_time_decay(df)
         df_rating_weighted = (df['rating'] * weights).astype('float32')
 
-        # Pre-build masks for vectorized genre/decade operations
+        # Pre-build masks for vectorized genre/decade/language/runtime operations
         genre_masks = self._build_genre_masks(df)
         decade_masks = self._build_decade_masks(df)
+        language_masks = self._build_language_masks(df)
+        runtime_masks = self._build_runtime_masks(df)
 
         # 1. Global Mean (weighted)
         global_mean = float(np.average(df['rating'], weights=weights))
@@ -335,13 +441,17 @@ class Command(BaseCommand):
         # Instead of a single pass where Action is always computed before Western,
         # we run 3 iterations. Each iteration recomputes residuals from scratch
         # using ALL previous-iteration biases, then re-estimates genre and decade biases.
-        self.stdout.write("Computing User-Genre & User-Decade Biases (iterative convergence)...")
+        self.stdout.write("Computing User-Genre, Decade, Language & Runtime Biases (iterative convergence)...")
 
         user_genre_biases = {}   # { Genre: { UserId: Bias } }
         user_decade_biases = {}  # { Decade: { UserId: Bias } }
+        user_language_biases = {}  # { Language: { UserId: Bias } }
+        user_runtime_biases = {}   # { RuntimeBucket: { UserId: Bias } }
 
         genre_damping = damping * 2
         decade_damping = damping * 2
+        language_damping = damping * 2
+        runtime_damping = damping * 2
         n_iterations = 3
 
         # Pre-compute the base residual (rating - global - year - item - user) once
@@ -370,6 +480,20 @@ class Command(BaseCommand):
             for decade, bias_map in user_decade_biases.items():
                 if decade in decade_masks:
                     mask = decade_masks[decade]
+                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
+                    residual[mask] -= mapped
+
+            # Subtract ALL previous-iteration language biases
+            for lang, bias_map in user_language_biases.items():
+                if lang in language_masks:
+                    mask = language_masks[lang]
+                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
+                    residual[mask] -= mapped
+
+            # Subtract ALL previous-iteration runtime biases
+            for bucket, bias_map in user_runtime_biases.items():
+                if bucket in runtime_masks:
+                    mask = runtime_masks[bucket]
                     mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
                     residual[mask] -= mapped
 
@@ -406,25 +530,75 @@ class Command(BaseCommand):
                 bias = (decade_sum / (decade_wt + decade_damping))
                 new_decade_biases[decade] = bias.to_dict()
 
+            # Re-estimate language biases (residual - genre - decade)
+            residual_after_decade = residual_after_genre.copy()
+            for decade, bias_map in new_decade_biases.items():
+                if decade in decade_masks:
+                    mask = decade_masks[decade]
+                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
+                    residual_after_decade[mask] -= mapped
+
+            new_language_biases = {}
+            weighted_residual_ad = residual_after_decade * weights
+            for lang, mask in language_masks.items():
+                subset_user = df.loc[mask, 'userId']
+                wr = pd.Series(weighted_residual_ad[mask], index=subset_user.index)
+                w = pd.Series(weights[mask], index=subset_user.index)
+
+                lang_sum = wr.groupby(subset_user).sum()
+                lang_wt = w.groupby(subset_user).sum()
+                bias = (lang_sum / (lang_wt + language_damping))
+                new_language_biases[lang] = bias.to_dict()
+
+            # Re-estimate runtime biases (residual - genre - decade - language)
+            residual_after_lang = residual_after_decade.copy()
+            for lang, bias_map in new_language_biases.items():
+                if lang in language_masks:
+                    mask = language_masks[lang]
+                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
+                    residual_after_lang[mask] -= mapped
+
+            new_runtime_biases = {}
+            weighted_residual_al = residual_after_lang * weights
+            for bucket, mask in runtime_masks.items():
+                subset_user = df.loc[mask, 'userId']
+                wr = pd.Series(weighted_residual_al[mask], index=subset_user.index)
+                w = pd.Series(weights[mask], index=subset_user.index)
+
+                rt_sum = wr.groupby(subset_user).sum()
+                rt_wt = w.groupby(subset_user).sum()
+                bias = (rt_sum / (rt_wt + runtime_damping))
+                new_runtime_biases[bucket] = bias.to_dict()
+
             user_genre_biases = new_genre_biases
             user_decade_biases = new_decade_biases
+            user_language_biases = new_language_biases
+            user_runtime_biases = new_runtime_biases
 
             del residual, weighted_residual, residual_after_genre, weighted_residual_ag
+            del residual_after_decade, weighted_residual_ad
+            del residual_after_lang, weighted_residual_al
             gc.collect()
 
         del base_residual
         gc.collect()
 
         self.log_memory("Biases Computed")
-        return global_mean, year_biases, item_biases, user_biases, user_genre_biases, user_decade_biases
+        return (global_mean, year_biases, item_biases, user_biases,
+                user_genre_biases, user_decade_biases,
+                user_language_biases, user_runtime_biases)
 
-    def create_sparse_matrix(self, df, global_mean, year_biases, item_biases, user_biases, user_genre_biases, user_decade_biases):
-        """Creates residuals matrix R for SVD, using pre-built masks for genre/decade."""
+    def create_sparse_matrix(self, df, global_mean, year_biases, item_biases, user_biases,
+                             user_genre_biases, user_decade_biases,
+                             user_language_biases, user_runtime_biases):
+        """Creates residuals matrix R for SVD, using pre-built masks for genre/decade/language/runtime."""
         self.stdout.write('Preparing residuals for SVD...')
 
         # Pre-build masks once for this method
         genre_masks = self._build_genre_masks(df)
         decade_masks = self._build_decade_masks(df)
+        language_masks = self._build_language_masks(df)
+        runtime_masks = self._build_runtime_masks(df)
 
         # Base Residual
         y_bias = df['year'].map(year_biases).fillna(0).astype('float32')
@@ -447,13 +621,30 @@ class Command(BaseCommand):
                 b = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
                 g_bias_total[mask] += b
 
+        # Language Bias (vectorized via pre-built masks)
+        l_bias_total = np.zeros(len(df), dtype=np.float32)
+        for lang, bias_map in user_language_biases.items():
+            if lang in language_masks:
+                mask = language_masks[lang]
+                b = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
+                l_bias_total[mask] = b
+
+        # Runtime Bias (vectorized via pre-built masks)
+        r_bias_total = np.zeros(len(df), dtype=np.float32)
+        for bucket, bias_map in user_runtime_biases.items():
+            if bucket in runtime_masks:
+                mask = runtime_masks[bucket]
+                b = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
+                r_bias_total[mask] = b
+
         residuals = (df['rating'].values - global_mean - y_bias.values - i_bias.values
-                     - u_bias.values - d_bias_total - g_bias_total)
+                     - u_bias.values - d_bias_total - g_bias_total - l_bias_total - r_bias_total)
 
         # Clamp residuals to prevent SVD distortion from extreme outliers
         residuals = np.clip(residuals, -3.0, 3.0).astype(np.float32)
         
-        del y_bias, i_bias, u_bias, g_bias_total, d_bias_total, genre_masks, decade_masks
+        del y_bias, i_bias, u_bias, g_bias_total, d_bias_total, l_bias_total, r_bias_total
+        del genre_masks, decade_masks, language_masks, runtime_masks
         gc.collect()
         
         # Indices
@@ -475,10 +666,15 @@ class Command(BaseCommand):
     def evaluate_model(self, df_train, df_test, k, damping=5):
         """Evaluates RMSE and MAE with full bias hierarchy, with per-group breakdown."""
         # We process train copy
-        global_mean, year_biases, item_biases, user_biases, user_genre_biases, user_decade_biases = self.compute_biases(df_train, damping)
+        (global_mean, year_biases, item_biases, user_biases,
+         user_genre_biases, user_decade_biases,
+         user_language_biases, user_runtime_biases) = self.compute_biases(df_train, damping)
         
         try:
-            R_sparse, u_map, i_map = self.create_sparse_matrix(df_train, global_mean, year_biases, item_biases, user_biases, user_genre_biases, user_decade_biases)
+            R_sparse, u_map, i_map = self.create_sparse_matrix(
+                df_train, global_mean, year_biases, item_biases, user_biases,
+                user_genre_biases, user_decade_biases,
+                user_language_biases, user_runtime_biases)
             
             min_dim = min(R_sparse.shape)
             k = min(k, max(1, min_dim - 1))
@@ -518,6 +714,20 @@ class Command(BaseCommand):
             if mask.any():
                 pred[mask] += test_df.loc[mask, 'userId'].map(bias_map).fillna(0).values.astype(np.float32)
 
+        # Language Predictions
+        if 'original_language' in test_df.columns:
+            for lang, bias_map in user_language_biases.items():
+                mask = (test_df['original_language'] == lang)
+                if mask.any():
+                    pred[mask] += test_df.loc[mask, 'userId'].map(bias_map).fillna(0).values.astype(np.float32)
+
+        # Runtime Predictions
+        if 'runtime_bucket' in test_df.columns:
+            for bucket, bias_map in user_runtime_biases.items():
+                mask = (test_df['runtime_bucket'] == bucket)
+                if mask.any():
+                    pred[mask] += test_df.loc[mask, 'userId'].map(bias_map).fillna(0).values.astype(np.float32)
+
         # SVD Interaction
         u_idx = test_df['userId'].map(u_map).values
         i_idx = test_df['tmdbId'].map(i_map).values
@@ -548,7 +758,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         try:
-            df, tmdb_to_genres = self.load_data()
+            df, tmdb_to_genres, tmdb_vote_data, catalog_language, catalog_runtime_bucket = self.load_data()
             if df is None: return
 
             best_k, best_damping = 120, 15
@@ -589,8 +799,13 @@ class Command(BaseCommand):
             self.stdout.write(f"Training Final Model (k={best_k})...")
             
             # Full Train
-            global_mean, year_biases, item_biases, user_biases, user_genre_biases, user_decade_biases = self.compute_biases(df, best_damping)
-            R_sparse, u_map, i_map = self.create_sparse_matrix(df, global_mean, year_biases, item_biases, user_biases, user_genre_biases, user_decade_biases)
+            (global_mean, year_biases, item_biases, user_biases,
+             user_genre_biases, user_decade_biases,
+             user_language_biases, user_runtime_biases) = self.compute_biases(df, best_damping)
+            R_sparse, u_map, i_map = self.create_sparse_matrix(
+                df, global_mean, year_biases, item_biases, user_biases,
+                user_genre_biases, user_decade_biases,
+                user_language_biases, user_runtime_biases)
             
             u, s, vt = svds(R_sparse, k=best_k)
             # ... process matrices ...
@@ -628,7 +843,12 @@ class Command(BaseCommand):
                 'user_biases': user_biases,
                 'user_genre_biases': user_genre_biases,
                 'user_decade_biases': user_decade_biases,
+                'user_language_biases': user_language_biases,
+                'user_runtime_biases': user_runtime_biases,
                 'tmdb_to_genres': tmdb_to_genres,
+                'tmdb_to_language': catalog_language,
+                'tmdb_to_runtime_bucket': catalog_runtime_bucket,
+                'tmdb_vote_data': tmdb_vote_data,
                 'genre_mapping': self.TMDB_TO_MOVIELENS,
                 'tmdb_id_to_year': df[['tmdbId', 'year']].drop_duplicates('tmdbId').set_index('tmdbId')['year'].to_dict(),
                 'metadata': {
@@ -640,7 +860,7 @@ class Command(BaseCommand):
                     'n_ratings': len(df),
                     'n_local_users': sum(1 for uid in u_map if uid.startswith('loc_')),
                     'n_ml_users': sum(1 for uid in u_map if uid.startswith('ml_')),
-                    'model_version': '2.0',
+                    'model_version': '3.0',
                 },
             }
             
