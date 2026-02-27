@@ -14,11 +14,18 @@ logger = logging.getLogger(__name__)
 
 class MovieRecommender:
     def __init__(self):
-        self.movie_content_type = ContentType.objects.get_for_model(Movie)
+        self._movie_content_type = None  # Lazy — avoids DB access at import/init time
         self.model_data = None
         self.known_tmdb_ids = set()
         self._genre_combo_avg_bias = {}  # Pre-built lookup for cold-item estimation
         self._load_model()
+
+    @property
+    def movie_content_type(self):
+        """Lazy-loaded ContentType to avoid DB queries during app initialization."""
+        if self._movie_content_type is None:
+            self._movie_content_type = ContentType.objects.get_for_model(Movie)
+        return self._movie_content_type
         
     def _load_model(self):
         """Load the Scipy SVD model and mappings"""
