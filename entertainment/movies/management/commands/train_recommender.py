@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 import gc
 from scipy.sparse import coo_matrix
-from scipy.sparse.linalg import svds
 from django.core.management.base import BaseCommand
 from django.contrib.contenttypes.models import ContentType
 from django.conf import settings
@@ -13,7 +12,7 @@ from movies.models import Movie
 from custom_auth.models import Review
 
 class Command(BaseCommand):
-    help = 'Trains the SVD recommender model using MovieLens 32M data (Scipy Implementation)'
+    help = 'Trains the ALS recommender model with IPS popularity debiasing using MovieLens 32M data'
 
     # Mapping TMDB Genre Names -> MovieLens Genre Names
     TMDB_TO_MOVIELENS = {
@@ -298,6 +297,38 @@ class Command(BaseCommand):
     ]
 
     RUNTIME_BUCKETS = ['short', 'standard', 'long', 'epic']
+
+    def _compute_ips_weights(self, df, clip_min=0.1, clip_max=5.0):
+        """
+        Inverse Propensity Scoring (IPS) for popularity debiasing.
+        Popular movies get rated more often, biasing the model toward recommending
+        well-known films. IPS reweights each rating inversely proportional to how
+        often that item appears, so niche movies get fairer representation.
+
+        propensity(item) = count(item) / max_count  → in [0, 1]
+        ips_weight(item) = 1 / propensity(item)     → rare items get higher weight
+
+        Clipped to [clip_min, clip_max] to prevent extreme weights for very rare items.
+        """
+        self.stdout.write("Computing Inverse Propensity Scores for popularity debiasing...")
+        item_counts = df['tmdbId'].value_counts()
+        max_count = item_counts.max()
+
+        # propensity: how "popular" each item is relative to the most-rated item
+        propensity = item_counts / max_count  # range (0, 1]
+
+        # IPS: inverse proportional — rare items get larger weight
+        ips = (1.0 / propensity).clip(lower=clip_min, upper=clip_max)
+
+        # Map back to each row
+        ips_per_row = df['tmdbId'].map(ips).fillna(1.0).astype(np.float32).values
+
+        median_ips = float(np.median(ips_per_row))
+        self.stdout.write(
+            f"  IPS stats: median={median_ips:.2f}, "
+            f"min={ips_per_row.min():.2f}, max={ips_per_row.max():.2f}, "
+            f"unique items={len(item_counts)}")
+        return ips_per_row
 
     def _apply_time_decay(self, df, half_life_days=365 * 3):
         """
@@ -590,9 +621,10 @@ class Command(BaseCommand):
 
     def create_sparse_matrix(self, df, global_mean, year_biases, item_biases, user_biases,
                              user_genre_biases, user_decade_biases,
-                             user_language_biases, user_runtime_biases):
-        """Creates residuals matrix R for SVD, using pre-built masks for genre/decade/language/runtime."""
-        self.stdout.write('Preparing residuals for SVD...')
+                             user_language_biases, user_runtime_biases,
+                             apply_ips=True):
+        """Creates IPS-weighted residuals matrix R for ALS, using pre-built masks."""
+        self.stdout.write('Preparing residuals for ALS...')
 
         # Pre-build masks once for this method
         genre_masks = self._build_genre_masks(df)
@@ -640,8 +672,13 @@ class Command(BaseCommand):
         residuals = (df['rating'].values - global_mean - y_bias.values - i_bias.values
                      - u_bias.values - d_bias_total - g_bias_total - l_bias_total - r_bias_total)
 
-        # Clamp residuals to prevent SVD distortion from extreme outliers
+        # Clamp residuals to prevent distortion from extreme outliers
         residuals = np.clip(residuals, -3.0, 3.0).astype(np.float32)
+
+        # Apply Inverse Propensity Scoring: upweight niche movies, downweight popular ones
+        if apply_ips:
+            ips_weights = self._compute_ips_weights(df)
+            residuals = residuals * np.sqrt(ips_weights)  # sqrt for gentler application
         
         del y_bias, i_bias, u_bias, g_bias_total, d_bias_total, l_bias_total, r_bias_total
         del genre_masks, decade_masks, language_masks, runtime_masks
@@ -664,8 +701,9 @@ class Command(BaseCommand):
         return R_sparse, user_to_idx, item_to_idx
 
     def evaluate_model(self, df_train, df_test, k, damping=5):
-        """Evaluates RMSE and MAE with full bias hierarchy, with per-group breakdown."""
-        # We process train copy
+        """Evaluates RMSE and MAE with full bias hierarchy + ALS, with per-group breakdown."""
+        from implicit.als import AlternatingLeastSquares
+
         (global_mean, year_biases, item_biases, user_biases,
          user_genre_biases, user_decade_biases,
          user_language_biases, user_runtime_biases) = self.compute_biases(df_train, damping)
@@ -676,13 +714,20 @@ class Command(BaseCommand):
                 user_genre_biases, user_decade_biases,
                 user_language_biases, user_runtime_biases)
             
-            min_dim = min(R_sparse.shape)
-            k = min(k, max(1, min_dim - 1))
-            
-            u, s, vt = svds(R_sparse, k=k)
-            u, s, vt = u.astype(np.float32), s.astype(np.float32), vt.astype(np.float32)
-            
-            sigma = np.diag(s)
+            # Train ALS model
+            model = AlternatingLeastSquares(
+                factors=k,
+                regularization=0.1,
+                iterations=15,
+                use_gpu=False,
+                random_state=42,
+            )
+            # implicit >= 0.7 expects user-item matrix (R_sparse is already user-item CSR)
+            model.fit(R_sparse)
+
+            user_factors = np.array(model.user_factors, dtype=np.float32)
+            item_factors = np.array(model.item_factors, dtype=np.float32)
+
             del R_sparse
             gc.collect()
         except Exception:
@@ -728,14 +773,11 @@ class Command(BaseCommand):
                 if mask.any():
                     pred[mask] += test_df.loc[mask, 'userId'].map(bias_map).fillna(0).values.astype(np.float32)
 
-        # SVD Interaction
+        # ALS Interaction: user_factors @ item_factors.T
         u_idx = test_df['userId'].map(u_map).values
         i_idx = test_df['tmdbId'].map(i_map).values
         
-        u_vecs = np.dot(u[u_idx], sigma)
-        vt_vecs = vt[:, i_idx]
-        
-        interaction = np.sum(u_vecs * vt_vecs.T, axis=1)
+        interaction = np.sum(user_factors[u_idx] * item_factors[i_idx], axis=1)
         pred += interaction
         
         # Overall metrics
@@ -807,12 +849,26 @@ class Command(BaseCommand):
                 user_genre_biases, user_decade_biases,
                 user_language_biases, user_runtime_biases)
             
-            u, s, vt = svds(R_sparse, k=best_k)
-            # ... process matrices ...
-            u = u[:, ::-1].astype(np.float32)
-            s = s[::-1].astype(np.float32)
-            vt = vt[::-1, :].astype(np.float32)
-            sigma = np.diag(s)
+            # Train ALS model on IPS-weighted residuals
+            from implicit.als import AlternatingLeastSquares
+
+            self.stdout.write(f"Fitting ALS model (factors={best_k}, iterations=20)...")
+            als_model = AlternatingLeastSquares(
+                factors=best_k,
+                regularization=0.1,
+                iterations=20,
+                use_gpu=False,
+                random_state=42,
+            )
+            # implicit >= 0.7 expects user-item matrix (R_sparse is already user-item CSR)
+            als_model.fit(R_sparse)
+
+            user_factors = np.array(als_model.user_factors, dtype=np.float32)
+            item_factors = np.array(als_model.item_factors, dtype=np.float32)
+            self.stdout.write(f"  User factors: {user_factors.shape}, Item factors: {item_factors.shape}")
+
+            del R_sparse, als_model
+            gc.collect()
 
             # Enrich tmdb_to_genres with local DB movies not in MovieLens (post-2023)
             self.stdout.write("Enriching genre map with local DB movies...")
@@ -834,7 +890,8 @@ class Command(BaseCommand):
             import shutil
 
             data = {
-                'U': u, 'Sigma': sigma, 'Vt': vt,
+                'user_factors': user_factors,
+                'item_factors': item_factors,
                 'user_to_idx': u_map, 'item_to_idx': i_map,
                 'known_tmdb_ids': list(i_map.keys()),
                 'global_mean': float(global_mean),
@@ -860,7 +917,9 @@ class Command(BaseCommand):
                     'n_ratings': len(df),
                     'n_local_users': sum(1 for uid in u_map if uid.startswith('loc_')),
                     'n_ml_users': sum(1 for uid in u_map if uid.startswith('ml_')),
-                    'model_version': '3.0',
+                    'model_type': 'als',
+                    'model_version': '4.0',
+                    'ips_debiasing': True,
                 },
             }
             
