@@ -1564,12 +1564,18 @@ def upload_model(request):
         with open(versioned_path, 'rb') as f:
             data = pickle.load(f)
 
-        required_keys = {'global_mean', 'U', 'Sigma', 'Vt', 'user_to_idx', 'item_to_idx'}
-        if not required_keys.issubset(data.keys()):
-            missing = required_keys - data.keys()
+        # Accept both ALS format (user_factors, item_factors) and legacy SVD (U, Sigma, Vt)
+        base_keys = {'global_mean', 'user_to_idx', 'item_to_idx'}
+        als_keys = base_keys | {'user_factors', 'item_factors'}
+        svd_keys = base_keys | {'U', 'Sigma', 'Vt'}
+
+        if not (als_keys.issubset(data.keys()) or svd_keys.issubset(data.keys())):
+            missing_als = als_keys - data.keys()
+            missing_svd = svd_keys - data.keys()
             os.remove(versioned_path)
-            return Response({'error': f'Invalid model: missing keys {missing}'},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'error': f'Invalid model: missing ALS keys {missing_als} or SVD keys {missing_svd}'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         metadata = data.get('metadata', {})
         # Free memory before copying
