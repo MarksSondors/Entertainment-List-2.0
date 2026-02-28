@@ -10,10 +10,13 @@ WORKDIR /app
 # Install system dependencies
 RUN apk update && apk add --no-cache \
     gcc \
+    g++ \
     musl-dev \
     postgresql-dev \
     postgresql-client \
-    netcat-openbsd
+    netcat-openbsd \
+    cmake \
+    make
 
 # Copy the requirements file
 COPY requirements.txt .
