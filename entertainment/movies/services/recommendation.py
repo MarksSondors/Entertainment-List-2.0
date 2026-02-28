@@ -44,9 +44,19 @@ class MovieRecommender:
                     self.known_tmdb_ids = set(self.model_data.get('known_tmdb_ids', []))
                     self.user_to_idx = self.model_data.get('user_to_idx', {})
                     self.item_to_idx = self.model_data.get('item_to_idx', {})
+
+                    # ALS model stores user_factors and item_factors directly
+                    # Legacy SVD model stores U, Sigma, Vt
+                    self.user_factors = self.model_data.get('user_factors')
+                    self.item_factors = self.model_data.get('item_factors')
+
+                    # Backward compatibility: load legacy SVD format if present
                     self.U = self.model_data.get('U')
                     self.Sigma = self.model_data.get('Sigma')
                     self.Vt = self.model_data.get('Vt')
+
+                    metadata = self.model_data.get('metadata', {})
+                    self.model_type = metadata.get('model_type', 'svd')  # 'als' or 'svd'
                     
                     # Bias Terms
                     self.item_biases = self.model_data.get('item_biases', {})
@@ -67,13 +77,13 @@ class MovieRecommender:
                     self.global_mean = self.model_data.get('global_mean', 3.5)
 
                     # Log metadata if available
-                    metadata = self.model_data.get('metadata', {})
                     if metadata:
                         logger.info(
-                            f"Loaded SVD model v{metadata.get('model_version', '?')} "
+                            f"Loaded {self.model_type.upper()} model v{metadata.get('model_version', '?')} "
                             f"trained {metadata.get('trained_at', '?')} | "
                             f"k={metadata.get('k')}, {metadata.get('n_items')} items, "
                             f"{metadata.get('n_local_users', 0)} local users"
+                            f"{', IPS debiased' if metadata.get('ips_debiasing') else ''}"
                         )
 
                     # Pre-build genre_combo → avg_bias lookup for cold-item estimation
@@ -212,9 +222,14 @@ class MovieRecommender:
         interaction = 0.0
         
         if u_idx is not None and i_idx is not None:
-            user_vec = self.U[u_idx, :]
-            item_vec = self.Vt[:, i_idx]
-            interaction = np.dot(np.dot(user_vec, self.Sigma), item_vec)
+            if self.model_type == 'als' and self.user_factors is not None:
+                # ALS: direct dot product of user and item factor vectors
+                interaction = float(np.dot(self.user_factors[u_idx], self.item_factors[i_idx]))
+            elif self.U is not None and self.Sigma is not None and self.Vt is not None:
+                # Legacy SVD: U @ Sigma @ Vt
+                user_vec = self.U[u_idx, :]
+                item_vec = self.Vt[:, i_idx]
+                interaction = np.dot(np.dot(user_vec, self.Sigma), item_vec)
         
         # Final Score
         score = self.global_mean + b_i + b_u + b_y + b_g + b_dec + b_lang + b_rt + interaction
