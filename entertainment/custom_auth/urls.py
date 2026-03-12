@@ -49,6 +49,7 @@ urlpatterns = [    # discover page
 
     # activity
     path('activity/recent/', views.recent_activity, name='recent_activity'),
+    path('activity/recent/<str:username>/', views.user_recent_activity, name='user_recent_activity'),
 
     # statistics
     path('statistics/', views.statistics_page, name='statistics_page'),
