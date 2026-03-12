@@ -705,9 +705,8 @@ def profile_page(request, username=None):
     Otherwise, show the logged-in user's profile.
     """
     if username:
-        # Only fetch needed fields for the profile user
         user = get_object_or_404(
-            CustomUser.objects.only('id', 'username', 'profile_picture'),
+            CustomUser.objects.only('id', 'username', 'profile_picture', 'last_active', 'bio'),
             username=username
         )
     else:
@@ -871,14 +870,40 @@ def profile_page(request, username=None):
                     
                 watchlist_for_template.append(item_data)
     
+    # Quick profile stats
+    all_reviews_qs = Review.objects.filter(user=user)
+    total_reviews = all_reviews_qs.count()
+    avg_rating_val = all_reviews_qs.aggregate(avg=Avg('rating'))['avg']
+    avg_rating = round(float(avg_rating_val), 1) if avg_rating_val else None
+
+    # Top media type by review count
+    top_media_row = (
+        all_reviews_qs
+        .values('content_type')
+        .annotate(cnt=Count('id'))
+        .order_by('-cnt')
+        .first()
+    )
+    top_media = None
+    if top_media_row:
+        ct = ContentType.objects.get(pk=top_media_row['content_type'])
+        top_media = {'movie': 'Movies', 'tvshow': 'TV Shows', 'game': 'Games'}.get(ct.model, ct.model.title())
+
+    profile_stats = {
+        'total': total_reviews,
+        'avg': avg_rating,
+        'top_media': top_media,
+    }
+
     context = {
         'user': user,
         'favorite_movies': favorite_movies,
         'favorite_shows': favorite_shows,
         'favorite_games': favorite_games,
         'watchlist_items': watchlist_for_template,
-        'all_users': all_users,  # Add all users to context
-        'current_user': request.user,  # Add current user for highlighting
+        'all_users': all_users,
+        'current_user': request.user,
+        'profile_stats': profile_stats,
     }
     
     return render(request, 'profile_page.html', context)
@@ -2233,6 +2258,76 @@ def _fetch_activities_efficiently(fetch_limit, content_types):
     }
 
 
+def _fetch_user_activities(fetch_limit, content_types, user):
+    """
+    Fetch activities for a specific user using optimized queries.
+    Similar to _fetch_activities_efficiently but filtered by user.
+    """
+    from custom_auth.models import Review, Watchlist
+    from movies.models import Movie
+    from tvshows.models import WatchedEpisode
+    from games.models import Game
+
+    reviews = Review.objects.filter(user=user).select_related(
+        'user', 'content_type', 'season', 'episode_subgroup'
+    ).order_by('-date_added')[:fetch_limit]
+
+    watchlist_items = Watchlist.objects.filter(user=user).select_related(
+        'user', 'content_type'
+    ).order_by('-date_added')[:fetch_limit]
+
+    movies = Movie.objects.filter(added_by=user).select_related('added_by').order_by('-date_added')[:fetch_limit]
+
+    games = Game.objects.filter(added_by=user).select_related('added_by').order_by('-date_added')[:fetch_limit]
+
+    watched_episodes = WatchedEpisode.objects.filter(user=user).select_related(
+        'user', 'episode__season__show'
+    ).order_by('-watched_date')[:fetch_limit * 2]
+
+    return {
+        'reviews': reviews,
+        'watchlist_items': watchlist_items,
+        'movies': movies,
+        'games': games,
+        'watched_episodes': watched_episodes
+    }
+
+
+def user_recent_activity(request, username):
+    """
+    Returns recent activity for a specific user, same format as recent_activity.
+    """
+    target_user = get_object_or_404(CustomUser, username=username)
+
+    page = int(request.GET.get('page', '1'))
+    limit = int(request.GET.get('limit', '15'))
+    offset = (page - 1) * limit
+    fetch_limit = limit * 3
+
+    try:
+        content_types = _get_content_types()
+        activities_data = _fetch_user_activities(fetch_limit, content_types, target_user)
+        grouped_activities = _process_and_group_activities(activities_data, content_types)
+
+        total_count = len(grouped_activities)
+        paginated_results = grouped_activities[offset:offset + limit]
+        _optimize_poster_urls(paginated_results)
+
+        return JsonResponse({
+            'results': paginated_results,
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total': total_count,
+                'has_more': (offset + limit) < total_count
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error in user_recent_activity for {username}: {str(e)}")
+        return JsonResponse({'error': 'Internal server error'}, status=500)
+
+
 def _get_media_objects_bulk(activities_data, content_types):
     """
     Efficiently fetch all required media objects in bulk.
@@ -2360,6 +2455,10 @@ def _process_watched_episodes(watched_episodes, tvshows_by_id):
         timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
         episode_count = len(episodes)
         
+        # Use season poster if available, fall back to show poster
+        season_poster = getattr(most_recent.episode.season, 'poster', None)
+        poster = season_poster or tv_show.poster
+        
         activities.append({
             'type': 'watched_episodes',
             'username': most_recent.user.username,
@@ -2370,7 +2469,7 @@ def _process_watched_episodes(watched_episodes, tvshows_by_id):
             'timestamp_key': timestamp_key,
             'media_id': tv_show.id,
             'action': f'watched {episode_count} episode{"s" if episode_count > 1 else ""}',
-            'poster_path': tv_show.poster,
+            'poster_path': poster,
             'tmdb_id': tv_show.tmdb_id,
             'episode_count': episode_count
         })
@@ -2410,6 +2509,12 @@ def _process_reviews(reviews, movies_by_id, tvshows_by_id, games_by_id, content_
             elif review.episode_subgroup:
                 title += f" - {review.episode_subgroup.name}"
         
+        # For TV show reviews with a specific season, use the season poster
+        if hasattr(content_object, 'first_air_date') and review.season:
+            poster = getattr(review.season, 'poster', None) or getattr(content_object, 'poster', None)
+        else:
+            poster = getattr(content_object, 'poster', None)
+        
         # Create timestamp
         local_timestamp = timezone.localtime(review.date_added)
         timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
@@ -2425,7 +2530,7 @@ def _process_reviews(reviews, movies_by_id, tvshows_by_id, games_by_id, content_
             'timestamp': timestamp_key,
             'timestamp_key': timestamp_key,
             'media_id': content_object.id,
-            'poster_path': getattr(content_object, 'poster', None),
+            'poster_path': poster,
             'tmdb_id': getattr(content_object, 'tmdb_id', None),
             'rawg_id': getattr(content_object, 'rawg_id', None)
         })
