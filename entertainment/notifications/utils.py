@@ -71,11 +71,16 @@ def send_push_notification(subscription_id, title, body, **kwargs):
     
     try:
         # Send the push notification
+        # TTL=86400 (24h): FCM stores the message and delivers when device wakes up.
+        # Without this (default ttl=0), FCM discards messages if the device isn't
+        # immediately reachable (screen off, Doze mode, brief network gap).
         webpush(
             subscription_info=subscription_info,
             data=json.dumps(notification_data),
             vapid_private_key=settings.WEBPUSH_VAPID_PRIVATE_KEY,
-            vapid_claims=vapid_claims
+            vapid_claims=vapid_claims,
+            ttl=86400,
+            headers={'urgency': 'high'},
         )
         success = True
         logger.info(f"Push notification sent to subscription {subscription_id}")
@@ -84,11 +89,11 @@ def send_push_notification(subscription_id, title, body, **kwargs):
         error_message = str(e)
         logger.error(f"WebPushException for subscription {subscription_id}: {e}")
         
-        # If subscription is invalid (410 Gone), deactivate it
-        if e.response and e.response.status_code == 410:
+        # Deactivate subscriptions with invalid/expired endpoints
+        if e.response and e.response.status_code in (401, 404, 410):
             subscription.is_active = False
             subscription.save()
-            logger.info(f"Deactivated invalid subscription {subscription_id}")
+            logger.info(f"Deactivated invalid subscription {subscription_id} (HTTP {e.response.status_code})")
     
     except Exception as e:
         error_message = str(e)
@@ -242,7 +247,7 @@ def queue_notification(user, title, body, notification_type, **kwargs):
         object_id=kwargs.get('object_id'),
         extra_data={
             'vibrate': kwargs.get('vibrate', [200, 100, 200]),
-            'tag': kwargs.get('tag', 'default'),
+            'tag': kwargs.get('tag', str(uuid.uuid4())),
             'require_interaction': kwargs.get('require_interaction', False),
             'actions': kwargs.get('actions'),
         }

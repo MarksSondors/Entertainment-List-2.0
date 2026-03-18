@@ -133,3 +133,40 @@ self.addEventListener('notificationclose', (event) => {
   console.log('Notification closed:', event);
   // You can track notification dismissals here
 });
+
+// Push Subscription Change Handler
+// Android Chrome periodically rotates FCM push endpoints. Without this handler,
+// the server keeps sending to old (dead) endpoints that may still return 201
+// but never actually deliver to the device.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  console.log('Push subscription changed:', event);
+
+  event.waitUntil(
+    (async () => {
+      try {
+        // Re-subscribe with the same application server key
+        const newSubscription = await self.registration.pushManager.subscribe(
+          event.oldSubscription?.options || { userVisibleOnly: true }
+        );
+
+        const subscriptionJSON = newSubscription.toJSON();
+
+        // Send the updated subscription to our server
+        await fetch('/api/notifications/subscriptions/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: subscriptionJSON.endpoint,
+            p256dh: subscriptionJSON.keys.p256dh,
+            auth: subscriptionJSON.keys.auth,
+            device_name: 'Auto-renewed',
+          }),
+        });
+
+        console.log('Push subscription renewed successfully');
+      } catch (error) {
+        console.error('Failed to renew push subscription:', error);
+      }
+    })()
+  );
+});
