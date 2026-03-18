@@ -219,6 +219,10 @@ class MediaPerson(models.Model):
 
     class Meta:
         ordering = ['order']
+        indexes = [
+            models.Index(fields=['content_type', 'object_id']),
+            models.Index(fields=['content_type', 'object_id', 'role']),
+        ]
         
 class Watchlist(models.Model):
     """Model for tracking media items a user wants to watch."""
@@ -285,6 +289,11 @@ class Review(models.Model):
                 condition=models.Q(season__isnull=True) & models.Q(episode_subgroup__isnull=True),
                 name='unique_review_without_season_or_subgroup'
             ),
+        ]
+        indexes = [
+            models.Index(fields=['content_type', 'object_id']),
+            models.Index(fields=['user', 'content_type', 'object_id']),
+            models.Index(fields=['content_type', 'date_added']),
         ]
         
     def __str__(self):
