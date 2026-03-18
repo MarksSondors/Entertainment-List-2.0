@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from custom_auth.models import *
@@ -33,6 +34,11 @@ class TVShow(Media):
     added_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='added_tv_shows', blank=True, null=True)
     date_added = models.DateTimeField(auto_now_add=True)
     date_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['status', 'date_updated']),
+        ]
     
     def __str__(self):
         return self.title
@@ -144,6 +150,9 @@ class Season(models.Model):
     class Meta:
         unique_together = ['show', 'season_number']
         ordering = ['season_number']
+        indexes = [
+            models.Index(fields=['tmdb_id'], condition=Q(tmdb_id__isnull=False), name='season_tmdb_id_partial'),
+        ]
         
     def __str__(self):
         return f"{self.show.title} - Season {self.season_number}"
@@ -188,6 +197,12 @@ class Episode(models.Model):
     class Meta:
         unique_together = ['season', 'episode_number']
         ordering = ['episode_number']
+        indexes = [
+            models.Index(fields=['air_date']),
+            models.Index(fields=['season', 'air_date']),
+            models.Index(fields=['tmdb_id'], condition=Q(tmdb_id__isnull=False), name='episode_tmdb_id_partial'),
+            models.Index(fields=['tvdb_id'], condition=Q(tvdb_id__isnull=False), name='episode_tvdb_id_partial'),
+        ]
         
     def __str__(self):
         return f"{self.season.show.title} - S{self.season.season_number:02d}E{self.episode_number:02d} - {self.title}"

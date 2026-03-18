@@ -52,6 +52,13 @@ class Movie(Media):
     date_added = models.DateTimeField(auto_now_add=True)
     date_updated = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['status', 'release_date']),
+            models.Index(fields=['date_updated']),
+            models.Index(fields=['collection', 'release_date']),
+        ]
+
     def __str__(self):
         return self.title
     
@@ -141,10 +148,8 @@ class Movie(Media):
 
     def get_related_albums(self, relationship_type=None):
         """Get albums related to this movie with optional relationship type filter."""
-        from django.contrib.contenttypes.models import ContentType
-        movie_type = ContentType.objects.get_for_model(self.__class__)
         query = MediaAlbumRelationship.objects.filter(
-            content_type=movie_type,
+            content_type_id=self._get_content_type_id,
             object_id=self.id
         )
         if relationship_type:
@@ -156,11 +161,9 @@ class Movie(Media):
     @property
     def related_albums(self):
         """Get all related albums for this movie."""
-        from django.contrib.contenttypes.models import ContentType
-        movie_type = ContentType.objects.get_for_model(self.__class__)
         return Album.objects.filter(
             id__in=MediaAlbumRelationship.objects.filter(
-                content_type=movie_type,
+                content_type_id=self._get_content_type_id,
                 object_id=self.id
             ).values_list('album_id', flat=True)
         )
@@ -170,12 +173,9 @@ class Movie(Media):
         Returns crew members with their combined roles.
         Example: {'Person1': ['Director', 'Writer'], 'Person2': ['Novel']}
         """
-        from django.contrib.contenttypes.models import ContentType
-        movie_content_type = ContentType.objects.get_for_model(self)
-        
         # Get all crew members (not actors)
         crew_members = MediaPerson.objects.filter(
-            content_type=movie_content_type,
+            content_type_id=self._get_content_type_id,
             object_id=self.id
         ).exclude(role="Actor").select_related('person')
         
@@ -208,6 +208,9 @@ class MovieOfWeekPick(models.Model):
     
     class Meta:
         ordering = ['-start_date', 'date_created']
+        indexes = [
+            models.Index(fields=['status', 'date_created']),
+        ]
     
     def __str__(self):
         return f"{self.movie.title} (suggested by {self.suggested_by.username})"
