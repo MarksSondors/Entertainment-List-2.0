@@ -170,7 +170,7 @@ def imdb_import_confirm(request):
             
     # 2. Queue task for new items
     if to_fetch_items:
-        async_task('custom_auth.tasks.import_imdb_data', request.user.id, to_fetch_items)
+        async_task('custom_auth.tasks.import_imdb_data', request.user.id, to_fetch_items, timeout=3600)
         messages.success(request, f"Imported {count_existing} existing items. {len(to_fetch_items)} new items are being fetched in the background. You will receive a notification when complete.")
     else:
         messages.success(request, f"Successfully imported {count_existing} items.")
