@@ -2,8 +2,11 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import *
 from django.contrib.contenttypes.models import ContentType
-from django.urls import reverse
+from django.urls import reverse, path
 from django.utils.safestring import mark_safe
+from django.http import HttpResponseRedirect
+from django.contrib import messages
+from django_q.tasks import async_task
 from custom_auth.models import MediaPerson
 
 
@@ -117,7 +120,7 @@ class TVShowAdmin(admin.ModelAdmin):
                 html += f"&nbsp;&nbsp;<em>... and {len(people) - 15} more</em><br>"
             html += "<br>"
         
-        return format_html(html)
+        return mark_safe(html)
     display_cast_crew.short_description = "Cast & Crew"
     
     def seasons_count(self, obj):
@@ -156,12 +159,34 @@ class TVShowAdmin(admin.ModelAdmin):
     
     def update_button(self, obj):
         if obj.id:
+            url = reverse('admin:tvshows_tvshow_update_tmdb', args=[obj.id])
             return format_html(
-                '<a href="/admin/tvshows/update/?id={}" class="button">Update from TMDB</a>', 
-                obj.id
+                '<a href="{}" class="button">Update from TMDB</a>',
+                url
             )
         return ""
     update_button.short_description = "Actions"
+    
+    def get_urls(self):
+        custom_urls = [
+            path(
+                '<int:tvshow_id>/update-from-tmdb/',
+                self.admin_site.admin_view(self.update_from_tmdb_view),
+                name='tvshows_tvshow_update_tmdb',
+            ),
+        ]
+        return custom_urls + super().get_urls()
+    
+    def update_from_tmdb_view(self, request, tvshow_id):
+        from .tasks import update_single_tvshow
+        try:
+            tvshow = TVShow.objects.get(id=tvshow_id)
+            async_task(update_single_tvshow, tvshow.id, True)
+            messages.success(request, f"Scheduled TMDB update for \"{tvshow.title}\".")
+        except TVShow.DoesNotExist:
+            messages.error(request, f"TV show with ID {tvshow_id} not found.")
+        
+        return HttpResponseRedirect(request.META.get('HTTP_REFERER', reverse('admin:tvshows_tvshow_changelist')))
 
 
 class EpisodeInline(admin.TabularInline):
