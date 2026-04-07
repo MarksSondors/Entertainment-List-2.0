@@ -727,6 +727,15 @@ def update_tvshow_seasons(tvshow_id):
         # Get all seasons in our database for this TV show
         existing_seasons = {s.season_number: s for s in Season.objects.filter(show=tvshow)}
         
+        # Collect season numbers from the API response
+        api_season_numbers = {season_data['season_number'] for season_data in data['seasons']}
+        
+        # Delete seasons that no longer exist in the API
+        seasons_to_delete = set(existing_seasons.keys()) - api_season_numbers
+        if seasons_to_delete:
+            deleted_count = Season.objects.filter(show=tvshow, season_number__in=seasons_to_delete).delete()[0]
+            logger.info(f"Deleted {deleted_count} removed seasons (numbers: {seasons_to_delete}) for {tvshow.title}")
+        
         # Check for new or updated seasons
         for season_data in data['seasons']:
             season_number = season_data['season_number']
@@ -785,6 +794,15 @@ def update_single_season(season_id):
             
         # Get all episodes in our database for this season
         existing_episodes = {e.episode_number: e for e in Episode.objects.filter(season=season)}
+        
+        # Collect episode numbers from the API response
+        api_episode_numbers = {ep['episode_number'] for ep in data['episodes']}
+        
+        # Delete episodes that no longer exist in the API
+        episodes_to_delete = set(existing_episodes.keys()) - api_episode_numbers
+        if episodes_to_delete:
+            deleted_count = Episode.objects.filter(season=season, episode_number__in=episodes_to_delete).delete()[0]
+            logger.info(f"Deleted {deleted_count} removed episodes (numbers: {episodes_to_delete}) for {tvshow.title} season {season.season_number}")
         
         # Check for new or updated episodes
         added_count = 0
@@ -871,6 +889,15 @@ def update_episode_groups(tvshow_id):
         # Get existing episode groups
         existing_groups = {group.tmdb_id: group for group in EpisodeGroup.objects.filter(show=tvshow)}
         
+        # Collect relevant group IDs from the API response (only type 5 and 6)
+        api_group_ids = {str(g['id']) for g in data['results'] if g.get('type') in [5, 6]}
+        
+        # Delete episode groups that no longer exist in the API
+        groups_to_delete = set(existing_groups.keys()) - api_group_ids
+        if groups_to_delete:
+            deleted_count = EpisodeGroup.objects.filter(show=tvshow, tmdb_id__in=groups_to_delete).delete()[0]
+            logger.info(f"Deleted {deleted_count} removed episode groups for {tvshow.title}")
+        
         # Update or create episode groups
         added_groups = 0
         updated_groups = 0
@@ -946,6 +973,15 @@ def update_episode_subgroups(group_id, tmdb_group_id):
             
         # Get existing subgroups
         existing_subgroups = {subgroup.tmdb_id: subgroup for subgroup in EpisodeSubGroup.objects.filter(parent_group=group) if subgroup.tmdb_id}
+        
+        # Collect subgroup IDs from the API response
+        api_subgroup_ids = {str(sg['id']) for sg in data['groups'] if 'id' in sg}
+        
+        # Delete subgroups that no longer exist in the API
+        subgroups_to_delete = set(existing_subgroups.keys()) - api_subgroup_ids
+        if subgroups_to_delete:
+            deleted_count = EpisodeSubGroup.objects.filter(parent_group=group, tmdb_id__in=subgroups_to_delete).delete()[0]
+            logger.info(f"Deleted {deleted_count} removed episode subgroups for group {group.name}")
         
         # Update or create subgroups
         added_subgroups = 0
