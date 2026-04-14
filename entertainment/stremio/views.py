@@ -19,7 +19,7 @@ from movies.services.recommendation import MovieRecommender
 
 # Constants
 PAGE_SIZE = 100
-RECOMMENDATIONS_SIZE = 10
+RECOMMENDATIONS_SIZE = 20
 
 
 def cors_response(data: dict, status: int = 200) -> JsonResponse:
