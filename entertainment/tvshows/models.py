@@ -32,7 +32,7 @@ class TVShow(Media):
 
     # user related fields
     added_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='added_tv_shows', blank=True, null=True)
-    date_added = models.DateTimeField(auto_now_add=True)
+    date_added = models.DateTimeField(auto_now_add=True, db_index=True)
     date_updated = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 
 # Register your models here.
 from .models import CustomUser, Genre, Keyword, Country, Watchlist, Review, Person, MediaPerson, ProductionCompany
@@ -52,14 +52,16 @@ class PersonAdmin(admin.ModelAdmin):
             movie_roles[mp.object_id].append(role_info)
         
         # Build HTML list with clickable links to movie admin pages
-        html = "<ul>"
+        items = []
         for movie_id in sorted(movie_roles.keys(), key=lambda x: movies[x].title if x in movies else ""):
             if movie_id in movies:
                 movie = movies[movie_id]
                 url = reverse('admin:movies_movie_change', args=[movie_id])
-                html += f'<li><a href="{url}">{movie.title}</a> ({", ".join(movie_roles[movie_id])})</li>'
-        html += "</ul>"
-        return format_html(html)
+                items.append(format_html(
+                    '<li><a href="{}">{}</a> ({})</li>',
+                    url, movie.title, ", ".join(movie_roles[movie_id])
+                ))
+        return mark_safe("<ul>" + "".join(items) + "</ul>")
     
     display_connected_movies.short_description = "Connected Movies"
 

@@ -61,7 +61,7 @@ class BooksService:
         }
         
         if self.api_token:
-            headers['Authorization'] = self.api_token
+            headers['Authorization'] = f'Bearer {self.api_token}'
             
         return headers
     
@@ -110,183 +110,135 @@ class BooksService:
                 print(f"Request error: {e}. Retrying in {backoff:.1f} seconds... (Attempt {retries}/{max_retries})")
                 time.sleep(backoff)
     
-    def search_books(self, query, limit=25, offset=0):
-        """Search for books"""
+    # ---------------------------------------------------------------------------
+    # Book fragments (reused across queries)
+    # ---------------------------------------------------------------------------
+    _BOOK_FIELDS = """
+        id
+        title
+        subtitle
+        description
+        slug
+        rating
+        ratings_count
+        release_date
+        release_year
+        compilation
+        cached_image
+        contributions(where: {contributable_type: {_eq: "Book"}}) {
+            contribution
+            author {
+                id
+                name
+                bio
+                born_date
+                death_date
+                cached_image
+                identifiers
+                links
+                alternate_names
+            }
+        }
+        book_series {
+            position
+            featured
+            series {
+                id
+                name
+            }
+        }
+        default_physical_edition {
+            isbn_10
+            isbn_13
+            pages
+            language {
+                language
+            }
+            publisher {
+                id
+                name
+            }
+        }
+        taggings {
+            tag { id tag tag_category_id }
+        }
+    """
+
+    def search_books(self, query, per_page=25, page=1):
+        """
+        Search for books using Hardcover's Typesense-backed search endpoint.
+        Returns a dict with 'results' (Typesense hits JSON) and 'ids' (list of book IDs).
+        """
         search_query = """
-        query SearchBooks($query: String!, $limit: Int, $offset: Int) {
-            books(where: {_or: [
-                {title: {_ilike: $query}},
-                {authors: {name: {_ilike: $query}}},
-                {isbn_10: {_eq: $query}},
-                {isbn_13: {_eq: $query}}
-            ]}, limit: $limit, offset: $offset) {
-                id
-                title
-                subtitle
-                description
-                isbn_10
-                isbn_13
-                pages
-                published_date
-                language
-                image_url
-                authors {
-                    id
-                    name
-                }
-                genres {
-                    id
-                    name
-                }
+        query SearchBooks($query: String!, $per_page: Int, $page: Int) {
+            search(
+                query: $query,
+                query_type: "Book",
+                per_page: $per_page,
+                page: $page
+            ) {
+                results
+                ids
             }
         }
         """
-        variables = {
-            'query': f'%{query}%',
-            'limit': limit,
-            'offset': offset
-        }
+        variables = {'query': query, 'per_page': per_page, 'page': page}
         return self._make_graphql_request(search_query, variables)
-    
-    def get_book_details(self, book_id):
-        """Get detailed information about a specific book"""
+
+    def get_books_by_ids(self, ids):
+        """Fetch full book details for a list of integer IDs (used after search)."""
+        if not ids:
+            return []
         query = """
-        query GetBookDetails($book_id: uuid!) {
-            books_by_pk(id: $book_id) {
-                id
-                title
-                subtitle
-                description
-                isbn_10
-                isbn_13
-                pages
-                published_date
-                language
-                image_url
-                authors {
-                    id
-                    name
-                    bio
-                }
-                genres {
-                    id
-                    name
-                }
-                publishers {
-                    id
-                    name
-                }
-                series {
-                    id
-                    name
-                    position
-                }
+        query GetBooksByIds($ids: [Int!]!) {
+            books(where: {id: {_in: $ids}}) {
+                """ + self._BOOK_FIELDS + """
             }
         }
         """
-        variables = {'book_id': book_id}
-        return self._make_graphql_request(query, variables)
-    
+        result = self._make_graphql_request(query, {'ids': ids})
+        return result.get('books', [])
+
+    def get_book_details(self, book_id):
+        """Get detailed information about a specific book by its integer ID."""
+        query = """
+        query GetBook($id: Int!) {
+            books(where: {id: {_eq: $id}}, limit: 1) {
+                """ + self._BOOK_FIELDS + """
+            }
+        }
+        """
+        result = self._make_graphql_request(query, {'id': book_id})
+        books = result.get('books', [])
+        return books[0] if books else None
+
     def get_popular_books(self, limit=25, offset=0):
-        """Get popular books"""
+        """Get popular books ordered by user count."""
         query = """
         query GetPopularBooks($limit: Int, $offset: Int) {
             books(
-                order_by: {user_books_aggregate: {count: desc}},
+                order_by: {users_count: desc},
                 limit: $limit,
                 offset: $offset
             ) {
-                id
-                title
-                subtitle
-                description
-                isbn_10
-                isbn_13
-                pages
-                published_date
-                language
-                image_url
-                authors {
-                    id
-                    name
-                }
-                genres {
-                    id
-                    name
-                }
+                """ + self._BOOK_FIELDS + """
             }
         }
         """
-        variables = {
-            'limit': limit,
-            'offset': offset
-        }
-        return self._make_graphql_request(query, variables)
-    
-    def get_recently_added_books(self, limit=25, offset=0):
-        """Get recently added books"""
-        query = """
-        query GetRecentlyAddedBooks($limit: Int, $offset: Int) {
-            books(
-                order_by: {created_at: desc},
-                limit: $limit,
-                offset: $offset
-            ) {
-                id
-                title
-                subtitle
-                description
-                isbn_10
-                isbn_13
-                pages
-                published_date
-                language
-                image_url
-                created_at
-                authors {
-                    id
-                    name
-                }
-                genres {
-                    id
-                    name
-                }
-            }
-        }
-        """
-        variables = {
-            'limit': limit,
-            'offset': offset
-        }
-        return self._make_graphql_request(query, variables)
-    
+        result = self._make_graphql_request(query, {'limit': limit, 'offset': offset})
+        return result.get('books', [])
+
     def get_books_by_author(self, author_id, limit=25, offset=0):
-        """Get books by a specific author"""
+        """Get books by a specific author (integer author ID)."""
         query = """
-        query GetBooksByAuthor($author_id: uuid!, $limit: Int, $offset: Int) {
+        query GetBooksByAuthor($author_id: Int!, $limit: Int, $offset: Int) {
             books(
-                where: {authors: {id: {_eq: $author_id}}},
+                where: {contributions: {author_id: {_eq: $author_id}}},
                 limit: $limit,
-                offset: $offset
+                offset: $offset,
+                order_by: {users_count: desc}
             ) {
-                id
-                title
-                subtitle
-                description
-                isbn_10
-                isbn_13
-                pages
-                published_date
-                language
-                image_url
-                authors {
-                    id
-                    name
-                }
-                genres {
-                    id
-                    name
-                }
+                """ + self._BOOK_FIELDS + """
             }
         }
         """
@@ -296,57 +248,54 @@ class BooksService:
             'offset': offset
         }
         return self._make_graphql_request(query, variables)
-    
-    def get_books_by_genre(self, genre_id, limit=25, offset=0):
-        """Get books by a specific genre"""
+
+    def get_series_books(self, hardcover_series_id):
+        """Get all books in a series ordered by position.
+        featured=true  → this series is the book's primary series (not a side-association)
+        compilation=false → skip box-set / omnibus entries (shown as "Collections" on Hardcover)
+        """
         query = """
-        query GetBooksByGenre($genre_id: uuid!, $limit: Int, $offset: Int) {
-            books(
-                where: {genres: {id: {_eq: $genre_id}}},
-                limit: $limit,
-                offset: $offset
+        query GetSeriesBooks($series_id: Int!) {
+            book_series(
+                where: {
+                    series_id: {_eq: $series_id},
+                    featured: {_eq: true},
+                    compilation: {_eq: false}
+                },
+                order_by: {position: asc}
             ) {
-                id
-                title
-                subtitle
-                description
-                isbn_10
-                isbn_13
-                pages
-                published_date
-                language
-                image_url
-                authors {
+                position
+                book {
                     id
-                    name
-                }
-                genres {
-                    id
-                    name
+                    title
+                    subtitle
+                    rating
+                    ratings_count
+                    release_year
+                    cached_image
+                    contributions(where: {contributable_type: {_eq: "Book"}}, limit: 3) {
+                        author { name }
+                    }
                 }
             }
         }
         """
-        variables = {
-            'genre_id': genre_id,
-            'limit': limit,
-            'offset': offset
+        result = self._make_graphql_request(query, {'series_id': hardcover_series_id})
+        return result.get('book_series', [])
+
+    def get_series_info(self, hardcover_series_id):
+        """Fetch metadata (name, description, is_completed) for a single series."""
+        query = """
+        query GetSeriesInfo($series_id: Int!) {
+            series(where: {id: {_eq: $series_id}}, limit: 1) {
+                id
+                name
+                description
+                is_completed
+                primary_books_count
+            }
         }
-        return self._make_graphql_request(query, variables)
-
-
-# Convenience function for easy usage
-def get_books_service():
-    """Get an instance of the BooksService"""
-    return BooksService()
-
-
-# Simplified search function
-def search_books(query, limit=10):
-    """Search for books by title, author, or ISBN"""
-    service = BooksService()
-    results = service.search_books(query, limit=limit)
-    
-    if results and 'books' in results:
-        return results['books']
-    return []
+        """
+        result = self._make_graphql_request(query, {'series_id': hardcover_series_id})
+        rows = result.get('series', [])
+        return rows[0] if rows else None

@@ -1,0 +1,254 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+:root {
+    --bg-color: #c0c0c0;
+    --window-bg: #ffffff;
+    --text-color: #000000;
+    --text-muted: #666666;
+    --border-light: #ffffff;
+    --border-dark: #808080;
+    --shadow-color: rgba(0,0,0,0.3);
+    --button-bg: #c0c0c0;
+    --button-text: #000000;
+    --button-hover: #d4d0c8;
+    --poster-border: #808080;
+    --win98-dark: #000080;
+    --win98-light: #1084d0;
+    --backdrop-overlay: rgba(192,192,192,0.92);
+    --card-bg: #f0f0f0;
+    --card-border: #c0c0c0;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --window-bg: #2a2a2a;
+        --text-color: #e0e0e0;
+        --text-muted: #999999;
+        --border-light: #585858;
+        --border-dark: #1a1a1a;
+        --shadow-color: rgba(0,0,0,0.6);
+        --button-bg: #484848;
+        --button-text: #e0e0e0;
+        --button-hover: #585858;
+        --poster-border: #585858;
+        --win98-dark: #000060;
+        --win98-light: #0060a0;
+        --backdrop-overlay: rgba(56,56,56,0.92);
+        --card-bg: #333333;
+        --card-border: #505050;
+    }
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.collection-page-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    margin-bottom: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+    }
+}
+
+.window-body {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 12px;
+}
+
+.status-bar {
+    border-top: 1px solid var(--border-dark);
+    background-color: var(--bg-color);
+    padding: 2px 4px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.status-bar-field {
+    border: 1px inset var(--bg-color);
+    padding: 2px 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.window-body a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.window-body a:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Book cards grid */
+.books-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+}
+
+.book-card {
+    background: var(--card-bg);
+    border: 2px outset var(--card-border);
+    padding: 6px;
+    position: relative;
+    text-align: center;
+}
+
+.book-card:hover {
+    background: var(--button-hover);
+}
+
+.book-card a {
+    text-decoration: none;
+    color: var(--text-color);
+}
+
+.book-card img {
+    width: 100%;
+    max-width: 120px;
+    border: 1px solid var(--poster-border);
+    display: block;
+    margin: 0 auto 6px;
+}
+
+.book-card .book-title {
+    font-size: 12px;
+    font-weight: bold;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-bottom: 3px;
+}
+
+.book-card .book-author {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.book-card .book-year {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.user-rating-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: #000080;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 5px;
+    border: 1px solid #ffffff;
+}
+
+.card-reviewed {
+    border-color: #000080;
+}
+
+.card-watchlist {
+    border-color: #008000;
+}
+
+@media (max-width: 768px) {
+    .collection-page-container { padding: 10px; }
+    .books-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+}
+</style>
+
+<div class="collection-page-container">
+    <!-- Collection Info Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">{{ collection.name }}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div style="display: flex; align-items: flex-start; gap: 20px;">
+                {% if collection.image_url %}
+                <div style="flex-shrink: 0;">
+                    <img src="{{ collection.image_url }}"
+                         alt="{{ collection.name }}"
+                         style="width: 150px; border: 2px solid var(--poster-border); box-shadow: 2px 2px 4px var(--shadow-color);">
+                </div>
+                {% endif %}
+                <div style="flex-grow: 1;">
+                    {% if collection.description %}
+                    <p>{{ collection.description }}</p>
+                    {% else %}
+                    <p style="color: var(--text-muted);"><em>No description available.</em></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">{{ books|length }} book{{ books|length|pluralize }}</div>
+        </div>
+    </div>
+
+    <!-- Books Grid Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">Books in Collection</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="books-grid">
+                {% for book in books %}
+                <div class="book-card {% if book.user_rating %}card-reviewed{% elif book.in_watchlist %}card-watchlist{% endif %}">
+                    {% if book.user_rating %}
+                    <div class="user-rating-badge">{{ book.user_rating }}</div>
+                    {% endif %}
+                    <a href="{% url 'books:book_page' book.id %}">
+                        <img src="{{ book.image_url|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}"
+                             alt="{{ book.title }}">
+                        <div class="book-title">{{ book.title }}</div>
+                    </a>
+                    <div class="book-author">{{ book.author_names }}</div>
+                    {% if book.published_date %}
+                    <div class="book-year">{{ book.published_date|date:"Y" }}</div>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <div style="grid-column: 1/-1; text-align: center; padding: 20px; color: var(--text-muted);">
+                    No books found in this collection.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

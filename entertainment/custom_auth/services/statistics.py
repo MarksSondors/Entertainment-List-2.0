@@ -9,10 +9,10 @@ import logging
 from collections import defaultdict
 from django.core.cache import cache
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.db.models.functions import ExtractYear, TruncMonth
 
-from custom_auth.models import Review, MediaPerson
+from custom_auth.models import Review, MediaPerson, Watchlist
 from movies.models import Movie
 from tvshows.models import TVShow, WatchedEpisode
 from games.models import Game
@@ -381,6 +381,21 @@ def _compute_all_for_slice(ctx, media_data, content_type, year=None):
     }
 
 
+def _fetch_watchlist_monthly(user, content_type):
+    """Return watchlist additions aggregated by month for a specific content type."""
+    rows = list(
+        Watchlist.objects.filter(user=user, content_type=content_type)
+        .annotate(month=TruncMonth('date_added'))
+        .values('month')
+        .annotate(total=Count('id'))
+        .order_by('month')
+    )
+    return [
+        {'month': row['month'].strftime('%Y-%m'), 'count': row['total'], '_year': row['month'].year}
+        for row in rows if row['month']
+    ]
+
+
 def get_all_stats(user):
     """Compute all statistics for all media types. Cached per user."""
     cache_key = _stats_cache_key(user.id)
@@ -414,11 +429,22 @@ def get_all_stats(user):
         stats['years'] = available_years
         stats['total_reviews'] = len(ctx['object_ids'])
 
-        # 6. Compute per-year stats by filtering in-memory
+        # 6. Fetch watchlist monthly data for this content type (1 DB query)
+        all_watchlist_monthly = _fetch_watchlist_monthly(user, ct)
+        stats['watchlist_by_month'] = [
+            {'month': r['month'], 'count': r['count']} for r in all_watchlist_monthly
+        ]
+
+        # 7. Compute per-year stats by filtering in-memory
         yearly_data = {}
         for y in available_years:
             year_ctx = _build_review_context(all_reviews, year=y)
-            yearly_data[str(y)] = _compute_all_for_slice(year_ctx, media_data, ct, year=y)
+            year_slice = _compute_all_for_slice(year_ctx, media_data, ct, year=y)
+            year_slice['watchlist_by_month'] = [
+                {'month': r['month'], 'count': r['count']}
+                for r in all_watchlist_monthly if r['_year'] == y
+            ]
+            yearly_data[str(y)] = year_slice
         stats['yearly'] = yearly_data
 
         result[media_key] = stats

@@ -1,0 +1,398 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+:root {
+    --bg-color: #c0c0c0;
+    --window-bg: #ffffff;
+    --text-color: #000000;
+    --text-muted: #666666;
+    --border-light: #ffffff;
+    --border-dark: #808080;
+    --shadow-color: rgba(0,0,0,0.3);
+    --button-bg: #c0c0c0;
+    --button-text: #000000;
+    --button-hover: #d4d0c8;
+    --poster-border: #808080;
+    --win98-dark: #000080;
+    --win98-light: #1084d0;
+    --card-bg: #f0f0f0;
+    --card-border: #c0c0c0;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --window-bg: #2a2a2a;
+        --text-color: #e0e0e0;
+        --text-muted: #999999;
+        --border-light: #585858;
+        --border-dark: #1a1a1a;
+        --shadow-color: rgba(0,0,0,0.6);
+        --button-bg: #484848;
+        --button-text: #e0e0e0;
+        --button-hover: #585858;
+        --poster-border: #585858;
+        --win98-dark: #000060;
+        --win98-light: #0060a0;
+        --card-bg: #333333;
+        --card-border: #505050;
+    }
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.series-page-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    margin-bottom: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+    }
+}
+
+.window-body {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 12px;
+}
+
+.status-bar {
+    border-top: 1px solid var(--border-dark);
+    background-color: var(--bg-color);
+    padding: 2px 4px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.status-bar-field {
+    border: 1px inset var(--bg-color);
+    padding: 2px 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.window-body a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.window-body a:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Series book list */
+.series-book-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px;
+    border-bottom: 1px solid var(--border-dark);
+    background: var(--card-bg);
+    position: relative;
+}
+
+.series-book-row:last-child {
+    border-bottom: none;
+}
+
+.series-book-row:hover {
+    background: var(--button-hover);
+}
+
+.series-position {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--text-muted);
+    min-width: 28px;
+    text-align: right;
+    padding-top: 4px;
+    flex-shrink: 0;
+}
+
+.series-book-cover img {
+    width: 70px;
+    border: 1px solid var(--poster-border);
+    display: block;
+    flex-shrink: 0;
+}
+
+.series-book-info {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.series-book-info .book-title {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.series-book-info .book-author {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.series-book-info .book-year {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.series-book-info .book-description {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.user-rating-badge {
+    background: #000080;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border: 1px solid white;
+    white-space: nowrap;
+    align-self: flex-start;
+    flex-shrink: 0;
+}
+
+.card-reviewed {
+    border-left: 3px solid #000080;
+}
+
+.card-watchlist {
+    border-left: 3px solid #008000;
+}
+
+@media (max-width: 768px) {
+    .series-page-container { padding: 10px; }
+    .series-book-cover img { width: 55px; }
+.series-book-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-self: center;
+    flex-shrink: 0;
+}
+
+.missing-overlay {
+    opacity: 0.55;
+}
+</style>
+
+<div class="series-page-container">
+    <!-- Series Info Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">{{ series.name }}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            {% if series.description %}
+            <p>{{ series.description }}</p>
+            {% else %}
+            <p style="color: var(--text-muted);"><em>No description available.</em></p>
+            {% endif %}
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">{{ total_count }} book{{ total_count|pluralize }} in series</div>
+            <div class="status-bar-field">{{ in_db_count }} in your library</div>
+        </div>
+    </div>
+
+    <!-- Books List Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">Books in Series</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body" style="padding: 0;">
+            {% for entry in series_entries %}
+            <div class="series-book-row {% if entry.user_rating %}card-reviewed{% elif entry.in_watchlist %}card-watchlist{% endif %}">
+                <div class="series-position">
+                    {% if entry.position %}{{ entry.position|floatformat }}{% else %}—{% endif %}
+                </div>
+                <div class="series-book-cover {% if not entry.in_db %}missing-overlay{% endif %}">
+                    {% if entry.in_db %}
+                    <a href="{% url 'books:book_page' entry.db_book.id %}">
+                        <img src="{{ entry.cover_url|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}"
+                             alt="{{ entry.title }}">
+                    </a>
+                    {% else %}
+                    <img src="{{ entry.cover_url|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}"
+                         alt="{{ entry.title }}">
+                    {% endif %}
+                </div>
+                <div class="series-book-info">
+                    <div class="book-title">
+                        {% if entry.in_db %}
+                        <a href="{% url 'books:book_page' entry.db_book.id %}">{{ entry.title }}</a>
+                        {% else %}
+                        {{ entry.title }}
+                        {% endif %}
+                    </div>
+                    {% if entry.subtitle %}
+                    <div class="book-author" style="font-style: italic;">{{ entry.subtitle }}</div>
+                    {% endif %}
+                    {% if entry.author_names %}
+                    <div class="book-author">{{ entry.author_names }}</div>
+                    {% endif %}
+                    {% if entry.release_year %}
+                    <div class="book-year">{{ entry.release_year }}</div>
+                    {% endif %}
+                    {% if entry.rating %}
+                    <div class="book-year">Hardcover: {{ entry.rating|floatformat:1 }}</div>
+                    {% endif %}
+                    {% if not entry.in_db %}
+                    <div class="book-year" style="color: var(--text-muted); font-style: italic;">Not in library</div>
+                    {% endif %}
+                </div>
+                <div class="series-book-actions">
+                    {% if entry.in_db %}
+                        {% if entry.user_rating %}
+                        <div class="user-rating-badge">{{ entry.user_rating }}/10</div>
+                        {% endif %}
+                        {% if not entry.in_watchlist %}
+                        <button class="btn-watchlist" data-book-id="{{ entry.db_book.id }}"
+                                onclick="toggleWatchlist({{ entry.db_book.id }}, this)">+ Watchlist</button>
+                        {% else %}
+                        <button class="btn-watchlist btn-watchlist-active" data-book-id="{{ entry.db_book.id }}"
+                                onclick="toggleWatchlist({{ entry.db_book.id }}, this)">✓ Watchlist</button>
+                        {% endif %}
+                    {% else %}
+                        {% if entry.hardcover_id %}
+                        <a href="{% url 'books:add_book' entry.hardcover_id %}" class="btn-add-db">Add to Library</a>
+                        <button class="btn-add-watchlist" data-hc-id="{{ entry.hardcover_id }}"
+                                onclick="addAndWatchlist({{ entry.hardcover_id }}, this)">+ Watchlist</button>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% empty %}
+            <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+                No books found in this series.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<style>
+.btn-watchlist, .btn-add-db, .btn-add-watchlist {
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    padding: 3px 8px;
+    border: 2px outset var(--bg-color);
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+.btn-watchlist:hover, .btn-add-db:hover, .btn-add-watchlist:hover {
+    background-color: var(--button-hover);
+}
+.btn-watchlist-active {
+    border-style: inset;
+    background-color: var(--button-hover);
+}
+.btn-add-db {
+    background-color: #000080;
+    color: white;
+}
+.btn-add-db:hover {
+    background-color: #0000a0;
+    color: white;
+}
+</style>
+
+<script>
+const WATCHLIST_URL = "{% url 'books:book_watchlist' %}";
+const CSRF_TOKEN = "{{ csrf_token }}";
+
+function toggleWatchlist(bookId, btn) {
+    const isActive = btn.classList.contains('btn-watchlist-active');
+    fetch(WATCHLIST_URL, {
+        method: isActive ? 'DELETE' : 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': CSRF_TOKEN,
+        },
+        body: JSON.stringify({id: bookId}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'added' || (!isActive && data.status !== 'error')) {
+            btn.classList.add('btn-watchlist-active');
+            btn.textContent = '✓ Watchlist';
+        } else {
+            btn.classList.remove('btn-watchlist-active');
+            btn.textContent = '+ Watchlist';
+        }
+    })
+    .catch(() => alert('Could not update watchlist.'));
+}
+
+function addAndWatchlist(hcId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+    // First add to DB, then add to watchlist
+    fetch(`/books/add/${hcId}/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+        body: JSON.stringify({add_to_watchlist: false}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const bookId = data.id;
+        if (!bookId) throw new Error('No book id returned');
+        return fetch(WATCHLIST_URL, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+            body: JSON.stringify({id: bookId}),
+        });
+    })
+    .then(() => location.reload())
+    .catch(() => {
+        btn.disabled = false;
+        btn.textContent = '+ Watchlist';
+        alert('Could not add book to watchlist.');
+    });
+}
+</script>
+{% endblock %}

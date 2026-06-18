@@ -550,7 +550,7 @@
                     <div class="title-bar">
                         <div class="title-bar-text">
                             <img src="{% static 'images/win98/clock.png' %}" alt="" class="win98-icon">
-                            Watch Time by Month
+                            Watch Time & Watchlist Size by Month
                         </div>
                     </div>
                     <div class="window-body">
@@ -726,6 +726,7 @@
                 count_by_genre:       media.count_by_genre,
                 avg_rating_by_genre:  media.avg_rating_by_genre,
                 watch_time_by_month:  media.watch_time_by_month,
+                watchlist_by_month:   media.watchlist_by_month,
                 top_directors:        media.top_directors,
                 top_directors_by_rating: media.top_directors_by_rating,
                 top_actors:           media.top_actors,
@@ -965,31 +966,57 @@
         );
         charts.genreAvg.render();
 
-        // 7. Watch Time by Month — area chart (Movies & TV only)
+        // 7. Watch Time & Watchlist Size — mixed chart (Movies & TV only)
         if (mediaType !== 'games') {
             const wtData = data.watch_time_by_month || [];
-            if (Array.isArray(wtData) && wtData.length > 0) {
-                const wtLabels = wtData.map(d => d.month);
-                const wtValues = wtData.map(d => d.hours);
+            const wlData = data.watchlist_by_month || [];
+            const allMonths = [...new Set([...wtData.map(d => d.month), ...wlData.map(d => d.month)])].sort();
+            if (allMonths.length > 0) {
+                const wtMap = Object.fromEntries(wtData.map(d => [d.month, d.hours]));
+                const wlMap = Object.fromEntries(wlData.map(d => [d.month, d.count]));
+                const wtValues = allMonths.map(m => wtMap[m] ?? 0);
+                // Compute running cumulative total for watchlist size
+                let running = 0;
+                const wlRunning = allMonths.map(m => { running += wlMap[m] ?? 0; return running; });
                 charts.watchTime = new ApexCharts(
                     document.querySelector('#chart-watch-time'),
                     baseOptions({
-                        chart: { type: 'area', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false } },
-                        series: [{ name: 'Hours', data: wtValues }],
+                        chart: { type: 'line', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false } },
+                        series: [
+                            { name: 'Hours Watched', data: wtValues, type: 'area' },
+                            { name: 'Watchlist Size', data: wlRunning, type: 'area' },
+                        ],
                         xaxis: {
-                            categories: wtLabels,
+                            categories: allMonths,
                             title: { text: 'Month', style: { color: c.text, fontSize: '10px' } },
-                            labels: { style: { colors: c.text, fontSize: '10px' }, rotate: -45, rotateAlways: wtLabels.length > 10 },
+                            labels: { style: { colors: c.text, fontSize: '10px' }, rotate: -45, rotateAlways: allMonths.length > 10 },
                             axisBorder: { color: c.gridLine }, axisTicks: { color: c.gridLine },
                         },
-                        yaxis: {
-                            title: { text: 'Hours', style: { color: c.text, fontSize: '10px' } },
-                            labels: { style: { colors: c.text, fontSize: '10px' } },
+                        yaxis: [
+                            {
+                                title: { text: 'Hours', style: { color: '#008080', fontSize: '10px' } },
+                                labels: { style: { colors: '#008080', fontSize: '10px' } },
+                                min: 0,
+                            },
+                            {
+                                opposite: true,
+                                title: { text: 'Watchlist Items', style: { color: '#e040fb', fontSize: '10px' } },
+                                labels: { style: { colors: '#e040fb', fontSize: '10px' }, formatter: (v) => Math.round(v) },
+                                min: 0,
+                            },
+                        ],
+                        colors: ['#008080', '#e040fb'],
+                        stroke: { width: [2, 2], curve: ['smooth', 'smooth'] },
+                        fill: {
+                            type: ['gradient', 'gradient'],
+                            gradient: [
+                                { type: 'vertical', shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05 },
+                                { type: 'vertical', shadeIntensity: 1, opacityFrom: 0, opacityTo: 0 },
+                            ],
                         },
-                        colors: ['#008080'],
-                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1 } },
-                        stroke: { width: 2, curve: 'smooth' },
+                        markers: { size: 0 },
                         dataLabels: { enabled: false },
+                        legend: { show: true, position: 'top', labels: { colors: c.text } },
                     })
                 );
                 charts.watchTime.render();

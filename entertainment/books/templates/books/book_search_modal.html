@@ -1,0 +1,403 @@
+{% comment %} book_search_modal.html {% endcomment %}
+
+<div id="book-search-modal" class="modal" style="display: none;">
+    <div class="modal-content window" style="width: 80%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+        <!-- Modal Header -->
+        <div class="title-bar">
+            <div class="title-bar-text" id="book-modal-title">Add Book</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" id="book-close-modal-btn"></button>
+            </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body">
+
+            <!-- Stage 1: Search and Select -->
+            <div id="book-modal-stage-1">
+                <!-- Search Input -->
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    <label for="book-query">Search:</label>
+                    <input type="text" id="book-query" name="book-query" style="margin: 0 10px; flex-grow: 1;" placeholder="Enter book title or author">
+                    <button id="book-search-button">Search</button>
+                </div>
+
+                <!-- Results Section -->
+                <div style="margin-top: 15px;">
+                    <div id="book-results-panel" class="sunken-panel" style="overflow-y: auto; max-height: 350px; background-color: var(--input-bg, white); margin-bottom: 10px; padding: 0;">
+                        <ul id="book-results-list" class="tree-view" style="height: 100%; width: 100%; border: none; margin: 0;"></ul>
+                    </div>
+                    <div id="book-loading-more" style="text-align: center; padding: 5px; display: none;">
+                        <p style="margin: 0;">Loading more results&hellip;</p>
+                    </div>
+                    <div class="status-bar-field">
+                        Total Results: <span id="book-total-results">0</span>
+                    </div>
+                </div>
+
+                <!-- Navigation -->
+                <div style="text-align: right; margin-top: 15px;">
+                    <button id="book-to-stage-2-btn" disabled>Next &gt;</button>
+                </div>
+            </div>
+
+            <!-- Stage 2: Confirm and Add -->
+            <div id="book-modal-stage-2" style="display: none;">
+                <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                    <!-- Cover Image -->
+                    <div style="flex-shrink: 0; text-align: center;">
+                        <img id="book-cover-preview" src="" alt="Book cover"
+                             style="width: 130px; height: 190px; object-fit: cover; border: 2px solid #888;">
+                    </div>
+
+                    <!-- Book Info -->
+                    <div style="flex: 1;">
+                        <p style="margin: 0 0 6px;"><strong id="book-confirm-title" style="font-size: 1.1em;"></strong></p>
+                        <p style="margin: 0 0 4px; font-size: 0.9em;" id="book-confirm-subtitle"></p>
+                        <p style="margin: 0 0 4px;"><em id="book-confirm-authors"></em></p>
+                        <p style="margin: 0 0 4px; font-size: 0.85em;" id="book-confirm-year"></p>
+                        <p style="margin: 0 0 4px; font-size: 0.85em;" id="book-confirm-series"></p>
+                        <p style="margin: 0 0 4px; font-size: 0.85em;" id="book-confirm-rating"></p>
+                        <p style="margin: 0 0 4px; font-size: 0.85em;" id="book-confirm-pages"></p>
+                    </div>
+                </div>
+
+                <div class="field-row" style="margin-bottom: 15px;">
+                    <input type="checkbox" id="book-add-to-watchlist" name="add_to_watchlist" checked>
+                    <label for="book-add-to-watchlist">Add to my watchlist</label>
+                </div>
+
+                <!-- Hidden ID -->
+                <input type="hidden" id="book-hardcover-id">
+
+                <!-- Navigation -->
+                <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+                    <button type="button" id="book-back-to-stage-1-btn">Back to Search</button>
+                    <button type="button" id="book-add-btn">Add Book</button>
+                </div>
+            </div>
+
+        </div><!-- /.modal-body -->
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div id="book-loading-modal" class="modal" style="display: none; z-index: 1200;">
+    <div class="modal-content window" style="width: 400px;">
+        <div class="title-bar">
+            <div class="title-bar-text">Adding Book</div>
+        </div>
+        <div class="window-body" style="text-align: center; padding: 20px;">
+            <p id="book-loading-message">Adding book to your library&hellip;</p>
+            <div class="progress-indicator">
+                <span class="progress-indicator-bar"></span>
+            </div>
+            <div id="book-loading-info" style="margin-top: 15px; font-size: 12px; display: none;">
+                <p>This may take a moment. You can close this dialog and the process will continue in the background.</p>
+                <button id="book-close-loading-btn">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Message Dialog -->
+<div id="book-message-dialog" class="modal" style="display: none; z-index: 1200;">
+    <div class="modal-content window" style="width: 380px;">
+        <div class="title-bar">
+            <div class="title-bar-text" id="book-dialog-title">Message</div>
+            <div class="title-bar-controls">
+                <button aria-label="Close" onclick="closeBookMessageDialog()"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <p id="book-dialog-message"></p>
+            <div style="text-align: right; margin-top: 15px;">
+                <button onclick="closeBookMessageDialog()">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    /* -------------------------------------------------------------------
+       State
+    ------------------------------------------------------------------- */
+    let bookResults     = [];
+    let bookPage        = 1;
+    let bookPerPage     = 25;
+    let bookCurrentQuery = '';
+    let bookHasMore     = false;
+    let bookIsLoading   = false;
+    let bookSearchTimeout = null;
+    let selectedBook    = null;
+
+    const csrfToken = document.cookie
+        .split('; ')
+        .find(r => r.startsWith('csrftoken='))
+        ?.split('=')[1] || '';
+
+    /* -------------------------------------------------------------------
+       Helpers
+    ------------------------------------------------------------------- */
+    function openBookModal(initialQuery) {
+        document.getElementById('book-search-modal').style.display = 'flex';
+        document.getElementById('book-modal-stage-1').style.display = 'block';
+        document.getElementById('book-modal-stage-2').style.display = 'none';
+        document.getElementById('book-results-list').innerHTML = '';
+        document.getElementById('book-total-results').textContent = '0';
+        document.getElementById('book-to-stage-2-btn').disabled = true;
+        bookPage = 1;
+        bookResults = [];
+        bookCurrentQuery = '';
+        bookHasMore = false;
+        bookIsLoading = false;
+        selectedBook = null;
+        if (initialQuery) {
+            document.getElementById('book-query').value = initialQuery;
+            bookCurrentQuery = initialQuery;
+            fetchBooks(initialQuery, 1, false);
+        } else {
+            document.getElementById('book-query').value = '';
+        }
+    }
+
+    function closeBookModal() {
+        document.getElementById('book-search-modal').style.display = 'none';
+    }
+
+    function closeBookMessageDialog() {
+        document.getElementById('book-message-dialog').style.display = 'none';
+    }
+    // Expose globally
+    window.openBookModal      = openBookModal;
+    window.closeBookMessageDialog = closeBookMessageDialog;
+
+    function showBookMessage(title, message) {
+        document.getElementById('book-dialog-title').textContent = title;
+        document.getElementById('book-dialog-message').textContent = message;
+        document.getElementById('book-message-dialog').style.display = 'flex';
+    }
+
+    function renderResults(results, append = false) {
+        const list = document.getElementById('book-results-list');
+        if (!append) list.innerHTML = '';
+        if (!results.length && !append) {
+            list.innerHTML = '<li style="padding: 5px;">No results found.</li>';
+            return;
+        }
+        results.forEach(book => {
+            const li = document.createElement('li');
+            li.style.cursor = 'pointer';
+            li.dataset.bookId = book.hardcover_id;
+
+            const authors = Array.isArray(book.author_names) ? book.author_names.join(', ') : (book.author_names || '');
+            const year    = book.release_year ? ` (${book.release_year})` : '';
+
+            const cover = book.cover_url
+                ? `<img src="${book.cover_url}" alt="${book.title}" style="width: 50px; height: auto; max-height: 70px; object-fit: cover; vertical-align: middle; margin-right: 10px; flex-shrink: 0;">`
+                : `<div style="width: 50px; height: 70px; background: var(--button-bg, #c0c0c0); border: 2px inset; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 9px; text-align: center; color: var(--text-color); flex-shrink: 0;">No Cover</div>`;
+
+            let statusIndicators = '';
+            if (book.in_database) {
+                statusIndicators += `<span class="status-pill in-database">In Library</span>`;
+            }
+            if (book.in_watchlist) {
+                statusIndicators += `<span class="status-pill in-watchlist">In Watchlist</span>`;
+            }
+
+            li.innerHTML = `
+                <div class="movie-result">
+                    ${cover}
+                    <span class="movie-title">${book.title}${year}<br><small style="opacity: 0.75;">${authors}</small></span>
+                    <div class="movie-status">${statusIndicators}</div>
+                </div>`;
+
+            li.addEventListener('click', () => {
+                list.querySelectorAll('li').forEach(el => el.classList.remove('selected'));
+                li.classList.add('selected');
+                selectedBook = book;
+                document.getElementById('book-to-stage-2-btn').disabled = false;
+            });
+
+            li.addEventListener('dblclick', () => {
+                selectedBook = book;
+                showStage2();
+            });
+
+            list.appendChild(li);
+        });
+    }
+
+    function fetchBooks(query, page, append = false) {
+        if (bookIsLoading) return;
+        bookIsLoading = true;
+        const loadingMore = document.getElementById('book-loading-more');
+        if (append) loadingMore.style.display = 'block';
+
+        const url = `/books/search/?q=${encodeURIComponent(query)}&page=${page}&per_page=${bookPerPage}`;
+        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(r => r.json())
+            .then(data => {
+                const newResults = data.results || [];
+                const total = data.total || 0;
+                const totalPages = Math.max(1, Math.ceil(total / bookPerPage));
+
+                if (append) {
+                    bookResults = bookResults.concat(newResults);
+                } else {
+                    bookResults = newResults;
+                }
+                bookHasMore = page < totalPages;
+                bookPage = page;
+
+                document.getElementById('book-total-results').textContent = total;
+                renderResults(newResults, append);
+            })
+            .catch(() => showBookMessage('Error', 'Failed to reach the search service.'))
+            .finally(() => {
+                bookIsLoading = false;
+                loadingMore.style.display = 'none';
+            });
+    }
+
+    function showStage2() {
+        if (!selectedBook) return;
+        document.getElementById('book-modal-stage-1').style.display = 'none';
+        document.getElementById('book-modal-stage-2').style.display = 'block';
+        document.getElementById('book-modal-title').textContent = 'Confirm Book';
+
+        document.getElementById('book-hardcover-id').value = selectedBook.hardcover_id;
+
+        document.getElementById('book-confirm-title').textContent   = selectedBook.title || '';
+        document.getElementById('book-confirm-subtitle').textContent = selectedBook.subtitle || '';
+        document.getElementById('book-confirm-authors').textContent  =
+            'by ' + (Array.isArray(selectedBook.author_names) ? selectedBook.author_names.join(', ') : (selectedBook.author_names || ''));
+
+        document.getElementById('book-confirm-year').textContent =
+            selectedBook.release_year ? `Published: ${selectedBook.release_year}` : '';
+        document.getElementById('book-confirm-rating').textContent =
+            selectedBook.rating ? `Rating: ${Number(selectedBook.rating).toFixed(2)} / 5` : '';
+        document.getElementById('book-confirm-pages').textContent =
+            selectedBook.pages ? `Pages: ${selectedBook.pages}` : '';
+
+        let seriesText = '';
+        if (selectedBook.featured_series) {
+            seriesText = `Series: ${selectedBook.featured_series}`;
+            if (selectedBook.featured_series_position) {
+                seriesText += ` #${selectedBook.featured_series_position}`;
+            }
+        } else if (Array.isArray(selectedBook.series_names) && selectedBook.series_names.length) {
+            seriesText = `Series: ${selectedBook.series_names[0]}`;
+        }
+        document.getElementById('book-confirm-series').textContent = seriesText;
+
+        const coverImg = document.getElementById('book-cover-preview');
+        if (selectedBook.cover_url) {
+            coverImg.src = selectedBook.cover_url;
+            coverImg.style.display = 'block';
+        } else {
+            coverImg.src = '';
+            coverImg.style.display = 'none';
+        }
+    }
+
+    /* -------------------------------------------------------------------
+       Event Listeners
+    ------------------------------------------------------------------- */
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('book-close-modal-btn').addEventListener('click', closeBookModal);
+
+        document.getElementById('book-search-button').addEventListener('click', () => {
+            const q = document.getElementById('book-query').value.trim();
+            if (!q) return;
+            bookCurrentQuery = q;
+            fetchBooks(q, 1, false);
+        });
+
+        document.getElementById('book-query').addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('book-search-button').click();
+            }
+        });
+
+        document.getElementById('book-query').addEventListener('input', () => {
+            const q = document.getElementById('book-query').value.trim();
+            if (bookSearchTimeout) clearTimeout(bookSearchTimeout);
+            if (q.length < 2) {
+                document.getElementById('book-results-list').innerHTML = '';
+                document.getElementById('book-total-results').textContent = '0';
+                bookResults = [];
+                bookCurrentQuery = '';
+                bookHasMore = false;
+                return;
+            }
+            if (q === bookCurrentQuery) return;
+            bookSearchTimeout = setTimeout(() => {
+                bookCurrentQuery = q;
+                fetchBooks(q, 1, false);
+            }, 300);
+        });
+
+        // Infinite scroll
+        document.getElementById('book-results-panel').addEventListener('scroll', function () {
+            if (bookIsLoading || !bookHasMore || bookCurrentQuery.length < 2) return;
+            if (this.scrollHeight - this.scrollTop - this.clientHeight < 50) {
+                fetchBooks(bookCurrentQuery, bookPage + 1, true);
+            }
+        });
+
+        document.getElementById('book-to-stage-2-btn').addEventListener('click', showStage2);
+
+        document.getElementById('book-back-to-stage-1-btn').addEventListener('click', () => {
+            document.getElementById('book-modal-stage-2').style.display = 'none';
+            document.getElementById('book-modal-stage-1').style.display = 'block';
+            document.getElementById('book-modal-title').textContent = 'Add Book';
+        });
+
+        document.getElementById('book-add-btn').addEventListener('click', () => {
+            const hardcoverId = document.getElementById('book-hardcover-id').value;
+            const addToWatchlist = document.getElementById('book-add-to-watchlist').checked;
+            if (!hardcoverId) return;
+
+            const loadingModal = document.getElementById('book-loading-modal');
+            const loadingInfo  = document.getElementById('book-loading-info');
+            loadingModal.style.display = 'flex';
+            loadingInfo.style.display  = 'none';
+            closeBookModal();
+
+            fetch(`/books/add/${hardcoverId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({add_to_watchlist: addToWatchlist}),
+            })
+            .then(r => r.json().then(data => ({status: r.status, data})))
+            .then(({status, data}) => {
+                loadingModal.style.display = 'none';
+                if (status === 200) {
+                    showBookMessage('Already Added', 'This book is already in your library!');
+                } else if (status === 201) {
+                    showBookMessage('Success', `"${selectedBook.title}" has been added to your library!`);
+                } else if (status === 404) {
+                    showBookMessage('Not Found', data.error || 'Book not found on Hardcover.');
+                } else {
+                    showBookMessage('Error', data.error || 'Something went wrong.');
+                }
+            })
+            .catch(() => {
+                loadingModal.style.display = 'none';
+                showBookMessage('Error', 'Network error — please try again.');
+            });
+        });
+
+        document.getElementById('book-close-loading-btn')?.addEventListener('click', () => {
+            document.getElementById('book-loading-modal').style.display = 'none';
+        });
+    });
+})();
+</script>

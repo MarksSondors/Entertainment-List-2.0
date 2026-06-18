@@ -216,7 +216,7 @@
 <script>
 // Load continue watching data
 function loadContinueWatching() {
-    fetch('/api/watchlist/')
+    fetch('/api/watchlist/?continue_watching=1')
         .then(response => response.json())
         .then(data => {
             const continueWatchingData = data.continue_watching || [];
