@@ -761,7 +761,7 @@ body::before {
                     {% endif %}
                     
                     <p><strong>Roles:</strong> 
-                        {% if person.is_actor %}<span>Actor</span>{% endif %}{% if person.is_director %}{% if person.is_actor %}, {% endif %}<span>Director</span>{% endif %}{% if person.is_screenwriter %}{% if person.is_actor or person.is_director %}, {% endif %}<span>Screenwriter</span>{% endif %}{% if person.is_writer %}{% if person.is_actor or person.is_director or person.is_screenwriter %}, {% endif %}<span>Writer</span>{% endif %}{% if person.is_original_music_composer %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer %}, {% endif %}<span>Composer</span>{% endif %}{% if person.is_tv_creator %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer or person.is_original_music_composer %}, {% endif %}<span>TV Creator</span>{% endif %}{% if not person.is_actor and not person.is_director and not person.is_screenwriter and not person.is_writer and not person.is_original_music_composer and not person.is_tv_creator %}Unknown{% endif %}
+                        {% if person.is_actor %}<span>Actor</span>{% endif %}{% if person.is_director %}{% if person.is_actor %}, {% endif %}<span>Director</span>{% endif %}{% if person.is_screenwriter %}{% if person.is_actor or person.is_director %}, {% endif %}<span>Screenwriter</span>{% endif %}{% if person.is_writer %}{% if person.is_actor or person.is_director or person.is_screenwriter %}, {% endif %}<span>Writer</span>{% endif %}{% if person.is_original_music_composer %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer %}, {% endif %}<span>Composer</span>{% endif %}{% if person.is_tv_creator %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer or person.is_original_music_composer %}, {% endif %}<span>TV Creator</span>{% endif %}{% if person.is_book_author %}{% if person.is_actor or person.is_director or person.is_screenwriter or person.is_writer or person.is_original_music_composer or person.is_tv_creator %}, {% endif %}<span>Author</span>{% endif %}{% if not person.is_actor and not person.is_director and not person.is_screenwriter and not person.is_writer and not person.is_original_music_composer and not person.is_tv_creator and not person.is_book_author %}Unknown{% endif %}
                     </p>
 
                     {% if average_rating is not None %}
@@ -836,6 +836,7 @@ body::before {
 </div>
 
 <!-- Filmography Window -->
+{% if combined_credits %}
 <div class="window">
     <div class="title-bar">
         <div class="title-bar-text">Filmography</div>
@@ -863,19 +864,23 @@ body::before {
                         <tr>
                             {% with media=item.media %}
                             <td>
-                                {% if media.release_date %}
-                                    <a href="{% url 'movie_page' media.tmdb_id %}">{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}</a>
-                                {% elif media.first_air_date %}
-                                    <a href="{% url 'tv_show_page' media.tmdb_id %}">{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}</a>
+                                {% if item.media_type == 'movie' %}
+                                    {% if media.tmdb_id %}<a href="{% url 'movie_page' media.tmdb_id %}">{% endif %}{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}{% if media.tmdb_id %}</a>{% endif %}
+                                {% elif item.media_type == 'tvshow' %}
+                                    {% if media.tmdb_id %}<a href="{% url 'tv_show_page' media.tmdb_id %}">{% endif %}{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}{% if media.tmdb_id %}</a>{% endif %}
+                                {% elif item.media_type == 'book' %}
+                                    <a href="{% url 'books:book_page' media.id %}">{{ media.title }}</a>
                                 {% else %}
                                     {{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}
                                 {% endif %}
                             </td>
                             <td>
-                                {% if media.release_date %}
+                                {% if item.media_type == 'movie' %}
                                     {{ media.release_date|date:"Y" }}
-                                {% elif media.first_air_date %}
+                                {% elif item.media_type == 'tvshow' %}
                                     {{ media.first_air_date|date:"Y" }}
+                                {% elif item.media_type == 'book' %}
+                                    {{ media.published_date|date:"Y"|default:"-" }}
                                 {% else %}
                                     -
                                 {% endif %}
@@ -902,7 +907,9 @@ body::before {
                     {% with media=item.media %}
                     <div class="filmography-card{% if item.user_rating %} reviewed{% endif %}">
                         <div class="filmography-poster">
-                            {% if media.poster %}
+                            {% if item.media_type == 'book' and media.image_url %}
+                            <img src="{{ media.image_url }}" alt="{{ media.title }}" loading="lazy">
+                            {% elif media.poster %}
                             <img src="{{ media.poster }}" alt="{{ media.title }}" loading="lazy">
                             {% else %}
                             <div class="poster-placeholder">{{ media.title|first }}</div>
@@ -924,19 +931,23 @@ body::before {
                         </div>
                         <div class="filmography-info">
                             <div class="filmography-title">
-                                {% if media.release_date %}
-                                    <a href="{% url 'movie_page' media.tmdb_id %}">{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}</a>
-                                {% elif media.first_air_date %}
-                                    <a href="{% url 'tv_show_page' media.tmdb_id %}">{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}</a>
+                                {% if item.media_type == 'movie' %}
+                                    {% if media.tmdb_id %}<a href="{% url 'movie_page' media.tmdb_id %}">{% endif %}{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}{% if media.tmdb_id %}</a>{% endif %}
+                                {% elif item.media_type == 'tvshow' %}
+                                    {% if media.tmdb_id %}<a href="{% url 'tv_show_page' media.tmdb_id %}">{% endif %}{{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}{% if media.tmdb_id %}</a>{% endif %}
+                                {% elif item.media_type == 'book' %}
+                                    <a href="{% url 'books:book_page' media.id %}">{{ media.title }}</a>
                                 {% else %}
                                     {{ media.title }}{% if media.original_title and media.original_title != media.title %} ({{ media.original_title }}){% endif %}
                                 {% endif %}
                             </div>
                             <div class="filmography-year">
-                                {% if media.release_date %}
+                                {% if item.media_type == 'movie' %}
                                     {{ media.release_date|date:"Y" }}
-                                {% elif media.first_air_date %}
+                                {% elif item.media_type == 'tvshow' %}
                                     {{ media.first_air_date|date:"Y" }}
+                                {% elif item.media_type == 'book' %}
+                                    {{ media.published_date|date:"Y"|default:"-" }}
                                 {% else %}
                                     -
                                 {% endif %}
@@ -962,6 +973,83 @@ body::before {
         <div class="status-bar-field">{{ combined_credits|length }} item{{ combined_credits|length|pluralize }}</div>
     </div>
 </div>
+{% endif %}
+
+<!-- Bibliography Window -->
+{% if person_books %}
+<div class="window">
+    <div class="title-bar">
+        <div class="title-bar-text">Bibliography</div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize"></button>
+            <button aria-label="Maximize"></button>
+            <button aria-label="Close"></button>
+        </div>
+    </div>
+    <div class="window-body">
+        <!-- Desktop table view -->
+        <div class="filmography-desktop-view">
+            <div class="filmography-table-container">
+                <table class="filmography-table interactive">
+                    <thead>
+                        <tr>
+                            <th style="width: 50%;">Title</th>
+                            <th>Year</th>
+                            <th>Series</th>
+                            <th>Rating</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for book in person_books %}
+                        <tr>
+                            <td><a href="{% url 'books:book_page' book.id %}">{{ book.title }}{% if book.subtitle %}: {{ book.subtitle }}{% endif %}</a></td>
+                            <td>{{ book.published_date|date:"Y"|default:"-" }}</td>
+                            <td>{% if book.series %}<a href="{% url 'books:book_series_page' book.series.id %}">{{ book.series.name }}</a>{% if book.series_position %} #{{ book.series_position|floatformat }}{% endif %}{% else %}-{% endif %}</td>
+                            <td>{{ book.rating|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4">No books available.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <!-- Mobile grid view -->
+        <div class="filmography-mobile-view">
+            <div class="filmography-grid">
+                {% for book in person_books %}
+                <div class="filmography-item">
+                    <div class="filmography-card">
+                        <div class="filmography-poster">
+                            {% if book.image_url %}
+                            <img src="{{ book.image_url }}" alt="{{ book.title }}" loading="lazy">
+                            {% else %}
+                            <div class="poster-placeholder">{{ book.title|first }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="filmography-info">
+                            <div class="filmography-title">
+                                <a href="{% url 'books:book_page' book.id %}">{{ book.title }}</a>
+                            </div>
+                            {% if book.published_date %}
+                            <div class="filmography-year">{{ book.published_date|date:"Y" }}</div>
+                            {% endif %}
+                            {% if book.series %}
+                            <div class="filmography-role">{{ book.series.name }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="status-bar">
+        <div class="status-bar-field">Bibliography</div>
+        <div class="status-bar-field">{{ person_books|length }} book{{ person_books|length|pluralize }}</div>
+    </div>
+</div>
+{% endif %}
 
 <script>
     // Static icon paths (using Django template tags)

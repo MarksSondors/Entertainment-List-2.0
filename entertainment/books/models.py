@@ -1,14 +1,26 @@
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from custom_auth.models import CustomUser, Media, Person, Genre, Keyword
+from custom_auth.models import CustomUser, Media, Person, Keyword
 
 # Book-specific models
+
+class BookGenre(models.Model):
+    """Genre model specific to books (separate from TMDB-based movie/TV genres)."""
+    name = models.CharField(max_length=100, unique=True)
+    hardcover_tag_id = models.BigIntegerField(blank=True, null=True, unique=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ['name']
+
 class BookSeries(models.Model):
     """Series that books belong to"""
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
-    hardcover_id = models.UUIDField(unique=True, blank=True, null=True)
+    hardcover_id = models.IntegerField(unique=True, blank=True, null=True)
     
     def __str__(self):
         return self.name
@@ -16,7 +28,7 @@ class BookSeries(models.Model):
 class Publisher(models.Model):
     """Publisher of books"""
     name = models.CharField(max_length=255)
-    hardcover_id = models.UUIDField(unique=True, blank=True, null=True)
+    hardcover_id = models.IntegerField(unique=True, blank=True, null=True)
     
     def __str__(self):
         return self.name
@@ -26,7 +38,7 @@ class BookCollection(models.Model):
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField(blank=True, null=True)
     image_url = models.URLField(blank=True, null=True)
-    hardcover_id = models.UUIDField(unique=True, blank=True, null=True)
+    hardcover_id = models.IntegerField(unique=True, blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -44,11 +56,12 @@ class Book(Media):
     language = models.CharField(max_length=50, blank=True, null=True)
     
     # IDs
-    hardcover_id = models.UUIDField(unique=True)
+    hardcover_id = models.IntegerField(unique=True)
+    rating = models.FloatField(blank=True, null=True)
     
     # Relationships
     authors = models.ManyToManyField(Person, related_name='books')
-    genres = models.ManyToManyField(Genre, related_name='books')
+    genres = models.ManyToManyField(BookGenre, related_name='books', blank=True)
     publishers = models.ManyToManyField(Publisher, blank=True, related_name='books')
     keywords = models.ManyToManyField(Keyword, blank=True, related_name='books')
     
@@ -58,7 +71,7 @@ class Book(Media):
     
     # User related fields
     added_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='added_books', blank=True, null=True)
-    date_added = models.DateTimeField(auto_now_add=True)
+    date_added = models.DateTimeField(auto_now_add=True, db_index=True)
     date_updated = models.DateTimeField(auto_now=True)
     
     def __str__(self):
@@ -69,32 +82,4 @@ class Book(Media):
         """Return a string of author names"""
         return ', '.join([author.name for author in self.authors.all()])
 
-class UserBook(models.Model):
-    """Tracks user's relationship with books"""
-    STATUS_CHOICES = [
-        ('want_to_read', 'Want to Read'),
-        ('reading', 'Currently Reading'),
-        ('read', 'Read'),
-        ('did_not_finish', 'Did Not Finish'),
-        ('on_hold', 'On Hold')
-    ]
-    
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='user_books')
-    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='user_books')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='want_to_read')
-    rating = models.IntegerField(blank=True, null=True)
-    review = models.TextField(blank=True, null=True)
-    notes = models.TextField(blank=True, null=True)
-    progress = models.IntegerField(blank=True, null=True)  # Current page or percentage
-    
-    started_at = models.DateField(blank=True, null=True)
-    finished_at = models.DateField(blank=True, null=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        unique_together = ('user', 'book')
-    
-    def __str__(self):
-        return f"{self.user.username} - {self.book.title} ({self.status})"
+

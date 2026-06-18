@@ -1,0 +1,776 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+
+<style>
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --button-bg: #c0c0c0;
+    --button-text: #000;
+    --button-hover: #e0e0e0;
+    --progress-bg: #fff;
+    --progress-bar: #008080;
+    --shadow-color: rgba(0,0,0,0.25);
+    --poster-border: #a0a0a0;
+    --backdrop-overlay: rgba(192, 192, 192, 0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --button-bg: #505050;
+        --button-text: #ffffff;
+        --button-hover: #606060;
+        --progress-bg: #2a2a2a;
+        --progress-bar: #00a0a0;
+        --shadow-color: rgba(0,0,0,0.5);
+        --poster-border: #606060;
+        --backdrop-overlay: rgba(56, 56, 56, 0.9);
+    }
+}
+
+.book-page-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.backdrop-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-size: cover;
+    z-index: -2;
+}
+
+.backdrop-overlay::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--backdrop-overlay);
+    z-index: -1;
+}
+
+.window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    margin-bottom: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+    .title-bar {
+        background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+    }
+}
+
+.window-body {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 12px;
+}
+
+.status-bar {
+    border-top: 1px solid var(--border-dark);
+    background-color: var(--bg-color);
+    padding: 2px 4px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-bar-field {
+    border: 1px inset var(--bg-color);
+    padding: 2px 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.retro-btn {
+    border: 1px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--button-text);
+    padding: 2px 8px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background-color 0.1s ease;
+}
+
+.retro-btn:hover {
+    background: var(--button-hover);
+    color: var(--button-text);
+    text-decoration: none;
+}
+
+.retro-btn:active {
+    border: 1px inset var(--button-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+    .retro-btn {
+        border-color: var(--border-light);
+        box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+    }
+    .retro-btn:hover {
+        box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+    }
+}
+
+.window-body a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.window-body a:hover {
+    color: var(--text-color);
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Cover image */
+.book-cover img {
+    border: 2px solid var(--poster-border);
+    border-radius: 4px;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    cursor: pointer;
+}
+
+/* Authors scroll */
+.author-scroll {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.author-card {
+    flex: 0 0 auto;
+    min-width: 120px;
+    max-width: 180px;
+    text-align: left;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 6px;
+    border: 2px outset var(--bg-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: 2px;
+}
+
+.author-card a {
+    color: var(--text-color);
+    font-weight: bold;
+    font-size: 13px;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-decoration: none;
+}
+
+/* Publishers collapsible */
+.collapsible-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    color: var(--text-color);
+}
+
+.collapsible-arrow {
+    display: inline-block;
+    width: 12px;
+    margin-right: 5px;
+    color: var(--text-color);
+}
+
+/* Fellow hoarders */
+.fellow-hoarders {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    max-height: 80px;
+    overflow-y: auto;
+    background-color: var(--progress-bg);
+    padding: 5px;
+    border: 1px inset var(--border-dark);
+}
+
+.hoarder-badge {
+    text-decoration: none;
+    background-color: var(--window-bg);
+    color: var(--text-color);
+    padding: 3px 6px;
+    border: 1px outset var(--border-light);
+    font-size: 12px;
+    white-space: nowrap;
+    display: inline-block;
+}
+
+.hoarder-badge:hover {
+    background-color: var(--button-hover);
+    text-decoration: none;
+}
+
+/* Review table */
+.review-table {
+    background-color: var(--window-bg);
+    color: var(--text-color);
+}
+
+.review-table thead th {
+    background-color: var(--window-bg);
+    border-bottom: 2px solid var(--border-dark);
+    color: var(--text-color);
+    font-weight: bold;
+}
+
+.review-table tbody tr:hover {
+    background-color: var(--button-hover);
+}
+
+.review-table tbody tr.highlighted {
+    background-color: #000080 !important;
+    color: white !important;
+}
+
+.review-table tbody tr.highlighted td {
+    color: white !important;
+}
+
+.review-table td:nth-child(3) {
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-width: 0;
+    white-space: normal;
+}
+
+#reviewModalText {
+    word-break: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    background-color: var(--progress-bg);
+    color: var(--text-color);
+    padding: 8px;
+    border: 1px solid var(--border-dark);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.modal-content {
+    background-color: var(--window-bg);
+    border: 2px outset var(--bg-color);
+    box-shadow: 2px 2px 4px var(--shadow-color);
+}
+
+.modal { background-color: rgba(0,0,0,0.7); }
+
+@media (max-width: 768px) {
+    .modal-content { width: 95% !important; max-width: 95% !important; }
+}
+
+/* Collapsible "” match movie page (overflow-x: auto) */
+.collapsible-content {
+    overflow-x: auto;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .book-page-container { padding: 10px; }
+
+    .book-info-container { flex-direction: column !important; }
+
+    .book-cover {
+        width: 100% !important;
+        text-align: center;
+        margin-bottom: 15px;
+    }
+
+    .book-cover img {
+        width: 200px !important;
+        max-width: 80% !important;
+    }
+
+    .book-details { width: 100% !important; }
+
+    .button-container {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+    }
+
+    .button-container .retro-btn {
+        width: 100% !important;
+        font-size: 14px !important;
+    }
+
+    .review-table.desktop-view { display: none !important; }
+    .mobile-view.review-cards  { display: flex !important; }
+}
+
+@media (max-width: 480px) {
+    .book-page-container { padding: 5px !important; }
+    .button-container { grid-template-columns: 1fr !important; }
+    .review-action-buttons { display: flex !important; flex-direction: column !important; gap: 5px !important; }
+}
+</style>
+
+<!-- Backdrop overlay -->
+<div class="backdrop-overlay"></div>
+
+<div class="book-page-container">
+    <!-- Book Information Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">{{ book.title }}{% if book.subtitle %}: {{ book.subtitle }}{% endif %}</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="book-info-container" style="display: flex; align-items: flex-start; gap: 20px;">
+                <div class="book-cover" style="flex-shrink: 0;">
+                    <img src="{{ book.image_url|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}"
+                         alt="{{ book.title }} cover"
+                         style="width: 200px;"
+                         onclick="openCoverModal()">
+                    <!-- Cover Modal -->
+                    <div id="coverModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--window-bg); border:2px outset var(--bg-color); z-index:9999; padding:0;">
+                        <div class="title-bar">
+                            <div class="title-bar-text">{{ book.title }}</div>
+                            <div class="title-bar-controls">
+                                <button aria-label="Close" onclick="document.getElementById('coverModal').style.display='none'; document.getElementById('coverOverlay').style.display='none';"></button>
+                            </div>
+                        </div>
+                        <div style="padding:4px; text-align:center;">
+                            <img src="{{ book.image_url|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}"
+                                 alt="{{ book.title }}"
+                                 style="max-width:90vw; max-height:80vh;">
+                        </div>
+                    </div>
+                    <div id="coverOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9998;" onclick="document.getElementById('coverModal').style.display='none'; this.style.display='none';"></div>
+                </div>
+
+                <div class="book-details" style="flex-grow: 1;">
+                    <p><strong>Description:</strong> {{ book.description|default:"No description available." }}</p>
+
+                    {% if book.published_date %}
+                    <p><strong>Published:</strong> {{ book.published_date }}</p>
+                    {% endif %}
+
+                    <p><strong>Author{% if book.authors.count > 1 %}s{% endif %}:</strong>
+                        {% for author in book.authors.all %}
+                            <a href="{% url 'person_detail' author.id %}">{{ author.name }}</a>{% if not forloop.last %}, {% endif %}
+                        {% empty %}
+                            <em style="color: var(--text-muted);">Unknown</em>
+                        {% endfor %}
+                    </p>
+
+                    {% if book.genres.all %}
+                    <p><strong>Genre:</strong>
+                        {% for genre in book.genres.all %}
+                            {{ genre.name }}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+
+                    {% if book.rating %}
+                    <p><strong>Hardcover Rating:</strong> {{ book.rating }}</p>
+                    {% endif %}
+
+                    {% if user_avg_rating %}
+                    <p><strong>User Rating:</strong> {{ user_avg_rating }}/10 ({{ user_rating_count }} review{{ user_rating_count|pluralize }})</p>
+                    {% else %}
+                    <p><strong>User Rating:</strong> <em style="color: var(--text-muted);">No user reviews yet</em></p>
+                    {% endif %}
+
+                    {% if book.pages %}
+                    <p><strong>Pages:</strong> {{ book.pages }}</p>
+                    {% endif %}
+
+                    {% if book.language %}
+                    <p><strong>Language:</strong> {{ book.language }}</p>
+                    {% endif %}
+
+                    {% if book.isbn_13 %}
+                    <p><strong>ISBN-13:</strong> {{ book.isbn_13 }}</p>
+                    {% elif book.isbn_10 %}
+                    <p><strong>ISBN-10:</strong> {{ book.isbn_10 }}</p>
+                    {% endif %}
+
+                    {% if book.series %}
+                    <p><strong>Series:</strong>
+                        <a href="{% url 'books:book_series_page' book.series.id %}">{{ book.series.name }}</a>
+                        {% if book.series_position %}(#{{ book.series_position|floatformat }}){% endif %}
+                    </p>
+                    {% endif %}
+
+                    {% if book.collection %}
+                    <p><strong>Collection:</strong>
+                        <a href="{% url 'books:book_collection_page' book.collection.id %}">{{ book.collection.name }}</a>
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Authors section -->
+            {% if book.authors.all %}
+            <div style="margin-top: 15px;">
+                <p style="font-weight: bold; margin-bottom: 10px; color: var(--text-color);">Authors:</p>
+                <div class="author-scroll">
+                    {% for author in book.authors.all %}
+                        <div class="author-card">
+                            <a href="{% url 'person_detail' author.id %}">{{ author.name }}</a>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Publishers section -->
+            {% if book.publishers.all %}
+            <div style="margin-top: 10px;">
+                <p class="collapsible-header" onclick="togglePublishers()">
+                    <span id="publishers-arrow" class="collapsible-arrow">►</span>
+                    Publishers:
+                </p>
+                <div id="publishers-container" class="collapsible-content" style="display: none;">
+                    {% for publisher in book.publishers.all %}
+                        <span style="background: var(--window-bg); border: 1px outset var(--border-light); padding: 3px 8px; font-size: 12px;">{{ publisher.name }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Fellow Book Hoarders -->
+            {% if watchlist_users %}
+            <div style="margin-top: 10px;">
+                <p style="font-weight: bold; margin-bottom: 5px; color: var(--text-color);">Fellow Book Hoarders:</p>
+                <div class="fellow-hoarders">
+                    {% for user in watchlist_users %}
+                        <a href="/profile/{{ user.username }}/" class="hoarder-badge">{{ user.username }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Action buttons -->
+            <div style="margin-top: 15px;" class="button-container">
+                {% if user_watchlist %}
+                    <button class="retro-btn" id="watchlist-btn" onclick="removeFromWatchlist()">Remove from Watchlist</button>
+                {% else %}
+                    <button class="retro-btn" id="watchlist-btn" onclick="addToWatchlist()">Add to Watchlist</button>
+                {% endif %}
+                <button class="retro-btn" onclick="openReviewModal()">Write a Review</button>
+            </div>
+
+            {% include "components/movie_review_modal.html" with content_id=book.id content_type='book' %}
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">
+                {% if book.rating %}Hardcover: {{ book.rating }}{% endif %}{% if user_avg_rating %} • Users: {{ user_avg_rating }}/10{% endif %}{% if book.published_date %} • {{ book.published_date|date:"Y" }}{% endif %}{% if book.pages %} • {{ book.pages }} pages{% endif %}
+            </div>
+            <div class="status-bar-field">Updated: {{ book.date_updated|date:"M d, Y" }}</div>
+        </div>
+    </div>
+
+    <!-- User Reviews Window -->
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">User Reviews</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <table class="interactive review-table desktop-view" style="width: 100%; border-collapse: collapse; display: table;">
+                <thead>
+                    <tr style="background-color: var(--window-bg); border-bottom: 2px solid var(--border-dark);">
+                        <th style="text-align: left; padding: 8px; width: 15%; color: var(--text-color);">User</th>
+                        <th style="text-align: center; padding: 8px; width: 10%; color: var(--text-color);">Rating</th>
+                        <th style="text-align: left; padding: 8px; width: 55%; color: var(--text-color);">Review</th>
+                        <th style="text-align: right; padding: 8px; width: 20%; color: var(--text-color);">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="4" style="padding: 8px; text-align: center; color: var(--text-muted);">Loading reviews...</td></tr>
+                </tbody>
+            </table>
+            <div class="mobile-view review-cards" style="display: none; flex-direction: column; gap: 10px;">
+                <div class="loading-message" style="padding: 10px; text-align: center; color: var(--text-muted);">Loading reviews...</div>
+            </div>
+        </div>
+        <div class="status-bar">
+            <div class="status-bar-field">Community Reviews</div>
+            <div class="status-bar-field">
+                <button class="retro-btn" onclick="openReviewModal()" style="font-size: 12px; padding: 2px 8px;">Add Review</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Review Detail Modal -->
+<div id="reviewDetailModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto;">
+    <div class="modal-content window" style="margin: 10% auto; width: 80%; max-width: 600px; position: relative;">
+        <div class="title-bar">
+            <div class="title-bar-text" id="reviewModalUsername">User Review</div>
+            <div class="title-bar-controls">
+                <button onclick="closeReviewDetailModal()" aria-label="Close">âœ•</button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <p style="margin: 0; color: var(--text-color);"><strong>Rating: </strong><span id="reviewModalRating"></span>/10</p>
+                <p style="margin: 0; color: var(--text-color);"><strong>Date: </strong><span id="reviewModalDate"></span></p>
+            </div>
+            <p style="margin: 10px 0 5px; color: var(--text-color);"><strong>Review:</strong></p>
+            <div id="reviewModalText"></div>
+            <div id="reviewModalActions" style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 5px;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Cover modal
+    function openCoverModal() {
+        document.getElementById('coverModal').style.display = 'block';
+        document.getElementById('coverOverlay').style.display = 'block';
+    }
+
+    // Publishers collapsible
+    function togglePublishers() {
+        const container = document.getElementById('publishers-container');
+        const arrow = document.getElementById('publishers-arrow');
+        if (container.style.display === 'flex') {
+            container.style.display = 'none';
+            arrow.textContent = '►';
+        } else {
+            container.style.display = 'flex';
+            arrow.textContent = '▼';
+        }
+    }
+
+    function sanitizeContent(text) {
+        if (typeof DOMPurify !== 'undefined') {
+            return DOMPurify.sanitize(text, {ALLOWED_TAGS: [], ALLOWED_ATTR: []});
+        }
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function checkViewport() {
+        const isMobile = window.innerWidth <= 768;
+        const desktopView = document.querySelector('.review-table.desktop-view');
+        const mobileView = document.querySelector('.mobile-view.review-cards');
+        if (desktopView) desktopView.style.display = isMobile ? 'none' : 'table';
+        if (mobileView) mobileView.style.display = isMobile ? 'flex' : 'none';
+    }
+
+    window.loadReviews = function(contentId, contentType) {
+        fetch(`/${contentType}s/reviews/?${contentType}_id=${contentId}`)
+        .then(r => r.json())
+        .then(reviews => {
+            const tbody = document.querySelector('.review-table.desktop-view tbody');
+            const mobileContainer = document.querySelector('.mobile-view.review-cards');
+            const currentUsername = document.querySelector('meta[name="username"]')?.content || '';
+
+            if (tbody) {
+                tbody.innerHTML = '';
+                if (reviews.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="padding:8px;text-align:center;color:var(--text-muted);">No reviews yet. Be the first to review!</td></tr>`;
+                } else {
+                    reviews.forEach(review => {
+                        const row = document.createElement('tr');
+                        const reviewDate = new Date(review.date_added);
+                        const formattedDate = reviewDate.toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'});
+                        const isAuthor = review.user === currentUsername;
+                        const sanitizedText = review.review_text ? sanitizeContent(review.review_text) : '';
+                        const sanitizedTextForJS = review.review_text ? review.review_text.replace(/'/g,"\\'").replace(/\n/g,"\\n") : '';
+
+                        const tdUser = document.createElement('td');
+                        tdUser.style.cssText = 'padding:4px;border-bottom:1px solid var(--border-light);color:var(--text-color);';
+                        tdUser.textContent = review.user;
+
+                        const tdRating = document.createElement('td');
+                        tdRating.style.cssText = 'padding:4px;text-align:center;border-bottom:1px solid var(--border-light);color:var(--text-color);';
+                        tdRating.textContent = `${review.rating}/10`;
+
+                        const tdContent = document.createElement('td');
+                        tdContent.style.cssText = 'padding:4px;border-bottom:1px solid var(--border-light);cursor:pointer;color:var(--text-color);';
+                        tdContent.innerHTML = sanitizedText ? sanitizedText.substring(0, 100) + (sanitizedText.length > 100 ? '...' : '') : '<em>No text review</em>';
+                        tdContent.onclick = () => openReviewDetailModal(review, isAuthor, contentType);
+
+                        const tdDate = document.createElement('td');
+                        tdDate.style.cssText = 'padding:4px;text-align:right;border-bottom:1px solid var(--border-light);color:var(--text-muted);';
+                        tdDate.textContent = formattedDate;
+
+                        row.appendChild(tdUser);
+                        row.appendChild(tdRating);
+                        row.appendChild(tdContent);
+
+                        if (isAuthor) {
+                            const actionsDiv = document.createElement('div');
+                            actionsDiv.innerHTML = `
+                                <button onclick="editReview(${review.id},${review.rating},'${sanitizedTextForJS}','${review.date_added}')" style="font-size:12px;background:#C3C3C3;border:1px outset;padding:2px;margin-right:4px;">Edit</button>
+                                <button onclick="if(confirm('Delete this review?')){deleteReview(${review.id},'${contentType}')}" style="font-size:12px;background:#C3C3C3;border:1px outset;padding:2px;">Delete</button>`;
+                            tdDate.appendChild(actionsDiv);
+                        }
+
+                        row.appendChild(tdDate);
+                        tbody.appendChild(row);
+                    });
+                }
+            }
+
+            if (mobileContainer) {
+                mobileContainer.innerHTML = '';
+                if (reviews.length === 0) {
+                    mobileContainer.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-muted);">No reviews yet.</div>';
+                } else {
+                    reviews.forEach(review => {
+                        const card = document.createElement('div');
+                        card.style.cssText = 'background:var(--window-bg);border:2px outset var(--bg-color);padding:8px;';
+                        const reviewDate = new Date(review.date_added);
+                        const formattedDate = reviewDate.toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'});
+                        const sanitizedText = review.review_text ? sanitizeContent(review.review_text) : '';
+                        card.innerHTML = `
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                <strong style="color:var(--text-color);">${sanitizeContent(review.user)}</strong>
+                                <span style="color:var(--text-muted);font-size:12px;">${formattedDate}</span>
+                            </div>
+                            <div style="color:var(--text-color);margin-bottom:4px;">${review.rating}/10</div>
+                            <div style="color:var(--text-color);font-size:13px;">${sanitizedText || '<em>No text review</em>'}</div>`;
+                        card.onclick = () => openReviewDetailModal(review, review.user === (document.querySelector('meta[name="username"]')?.content || ''), contentType);
+                        mobileContainer.appendChild(card);
+                    });
+                }
+            }
+
+            // Check if current user has already reviewed — swap button to "Edit Review"
+            const userReview = reviews.find(review => review.user === currentUsername);
+            if (userReview) {
+                const reviewButton = document.querySelector('button[onclick*="openReviewModal"]');
+                if (reviewButton) {
+                    reviewButton.textContent = 'Edit Review';
+                    reviewButton.onclick = function() {
+                        editReview(userReview.id, userReview.rating, userReview.review_text || '', userReview.date_added);
+                    };
+                }
+            }
+        })
+        .catch(() => {
+            const tbody = document.querySelector('.review-table.desktop-view tbody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="padding:8px;text-align:center;color:var(--text-muted);">Failed to load reviews.</td></tr>';
+        });
+    };
+
+    function openReviewDetailModal(review, isAuthor, contentType) {
+        document.getElementById('reviewModalUsername').textContent = review.user;
+        document.getElementById('reviewModalRating').textContent = review.rating;
+        const d = new Date(review.date_added);
+        document.getElementById('reviewModalDate').textContent = d.toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'});
+        document.getElementById('reviewModalText').textContent = review.review_text || 'No review text provided.';
+
+        const actions = document.getElementById('reviewModalActions');
+        if (isAuthor) {
+            const sanitizedTextForJS = review.review_text ? review.review_text.replace(/'/g,"\\'").replace(/\n/g,"\\n") : '';
+            actions.innerHTML = `
+                <button onclick="editReview(${review.id},${review.rating},'${sanitizedTextForJS}','${review.date_added}');closeReviewDetailModal();" style="font-family:'MS Sans Serif',Arial,sans-serif;background:#C3C3C3;border:2px outset #fff;padding:3px 8px;cursor:pointer;">Edit</button>
+                <button onclick="if(confirm('Delete this review?')){deleteReview(${review.id},'${contentType}');closeReviewDetailModal();}" style="font-family:'MS Sans Serif',Arial,sans-serif;background:#C3C3C3;border:2px outset #fff;padding:3px 8px;cursor:pointer;">Delete</button>`;
+        } else {
+            actions.innerHTML = `<button onclick="closeReviewDetailModal()" style="font-family:'MS Sans Serif',Arial,sans-serif;background:#C3C3C3;border:2px outset #fff;padding:3px 8px;cursor:pointer;">Close</button>`;
+        }
+        document.getElementById('reviewDetailModal').style.display = 'block';
+    }
+
+    function closeReviewDetailModal() {
+        document.getElementById('reviewDetailModal').style.display = 'none';
+    }
+
+    window.addEventListener('click', function(e) {
+        const modal = document.getElementById('reviewDetailModal');
+        if (e.target === modal) closeReviewDetailModal();
+    });
+
+    function getCookie(name) {
+        let v = null;
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(c => {
+                c = c.trim();
+                if (c.substring(0, name.length + 1) === (name + '='))
+                    v = decodeURIComponent(c.substring(name.length + 1));
+            });
+        }
+        return v;
+    }
+
+    function addToWatchlist(bookId = {{ book.id }}, buttonElement = null) {
+        if (!buttonElement) buttonElement = document.getElementById('watchlist-btn');
+        fetch('/books/watchlist/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+            body: JSON.stringify({id: bookId})
+        })
+        .then(r => {
+            if (r.ok) {
+                buttonElement.textContent = 'Remove from Watchlist';
+                buttonElement.onclick = () => removeFromWatchlist(bookId, buttonElement);
+                alert('Book added to watchlist!');
+            } else {
+                r.json().then(d => alert('Failed: ' + (d.error || 'Unknown error'))).catch(() => alert('Failed to add to watchlist'));
+            }
+        })
+        .catch(() => alert('Error adding to watchlist'));
+    }
+
+    function removeFromWatchlist(bookId = {{ book.id }}, buttonElement = null) {
+        if (!buttonElement) buttonElement = document.getElementById('watchlist-btn');
+        fetch('/books/watchlist/', {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+            body: JSON.stringify({id: bookId})
+        })
+        .then(r => {
+            if (r.ok) {
+                buttonElement.textContent = 'Add to Watchlist';
+                buttonElement.onclick = () => addToWatchlist(bookId, buttonElement);
+                alert('Book removed from watchlist!');
+            } else {
+                alert('Failed to remove from watchlist');
+            }
+        })
+        .catch(() => alert('Error removing from watchlist'));
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        checkViewport();
+        setTimeout(() => { loadReviews({{ book.id }}, 'book'); }, 50);
+    });
+    window.addEventListener('resize', checkViewport);
+</script>
+{% endblock %}

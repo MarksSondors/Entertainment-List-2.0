@@ -15,6 +15,7 @@ from .models import *
 from movies.models import Movie
 from tvshows.models import TVShow
 from games.models import Game
+from books.models import Book
 from datetime import date # Import date
 import random
 
@@ -430,6 +431,44 @@ def search_bar_discover(request):
                 'watchlist_users': watchlist_users.get(game.id, [])
             }
             results.append(result)
+    elif search_type == 'books':
+        books = Book.objects.annotate(
+            similarity=TrigramSimilarity('title', search_query)
+        ).filter(
+            Q(similarity__gt=0.3) | Q(title__icontains=search_query) | Q(authors__name__icontains=search_query)
+        ).distinct().order_by('-similarity')[:10]
+
+        book_content_type = ContentType.objects.get_for_model(Book)
+        book_ids = [book.id for book in books]
+
+        user_watchlist = set(
+            Watchlist.objects.filter(
+                user=request.user,
+                content_type=book_content_type,
+                object_id__in=book_ids
+            ).values_list('object_id', flat=True)
+        )
+
+        avg_ratings = {
+            item['object_id']: round(item['avg_rating'], 1)
+            for item in Review.objects.filter(
+                content_type=book_content_type,
+                object_id__in=book_ids
+            ).values('object_id').annotate(avg_rating=Avg('rating'))
+        }
+
+        results = []
+        for book in books:
+            results.append({
+                'id': book.id,
+                'title': book.title,
+                'poster': book.image_url,
+                'year': book.published_date.year if book.published_date else None,
+                'url': f'/books/{book.id}/',
+                'in_watchlist': book.id in user_watchlist,
+                'avg_rating': avg_ratings.get(book.id),
+                'authors': book.author_names,
+            })
     else:
         return JsonResponse({'error': 'Invalid search type'}, status=400)
     
@@ -1199,39 +1238,36 @@ def add_review_data_to_items(items, current_user):
     """Helper function to add review data to watchlist items."""
     if not items:
         return
-        
+
     # Group items by content type and object ID
     grouped_items = {}
     for item in items:
         key = (item.content_type_id, item.object_id)
-        if key not in grouped_items:
-            grouped_items[key] = []
-        grouped_items[key].append(item)
-    
-    # Identify TV show content type
+        grouped_items.setdefault(key, []).append(item)
+
+    # Group object IDs by content type so we can use object_id__in instead of
+    # building a giant chain of `Q | Q | Q ...` (which kills the PG planner).
+    from collections import defaultdict
+    ct_to_obj_ids = defaultdict(list)
+    for ct_id, obj_id in grouped_items.keys():
+        ct_to_obj_ids[ct_id].append(obj_id)
+
     from tvshows.models import TVShow
     tv_show_content_type_id = ContentType.objects.get_for_model(TVShow).id
-    
-    # Build a combined query for all reviews at once
+    tv_show_ids = ct_to_obj_ids.get(tv_show_content_type_id, [])
+
     from django.db.models import Q
     review_query = Q()
-    tv_show_ids = []  # Track TV show IDs for season/subgroup review fetch
-    
-    for ct_id, obj_id in grouped_items.keys():
-        review_query |= Q(content_type_id=ct_id, object_id=obj_id)
-        # If this is a TV show, track it for later
-        if ct_id == tv_show_content_type_id:
-            tv_show_ids.append(obj_id)
-    
-    # Fetch all direct reviews in a SINGLE query - only fetch needed fields
+    for ct_id, obj_ids in ct_to_obj_ids.items():
+        review_query |= Q(content_type_id=ct_id, object_id__in=obj_ids)
+
+    # Single query: top-level reviews for everything
     all_reviews = list(Review.objects.filter(review_query).exclude(
         Q(season__isnull=False) | Q(episode_subgroup__isnull=False)
     ).values('content_type_id', 'object_id', 'rating', 'user__username'))
-    
+
     # For TV shows, also fetch season and episode subgroup reviews
     if tv_show_ids:
-        # Get season and subgroup reviews for these TV shows - only needed fields
-        from django.db.models import Q
         tv_show_season_reviews = list(Review.objects.filter(
             content_type_id=tv_show_content_type_id,
             object_id__in=tv_show_ids
@@ -1239,8 +1275,6 @@ def add_review_data_to_items(items, current_user):
             season=None,
             episode_subgroup=None
         ).values('content_type_id', 'object_id', 'rating', 'user__username'))
-        
-        # Add these reviews to our collection
         all_reviews = all_reviews + tv_show_season_reviews
     
     # Group reviews by content type and object ID for fast lookup
@@ -1275,6 +1309,123 @@ def add_review_data_to_items(items, current_user):
             item.avg_rating = avg_rating
             item.rating_count = rating_count
 
+def _api_watchlist_continue_only(user, tv_ct):
+    """Fast path for the discover page: returns only in-progress TV shows.
+
+    Skips movies entirely, only fetches TV shows that have at least one watched
+    episode but aren't 100% complete. Avoids the expensive Movie IN-list and the
+    cross-content-type review query.
+    """
+    from tvshows.models import Episode, WatchedEpisode
+
+    tv_watchlist = list(
+        Watchlist.objects.filter(user=user, content_type=tv_ct)
+        .values('id', 'object_id', 'date_added')
+    )
+    if not tv_watchlist:
+        return JsonResponse({
+            'continue_watching': [],
+            'havent_started': [],
+            'finished_shows': [],
+            'movies': [],
+        })
+
+    tv_show_ids = [w['object_id'] for w in tv_watchlist]
+
+    total_episodes_map = {
+        row['season__show_id']: row['count']
+        for row in Episode.objects.filter(
+            season__show_id__in=tv_show_ids,
+            season__season_number__gt=0,
+            air_date__isnull=False,
+            air_date__lte=timezone.now(),
+        ).values('season__show_id').annotate(count=models.Count('id'))
+    }
+    watched_episodes_map = {
+        row['episode__season__show_id']: row['count']
+        for row in WatchedEpisode.objects.filter(
+            user=user,
+            episode__season__show_id__in=tv_show_ids,
+            episode__season__season_number__gt=0,
+        ).values('episode__season__show_id').annotate(count=models.Count('id'))
+    }
+
+    in_progress_show_ids = []
+    progress_map = {}
+    for show_id in tv_show_ids:
+        watched = watched_episodes_map.get(show_id, 0)
+        if watched <= 0:
+            continue
+        total = total_episodes_map.get(show_id, 0)
+        if total <= 0 or watched >= total:
+            continue
+        in_progress_show_ids.append(show_id)
+        progress_map[show_id] = (watched / total) * 100
+
+    if not in_progress_show_ids:
+        return JsonResponse({
+            'continue_watching': [],
+            'havent_started': [],
+            'finished_shows': [],
+            'movies': [],
+        })
+
+    tvshows_by_id = {
+        t.id: t for t in TVShow.objects.filter(id__in=in_progress_show_ids).only(
+            'id', 'title', 'poster', 'tmdb_id', 'first_air_date'
+        )
+    }
+
+    review_rows = Review.objects.filter(
+        content_type=tv_ct,
+        object_id__in=in_progress_show_ids,
+        season__isnull=True,
+        episode_subgroup__isnull=True,
+    ).values('object_id', 'rating')
+
+    rating_agg = {}
+    for r in review_rows:
+        bucket = rating_agg.setdefault(r['object_id'], [0, 0.0])
+        bucket[0] += 1
+        bucket[1] += r['rating']
+
+    tv_model_label = tv_ct.model
+    continue_watching = []
+    for entry in tv_watchlist:
+        show_id = entry['object_id']
+        if show_id not in progress_map:
+            continue
+        show = tvshows_by_id.get(show_id)
+        if not show:
+            continue
+        count, total_rating = rating_agg.get(show_id, (0, 0.0))
+        avg_rating = round(total_rating / count, 1) if count else None
+        continue_watching.append({
+            'item': {
+                'id': entry['id'],
+                'content_type_model': tv_model_label,
+                'media_id': show.id,
+                'media_title': show.title,
+                'media_poster': show.poster,
+                'media_tmdb_id': show.tmdb_id,
+                'date_added': entry['date_added'].isoformat(),
+                'media_first_air_date': show.first_air_date.isoformat() if show.first_air_date else None,
+                'avg_rating': avg_rating,
+                'rating_count': count,
+            },
+            'progress': progress_map[show_id],
+        })
+
+    continue_watching.sort(key=lambda x: x['progress'], reverse=True)
+
+    return JsonResponse({
+        'continue_watching': continue_watching,
+        'havent_started': [],
+        'finished_shows': [],
+        'movies': [],
+    })
+
+
 @login_required
 def api_watchlist(request):
     """API endpoint for filtering watchlist items - optimized for performance."""
@@ -1284,7 +1435,14 @@ def api_watchlist(request):
     genre_id = request.GET.get('genre', '')
     country_id = request.GET.get('country', '')
     sort_by = request.GET.get('sort_by', 'date_added')
-    
+    # discover page only consumes `continue_watching` — skip movies entirely in that mode
+    continue_only = request.GET.get('continue_watching') in ('1', 'true', 'True')
+
+    tv_ct = ContentType.objects.get_for_model(TVShow)
+
+    if continue_only:
+        return _api_watchlist_continue_only(user, tv_ct)
+
     # Get user's watchlist items
     watchlist_items = user.get_watchlist()
     
@@ -1298,7 +1456,6 @@ def api_watchlist(request):
     
     # Get content types
     movie_ct = ContentType.objects.get_for_model(Movie)
-    tv_ct = ContentType.objects.get_for_model(TVShow)
     
     # Group items by content type for bulk fetching
     items_by_content_type = {}
@@ -1314,15 +1471,23 @@ def api_watchlist(request):
     if movie_ct.id in items_by_content_type:
         movie_items = items_by_content_type[movie_ct.id]
         movie_ids = [item.object_id for item in movie_items]
-        movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=movie_ids)}
+        movies_by_id = {
+            m.id: m for m in Movie.objects.filter(id__in=movie_ids).only(
+                'id', 'title', 'original_title', 'poster', 'tmdb_id', 'release_date'
+            )
+        }
         for item in movie_items:
             media_objects[(item.content_type_id, item.object_id)] = movies_by_id.get(item.object_id)
-    
+
     # Fetch TV shows
     if tv_ct.id in items_by_content_type:
         tv_items = items_by_content_type[tv_ct.id]
         tv_ids = [item.object_id for item in tv_items]
-        tvshows_by_id = {t.id: t for t in TVShow.objects.filter(id__in=tv_ids)}
+        tvshows_by_id = {
+            t.id: t for t in TVShow.objects.filter(id__in=tv_ids).only(
+                'id', 'title', 'original_title', 'poster', 'tmdb_id', 'first_air_date'
+            )
+        }
         for item in tv_items:
             media_objects[(item.content_type_id, item.object_id)] = tvshows_by_id.get(item.object_id)
     
@@ -1604,38 +1769,53 @@ def people_detail(request, person_id):
     # Get the person object or return 404
     person = get_object_or_404(Person, id=person_id)
     
-    # Get all media credits for this person
-    person_credits_qs = MediaPerson.objects.filter(person=person).select_related(
-        'content_type'
-    )
+    # Only consider movie/TV credits — books are handled separately and any other
+    # content type (or stale row pointing at a deleted record) should be skipped.
+    movie_ct_id = ContentType.objects.get_for_model(Movie).id
+    tv_ct_id = ContentType.objects.get_for_model(TVShow).id
+
+    person_credits_qs = MediaPerson.objects.filter(
+        person=person,
+        content_type_id__in=[movie_ct_id, tv_ct_id],
+    ).select_related('content_type')
     
     # Group credits by media and collect media identifiers
     grouped_credits = {}
     media_identifiers = set()
-    
+
+    # Bulk-fetch all related Movie/TVShow rows in two queries instead of one per credit
+    movie_object_ids = {c.object_id for c in person_credits_qs if c.content_type_id == movie_ct_id}
+    tv_object_ids = {c.object_id for c in person_credits_qs if c.content_type_id == tv_ct_id}
+    movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=movie_object_ids)} if movie_object_ids else {}
+    tvshows_by_id = {t.id: t for t in TVShow.objects.filter(id__in=tv_object_ids)} if tv_object_ids else {}
+
     for credit in person_credits_qs:
-        try:
-            # Get the actual movie or TV show object via the generic relation
-            media = credit.content_type.get_object_for_this_type(id=credit.object_id)
-            key = (credit.content_type_id, credit.object_id)
-            media_identifiers.add(key)
-            
-            if key not in grouped_credits:
-                grouped_credits[key] = {
-                    'media': media,
-                    'roles': set(), # Use set to avoid duplicate roles
-                    'characters': set() # Use set for unique characters
-                }
-            
-            grouped_credits[key]['roles'].add(credit.role)
-            if credit.character_name:
-                grouped_credits[key]['characters'].add(credit.character_name)
-                
-        except (Movie.DoesNotExist, TVShow.DoesNotExist):
-            continue # Skip if the related media object doesn't exist
+        if credit.content_type_id == movie_ct_id:
+            media = movies_by_id.get(credit.object_id)
+        else:
+            media = tvshows_by_id.get(credit.object_id)
+
+        if media is None:
+            # Stale MediaPerson row pointing at a deleted Movie/TVShow
+            continue
+
+        key = (credit.content_type_id, credit.object_id)
+        media_identifiers.add(key)
+
+        if key not in grouped_credits:
+            grouped_credits[key] = {
+                'media': media,
+                'roles': set(),
+                'characters': set(),
+            }
+
+        grouped_credits[key]['roles'].add(credit.role)
+        if credit.character_name:
+            grouped_credits[key]['characters'].add(credit.character_name)
             
     # Calculate average rating for the person's works (all users)
     average_rating = None
+    user_average_rating = None
     if media_identifiers:
         # Build Q objects for filtering reviews
         q_objects = Q()
@@ -1723,15 +1903,49 @@ def people_detail(request, person_id):
     # Choose a random backdrop if available
     if backdrop_candidates:
         random_backdrop = random.choice(backdrop_candidates)
-    
+
+    # Tag existing movie/TV credits with media type
+    for credit in combined_credits_list:
+        media = credit['media']
+        if 'media_type' not in credit:
+            credit['media_type'] = 'movie' if hasattr(media, 'release_date') else 'tvshow'
+
+    # Fetch books authored by this person and add to combined credits
+    person_books = list(Book.objects.filter(authors=person).order_by('-published_date'))
+    if person_books:
+        book_ct = ContentType.objects.get_for_model(Book)
+        book_ids = [b.id for b in person_books]
+
+        book_user_reviews = {
+            r.object_id: r.rating
+            for r in Review.objects.filter(
+                content_type=book_ct, object_id__in=book_ids, user=request.user
+            )
+        }
+
+        book_avg_data = {}
+        for item in Review.objects.filter(
+            content_type=book_ct, object_id__in=book_ids
+        ).values('object_id').annotate(avg_r=Avg('rating'), cnt=Count('id')):
+            book_avg_data[item['object_id']] = (round(item['avg_r'], 1), item['cnt'])
+
+        for book in person_books:
+            book._user_rating = book_user_reviews.get(book.id)
+            if book.id in book_avg_data:
+                book._avg_rating, book._rating_count = book_avg_data[book.id]
+            else:
+                book._avg_rating = None
+                book._rating_count = 0
+
     context = {
         'person': person,
         'combined_credits': combined_credits_list,
-        'average_rating': average_rating, # Add average rating to context
-        'user_average_rating': user_average_rating, # Add user-specific average rating
-        'random_backdrop': random_backdrop, # Add random backdrop to context
+        'person_books': person_books,
+        'average_rating': average_rating,
+        'user_average_rating': user_average_rating,
+        'random_backdrop': random_backdrop,
     }
-    
+
     return render(request, 'people_page.html', context)
 
 @login_required
@@ -2214,12 +2428,55 @@ def _get_content_types():
     from movies.models import Movie
     from tvshows.models import TVShow
     from games.models import Game
+    from books.models import Book
     
     return {
         'movie': ContentType.objects.get_for_model(Movie),
         'tvshow': ContentType.objects.get_for_model(TVShow),
-        'game': ContentType.objects.get_for_model(Game)
+        'game': ContentType.objects.get_for_model(Game),
+        'book': ContentType.objects.get_for_model(Book),
     }
+
+
+# Fields needed by the activity processors. Keeping these tight avoids pulling
+# heavy TextField columns like `description` for every row.
+_REVIEW_ONLY_FIELDS = (
+    'id', 'rating', 'review_text', 'date_added',
+    'content_type_id', 'object_id',
+    'user__username',
+    'season__id', 'season__title', 'season__poster',
+    'episode_subgroup__id', 'episode_subgroup__name',
+    'content_type__id', 'content_type__model',
+)
+_WATCHLIST_ONLY_FIELDS = (
+    'id', 'date_added', 'content_type_id', 'object_id',
+    'user__username',
+    'content_type__id', 'content_type__model',
+)
+_MOVIE_NEW_ONLY_FIELDS = (
+    'id', 'title', 'original_title', 'poster', 'tmdb_id', 'date_added',
+    'added_by__username',
+)
+_TVSHOW_ONLY_FIELDS = (
+    'id', 'title', 'original_title', 'poster', 'tmdb_id', 'first_air_date',
+)
+_GAME_NEW_ONLY_FIELDS = (
+    'id', 'title', 'original_title', 'poster', 'rawg_id', 'date_added',
+    'added_by__username',
+)
+_BOOK_NEW_ONLY_FIELDS = (
+    'id', 'title', 'original_title', 'image_url', 'date_added',
+    'added_by__username',
+)
+_WATCHED_EPISODE_ONLY_FIELDS = (
+    'id', 'watched_date',
+    'user__username',
+    'episode__id',
+    'episode__season__id', 'episode__season__poster',
+    'episode__season__show__id', 'episode__season__show__title',
+    'episode__season__show__original_title', 'episode__season__show__poster',
+    'episode__season__show__tmdb_id',
+)
 
 
 def _fetch_activities_efficiently(fetch_limit, content_types):
@@ -2230,30 +2487,38 @@ def _fetch_activities_efficiently(fetch_limit, content_types):
     from movies.models import Movie
     from tvshows.models import WatchedEpisode
     from games.models import Game
+    from books.models import Book
     
-    # Use select_related and prefetch_related more efficiently
     reviews = Review.objects.select_related(
         'user', 'content_type', 'season', 'episode_subgroup'
-    ).order_by('-date_added')[:fetch_limit]
+    ).only(*_REVIEW_ONLY_FIELDS).order_by('-date_added')[:fetch_limit]
     
     watchlist_items = Watchlist.objects.select_related(
         'user', 'content_type'
+    ).only(*_WATCHLIST_ONLY_FIELDS).order_by('-date_added')[:fetch_limit]
+    
+    movies = Movie.objects.select_related('added_by').only(
+        *_MOVIE_NEW_ONLY_FIELDS
     ).order_by('-date_added')[:fetch_limit]
     
-    movies = Movie.objects.select_related('added_by').order_by('-date_added')[:fetch_limit]
+    games = Game.objects.select_related('added_by').only(
+        *_GAME_NEW_ONLY_FIELDS
+    ).order_by('-date_added')[:fetch_limit]
     
-    games = Game.objects.select_related('added_by').order_by('-date_added')[:fetch_limit]
+    books = Book.objects.select_related('added_by').only(
+        *_BOOK_NEW_ONLY_FIELDS
+    ).order_by('-date_added')[:fetch_limit]
     
-    # More efficient episode fetching with optimized select_related
     watched_episodes = WatchedEpisode.objects.select_related(
         'user', 'episode__season__show'
-    ).order_by('-watched_date')[:fetch_limit * 2]  # Reduced multiplier
+    ).only(*_WATCHED_EPISODE_ONLY_FIELDS).order_by('-watched_date')[:fetch_limit * 2]
     
     return {
         'reviews': reviews,
         'watchlist_items': watchlist_items,
         'movies': movies,
         'games': games,
+        'books': books,
         'watched_episodes': watched_episodes
     }
 
@@ -2267,28 +2532,38 @@ def _fetch_user_activities(fetch_limit, content_types, user):
     from movies.models import Movie
     from tvshows.models import WatchedEpisode
     from games.models import Game
+    from books.models import Book
 
     reviews = Review.objects.filter(user=user).select_related(
         'user', 'content_type', 'season', 'episode_subgroup'
-    ).order_by('-date_added')[:fetch_limit]
+    ).only(*_REVIEW_ONLY_FIELDS).order_by('-date_added')[:fetch_limit]
 
     watchlist_items = Watchlist.objects.filter(user=user).select_related(
         'user', 'content_type'
+    ).only(*_WATCHLIST_ONLY_FIELDS).order_by('-date_added')[:fetch_limit]
+
+    movies = Movie.objects.filter(added_by=user).select_related('added_by').only(
+        *_MOVIE_NEW_ONLY_FIELDS
     ).order_by('-date_added')[:fetch_limit]
 
-    movies = Movie.objects.filter(added_by=user).select_related('added_by').order_by('-date_added')[:fetch_limit]
+    games = Game.objects.filter(added_by=user).select_related('added_by').only(
+        *_GAME_NEW_ONLY_FIELDS
+    ).order_by('-date_added')[:fetch_limit]
 
-    games = Game.objects.filter(added_by=user).select_related('added_by').order_by('-date_added')[:fetch_limit]
+    books = Book.objects.filter(added_by=user).select_related('added_by').only(
+        *_BOOK_NEW_ONLY_FIELDS
+    ).order_by('-date_added')[:fetch_limit]
 
     watched_episodes = WatchedEpisode.objects.filter(user=user).select_related(
         'user', 'episode__season__show'
-    ).order_by('-watched_date')[:fetch_limit * 2]
+    ).only(*_WATCHED_EPISODE_ONLY_FIELDS).order_by('-watched_date')[:fetch_limit * 2]
 
     return {
         'reviews': reviews,
         'watchlist_items': watchlist_items,
         'movies': movies,
         'games': games,
+        'books': books,
         'watched_episodes': watched_episodes
     }
 
@@ -2340,6 +2615,7 @@ def _get_media_objects_bulk(activities_data, content_types):
     movie_ids = set()
     tvshow_ids = set()
     game_ids = set()
+    book_ids = set()
     
     # From reviews
     for review in activities_data['reviews']:
@@ -2349,6 +2625,8 @@ def _get_media_objects_bulk(activities_data, content_types):
             tvshow_ids.add(review.object_id)
         elif review.content_type_id == content_types['game'].id:
             game_ids.add(review.object_id)
+        elif review.content_type_id == content_types['book'].id:
+            book_ids.add(review.object_id)
     
     # From watchlist items
     for item in activities_data['watchlist_items']:
@@ -2358,6 +2636,8 @@ def _get_media_objects_bulk(activities_data, content_types):
             tvshow_ids.add(item.object_id)
         elif item.content_type_id == content_types['game'].id:
             game_ids.add(item.object_id)
+        elif item.content_type_id == content_types['book'].id:
+            book_ids.add(item.object_id)
     
     # From watched episodes
     for episode in activities_data['watched_episodes']:
@@ -2367,17 +2647,38 @@ def _get_media_objects_bulk(activities_data, content_types):
     movies_by_id = {}
     tvshows_by_id = {}
     games_by_id = {}
+    books_by_id = {}
     
     if movie_ids:
-        movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=movie_ids)}
+        movies_by_id = {
+            m.id: m for m in Movie.objects.filter(id__in=movie_ids).only(
+                'id', 'title', 'original_title', 'poster', 'tmdb_id'
+            )
+        }
     
     if tvshow_ids:
-        tvshows_by_id = {t.id: t for t in TVShow.objects.filter(id__in=tvshow_ids)}
+        tvshows_by_id = {
+            t.id: t for t in TVShow.objects.filter(id__in=tvshow_ids).only(
+                'id', 'title', 'original_title', 'poster', 'tmdb_id', 'first_air_date'
+            )
+        }
     
     if game_ids:
-        games_by_id = {g.id: g for g in Game.objects.filter(id__in=game_ids)}
+        games_by_id = {
+            g.id: g for g in Game.objects.filter(id__in=game_ids).only(
+                'id', 'title', 'original_title', 'poster', 'rawg_id'
+            )
+        }
     
-    return movies_by_id, tvshows_by_id, games_by_id
+    if book_ids:
+        from books.models import Book
+        books_by_id = {
+            b.id: b for b in Book.objects.filter(id__in=book_ids).only(
+                'id', 'title', 'original_title', 'image_url'
+            )
+        }
+    
+    return movies_by_id, tvshows_by_id, games_by_id, books_by_id
 
 
 def _process_and_group_activities(activities_data, content_types):
@@ -2385,7 +2686,7 @@ def _process_and_group_activities(activities_data, content_types):
     Process activities and group them efficiently.
     """
     # Get media objects in bulk
-    movies_by_id, tvshows_by_id, games_by_id = _get_media_objects_bulk(activities_data, content_types)
+    movies_by_id, tvshows_by_id, games_by_id, books_by_id = _get_media_objects_bulk(activities_data, content_types)
     
     # Process each activity type
     all_activities = []
@@ -2398,13 +2699,15 @@ def _process_and_group_activities(activities_data, content_types):
     
     # Process reviews
     review_activities = _process_reviews(
-        activities_data['reviews'], movies_by_id, tvshows_by_id, games_by_id, content_types
+        activities_data['reviews'], movies_by_id, tvshows_by_id, games_by_id, content_types,
+        books_by_id=books_by_id
     )
     all_activities.extend(review_activities)
     
     # Process watchlist items
     watchlist_activities = _process_watchlist_items(
-        activities_data['watchlist_items'], movies_by_id, tvshows_by_id, games_by_id, content_types
+        activities_data['watchlist_items'], movies_by_id, tvshows_by_id, games_by_id, content_types,
+        books_by_id=books_by_id
     )
     all_activities.extend(watchlist_activities)
     
@@ -2415,6 +2718,10 @@ def _process_and_group_activities(activities_data, content_types):
     # Process new games
     game_activities = _process_new_games(activities_data['games'])
     all_activities.extend(game_activities)
+    
+    # Process new books
+    book_activities = _process_new_books(activities_data.get('books', []))
+    all_activities.extend(book_activities)
     
     # Sort by date and group by timestamp/media
     all_activities.sort(key=lambda x: x['date'], reverse=True)
@@ -2477,8 +2784,10 @@ def _process_watched_episodes(watched_episodes, tvshows_by_id):
     return activities
 
 
-def _process_reviews(reviews, movies_by_id, tvshows_by_id, games_by_id, content_types):
+def _process_reviews(reviews, movies_by_id, tvshows_by_id, games_by_id, content_types, books_by_id=None):
     """Process review activities efficiently."""
+    if books_by_id is None:
+        books_by_id = {}
     activities = []
     
     for review in reviews:
@@ -2493,6 +2802,9 @@ def _process_reviews(reviews, movies_by_id, tvshows_by_id, games_by_id, content_
         elif review.content_type_id == content_types['game'].id:
             content_object = games_by_id.get(review.object_id)
             content_type = "Game"
+        elif review.content_type_id == content_types['book'].id:
+            content_object = books_by_id.get(review.object_id)
+            content_type = "Book"
         else:
             # Fallback for other content types
             content_object = review.media
@@ -2512,6 +2824,8 @@ def _process_reviews(reviews, movies_by_id, tvshows_by_id, games_by_id, content_
         # For TV show reviews with a specific season, use the season poster
         if hasattr(content_object, 'first_air_date') and review.season:
             poster = getattr(review.season, 'poster', None) or getattr(content_object, 'poster', None)
+        elif content_type == "Book":
+            poster = getattr(content_object, 'image_url', None)
         else:
             poster = getattr(content_object, 'poster', None)
         
@@ -2538,8 +2852,10 @@ def _process_reviews(reviews, movies_by_id, tvshows_by_id, games_by_id, content_
     return activities
 
 
-def _process_watchlist_items(watchlist_items, movies_by_id, tvshows_by_id, games_by_id, content_types):
+def _process_watchlist_items(watchlist_items, movies_by_id, tvshows_by_id, games_by_id, content_types, books_by_id=None):
     """Process watchlist activities efficiently."""
+    if books_by_id is None:
+        books_by_id = {}
     activities = []
     
     for item in watchlist_items:
@@ -2554,6 +2870,9 @@ def _process_watchlist_items(watchlist_items, movies_by_id, tvshows_by_id, games
         elif item.content_type_id == content_types['game'].id:
             content_object = games_by_id.get(item.object_id)
             content_type = "Game"
+        elif item.content_type_id == content_types['book'].id:
+            content_object = books_by_id.get(item.object_id)
+            content_type = "Book"
         else:
             content_object = item.media
             content_type = item.content_type.model.capitalize()
@@ -2565,6 +2884,12 @@ def _process_watchlist_items(watchlist_items, movies_by_id, tvshows_by_id, games
         local_timestamp = timezone.localtime(item.date_added)
         timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
         
+        # Books use image_url instead of poster
+        if content_type == "Book":
+            poster = getattr(content_object, 'image_url', None)
+        else:
+            poster = getattr(content_object, 'poster', None)
+        
         activities.append({
             'type': 'watchlist',
             'username': item.user.username,
@@ -2575,9 +2900,35 @@ def _process_watchlist_items(watchlist_items, movies_by_id, tvshows_by_id, games
             'timestamp_key': timestamp_key,
             'media_id': content_object.id,
             'action': 'added to watchlist',
-            'poster_path': getattr(content_object, 'poster', None),
+            'poster_path': poster,
             'tmdb_id': getattr(content_object, 'tmdb_id', None),
             'rawg_id': getattr(content_object, 'rawg_id', None)
+        })
+    
+    return activities
+
+
+def _process_new_books(books):
+    """Process new book activities efficiently."""
+    activities = []
+    
+    for book in books:
+        local_timestamp = timezone.localtime(book.date_added)
+        timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
+        
+        activities.append({
+            'type': 'new_content',
+            'username': book.added_by.username if book.added_by else 'System',
+            'title': _format_title(book),
+            'content_type': 'Book',
+            'date': book.date_added,
+            'timestamp': timestamp_key,
+            'timestamp_key': timestamp_key,
+            'media_id': book.id,
+            'action': 'added to database',
+            'poster_path': book.image_url,
+            'tmdb_id': None,
+            'rawg_id': None
         })
     
     return activities

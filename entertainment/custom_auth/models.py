@@ -130,6 +130,7 @@ class Keyword(models.Model):
     name = models.CharField(max_length=100)
     tmdb_id = models.IntegerField(blank=True, null=True)
     rawg_id = models.IntegerField(blank=True, null=True)
+    hardcover_tag_id = models.BigIntegerField(blank=True, null=True)
 
     def save(self, *args, **kwargs):
         self.name = self.name.lower()
@@ -189,8 +190,8 @@ class Person(models.Model):
     
     # external IDs for music and books
     musicbrainz_id = models.CharField(max_length=36, blank=True, null=True)
-    hardcover_id = models.UUIDField(unique=True, blank=True, null=True)
-
+    hardcover_id = models.IntegerField(unique=True, blank=True, null=True)
+    openlibrary_id = models.CharField(max_length=50, blank=True, null=True, db_index=True)
 
     imdb_id = models.CharField(max_length=20, blank=True, null=True)
     tmdb_id = models.IntegerField(unique=True, blank=True, null=True)
@@ -248,16 +249,26 @@ class Watchlist(models.Model):
 
 # Add signals to automatically remove watchlist entries when media is deleted
 
+# Models with a GenericForeignKey to media that need to be cleaned up
+# whenever a media row is deleted.
+_MEDIA_MODEL_NAMES = {'Movie', 'TVShow', 'Album', 'Book', 'Game'}
+
+
 @receiver(pre_delete)
-def remove_from_watchlist(sender, instance, **kwargs):
-    """Remove any watchlist entries when media is deleted."""
-    # Check if the model is one that can be in a watchlist
-    media_models = ['Movie', 'TVShow', 'Album']
-    
-    if sender.__name__ in media_models:
-        # Direct media deletion
-        content_type = ContentType.objects.get_for_model(sender)
-        Watchlist.objects.filter(content_type=content_type, object_id=instance.id).delete()
+def remove_generic_relations_for_media(sender, instance, **kwargs):
+    """Clean up rows that point at deleted media via a GenericForeignKey.
+
+    Django's CASCADE only follows real ForeignKeys, so generic relations
+    (Watchlist, Review, MediaPerson, MediaAlbumRelationship) leak orphaned
+    rows when the underlying Movie/TVShow/Album/Book/Game is deleted.
+    """
+    if sender.__name__ not in _MEDIA_MODEL_NAMES:
+        return
+
+    content_type = ContentType.objects.get_for_model(sender)
+    Watchlist.objects.filter(content_type=content_type, object_id=instance.id).delete()
+    Review.objects.filter(content_type=content_type, object_id=instance.id).delete()
+    MediaPerson.objects.filter(content_type=content_type, object_id=instance.id).delete()
     
 class Review(models.Model):
     """Model for user reviews of media items."""
@@ -393,6 +404,20 @@ def invalidate_stats_on_review_save(sender, instance, **kwargs):
 @receiver(post_delete, sender=Review)
 def invalidate_stats_on_review_delete(sender, instance, **kwargs):
     """Invalidate statistics cache when a review is deleted."""
+    from custom_auth.services.statistics import invalidate_stats_cache
+    invalidate_stats_cache(instance.user_id)
+
+
+@receiver(post_save, sender=Watchlist)
+def invalidate_stats_on_watchlist_save(sender, instance, **kwargs):
+    """Invalidate statistics cache when a watchlist item is added."""
+    from custom_auth.services.statistics import invalidate_stats_cache
+    invalidate_stats_cache(instance.user_id)
+
+
+@receiver(post_delete, sender=Watchlist)
+def invalidate_stats_on_watchlist_delete(sender, instance, **kwargs):
+    """Invalidate statistics cache when a watchlist item is removed."""
     from custom_auth.services.statistics import invalidate_stats_cache
     invalidate_stats_cache(instance.user_id)
 

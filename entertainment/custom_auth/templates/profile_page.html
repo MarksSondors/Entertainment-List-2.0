@@ -1515,6 +1515,8 @@
                 detailUrl = `/tvshows/${activity.tmdb_id}`;
             } else if (activity.content_type === 'Game' && activity.media_id) {
                 detailUrl = `/games/${activity.media_id}/`;
+            } else if (activity.content_type === 'Book' && activity.media_id) {
+                detailUrl = `/books/${activity.media_id}/`;
             }
             card.href = detailUrl;
 

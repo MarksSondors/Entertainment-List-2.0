@@ -150,6 +150,7 @@ def process_cast(movie, cast, movies_service):
         if not person_instance:
             # Fetch person details and create if not found
             person_details = movies_service.get_person_details(person.get('id'))
+            external_ids = movies_service.get_person_external_ids(person.get('id'))
             person_instance, _ = Person.objects.get_or_create(
                 tmdb_id=person_details.get('id'),
                 defaults={
@@ -158,11 +159,17 @@ def process_cast(movie, cast, movies_service):
                     'date_of_birth': person_details.get('birthday'),
                     'date_of_death': person_details.get('deathday'),
                     'bio': person_details.get('biography'),
-                    'imdb_id': person_details.get('imdb_id')
+                    'imdb_id': person_details.get('imdb_id'),
+                    'wikidata_id': external_ids.get('wikidata_id') if external_ids else None,
                 }
             )
             person_instance.is_actor = True
             person_instance.save()
+        elif not person_instance.wikidata_id:
+            external_ids = movies_service.get_person_external_ids(person.get('id'))
+            if external_ids and external_ids.get('wikidata_id'):
+                person_instance.wikidata_id = external_ids.get('wikidata_id')
+                person_instance.save(update_fields=['wikidata_id'])
         
         # Create MediaPerson entry
         MediaPerson.objects.create(
@@ -190,7 +197,8 @@ def process_crew(movie, crew, movies_service):
             continue
         
         person_details = movies_service.get_person_details(person.get('id'))
-        person_instance, _ = Person.objects.get_or_create(
+        external_ids = movies_service.get_person_external_ids(person.get('id'))
+        person_instance, created = Person.objects.get_or_create(
             tmdb_id=person_details.get('id'),
             defaults={
                 'name': person_details.get('name'),
@@ -198,10 +206,14 @@ def process_crew(movie, crew, movies_service):
                 'date_of_birth': person_details.get('birthday'),
                 'date_of_death': person_details.get('deathday'),
                 'bio': person_details.get('biography'),
-                'imdb_id': person_details.get('imdb_id')
+                'imdb_id': person_details.get('imdb_id'),
+                'wikidata_id': external_ids.get('wikidata_id') if external_ids else None,
             }
         )
-        
+        if not created and not person_instance.wikidata_id and external_ids and external_ids.get('wikidata_id'):
+            person_instance.wikidata_id = external_ids.get('wikidata_id')
+            person_instance.save(update_fields=['wikidata_id'])
+
         # Set the appropriate role
         role = job
         if job == 'Director':

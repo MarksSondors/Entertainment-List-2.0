@@ -85,6 +85,10 @@ class MoviesService(BaseService):
     
     def get_person_details(self, person_id):
         return self._get(f'person/{person_id}')
+
+    def get_person_external_ids(self, person_id):
+        """Get external IDs for a person including wikidata_id."""
+        return self._get(f'person/{person_id}/external_ids')
     
     def get_person_movie_credits(self, person_id):
         """Get all movie credits for a person"""

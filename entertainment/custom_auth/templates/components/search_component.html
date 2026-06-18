@@ -24,6 +24,7 @@
             <button class="search-tab active" data-endpoint="movies">Movies</button>
             <button class="search-tab" data-endpoint="tvshows">TV Shows</button>
             <button class="search-tab" data-endpoint="games">Games</button>
+            <button class="search-tab" data-endpoint="books">Books</button>
             <button class="search-tab" data-endpoint="people">People</button>
             <button class="search-tab" data-endpoint="users">Users</button>
         </div>
@@ -131,12 +132,16 @@
 
     .win98-tabs {
         display: flex;
+        flex-wrap: wrap;
         gap: 2px;
         margin-top: 6px;
-        padding-left: 24px;
+        padding-left: 0;
     }
 
     .search-tab {
+        flex: 1 1 auto;
+        min-width: 0;
+        text-align: center;
         background: var(--win98-gray);
         border: none;
         box-shadow: inset 1px 1px var(--win98-light), 
@@ -148,7 +153,7 @@
         color: var(--win98-text);
         cursor: pointer;
         border-radius: 3px 3px 0 0;
-        margin-right: 2px;
+        white-space: nowrap;
     }
 
     .search-tab.active {
@@ -160,6 +165,13 @@
         box-shadow: inset 1px 1px var(--win98-light), 
                     inset -1px 0 var(--win98-dark), 
                     inset -2px 0 var(--win98-black);
+    }
+
+    @media (max-width: 480px) {
+        .search-tab {
+            padding: 4px 4px;
+            font-size: 11px;
+        }
     }
 
     .win98-results-dropdown {
@@ -286,6 +298,7 @@
             'movies': 'Search for movies...',
             'tvshows': 'Search for TV shows...',
             'games': 'Search for games...',
+            'books': 'Search for books or authors...',
             'people': 'Search for people...',
             'users': 'Search for users...'
         };
@@ -383,6 +396,23 @@
                             </div>
                         </div>
                     `;
+                } else if (data.search_type === 'books') {
+                    resultItem.onclick = () => window.location.href = item.url;
+                    resultItem.innerHTML = `
+                        ${item.poster ?
+                            `<img src="${item.poster}" alt="${item.title}" class="result-poster" style="object-fit: cover;">` :
+                            '<div class="result-poster-placeholder">No Cover</div>'
+                        }
+                        <div class="result-content">
+                            <div class="result-title">${item.title}</div>
+                            <div class="result-meta">
+                                ${item.authors ? `<span>${item.authors}</span>` : ''}
+                                ${item.year ? `<span>${item.year}</span>` : ''}
+                                ${item.avg_rating ? `<span>★ ${item.avg_rating}</span>` : ''}
+                                ${item.in_watchlist ? '<span style="color: #008000; font-weight: bold;">(In Watchlist)</span>' : ''}
+                            </div>
+                        </div>
+                    `;
                 } else {
                     let yearText = '';
                     if (item.year) {
@@ -413,7 +443,7 @@
         }
 
         function addAddContentResults() {
-            if (currentEndpoint === 'movies' || currentEndpoint === 'tvshows' || currentEndpoint === 'games') {
+            if (currentEndpoint === 'movies' || currentEndpoint === 'tvshows' || currentEndpoint === 'games' || currentEndpoint === 'books') {
                 const addResultItem = document.createElement('div');
                 addResultItem.className = 'result-item';
                 addResultItem.style.borderTop = '1px dotted var(--win98-dark)';
@@ -422,6 +452,7 @@
                 let buttonText = 'Add Movie';
                 if (currentEndpoint === 'tvshows') buttonText = 'Add TV Show';
                 else if (currentEndpoint === 'games') buttonText = 'Add Game';
+                else if (currentEndpoint === 'books') buttonText = 'Add Book';
                 
                 const currentQuery = searchInput.value.trim();
                 
@@ -447,6 +478,8 @@
                     } else if (currentEndpoint === 'games') {
                         if (typeof openGameModal === 'function') openGameModal(currentQuery);
                         else window.location.href = "{% url 'home_page' %}";
+                    } else if (currentEndpoint === 'books') {
+                        if (typeof openBookModal === 'function') openBookModal(currentQuery);
                     }
                 };
                 

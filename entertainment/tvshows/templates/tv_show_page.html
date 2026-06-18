@@ -1193,8 +1193,12 @@
             button.textContent = 'Watched';
             button.dataset.watched = 'true';
         } else {
-            const previousEpisodeId = parseInt(episodeId) - 1; // Assuming episode IDs are sequential
-            const previousEpisodeButton = document.querySelector(`button[data-episode-id="${previousEpisodeId}"]`);
+            // Find the previous episode by season+episode number, NOT by DB id
+            // (episode DB ids aren't necessarily sequential — episodes can be added later).
+            const prevEpisodeNumber = parseInt(episodeNumber) - 1;
+            const previousEpisodeButton = document.querySelector(
+                `.watch-button[data-season-number="${seasonNumber}"][data-episode-number="${prevEpisodeNumber}"]`
+            );
             if (previousEpisodeButton && previousEpisodeButton.dataset.watched === 'true') {
                 markEpisodeWatched(episodeId, true, seasonNumber, episodeNumber, false);
                 button.textContent = 'Watched';
