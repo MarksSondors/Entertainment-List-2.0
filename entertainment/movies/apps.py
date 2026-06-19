@@ -54,5 +54,18 @@ def _setup_movie_schedules(sender, **kwargs):
                 'next_run': None,  # Will calculate based on schedule
             }
         )
+
+        # Bi-weekly fold-in: refresh per-user overlay so new local reviews are
+        # reflected without retraining the base model on the PC.
+        Schedule.objects.get_or_create(
+            func='movies.tasks.refresh_recommender_overlay',
+            defaults={
+                'name': 'Refresh Recommender Overlay',
+                'schedule_type': Schedule.DAILY,
+                'repeats': -1,
+                'minutes': 14 * 24 * 60,  # 14 days
+                'next_run': None,
+            }
+        )
     except (OperationalError, ProgrammingError):
         pass

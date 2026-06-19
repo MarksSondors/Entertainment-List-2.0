@@ -1,955 +1,229 @@
-import os
-import psutil
-import pickle
-import pandas as pd
-import numpy as np
+"""Train the v5.0 recommender bundle.
+
+Orchestrator only — implementation lives in ``movies.services.recommender``.
+"""
+from __future__ import annotations
+
 import gc
-from scipy.sparse import coo_matrix
+import logging
+import os
+import sys
+
+import numpy as np
+import psutil
 from django.core.management.base import BaseCommand
-from django.contrib.contenttypes.models import ContentType
-from django.conf import settings
-from movies.models import Movie
-from custom_auth.models import Review
+
+from movies.services.recommender import MODEL_VERSION
+from movies.services.recommender.biases import compute_all_biases
+from movies.services.recommender.cold_start import fit_cold_start_head
+from movies.services.recommender.data_loading import load_dataset
+from movies.services.recommender.evaluation import (
+    EvalResult,
+    evaluate_full,
+    stratified_temporal_split,
+)
+from movies.services.recommender.mf_ranking import (
+    build_confidence_matrix,
+    train_ials,
+    _gpu_available,
+    gpu_diagnostics,
+)
+from movies.services.recommender.model_io import build_bundle, now_iso, save_bundle
+from movies.services.recommender.weights import (
+    combine_sample_weights,
+    compute_ips_weights,
+    source_weights,
+    time_decay,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _log_mem(stdout, label: str) -> None:
+    mb = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+    stdout.write(f"[{label}] RSS = {mb:.1f} MB")
+
 
 class Command(BaseCommand):
-    help = 'Trains the ALS recommender model with IPS popularity debiasing using MovieLens 32M data'
-
-    # Mapping TMDB Genre Names -> MovieLens Genre Names
-    TMDB_TO_MOVIELENS = {
-        'Action': 'Action',
-        'Adventure': 'Adventure',
-        'Animation': 'Animation',
-        'Comedy': 'Comedy',
-        'Crime': 'Crime',
-        'Documentary': 'Documentary',
-        'Drama': 'Drama',
-        'Family': "Children's", # Mapped to ML standard
-        'Fantasy': 'Fantasy',
-        'History': 'Drama', # Approximation
-        'Horror': 'Horror',
-        'Music': 'Musical', # Mapped
-        'Mystery': 'Mystery',
-        'Romance': 'Romance',
-        'Science Fiction': 'Sci-Fi', # Mapped
-        'Thriller': 'Thriller',
-        'War': 'War',
-        'Western': 'Western',
-        'TV Movie': None # No equivalent
-    }
+    help = "Train the v5.0 movie recommender (joint-ridge biases + iALS ranking + cold-start)."
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            '--optimize',
-            action='store_true',
-            help='Run hyperparameter tuning (Optuna) for latent factors',
-        )
+        parser.add_argument("--optimize", action="store_true",
+                            help="Run Optuna search over iALS hyperparameters using NDCG@10.")
+        parser.add_argument("--trials", type=int, default=15)
+        parser.add_argument("--gpu", action="store_true",
+                            help="Use CUDA for the iALS fit (requires implicit + cupy).")
+        parser.add_argument("--positive-threshold", type=float, default=3.5,
+                            help="Rating >= threshold counts as a positive interaction (5-scale).")
+        parser.add_argument("--keep-versions", type=int, default=5)
+        parser.add_argument("--no-cold-start", action="store_true")
 
-    def log_memory(self, step_name):
-        process = psutil.Process(os.getpid())
-        mem_info = process.memory_info()
-        mb_used = mem_info.rss / 1024 / 1024
-        self.stdout.write(self.style.SUCCESS(f"[{step_name}] RAM Used: {mb_used:.2f} MB"))
-
-    def load_metadata_and_genres(self):
-        """
-        Loads MovieLens movies.csv to get:
-        1. Year (parsed from title)
-        2. Genres (parsed from pipe-separated string)
-        3. ID Mapping (MovieLens -> TMDB)
-        Returns: meta_df (for merging), tmdb_to_genres (for model export)
-        """
-        self.log_memory("Start Metadata Load")
-        data_dir = settings.BASE_DIR / 'data' / 'ml-32m'
-        movies_file = data_dir / 'movies.csv'
-        links_file = data_dir / 'links.csv'
-
-        if not movies_file.exists() or not links_file.exists():
-            self.stdout.write(self.style.ERROR(f'Data files not found in {data_dir}.'))
-            return None, None
-
-        # 1. Load Links (ML ID -> TMDB ID)
-        links = pd.read_csv(
-            links_file, 
-            usecols=['movieId', 'tmdbId'],
-            dtype={'movieId': 'int32', 'tmdbId': 'float'}
-        ).dropna().astype({'movieId': 'int32', 'tmdbId': 'int32'})
-
-        # 2. Load Movies (ID, Title, Genres)
-        movies = pd.read_csv(
-            movies_file,
-            usecols=['movieId', 'title', 'genres'],
-            dtype={'movieId': 'int32', 'genres': 'string'}
-        )
-
-        # Extract Year 
-        movies['year'] = movies['title'].str.extract(r'\((\d{4})\)', expand=False).fillna(1900).astype('int32')
-        
-        # Merge
-        meta_df = pd.merge(movies, links, on='movieId', how='inner')
-        
-        # Create TMDB ID -> Genres list map
-        # Used by the recommender to look up genres for "Known" movies
-        self.stdout.write("Building ID->Genre Map...")
-        tmdb_to_genres = {}
-        for row in meta_df.itertuples(index=False):
-            # row structure: movieId, title, genres, year, tmdbId
-            # We skip 'genres' if it is (no genres listed)
-            if hasattr(row, 'genres') and isinstance(row.genres, str) and row.genres != '(no genres listed)':
-                tmdb_to_genres[row.tmdbId] = row.genres.split('|')
-            else:
-                tmdb_to_genres[row.tmdbId] = []
-
-        del movies
-        del links
-        gc.collect()
-
-        return meta_df[['movieId', 'tmdbId', 'year', 'genres']], tmdb_to_genres
-
-    def load_tmdb_catalog(self):
-        """
-        Loads the TMDB movie catalog CSV for enrichment data.
-        Provides: vote_average, vote_count, runtime, budget, revenue,
-        original_language, status — used for new bias layers and cold-start priors.
-        """
-        self.log_memory("Start TMDB Catalog Load")
-        catalog_file = settings.BASE_DIR / 'data' / 'TMDB_movie_dataset_v11.csv'
-
-        if not catalog_file.exists():
+    def handle(self, *args, **opts):
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+                            stream=sys.stdout)
+        gpu = bool(opts["gpu"])
+        if gpu and not _gpu_available():
+            diag = gpu_diagnostics()
             self.stdout.write(self.style.WARNING(
-                f'TMDB catalog not found at {catalog_file}. Skipping enrichment.'))
-            return None
-
-        catalog = pd.read_csv(
-            catalog_file,
-            usecols=['id', 'vote_average', 'vote_count', 'runtime',
-                     'budget', 'revenue', 'original_language', 'status'],
-            dtype={'id': 'float64'},  # Handle NaN IDs gracefully
-        )
-        catalog = catalog.dropna(subset=['id'])
-        catalog['id'] = catalog['id'].astype('int32')
-        catalog = catalog.rename(columns={'id': 'tmdbId'})
-
-        # Coerce numeric columns
-        for col in ['vote_average', 'vote_count', 'runtime', 'budget', 'revenue']:
-            catalog[col] = pd.to_numeric(catalog[col], errors='coerce').fillna(0)
-
-        catalog['vote_count'] = catalog['vote_count'].astype('int32')
-        catalog['runtime'] = catalog['runtime'].astype('float32')
-        catalog['vote_average'] = catalog['vote_average'].astype('float32')
-        catalog['original_language'] = catalog['original_language'].fillna('en').astype(str)
-        catalog['status'] = catalog['status'].fillna('Unknown').astype(str)
-
-        # Compute runtime buckets
-        conditions = [
-            catalog['runtime'] <= 0,
-            catalog['runtime'] <= 90,
-            catalog['runtime'] <= 120,
-            catalog['runtime'] <= 150,
-        ]
-        choices = ['standard', 'short', 'standard', 'long']
-        catalog['runtime_bucket'] = np.select(conditions, choices, default='epic')
-
-        released_count = (catalog['status'] == 'Released').sum()
-        self.stdout.write(f"TMDB catalog: {len(catalog)} total, {released_count} Released")
-        self.log_memory("TMDB Catalog Loaded")
-        return catalog
-
-    def load_data(self):
-        """Loads Ratings and merges with Metadata + TMDB catalog enrichment"""
-        meta_df, tmdb_to_genres = self.load_metadata_and_genres()
-        if meta_df is None: return None, None, None, None, None
-
-        self.log_memory("Loading Ratings")
-        data_dir = settings.BASE_DIR / 'data' / 'ml-32m'
-        ratings_file = data_dir / 'ratings.csv'
-
-        # Load Ratings
-        ratings = pd.read_csv(
-            ratings_file, 
-            usecols=['userId', 'movieId', 'rating', 'timestamp'],
-            dtype={'userId': 'int32', 'movieId': 'int32', 'rating': 'float32', 'timestamp': 'int64'}
-        )
-        
-        # 3. Pruning: Filter sparse MovieLens users (<10 ratings)
-        self.stdout.write("Pruning sparse MovieLens users (<10 ratings)...")
-        user_counts = ratings['userId'].value_counts()
-        valid_users = user_counts[user_counts >= 10].index
-        ratings = ratings[ratings['userId'].isin(valid_users)]
-        self.stdout.write(f"Remaining Ratings: {len(ratings)}")
-        del user_counts, valid_users
-        gc.collect()
-        
-        # Merge Metadata (Inner join filters ratings for movies without TMDB IDs)
-        self.stdout.write('Merging ratings with Metadata...')
-        df = pd.merge(ratings, meta_df, on='movieId', how='inner')
-        
-        del ratings
-        del meta_df
-        gc.collect()
-
-        # Format Columns
-        df['userId'] = 'ml_' + df['userId'].astype(str)
-        # Create Decade Column
-        df['decade'] = (df['year'] // 10) * 10
-        df = df[['userId', 'tmdbId', 'rating', 'timestamp', 'year', 'decade', 'genres']]
-
-        # --- TMDB Catalog Enrichment ---
-        tmdb_catalog = self.load_tmdb_catalog()
-        tmdb_vote_data = {}
-        catalog_language = {}
-        catalog_runtime_bucket = {}
-
-        if tmdb_catalog is not None:
-            # Filter training data to Released movies only
-            released_ids = set(tmdb_catalog.loc[tmdb_catalog['status'] == 'Released', 'tmdbId'])
-            before_count = len(df)
-            df = df[df['tmdbId'].isin(released_ids)]
-            self.stdout.write(f"Status filter: {before_count} -> {len(df)} ratings (removed non-Released)")
-
-            # Merge enrichment columns
-            enrich_cols = tmdb_catalog[['tmdbId', 'runtime_bucket', 'original_language']].drop_duplicates('tmdbId')
-            df = pd.merge(df, enrich_cols, on='tmdbId', how='left')
-            df['runtime_bucket'] = df['runtime_bucket'].fillna('standard')
-            df['original_language'] = df['original_language'].fillna('en')
-
-            # Build lookup dicts for cold-start and prediction
-            for row in tmdb_catalog.itertuples(index=False):
-                tmdb_vote_data[row.tmdbId] = (float(row.vote_average), int(row.vote_count))
-                catalog_language[row.tmdbId] = str(row.original_language)
-                catalog_runtime_bucket[row.tmdbId] = str(row.runtime_bucket)
-
-            del tmdb_catalog
-            gc.collect()
-        else:
-            df['runtime_bucket'] = 'standard'
-            df['original_language'] = 'en'
-
-        # Load Local Reviews
-        self.stdout.write('Loading local reviews...')
-        movie_ct = ContentType.objects.get_for_model(Movie)
-        local_reviews = Review.objects.filter(content_type=movie_ct).values_list('user__id', 'object_id', 'rating', 'date_added')
-        
-        # Build local movie map efficiently
-        movies_qs = Movie.objects.exclude(tmdb_id__isnull=True).values('id', 'tmdb_id', 'release_date')
-        movie_map = {}
-        for m in movies_qs:
-            y = m['release_date'].year if m['release_date'] else 1900
-            movie_map[m['id']] = (m['tmdb_id'], y)
-        
-        # Build TMDB genre lookup from local DB, converting TMDB names to MovieLens names
-        # This lets local reviews contribute to and benefit from genre bias learning
-        local_genre_map = {}  # tmdb_id -> pipe-delimited ML genre string
-        for movie in Movie.objects.exclude(tmdb_id__isnull=True).prefetch_related('genres'):
-            ml_genres = []
-            for g in movie.genres.all():
-                ml_name = self.TMDB_TO_MOVIELENS.get(g.name)
-                if ml_name:
-                    ml_genres.append(ml_name)
-            if ml_genres:
-                local_genre_map[movie.tmdb_id] = '|'.join(ml_genres)
-                # Backfill tmdb_to_genres for movies not in MovieLens (post-2023)
-                if movie.tmdb_id not in tmdb_to_genres or not tmdb_to_genres[movie.tmdb_id]:
-                    tmdb_to_genres[movie.tmdb_id] = ml_genres
-
-        local_data = []
-        for user_id, movie_pk, rating, date_added in local_reviews:
-            if movie_pk in movie_map:
-                tmdb_id, year = movie_map[movie_pk]
-                local_data.append({
-                    'userId': f'loc_{user_id}',
-                    'tmdbId': tmdb_id,
-                    'rating': rating / 2.0, 
-                    'timestamp': int(date_added.timestamp()),
-                    'year': year,
-                    'decade': (year // 10) * 10,
-                    'genres': local_genre_map.get(tmdb_id, ''),
-                    'runtime_bucket': catalog_runtime_bucket.get(tmdb_id, 'standard'),
-                    'original_language': catalog_language.get(tmdb_id, 'en'),
-                })
-        
-        if local_data:
-            local_df = pd.DataFrame(local_data)
-            
-            # Upweight local reviews: ML has ~32M ratings drowning out local users.
-            # Boost local rows so each local user has comparable influence to an avg ML user.
-            ml_user_count = df['userId'].nunique()
-            ml_avg_ratings_per_user = len(df) / max(ml_user_count, 1)
-            local_avg_ratings = len(local_df) / max(local_df['userId'].nunique(), 1)
-            boost_factor = max(1, min(int(ml_avg_ratings_per_user / max(local_avg_ratings, 1)), 10))
-            
-            if boost_factor > 1:
-                self.stdout.write(f"Boosting local reviews {boost_factor}x to match ML user density")
-                local_df = pd.concat([local_df] * boost_factor, ignore_index=True)
-            
-            self.stdout.write(f"Including {len(local_df)} local reviews "
-                           f"({local_df['userId'].nunique()} users, {boost_factor}x boost).")
-            df = pd.concat([df, local_df], ignore_index=True)
-            del local_df
-
-        self.log_memory("Data Merged")
-        return df, tmdb_to_genres, tmdb_vote_data, catalog_language, catalog_runtime_bucket
-
-    # Standard MovieLens genre vocabulary
-    GENRES_LIST = [
-        "Action", "Adventure", "Animation", "Children's", "Comedy", "Crime",
-        "Documentary", "Drama", "Fantasy", "Film-Noir", "Horror", "Musical",
-        "Mystery", "Romance", "Sci-Fi", "Thriller", "War", "Western"
-    ]
-
-    RUNTIME_BUCKETS = ['short', 'standard', 'long', 'epic']
-
-    def _compute_ips_weights(self, df, clip_min=0.1, clip_max=5.0):
-        """
-        Inverse Propensity Scoring (IPS) for popularity debiasing.
-        Popular movies get rated more often, biasing the model toward recommending
-        well-known films. IPS reweights each rating inversely proportional to how
-        often that item appears, so niche movies get fairer representation.
-
-        propensity(item) = count(item) / max_count  → in [0, 1]
-        ips_weight(item) = 1 / propensity(item)     → rare items get higher weight
-
-        Clipped to [clip_min, clip_max] to prevent extreme weights for very rare items.
-        """
-        self.stdout.write("Computing Inverse Propensity Scores for popularity debiasing...")
-        item_counts = df['tmdbId'].value_counts()
-        max_count = item_counts.max()
-
-        # propensity: how "popular" each item is relative to the most-rated item
-        propensity = item_counts / max_count  # range (0, 1]
-
-        # IPS: inverse proportional — rare items get larger weight
-        ips = (1.0 / propensity).clip(lower=clip_min, upper=clip_max)
-
-        # Map back to each row
-        ips_per_row = df['tmdbId'].map(ips).fillna(1.0).astype(np.float32).values
-
-        median_ips = float(np.median(ips_per_row))
-        self.stdout.write(
-            f"  IPS stats: median={median_ips:.2f}, "
-            f"min={ips_per_row.min():.2f}, max={ips_per_row.max():.2f}, "
-            f"unique items={len(item_counts)}")
-        return ips_per_row
-
-    def _apply_time_decay(self, df, half_life_days=365 * 3):
-        """
-        Compute exponential time-decay weights so recent ratings matter more.
-        Half-life of 3 years: a rating from 3 years ago has half the weight of today's.
-        Floor at 0.1 so very old ratings don't vanish completely.
-        """
-        max_ts = df['timestamp'].max()
-        seconds_per_day = 86400
-        half_life_seconds = half_life_days * seconds_per_day
-
-        decay = np.exp(-np.log(2) * (max_ts - df['timestamp'].values) / half_life_seconds)
-        decay = np.clip(decay, 0.1, 1.0).astype(np.float32)
-        return decay
-
-    def _extrapolate_year_biases(self, year_biases, max_future_year=2030):
-        """
-        Extrapolate year biases for years beyond the training data (post-2023).
-        Uses the average bias of the last 5 known years as a stable forward estimate.
-        """
-        known_years = sorted(y for y in year_biases.keys() if y >= 1950)
-        if not known_years:
-            return year_biases
-
-        max_known = max(known_years)
-        recent_years = [y for y in known_years if y >= max_known - 4]
-        if recent_years:
-            recent_avg = float(np.mean([year_biases[y] for y in recent_years]))
-        else:
-            recent_avg = 0.0
-
-        for y in range(max_known + 1, max_future_year + 1):
-            year_biases[y] = recent_avg
-
-        self.stdout.write(f"Extrapolated year biases {max_known + 1}-{max_future_year} "
-                         f"(avg bias: {recent_avg:.4f})")
-        return year_biases
-
-    def _build_genre_masks(self, df):
-        """
-        Pre-build boolean mask arrays for each genre. Calls str.contains() once per genre
-        upfront so that compute_biases() and create_sparse_matrix() can reuse them
-        without re-scanning the genres column on every iteration.
-        """
-        self.stdout.write("Pre-building genre masks...")
-        df_genres = df['genres'].astype(str)
-        genre_masks = {}
-        for genre in self.GENRES_LIST:
-            mask = df_genres.str.contains(genre, regex=False).values
-            if mask.any():
-                genre_masks[genre] = mask
-        return genre_masks
-
-    def _build_decade_masks(self, df):
-        """Pre-build boolean mask arrays for each decade present in the data."""
-        decade_masks = {}
-        for decade in df['decade'].unique():
-            mask = (df['decade'] == decade).values
-            if mask.any():
-                decade_masks[int(decade)] = mask
-        return decade_masks
-
-    def _build_language_masks(self, df):
-        """Pre-build boolean mask arrays for languages with meaningful data (≥100 ratings)."""
-        lang_counts = df['original_language'].value_counts()
-        significant_langs = lang_counts[lang_counts >= 100].index
-        language_masks = {}
-        for lang in significant_langs:
-            mask = (df['original_language'] == lang).values
-            if mask.any():
-                language_masks[str(lang)] = mask
-        return language_masks
-
-    def _build_runtime_masks(self, df):
-        """Pre-build boolean mask arrays for each runtime bucket."""
-        runtime_masks = {}
-        for bucket in self.RUNTIME_BUCKETS:
-            mask = (df['runtime_bucket'] == bucket).values
-            if mask.any():
-                runtime_masks[bucket] = mask
-        return runtime_masks
-
-    def compute_biases(self, df, damping=5):
-        """
-        Compute Global, Year, Item, User, User-Genre, and User-Decade biases.
-        Hierarchy: Global -> Year -> Item -> User -> User-Genre -> User-Decade
-
-        Uses time-decay weighting so recent ratings have more influence.
-        Genre/decade biases use iterative convergence (3 passes) to remove
-        order-dependency in the single-pass approach.
-        """
-        self.stdout.write('Computing biases...')
-
-        # Time-decay weights: recent ratings matter more
-        weights = self._apply_time_decay(df)
-        df_rating_weighted = (df['rating'] * weights).astype('float32')
-
-        # Pre-build masks for vectorized genre/decade/language/runtime operations
-        genre_masks = self._build_genre_masks(df)
-        decade_masks = self._build_decade_masks(df)
-        language_masks = self._build_language_masks(df)
-        runtime_masks = self._build_runtime_masks(df)
-
-        # 1. Global Mean (weighted)
-        global_mean = float(np.average(df['rating'], weights=weights))
-
-        # 2. Year Biases (weighted)
-        df_year_resid = (df_rating_weighted - weights * global_mean).astype('float32')
-        year_sum = df_year_resid.groupby(df['year']).sum()
-        year_weight = pd.Series(weights, index=df.index).groupby(df['year']).sum()
-        year_biases = (year_sum / (year_weight + damping)).to_dict()
-
-        # Extrapolate for years beyond training data (2024+)
-        year_biases = self._extrapolate_year_biases(year_biases)
-
-        del df_year_resid, year_sum, year_weight
-
-        # 3. Item Biases (weighted)
-        y_bias_series = df['year'].map(year_biases).fillna(0).astype('float32')
-        item_resid = (df_rating_weighted - weights * (global_mean + y_bias_series)).astype('float32')
-
-        item_sum = item_resid.groupby(df['tmdbId']).sum()
-        item_weight = pd.Series(weights, index=df.index).groupby(df['tmdbId']).sum()
-        item_biases = (item_sum / (item_weight + damping)).to_dict()
-
-        del item_resid, item_sum, item_weight
-
-        # 4. User Biases (weighted)
-        i_bias_series = df['tmdbId'].map(item_biases).fillna(0).astype('float32')
-        user_resid = (df_rating_weighted - weights * (global_mean + y_bias_series + i_bias_series)).astype('float32')
-
-        user_sum = user_resid.groupby(df['userId']).sum()
-        user_weight = pd.Series(weights, index=df.index).groupby(df['userId']).sum()
-        user_biases = (user_sum / (user_weight + damping)).to_dict()
-
-        del y_bias_series, i_bias_series, user_resid, user_sum, user_weight
-        del df_rating_weighted
-        gc.collect()
-
-        # 5 & 6. User-Genre and User-Decade Biases with Iterative Convergence
-        # Instead of a single pass where Action is always computed before Western,
-        # we run 3 iterations. Each iteration recomputes residuals from scratch
-        # using ALL previous-iteration biases, then re-estimates genre and decade biases.
-        self.stdout.write("Computing User-Genre, Decade, Language & Runtime Biases (iterative convergence)...")
-
-        user_genre_biases = {}   # { Genre: { UserId: Bias } }
-        user_decade_biases = {}  # { Decade: { UserId: Bias } }
-        user_language_biases = {}  # { Language: { UserId: Bias } }
-        user_runtime_biases = {}   # { RuntimeBucket: { UserId: Bias } }
-
-        genre_damping = damping * 2
-        decade_damping = damping * 2
-        language_damping = damping * 2
-        runtime_damping = damping * 2
-        n_iterations = 3
-
-        # Pre-compute the base residual (rating - global - year - item - user) once
-        base_residual = (
-            df['rating']
-            - global_mean
-            - df['year'].map(year_biases).fillna(0).astype('float32')
-            - df['tmdbId'].map(item_biases).fillna(0).astype('float32')
-            - df['userId'].map(user_biases).fillna(0).astype('float32')
-        ).astype('float32').values
-
-        for iteration in range(n_iterations):
-            self.stdout.write(f"  Bias convergence iteration {iteration + 1}/{n_iterations}")
-
-            # Start from base residual each iteration
-            residual = base_residual.copy()
-
-            # Subtract ALL previous-iteration genre biases
-            for genre, bias_map in user_genre_biases.items():
-                if genre in genre_masks:
-                    mask = genre_masks[genre]
-                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                    residual[mask] -= mapped
-
-            # Subtract ALL previous-iteration decade biases
-            for decade, bias_map in user_decade_biases.items():
-                if decade in decade_masks:
-                    mask = decade_masks[decade]
-                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                    residual[mask] -= mapped
-
-            # Subtract ALL previous-iteration language biases
-            for lang, bias_map in user_language_biases.items():
-                if lang in language_masks:
-                    mask = language_masks[lang]
-                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                    residual[mask] -= mapped
-
-            # Subtract ALL previous-iteration runtime biases
-            for bucket, bias_map in user_runtime_biases.items():
-                if bucket in runtime_masks:
-                    mask = runtime_masks[bucket]
-                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                    residual[mask] -= mapped
-
-            # Re-estimate genre biases from clean residuals
-            new_genre_biases = {}
-            weighted_residual = residual * weights
-            for genre, mask in genre_masks.items():
-                subset_user = df.loc[mask, 'userId']
-                wr = pd.Series(weighted_residual[mask], index=subset_user.index)
-                w = pd.Series(weights[mask], index=subset_user.index)
-
-                genre_sum = wr.groupby(subset_user).sum()
-                genre_wt = w.groupby(subset_user).sum()
-                bias = (genre_sum / (genre_wt + genre_damping))
-                new_genre_biases[genre] = bias.to_dict()
-
-            # Re-estimate decade biases from residuals (minus new genre biases)
-            residual_after_genre = residual.copy()
-            for genre, bias_map in new_genre_biases.items():
-                if genre in genre_masks:
-                    mask = genre_masks[genre]
-                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                    residual_after_genre[mask] -= mapped
-
-            new_decade_biases = {}
-            weighted_residual_ag = residual_after_genre * weights
-            for decade, mask in decade_masks.items():
-                subset_user = df.loc[mask, 'userId']
-                wr = pd.Series(weighted_residual_ag[mask], index=subset_user.index)
-                w = pd.Series(weights[mask], index=subset_user.index)
-
-                decade_sum = wr.groupby(subset_user).sum()
-                decade_wt = w.groupby(subset_user).sum()
-                bias = (decade_sum / (decade_wt + decade_damping))
-                new_decade_biases[decade] = bias.to_dict()
-
-            # Re-estimate language biases (residual - genre - decade)
-            residual_after_decade = residual_after_genre.copy()
-            for decade, bias_map in new_decade_biases.items():
-                if decade in decade_masks:
-                    mask = decade_masks[decade]
-                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                    residual_after_decade[mask] -= mapped
-
-            new_language_biases = {}
-            weighted_residual_ad = residual_after_decade * weights
-            for lang, mask in language_masks.items():
-                subset_user = df.loc[mask, 'userId']
-                wr = pd.Series(weighted_residual_ad[mask], index=subset_user.index)
-                w = pd.Series(weights[mask], index=subset_user.index)
-
-                lang_sum = wr.groupby(subset_user).sum()
-                lang_wt = w.groupby(subset_user).sum()
-                bias = (lang_sum / (lang_wt + language_damping))
-                new_language_biases[lang] = bias.to_dict()
-
-            # Re-estimate runtime biases (residual - genre - decade - language)
-            residual_after_lang = residual_after_decade.copy()
-            for lang, bias_map in new_language_biases.items():
-                if lang in language_masks:
-                    mask = language_masks[lang]
-                    mapped = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                    residual_after_lang[mask] -= mapped
-
-            new_runtime_biases = {}
-            weighted_residual_al = residual_after_lang * weights
-            for bucket, mask in runtime_masks.items():
-                subset_user = df.loc[mask, 'userId']
-                wr = pd.Series(weighted_residual_al[mask], index=subset_user.index)
-                w = pd.Series(weights[mask], index=subset_user.index)
-
-                rt_sum = wr.groupby(subset_user).sum()
-                rt_wt = w.groupby(subset_user).sum()
-                bias = (rt_sum / (rt_wt + runtime_damping))
-                new_runtime_biases[bucket] = bias.to_dict()
-
-            user_genre_biases = new_genre_biases
-            user_decade_biases = new_decade_biases
-            user_language_biases = new_language_biases
-            user_runtime_biases = new_runtime_biases
-
-            del residual, weighted_residual, residual_after_genre, weighted_residual_ag
-            del residual_after_decade, weighted_residual_ad
-            del residual_after_lang, weighted_residual_al
-            gc.collect()
-
-        del base_residual
-        gc.collect()
-
-        self.log_memory("Biases Computed")
-        return (global_mean, year_biases, item_biases, user_biases,
-                user_genre_biases, user_decade_biases,
-                user_language_biases, user_runtime_biases)
-
-    def create_sparse_matrix(self, df, global_mean, year_biases, item_biases, user_biases,
-                             user_genre_biases, user_decade_biases,
-                             user_language_biases, user_runtime_biases,
-                             apply_ips=True):
-        """Creates IPS-weighted residuals matrix R for ALS, using pre-built masks."""
-        self.stdout.write('Preparing residuals for ALS...')
-
-        # Pre-build masks once for this method
-        genre_masks = self._build_genre_masks(df)
-        decade_masks = self._build_decade_masks(df)
-        language_masks = self._build_language_masks(df)
-        runtime_masks = self._build_runtime_masks(df)
-
-        # Base Residual
-        y_bias = df['year'].map(year_biases).fillna(0).astype('float32')
-        i_bias = df['tmdbId'].map(item_biases).fillna(0).astype('float32')
-        u_bias = df['userId'].map(user_biases).fillna(0).astype('float32')
-
-        # Decade Bias (vectorized via pre-built masks)
-        d_bias_total = np.zeros(len(df), dtype=np.float32)
-        for decade, bias_map in user_decade_biases.items():
-            if decade in decade_masks:
-                mask = decade_masks[decade]
-                b = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                d_bias_total[mask] = b
-
-        # Genre Bias (vectorized via pre-built masks)
-        g_bias_total = np.zeros(len(df), dtype=np.float32)
-        for genre, bias_map in user_genre_biases.items():
-            if genre in genre_masks:
-                mask = genre_masks[genre]
-                b = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                g_bias_total[mask] += b
-
-        # Language Bias (vectorized via pre-built masks)
-        l_bias_total = np.zeros(len(df), dtype=np.float32)
-        for lang, bias_map in user_language_biases.items():
-            if lang in language_masks:
-                mask = language_masks[lang]
-                b = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                l_bias_total[mask] = b
-
-        # Runtime Bias (vectorized via pre-built masks)
-        r_bias_total = np.zeros(len(df), dtype=np.float32)
-        for bucket, bias_map in user_runtime_biases.items():
-            if bucket in runtime_masks:
-                mask = runtime_masks[bucket]
-                b = df.loc[mask, 'userId'].map(bias_map).fillna(0).astype('float32').values
-                r_bias_total[mask] = b
-
-        residuals = (df['rating'].values - global_mean - y_bias.values - i_bias.values
-                     - u_bias.values - d_bias_total - g_bias_total - l_bias_total - r_bias_total)
-
-        # Clamp residuals to prevent distortion from extreme outliers
-        residuals = np.clip(residuals, -3.0, 3.0).astype(np.float32)
-
-        # Apply Inverse Propensity Scoring: upweight niche movies, downweight popular ones
-        if apply_ips:
-            ips_weights = self._compute_ips_weights(df)
-            residuals = residuals * np.sqrt(ips_weights)  # sqrt for gentler application
-        
-        del y_bias, i_bias, u_bias, g_bias_total, d_bias_total, l_bias_total, r_bias_total
-        del genre_masks, decade_masks, language_masks, runtime_masks
-        gc.collect()
-        
-        # Indices
-        user_to_idx = {u: i for i, u in enumerate(df['userId'].unique())}
-        item_to_idx = {i: idx for idx, i in enumerate(df['tmdbId'].unique())}
-        
-        u_indices = df['userId'].map(user_to_idx).values
-        i_indices = df['tmdbId'].map(item_to_idx).values
-        
-        self.stdout.write('Building sparse matrix...')
-        R_sparse = coo_matrix(
-            (residuals.astype(np.float32), (u_indices, i_indices)), 
-            shape=(len(user_to_idx), len(item_to_idx)),
-            dtype=np.float32
-        ).tocsr()
-        
-        return R_sparse, user_to_idx, item_to_idx
-
-    def evaluate_model(self, df_train, df_test, k, damping=5):
-        """Evaluates RMSE and MAE with full bias hierarchy + ALS, with per-group breakdown."""
-        from implicit.als import AlternatingLeastSquares
-
-        (global_mean, year_biases, item_biases, user_biases,
-         user_genre_biases, user_decade_biases,
-         user_language_biases, user_runtime_biases) = self.compute_biases(df_train, damping)
-        
-        try:
-            R_sparse, u_map, i_map = self.create_sparse_matrix(
-                df_train, global_mean, year_biases, item_biases, user_biases,
-                user_genre_biases, user_decade_biases,
-                user_language_biases, user_runtime_biases)
-            
-            # Train ALS model
-            model = AlternatingLeastSquares(
-                factors=k,
-                regularization=0.1,
-                iterations=15,
-                use_gpu=False,
-                random_state=42,
-            )
-            # implicit >= 0.7 expects user-item matrix (R_sparse is already user-item CSR)
-            model.fit(R_sparse)
-
-            user_factors = np.array(model.user_factors, dtype=np.float32)
-            item_factors = np.array(model.item_factors, dtype=np.float32)
-
-            del R_sparse
-            gc.collect()
-        except Exception:
-            return float('inf')
-
-        # Eval Test
-        known_u = set(u_map.keys())
-        known_i = set(i_map.keys())
-        test_df = df_test[df_test['userId'].isin(known_u) & df_test['tmdbId'].isin(known_i)].copy()
-        
-        if test_df.empty: return 0.0
-        
-        # Base Predictions
-        pred = np.full(len(test_df), global_mean, dtype=np.float32)
-        pred += test_df['year'].map(year_biases).fillna(0).values.astype(np.float32)
-        pred += test_df['tmdbId'].map(item_biases).fillna(0).values.astype(np.float32)
-        pred += test_df['userId'].map(user_biases).fillna(0).values.astype(np.float32)
-        
-        # Genre Predictions
-        test_df['genres'] = test_df['genres'].astype(str)
-        for genre, bias_map in user_genre_biases.items():
-            mask = test_df['genres'].str.contains(genre, regex=False)
-            if mask.any():
-                pred[mask] += test_df.loc[mask, 'userId'].map(bias_map).fillna(0).values.astype(np.float32)
-
-        # Decade Predictions
-        for decade, bias_map in user_decade_biases.items():
-            mask = (test_df['decade'] == decade)
-            if mask.any():
-                pred[mask] += test_df.loc[mask, 'userId'].map(bias_map).fillna(0).values.astype(np.float32)
-
-        # Language Predictions
-        if 'original_language' in test_df.columns:
-            for lang, bias_map in user_language_biases.items():
-                mask = (test_df['original_language'] == lang)
-                if mask.any():
-                    pred[mask] += test_df.loc[mask, 'userId'].map(bias_map).fillna(0).values.astype(np.float32)
-
-        # Runtime Predictions
-        if 'runtime_bucket' in test_df.columns:
-            for bucket, bias_map in user_runtime_biases.items():
-                mask = (test_df['runtime_bucket'] == bucket)
-                if mask.any():
-                    pred[mask] += test_df.loc[mask, 'userId'].map(bias_map).fillna(0).values.astype(np.float32)
-
-        # ALS Interaction: user_factors @ item_factors.T
-        u_idx = test_df['userId'].map(u_map).values
-        i_idx = test_df['tmdbId'].map(i_map).values
-        
-        interaction = np.sum(user_factors[u_idx] * item_factors[i_idx], axis=1)
-        pred += interaction
-        
-        # Overall metrics
-        errors = pred - test_df['rating'].values
-        rmse = float(np.sqrt(np.mean(errors ** 2)))
-        mae = float(np.mean(np.abs(errors)))
-        self.stdout.write(f"  Overall: RMSE={rmse:.4f}, MAE={mae:.4f} ({len(test_df)} samples)")
-
-        # Per-group evaluation: loc_ (your users) vs ml_ (MovieLens)
-        user_ids = test_df['userId'].values
-        for prefix, label in [('loc_', 'Local'), ('ml_', 'MovieLens')]:
-            group_mask = np.array([uid.startswith(prefix) for uid in user_ids])
-            if group_mask.any():
-                group_errors = errors[group_mask]
-                g_rmse = float(np.sqrt(np.mean(group_errors ** 2)))
-                g_mae = float(np.mean(np.abs(group_errors)))
-                self.stdout.write(f"  {label}: RMSE={g_rmse:.4f}, MAE={g_mae:.4f} ({group_mask.sum()} samples)")
-
-        return rmse
-
-    def handle(self, *args, **options):
-        try:
-            df, tmdb_to_genres, tmdb_vote_data, catalog_language, catalog_runtime_bucket = self.load_data()
-            if df is None: return
-
-            best_k, best_damping = 120, 15
-            
-            if options['optimize']:
-                try:
-                    import optuna
-                    optuna.logging.set_verbosity(optuna.logging.WARNING)
-                    self.stdout.write("Starting Optuna optimization...")
-                    
-                    # Temporal split: train on older ratings, validate on newer ones.
-                    # This prevents data leakage (training on future to predict past)
-                    # and better simulates real-world usage.
-                    cutoff = df['timestamp'].quantile(0.8)
-                    train_df = df[df['timestamp'] <= cutoff].copy()
-                    val_df = df[df['timestamp'] > cutoff].copy()
-                    self.stdout.write(f"Temporal split: {len(train_df)} train, {len(val_df)} validation")
-                    
-                    def objective(trial):
-                        k = trial.suggest_int('k', 20, 100)
-                        damping = trial.suggest_int('damping', 2, 15)
-                        # We use a copy of train/val for safety if evaluate modifies them, though evaluate makes internal copies/computations.
-                        return self.evaluate_model(train_df, val_df, k, damping)
-                        
-                    study = optuna.create_study(direction='minimize')
-                    study.optimize(objective, n_trials=15) # 15 trials is a good balance
-                    
-                    best_k = study.best_params['k']
-                    best_damping = study.best_params['damping']
-                    self.stdout.write(self.style.SUCCESS(f"Best Params: k={best_k}, damping={best_damping}"))
-                    
-                    del train_df, val_df, study
-                    gc.collect()
-                    
-                except ImportError:
-                    self.stdout.write(self.style.WARNING("Optuna not installed. Skipping optimization."))
-
-            self.stdout.write(f"Training Final Model (k={best_k})...")
-            
-            # Full Train
-            (global_mean, year_biases, item_biases, user_biases,
-             user_genre_biases, user_decade_biases,
-             user_language_biases, user_runtime_biases) = self.compute_biases(df, best_damping)
-            R_sparse, u_map, i_map = self.create_sparse_matrix(
-                df, global_mean, year_biases, item_biases, user_biases,
-                user_genre_biases, user_decade_biases,
-                user_language_biases, user_runtime_biases)
-            
-            # Train ALS model on IPS-weighted residuals
-            from implicit.als import AlternatingLeastSquares
-
-            self.stdout.write(f"Fitting ALS model (factors={best_k}, iterations=20)...")
-            als_model = AlternatingLeastSquares(
-                factors=best_k,
-                regularization=0.1,
-                iterations=20,
-                use_gpu=False,
-                random_state=42,
-            )
-            # implicit >= 0.7 expects user-item matrix (R_sparse is already user-item CSR)
-            als_model.fit(R_sparse)
-
-            user_factors = np.array(als_model.user_factors, dtype=np.float32)
-            item_factors = np.array(als_model.item_factors, dtype=np.float32)
-            self.stdout.write(f"  User factors: {user_factors.shape}, Item factors: {item_factors.shape}")
-
-            del R_sparse, als_model
-            gc.collect()
-
-            # Enrich tmdb_to_genres with local DB movies not in MovieLens (post-2023)
-            self.stdout.write("Enriching genre map with local DB movies...")
-            enriched_count = 0
-            for movie in Movie.objects.exclude(tmdb_id__isnull=True).prefetch_related('genres'):
-                if movie.tmdb_id not in tmdb_to_genres or not tmdb_to_genres[movie.tmdb_id]:
-                    ml_genres = []
-                    for g in movie.genres.all():
-                        ml_name = self.TMDB_TO_MOVIELENS.get(g.name)
-                        if ml_name:
-                            ml_genres.append(ml_name)
-                    if ml_genres:
-                        tmdb_to_genres[movie.tmdb_id] = ml_genres
-                        enriched_count += 1
-            self.stdout.write(f"Added {enriched_count} local movies to genre map.")
-
-            # Export
-            from datetime import datetime
-            import shutil
-
-            data = {
-                'user_factors': user_factors,
-                'item_factors': item_factors,
-                'user_to_idx': u_map, 'item_to_idx': i_map,
-                'known_tmdb_ids': list(i_map.keys()),
-                'global_mean': float(global_mean),
-                'year_biases': year_biases,
-                'item_biases': item_biases,
-                'user_biases': user_biases,
-                'user_genre_biases': user_genre_biases,
-                'user_decade_biases': user_decade_biases,
-                'user_language_biases': user_language_biases,
-                'user_runtime_biases': user_runtime_biases,
-                'tmdb_to_genres': tmdb_to_genres,
-                'tmdb_to_language': catalog_language,
-                'tmdb_to_runtime_bucket': catalog_runtime_bucket,
-                'tmdb_vote_data': tmdb_vote_data,
-                'genre_mapping': self.TMDB_TO_MOVIELENS,
-                'tmdb_id_to_year': df[['tmdbId', 'year']].drop_duplicates('tmdbId').set_index('tmdbId')['year'].to_dict(),
-                'metadata': {
-                    'trained_at': datetime.now().isoformat(),
-                    'k': best_k,
-                    'damping': best_damping,
-                    'n_users': len(u_map),
-                    'n_items': len(i_map),
-                    'n_ratings': len(df),
-                    'n_local_users': sum(1 for uid in u_map if uid.startswith('loc_')),
-                    'n_ml_users': sum(1 for uid in u_map if uid.startswith('ml_')),
-                    'model_type': 'als',
-                    'model_version': '4.0',
-                    'ips_debiasing': True,
-                },
-            }
-            
-            model_dir = settings.BASE_DIR / 'movies' / 'ml_models'
-            os.makedirs(model_dir, exist_ok=True)
-
-            # Save versioned copy with timestamp
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            versioned_file = model_dir / f'svd_model_{timestamp}.pkl'
-            with open(versioned_file, 'wb') as f:
-                pickle.dump(data, f)
-
-            # Copy as the latest model (what recommendation.py loads)
-            latest_file = model_dir / 'svd_model_latest.pkl'
-            shutil.copy2(versioned_file, latest_file)
-
-            # Also keep backward-compatible name
-            compat_file = model_dir / 'svd_model.pkl'
-            shutil.copy2(versioned_file, compat_file)
-                
-            size_mb = os.path.getsize(versioned_file) / 1024 / 1024
-            self.stdout.write(self.style.SUCCESS(
-                f'Model saved: {versioned_file.name} ({size_mb:.2f} MB)\n'
-                f'  Users: {data["metadata"]["n_local_users"]} local, '
-                f'{data["metadata"]["n_ml_users"]} ML | '
-                f'Items: {data["metadata"]["n_items"]} | '
-                f'k={best_k}, damping={best_damping}'
+                "--gpu requested but implicit CUDA backend unavailable. Falling back to CPU."
             ))
+            self.stdout.write(self.style.WARNING(
+                f"  diagnostics: implicit.gpu module={diag['implicit_gpu_module']} "
+                f"HAS_CUDA={diag['implicit_has_cuda']} cupy_importable={diag['cupy_importable']} "
+                f"cuda_devices={diag['device_count']}"
+            ))
+            if diag["error"]:
+                self.stdout.write(self.style.WARNING(f"  reason: {diag['error']}"))
+            self.stdout.write(self.style.WARNING(
+                "  fix: install cupy matching your CUDA (e.g. `pip install cupy-cuda12x`) "
+                "and ensure `nvidia-smi` works on this host. Do NOT install on the inference VM."
+            ))
+            gpu = False
 
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Error: {e}"))
-            import traceback
-            self.stdout.write(traceback.format_exc())
+        self.stdout.write(self.style.NOTICE(f"Training recommender v{MODEL_VERSION} (gpu={gpu})"))
+        _log_mem(self.stdout, "start")
+
+        # 1. Load
+        df, catalog = load_dataset()
+        if df is None or df.empty:
+            self.stderr.write(self.style.ERROR("Failed to load dataset (no rows)"))
+            return
+        _log_mem(self.stdout, "after load")
+
+        # 2. Stratified split (only used for eval / Optuna)
+        train_df, val_df = stratified_temporal_split(df, val_fraction=0.2)
+
+        # 3. Per-row weights (sample_weight for biases, applied symmetrically to train + val view)
+        sample_w_train = combine_sample_weights(
+            time_decay(train_df["timestamp"].values),
+            source_weights(train_df["user_id"]),
+            np.sqrt(compute_ips_weights(train_df["tmdb_id"])),
+        )
+
+        # 4. Biases (joint per-user ridge)
+        self.stdout.write("Computing biases (global / year / item / user / joint-ridge categories)...")
+        biases = compute_all_biases(train_df, sample_w_train, damping=10.0, ridge_lambda=10.0)
+        _log_mem(self.stdout, "after biases")
+
+        # 5. Optuna search over iALS hyperparameters using NDCG@10
+        best_params = {"factors": 64, "regularization": 0.05, "iterations": 20, "alpha": 1.0}
+        threshold = float(opts["positive_threshold"])
+
+        if opts["optimize"]:
+            try:
+                import optuna
+                optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+                R_search, u2i, i2i = build_confidence_matrix(
+                    train_df, positive_threshold=threshold, alpha=40.0,
+                )
+
+                def objective(trial: "optuna.Trial") -> float:
+                    factors = trial.suggest_int("factors", 32, 192, step=16)
+                    reg = trial.suggest_float("regularization", 1e-3, 1e-1, log=True)
+                    iters = trial.suggest_int("iterations", 10, 30)
+                    alpha_outer = trial.suggest_float("alpha", 0.5, 2.0)
+                    rank = train_ials(
+                        R_search, u2i, i2i,
+                        factors=factors, regularization=reg, iterations=iters,
+                        alpha=alpha_outer, use_gpu=gpu,
+                        positive_threshold=threshold,
+                    )
+                    res = evaluate_full(
+                        train_df, val_df,
+                        biases=biases,
+                        ranking_user_to_idx=rank.user_to_idx,
+                        ranking_item_to_idx=rank.item_to_idx,
+                        ranking_user_factors=rank.user_factors,
+                        ranking_item_factors=rank.item_factors,
+                        positive_threshold=threshold,
+                    )
+                    self.stdout.write(
+                        f"  trial: factors={factors} reg={reg:.4g} iters={iters} alpha={alpha_outer:.2f} "
+                        f"-> NDCG@10={res.ndcg_at_k:.4f} Recall@10={res.recall_at_k:.4f} RMSE={res.rmse:.4f}"
+                    )
+                    # Maximize NDCG -> Optuna minimizes, so flip sign.
+                    return -res.ndcg_at_k
+
+                study = optuna.create_study(direction="minimize")
+                study.optimize(objective, n_trials=int(opts["trials"]))
+                best_params = study.best_params
+                self.stdout.write(self.style.SUCCESS(f"Best params: {best_params}"))
+                del R_search, u2i, i2i
+                gc.collect()
+            except ImportError:
+                self.stdout.write(self.style.WARNING("Optuna not installed; using defaults"))
+
+        # 6. Final iALS fit on FULL data (train + val) so the shipped model uses every rating
+        self.stdout.write("Fitting final iALS on full data...")
+        R, user_to_idx, item_to_idx = build_confidence_matrix(
+            df, positive_threshold=threshold, alpha=40.0,
+        )
+        ranking = train_ials(
+            R, user_to_idx, item_to_idx,
+            factors=int(best_params.get("factors", 64)),
+            regularization=float(best_params.get("regularization", 0.05)),
+            iterations=int(best_params.get("iterations", 20)),
+            alpha=float(best_params.get("alpha", 1.0)),
+            use_gpu=gpu,
+            positive_threshold=threshold,
+        )
+        _log_mem(self.stdout, "after iALS")
+        del R
+        gc.collect()
+
+        # 7. Cold-start head (CPU)
+        cold = None
+        if not opts["no_cold_start"]:
+            self.stdout.write("Fitting cold-start ridge head...")
+            cold = fit_cold_start_head(
+                ranking.item_factors, ranking.item_to_idx, catalog,
+                ridge_lambda=5.0,
+            )
+            _log_mem(self.stdout, "after cold-start")
+
+        # 8. Held-out evaluation on the val split for the shipped metadata
+        self.stdout.write("Evaluating on held-out validation split...")
+        eval_result: EvalResult = evaluate_full(
+            train_df, val_df,
+            biases=biases,
+            ranking_user_to_idx=ranking.user_to_idx,
+            ranking_item_to_idx=ranking.item_to_idx,
+            ranking_user_factors=ranking.user_factors,
+            ranking_item_factors=ranking.item_factors,
+            positive_threshold=threshold,
+        )
+        self.stdout.write(self.style.SUCCESS(
+            f"  RMSE={eval_result.rmse:.4f} MAE={eval_result.mae:.4f} "
+            f"NDCG@10={eval_result.ndcg_at_k:.4f} Recall@10={eval_result.recall_at_k:.4f} "
+            f"HitRate@10={eval_result.hit_rate_at_k:.4f} MRR={eval_result.mrr:.4f} "
+            f"Coverage@10={eval_result.coverage_at_k:.4f}"
+        ))
+
+        # 9. Build + save bundle
+        metadata = {
+            "trained_at": now_iso(),
+            "model_version": MODEL_VERSION,
+            "model_type": "ials",
+            "trained_with_gpu": ranking.trained_with_gpu,
+            "n_users": int(ranking.user_factors.shape[0]),
+            "n_items": int(ranking.item_factors.shape[0]),
+            "n_ratings": int(len(df)),
+            "n_local_users": int(sum(1 for u in ranking.user_to_idx if u.startswith("loc_"))),
+            "n_ml_users": int(sum(1 for u in ranking.user_to_idx if u.startswith("ml_"))),
+            "k": int(ranking.factors),
+            "regularization": float(ranking.regularization),
+            "iterations": int(ranking.iterations),
+            "alpha": float(ranking.alpha),
+            "positive_threshold": float(ranking.positive_threshold),
+            "ips_debiasing": True,
+            "eval": eval_result.to_dict(),
+        }
+
+        bundle = build_bundle(
+            biases=biases, catalog=catalog, ranking=ranking,
+            cold_start=cold, metadata=metadata,
+        )
+        path = save_bundle(bundle, keep_versions=int(opts["keep_versions"]))
+        self.stdout.write(self.style.SUCCESS(f"Saved {path}"))
+        _log_mem(self.stdout, "done")
