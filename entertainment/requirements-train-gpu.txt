@@ -1,0 +1,7 @@
+# GPU-only deps for training the recommender on a CUDA host.
+# The inference VM uses entertainment/requirements.txt and stays CPU-only;
+# do NOT install this file there.
+#
+# Pin the cupy variant to whatever CUDA version is installed on the trainer.
+# Detect with `nvidia-smi`.
+cupy-cuda12x>=13.0

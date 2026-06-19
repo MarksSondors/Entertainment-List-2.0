@@ -1,474 +1,510 @@
-import numpy as np
-import pickle
-import os
+"""Inference-time movie recommender.
+
+Loads a v5.0 bundle (or a legacy v4 pickle for backward compat) and a separate
+overlay pickle for per-user fold-in updates. CPU-only — never imports CuPy or
+``implicit.gpu``.
+
+Scoring:
+- ``predict_rating`` returns a 0-5 explicit score from the bias hierarchy
+  (used for UI display). Does NOT add iALS factors, which live on a different
+  scale and would distort the displayed rating.
+- ``_score_for_ranking`` returns the iALS dot-product score used to rank the
+  candidate set. Falls back to the cold-start ridge head for unseen items.
+"""
+from __future__ import annotations
+
 import logging
+import os
+import pickle
+import time
+from typing import Optional
+
+import numpy as np
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Count, Avg
-from movies.models import Movie
+from django.db.models import Avg, Count
+
 from custom_auth.models import Review
+from movies.models import Movie
+from movies.services.recommender.cold_start import (
+    ColdStartHead,
+    predict_factors as cold_start_predict_factors,
+)
+from movies.services.recommender.data_loading import CatalogLookups
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
+
+_OVERLAY_RELOAD_INTERVAL_SECONDS = 300  # 5 min TTL for picking up fold-in updates
+
+
 class MovieRecommender:
+    """Loads the trained model + overlay; serves predictions and recommendations."""
+
     def __init__(self):
-        self._movie_content_type = None  # Lazy — avoids DB access at import/init time
-        self.model_data = None
-        self.known_tmdb_ids = set()
-        self._genre_combo_avg_bias = {}  # Pre-built lookup for cold-item estimation
+        self._movie_content_type: Optional[ContentType] = None
+        self.model_data: Optional[dict] = None
+        self.known_tmdb_ids: set[int] = set()
+        self._genre_combo_avg_bias: dict = {}
+
+        # v5.0 sections
+        self.cold_start_head: Optional[ColdStartHead] = None
+        self.catalog: CatalogLookups = CatalogLookups()
+
+        # Overlay state
+        self._overlay: dict = {}
+        self._overlay_mtime: float = 0.0
+        self._overlay_loaded_at: float = 0.0
+
         self._load_model()
 
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
     @property
-    def movie_content_type(self):
-        """Lazy-loaded ContentType to avoid DB queries during app initialization."""
+    def movie_content_type(self) -> ContentType:
         if self._movie_content_type is None:
             self._movie_content_type = ContentType.objects.get_for_model(Movie)
         return self._movie_content_type
-        
-    def _load_model(self):
-        """Load the Scipy SVD model and mappings"""
+
+    def _load_model(self) -> None:
         try:
-            model_dir = os.path.join(settings.BASE_DIR, 'movies', 'ml_models')
-            # Try versioned name first, fall back to legacy name
-            model_path = os.path.join(model_dir, 'svd_model_latest.pkl')
-            if not os.path.exists(model_path):
-                model_path = os.path.join(model_dir, 'svd_model.pkl')
+            d = os.path.join(settings.BASE_DIR, "movies", "ml_models")
+            for name in ("svd_model_latest.pkl", "svd_model.pkl"):
+                p = os.path.join(d, name)
+                if os.path.exists(p):
+                    with open(p, "rb") as f:
+                        self.model_data = pickle.load(f)
+                    break
+            if not self.model_data:
+                return
 
-            if os.path.exists(model_path):
-                with open(model_path, 'rb') as f:
-                    self.model_data = pickle.load(f)
-                
-                if self.model_data:
-                    self.known_tmdb_ids = set(self.model_data.get('known_tmdb_ids', []))
-                    self.user_to_idx = self.model_data.get('user_to_idx', {})
-                    self.item_to_idx = self.model_data.get('item_to_idx', {})
+            data = self.model_data
+            ranking = data.get("ranking", {})
+            biases = data.get("biases", {})
+            catalog_dict = data.get("catalog", {})
 
-                    # ALS model stores user_factors and item_factors directly
-                    # Legacy SVD model stores U, Sigma, Vt
-                    self.user_factors = self.model_data.get('user_factors')
-                    self.item_factors = self.model_data.get('item_factors')
+            # Ranking factors / index maps (prefer v5.0 'ranking' section, fall back to legacy flat keys)
+            self.user_to_idx = ranking.get("user_to_idx") or data.get("user_to_idx", {})
+            self.item_to_idx = ranking.get("item_to_idx") or data.get("item_to_idx", {})
+            self.user_factors = ranking.get("user_factors")
+            if self.user_factors is None:
+                self.user_factors = data.get("user_factors")
+            self.item_factors = ranking.get("item_factors")
+            if self.item_factors is None:
+                self.item_factors = data.get("item_factors")
 
-                    # Backward compatibility: load legacy SVD format if present
-                    self.U = self.model_data.get('U')
-                    self.Sigma = self.model_data.get('Sigma')
-                    self.Vt = self.model_data.get('Vt')
+            # Legacy SVD path
+            self.U = data.get("U")
+            self.Sigma = data.get("Sigma")
+            self.Vt = data.get("Vt")
 
-                    metadata = self.model_data.get('metadata', {})
-                    self.model_type = metadata.get('model_type', 'svd')  # 'als' or 'svd'
-                    
-                    # Bias Terms
-                    self.item_biases = self.model_data.get('item_biases', {})
-                    self.user_biases = self.model_data.get('user_biases', {})
-                    self.year_biases = self.model_data.get('year_biases', {})
-                    self.user_genre_biases = self.model_data.get('user_genre_biases', {})
-                    self.user_decade_biases = self.model_data.get('user_decade_biases', {})
-                    self.user_language_biases = self.model_data.get('user_language_biases', {})
-                    self.user_runtime_biases = self.model_data.get('user_runtime_biases', {})
-                    
-                    self.tmdb_to_genres = self.model_data.get('tmdb_to_genres', {})
-                    self.tmdb_to_language = self.model_data.get('tmdb_to_language', {})
-                    self.tmdb_to_runtime_bucket = self.model_data.get('tmdb_to_runtime_bucket', {})
-                    self.tmdb_vote_data = self.model_data.get('tmdb_vote_data', {})
-                    self.genre_mapping = self.model_data.get('genre_mapping', {})
-                    
-                    self.tmdb_id_to_year = self.model_data.get('tmdb_id_to_year', {})
-                    self.global_mean = self.model_data.get('global_mean', 3.5)
+            metadata = data.get("metadata", {})
+            self.model_type = metadata.get("model_type", "svd")
+            self.model_version = data.get("model_version") or metadata.get("model_version", "<legacy>")
 
-                    # Log metadata if available
-                    if metadata:
-                        logger.info(
-                            f"Loaded {self.model_type.upper()} model v{metadata.get('model_version', '?')} "
-                            f"trained {metadata.get('trained_at', '?')} | "
-                            f"k={metadata.get('k')}, {metadata.get('n_items')} items, "
-                            f"{metadata.get('n_local_users', 0)} local users"
-                            f"{', IPS debiased' if metadata.get('ips_debiasing') else ''}"
-                        )
+            # Biases (prefer 'biases' subdict, fall back to flat legacy keys)
+            self.global_mean = float(biases.get("global_mean", data.get("global_mean", 3.5)))
+            self.year_biases = biases.get("year_biases") or data.get("year_biases", {})
+            self.item_biases = biases.get("item_biases") or data.get("item_biases", {})
+            self.user_biases = biases.get("user_biases") or data.get("user_biases", {})
+            self.user_genre_biases = biases.get("user_genre_biases") or data.get("user_genre_biases", {})
+            self.user_decade_biases = biases.get("user_decade_biases") or data.get("user_decade_biases", {})
+            self.user_language_biases = biases.get("user_language_biases") or data.get("user_language_biases", {})
+            self.user_runtime_biases = biases.get("user_runtime_biases") or data.get("user_runtime_biases", {})
 
-                    # Pre-build genre_combo → avg_bias lookup for cold-item estimation
-                    self._build_cold_item_lookup()
+            # Catalog lookups
+            self.catalog.tmdb_to_genres = catalog_dict.get("tmdb_to_genres") or data.get("tmdb_to_genres", {})
+            self.catalog.tmdb_to_language = catalog_dict.get("tmdb_to_language") or data.get("tmdb_to_language", {})
+            self.catalog.tmdb_to_runtime_bucket = catalog_dict.get("tmdb_to_runtime_bucket") or data.get("tmdb_to_runtime_bucket", {})
+            self.catalog.tmdb_to_year = catalog_dict.get("tmdb_to_year") or data.get("tmdb_id_to_year", {})
+            self.catalog.tmdb_vote_data = catalog_dict.get("tmdb_vote_data") or data.get("tmdb_vote_data", {})
+
+            # Aliases preserved for templates / call sites that still read these names
+            self.tmdb_to_genres = self.catalog.tmdb_to_genres
+            self.tmdb_to_language = self.catalog.tmdb_to_language
+            self.tmdb_to_runtime_bucket = self.catalog.tmdb_to_runtime_bucket
+            self.tmdb_id_to_year = self.catalog.tmdb_to_year
+            self.tmdb_vote_data = self.catalog.tmdb_vote_data
+            self.genre_mapping = data.get("genre_mapping", {})  # empty in v5 (= identity)
+
+            self.known_tmdb_ids = set(data.get("known_tmdb_ids") or list(self.item_to_idx.keys()))
+
+            # Cold-start head
+            cold = data.get("cold_start")
+            if cold is not None:
+                self.cold_start_head = ColdStartHead(
+                    coef=np.asarray(cold["coef"], dtype=np.float32),
+                    intercept=np.asarray(cold["intercept"], dtype=np.float32),
+                    decades=list(cold["decades"]),
+                    languages=list(cold["languages"]),
+                    feature_dim=int(cold["feature_dim"]),
+                )
+
+            self._build_cold_item_lookup()
+            self._maybe_reload_overlay(force=True)
+
+            if metadata:
+                logger.info(
+                    "Loaded recommender v%s (%s, %d items, %d users%s)",
+                    self.model_version, self.model_type,
+                    metadata.get("n_items", len(self.item_to_idx)),
+                    metadata.get("n_local_users", 0),
+                    ", IPS" if metadata.get("ips_debiasing") else "",
+                )
         except Exception:
-            pass
+            logger.exception("Failed to load recommender model")
 
-    def _build_cold_item_lookup(self):
-        """
-        Pre-build a lookup from frozenset(genres) → average item_bias
-        for estimating bias of movies not in the training data (post-2023).
-        Groups known movies by their genre combination and averages their item biases.
-        """
-        if not self.item_biases or not self.tmdb_to_genres:
+    # ------------------------------------------------------------------
+    # Overlay
+    # ------------------------------------------------------------------
+
+    def _overlay_path(self) -> str:
+        return os.path.join(settings.BASE_DIR, "movies", "ml_models", "svd_overlay_latest.pkl")
+
+    def _maybe_reload_overlay(self, *, force: bool = False) -> None:
+        """TTL-driven overlay reload. Cheap stat() call; only re-reads on mtime change."""
+        path = self._overlay_path()
+        if not os.path.exists(path):
+            self._overlay = {}
+            self._overlay_mtime = 0.0
             return
+        now = time.monotonic()
+        if not force and now - self._overlay_loaded_at < _OVERLAY_RELOAD_INTERVAL_SECONDS:
+            return
+        try:
+            mtime = os.path.getmtime(path)
+            if mtime == self._overlay_mtime and not force:
+                self._overlay_loaded_at = now
+                return
+            with open(path, "rb") as f:
+                overlay = pickle.load(f)
+            metadata = self.model_data.get("metadata", {}) if self.model_data else {}
+            base_at = metadata.get("trained_at")
+            if isinstance(overlay, dict) and overlay.get("base_trained_at") == base_at:
+                self._overlay = overlay
+            else:
+                # Stale overlay (different base) — ignore
+                self._overlay = {}
+            self._overlay_mtime = mtime
+            self._overlay_loaded_at = now
+        except (pickle.PickleError, EOFError, OSError):
+            logger.warning("Overlay reload failed; ignoring")
+            self._overlay = {}
 
+    def _ov_user_bias(self, user_id: str) -> Optional[float]:
+        return (self._overlay.get("user_biases") or {}).get(user_id)
+
+    def _ov_category_bias(self, kind: str, key, user_id: str) -> Optional[float]:
+        block = (self._overlay.get(kind) or {}).get(key)
+        if not block:
+            return None
+        return block.get(user_id)
+
+    def _ov_user_factor(self, user_id: str) -> Optional[np.ndarray]:
+        return (self._overlay.get("ranking_user_factors") or {}).get(user_id)
+
+    # ------------------------------------------------------------------
+    # Cold-item helpers (legacy fallback when there is no cold-start head)
+    # ------------------------------------------------------------------
+
+    def _build_cold_item_lookup(self) -> None:
         from collections import defaultdict
-        combo_biases = defaultdict(list)  # frozenset(genres) -> [bias1, bias2, ...]
-
-        for tmdb_id, genres_list in self.tmdb_to_genres.items():
+        if not self.item_biases or not self.tmdb_to_genres:
+            self._genre_combo_avg_bias = {}
+            return
+        combo_biases: dict[frozenset, list[float]] = defaultdict(list)
+        for tmdb_id, genres in self.tmdb_to_genres.items():
             if tmdb_id not in self.item_biases:
                 continue
-            genre_set = frozenset(genres_list)
-            if genre_set:
-                combo_biases[genre_set].append(self.item_biases[tmdb_id])
-
-        # Average bias per exact genre combination
+            gs = frozenset(genres or [])
+            if gs:
+                combo_biases[gs].append(float(self.item_biases[tmdb_id]))
         self._genre_combo_avg_bias = {
-            combo: float(np.mean(biases))
-            for combo, biases in combo_biases.items()
-            if biases
+            gs: float(np.mean(vals)) for gs, vals in combo_biases.items() if vals
         }
-    
-    def _estimate_cold_item_bias(self, tmdb_id_int):
-        """
-        For movies not in the training data (post-2023), estimate item bias
-        using a combination of:
-        1. TMDB vote data (Bayesian average as popularity prior)
-        2. Genre-combo bias lookup (content similarity)
-        """
-        # 1. TMDB Popularity Prior (Bayesian average)
+
+    def _estimate_cold_item_bias(self, tmdb_id_int: int) -> float:
+        """Bayesian popularity prior + genre-combo averaging. Used only when item_bias is missing."""
         popularity_bias = 0.0
-        vote_data = self.tmdb_vote_data.get(tmdb_id_int) if hasattr(self, 'tmdb_vote_data') else None
-        if vote_data:
-            vote_avg, vote_count = vote_data
+        vote = self.tmdb_vote_data.get(tmdb_id_int) if self.tmdb_vote_data else None
+        if vote:
+            vote_avg, vote_count = vote
             if vote_count > 0 and vote_avg > 0:
-                # Bayesian average: shrink toward global mean based on confidence
-                # C = confidence threshold; higher vote_count → trust vote_avg more
                 C = 300
-                bayesian_avg = (C * self.global_mean + vote_count * (vote_avg / 2.0)) / (C + vote_count)
-                popularity_bias = bayesian_avg - self.global_mean
+                bayes = (C * self.global_mean + vote_count * (vote_avg / 2.0)) / (C + vote_count)
+                popularity_bias = bayes - self.global_mean
 
-        # 2. Genre-combo bias (content similarity)
         genre_bias = 0.0
-        movie_genres = self.tmdb_to_genres.get(tmdb_id_int, [])
-        if movie_genres:
-            ml_genres = set()
-            for g in movie_genres:
-                mapped = self.genre_mapping.get(g, g)
-                if mapped:
-                    ml_genres.add(mapped)
+        gs = self.tmdb_to_genres.get(tmdb_id_int) or []
+        if gs:
+            target = frozenset(gs)
+            if target in self._genre_combo_avg_bias:
+                genre_bias = self._genre_combo_avg_bias[target]
+            else:
+                matches = [b for combo, b in self._genre_combo_avg_bias.items()
+                           if (len(target & combo) / max(len(target | combo), 1)) >= 0.5]
+                if matches:
+                    genre_bias = float(np.mean(matches))
 
-            if ml_genres:
-                target = frozenset(ml_genres)
-                if target in self._genre_combo_avg_bias:
-                    genre_bias = self._genre_combo_avg_bias[target]
-                else:
-                    matching_biases = []
-                    for combo, avg_bias in self._genre_combo_avg_bias.items():
-                        inter = len(target & combo)
-                        union = len(target | combo)
-                        if union > 0 and inter / union >= 0.5:
-                            matching_biases.append(avg_bias)
-                    if matching_biases:
-                        genre_bias = float(np.mean(matching_biases))
-
-        # Blend: weight popularity prior more when vote_count is high
-        if vote_data and vote_data[1] > 50:
+        if vote and vote[1] > 50:
             return 0.6 * popularity_bias + 0.4 * genre_bias
-        else:
-            return 0.3 * popularity_bias + 0.7 * genre_bias
+        return 0.3 * popularity_bias + 0.7 * genre_bias
 
-    def predict_rating(self, user_id_str, tmdb_id_int, year=None):
-        """Predict rating using SVD + Biases with cold-item fallback."""
+    # ------------------------------------------------------------------
+    # Rating prediction (UI display)
+    # ------------------------------------------------------------------
+
+    def predict_rating(self, user_id_str: str, tmdb_id_int: int, year: Optional[int] = None) -> float:
+        """Return a 0-5 explicit-rating estimate from the bias hierarchy.
+
+        Does NOT add the iALS factor dot product — those scores live on a
+        different scale and would corrupt the displayed rating. Use
+        ``_score_for_ranking`` to *order* candidates.
+        """
         if not self.model_data:
-            return 0
-            
-        u_idx = self.user_to_idx.get(user_id_str)
-        i_idx = self.item_to_idx.get(tmdb_id_int)
-        
-        # Item Bias: use learned bias if available, otherwise estimate from genre peers
+            return 0.0
+        self._maybe_reload_overlay()
+
+        # Item bias (with cold fallback)
         b_i = self.item_biases.get(tmdb_id_int)
         if b_i is None:
-            b_i = self._estimate_cold_item_bias(tmdb_id_int)
+            b_i = self._estimate_cold_item_bias(int(tmdb_id_int))
 
-        b_u = self.user_biases.get(user_id_str, 0.0)
-        
-        # Year & Decade Bias
+        b_u = self._ov_user_bias(user_id_str)
+        if b_u is None:
+            b_u = self.user_biases.get(user_id_str, 0.0)
+
         b_y = 0.0
         b_dec = 0.0
-        
         if year is None:
             year = self.tmdb_id_to_year.get(tmdb_id_int)
         if year is not None:
-             b_y = self.year_biases.get(year, 0.0)
-             if self.user_decade_biases:
-                 decade = (int(year) // 10) * 10
-                 b_dec = self.user_decade_biases.get(decade, {}).get(user_id_str, 0.0)
+            b_y = self.year_biases.get(int(year), 0.0)
+            decade = (int(year) // 10) * 10
+            ov = self._ov_category_bias("user_decade_biases", decade, user_id_str)
+            if ov is not None:
+                b_dec = ov
+            else:
+                b_dec = self.user_decade_biases.get(decade, {}).get(user_id_str, 0.0)
 
-        # Genre Bias — sum all matching genre biases (matches training subtraction pattern)
+        # Genre (multi-hot sum) — overlay overrides per-(genre, user)
         b_g = 0.0
-        movie_genres = self.tmdb_to_genres.get(tmdb_id_int, [])
-        
-        if movie_genres and self.user_genre_biases:
-            for g_raw in movie_genres:
-                ml_genre = self.genre_mapping.get(g_raw, g_raw) 
-                if ml_genre and ml_genre in self.user_genre_biases:
-                     genre_map = self.user_genre_biases[ml_genre]
-                     if user_id_str in genre_map:
-                         b_g += genre_map[user_id_str]
+        for g_raw in self.tmdb_to_genres.get(tmdb_id_int, []) or []:
+            mapped = self.genre_mapping.get(g_raw, g_raw) if self.genre_mapping else g_raw
+            if not mapped:
+                continue
+            ov = self._ov_category_bias("user_genre_biases", mapped, user_id_str)
+            if ov is not None:
+                b_g += ov
+            elif mapped in self.user_genre_biases:
+                b_g += self.user_genre_biases[mapped].get(user_id_str, 0.0)
 
-        # Language Bias
+        # Language
         b_lang = 0.0
-        if hasattr(self, 'user_language_biases') and self.user_language_biases:
-            movie_lang = self.tmdb_to_language.get(tmdb_id_int, 'en') if hasattr(self, 'tmdb_to_language') else 'en'
-            lang_bias_map = self.user_language_biases.get(movie_lang, {})
-            b_lang = lang_bias_map.get(user_id_str, 0.0)
+        if self.user_language_biases:
+            lang = self.tmdb_to_language.get(tmdb_id_int, "en") if self.tmdb_to_language else "en"
+            ov = self._ov_category_bias("user_language_biases", lang, user_id_str)
+            b_lang = ov if ov is not None else self.user_language_biases.get(lang, {}).get(user_id_str, 0.0)
 
-        # Runtime Bias
+        # Runtime
         b_rt = 0.0
-        if hasattr(self, 'user_runtime_biases') and self.user_runtime_biases:
-            movie_rt = self.tmdb_to_runtime_bucket.get(tmdb_id_int, 'standard') if hasattr(self, 'tmdb_to_runtime_bucket') else 'standard'
-            rt_bias_map = self.user_runtime_biases.get(movie_rt, {})
-            b_rt = rt_bias_map.get(user_id_str, 0.0)
-        
-        interaction = 0.0
-        
-        if u_idx is not None and i_idx is not None:
-            if self.model_type == 'als' and self.user_factors is not None:
-                # ALS: direct dot product of user and item factor vectors
-                interaction = float(np.dot(self.user_factors[u_idx], self.item_factors[i_idx]))
-            elif self.U is not None and self.Sigma is not None and self.Vt is not None:
-                # Legacy SVD: U @ Sigma @ Vt
-                user_vec = self.U[u_idx, :]
-                item_vec = self.Vt[:, i_idx]
-                interaction = np.dot(np.dot(user_vec, self.Sigma), item_vec)
-        
-        # Final Score
-        score = self.global_mean + b_i + b_u + b_y + b_g + b_dec + b_lang + b_rt + interaction
-        
-        return score
+        if self.user_runtime_biases:
+            rt = self.tmdb_to_runtime_bucket.get(tmdb_id_int, "standard") if self.tmdb_to_runtime_bucket else "standard"
+            ov = self._ov_category_bias("user_runtime_biases", rt, user_id_str)
+            b_rt = ov if ov is not None else self.user_runtime_biases.get(rt, {}).get(user_id_str, 0.0)
 
-    def _rerank_mmr(self, candidates, max_recommendations, diversity_alpha=0.7):
-        """
-        Maximal Marginal Relevance (MMR) for Diversity.
-        Uses multi-dimensional similarity (genre, language, runtime, decade) for richer diversity.
-        alpha = 1.0 (Pure Accuracy) vs 0.0 (Pure Diversity). 0.7 is a good scientific baseline.
-        """
-        if not candidates: return []
-            
-        # 1. Normalize Ratings (0-1 scale)
-        ratings = [c['predicted_rating'] for c in candidates]
-        max_r, min_r = max(ratings), min(ratings)
-        range_r = max_r - min_r if max_r > min_r else 1.0
-        
-        # 2. Pre-compute features for candidates
-        cand_features = {}
+        return self.global_mean + b_i + b_u + b_y + b_g + b_dec + b_lang + b_rt
+
+    # ------------------------------------------------------------------
+    # Ranking score (iALS dot product, with cold-start fallback)
+    # ------------------------------------------------------------------
+
+    def _user_factor(self, user_id_str: str) -> Optional[np.ndarray]:
+        ov = self._ov_user_factor(user_id_str)
+        if ov is not None:
+            return np.asarray(ov, dtype=np.float32)
+        idx = self.user_to_idx.get(user_id_str)
+        if idx is not None and self.user_factors is not None:
+            return np.asarray(self.user_factors[idx], dtype=np.float32)
+        return None
+
+    def _item_factor(self, tmdb_id: int) -> Optional[np.ndarray]:
+        idx = self.item_to_idx.get(tmdb_id)
+        if idx is not None and self.item_factors is not None:
+            return np.asarray(self.item_factors[idx], dtype=np.float32)
+        if self.cold_start_head is not None and self.catalog.tmdb_to_genres:
+            try:
+                vec = cold_start_predict_factors(self.cold_start_head, [int(tmdb_id)], self.catalog)
+                return vec[0]
+            except Exception:
+                return None
+        return None
+
+    def _score_for_ranking(self, user_id_str: str, tmdb_id_int: int) -> float:
+        """iALS dot-product score; 0 if no factors are available."""
+        u = self._user_factor(user_id_str)
+        if u is None:
+            return 0.0
+        v = self._item_factor(int(tmdb_id_int))
+        if v is None:
+            return 0.0
+        return float(np.dot(u, v))
+
+    # ------------------------------------------------------------------
+    # Diversity re-ranking (MMR) — unchanged behaviour
+    # ------------------------------------------------------------------
+
+    def _rerank_mmr(self, candidates: list[dict], max_recommendations: int, diversity_alpha: float = 0.7) -> list[dict]:
+        if not candidates:
+            return []
+
+        scores = [c.get("ranking_score", c["predicted_rating"]) for c in candidates]
+        s_max, s_min = max(scores), min(scores)
+        s_range = s_max - s_min if s_max > s_min else 1.0
+
+        feats: dict[int, dict] = {}
         for c in candidates:
-            tmdb_id = c['tmdb_id']
-            raw_gens = self.tmdb_to_genres.get(tmdb_id, [])
-            genres = set(self.genre_mapping.get(g, g) for g in raw_gens)
-            language = self.tmdb_to_language.get(tmdb_id, 'en') if hasattr(self, 'tmdb_to_language') else 'en'
-            runtime_bucket = self.tmdb_to_runtime_bucket.get(tmdb_id, 'standard') if hasattr(self, 'tmdb_to_runtime_bucket') else 'standard'
-            year = self.tmdb_id_to_year.get(tmdb_id)
-            decade = (year // 10) * 10 if year else None
-            cand_features[tmdb_id] = {
-                'genres': genres,
-                'language': language,
-                'runtime_bucket': runtime_bucket,
-                'decade': decade,
+            tid = c["tmdb_id"]
+            raw = self.tmdb_to_genres.get(tid, []) or []
+            genres = set(self.genre_mapping.get(g, g) if self.genre_mapping else g for g in raw)
+            year = self.tmdb_id_to_year.get(tid)
+            feats[tid] = {
+                "genres": genres,
+                "language": self.tmdb_to_language.get(tid, "en") if self.tmdb_to_language else "en",
+                "runtime_bucket": self.tmdb_to_runtime_bucket.get(tid, "standard") if self.tmdb_to_runtime_bucket else "standard",
+                "decade": (year // 10) * 10 if year else None,
             }
 
-        selected = []
-        remaining = sorted(candidates, key=lambda x: x['predicted_rating'], reverse=True)
-        
-        # 3. Always pick the absolute best match first (Anchor)
-        if remaining:
-            selected.append(remaining.pop(0))
-            
-        # 4. Iteratively select next item that maximizes MMR score
+        remaining = sorted(candidates, key=lambda x: x.get("ranking_score", x["predicted_rating"]), reverse=True)
+        selected = [remaining.pop(0)] if remaining else []
+
         while len(selected) < max_recommendations and remaining:
-            best_score = -float('inf')
+            best_score = -float("inf")
             best_idx = -1
-            
             for i, item in enumerate(remaining):
-                # Calculate Similarity to ALREADY SELECTED items
-                # We use Max pairwise similarity (avoiding items too similar to what we already have)
+                i_feat = feats.get(item["tmdb_id"], {})
+                i_gens = i_feat.get("genres", set())
                 max_sim = 0.0
-                i_feat = cand_features.get(item['tmdb_id'], {})
-                i_gens = i_feat.get('genres', set())
-                
                 for sel in selected:
-                    s_feat = cand_features.get(sel['tmdb_id'], {})
-                    s_gens = s_feat.get('genres', set())
-                    
-                    # Multi-dimensional similarity
-                    # Genre Jaccard (weight 0.50)
-                    genre_sim = 0.0
-                    if i_gens and s_gens:
-                        inter = len(i_gens & s_gens)
-                        union = len(i_gens | s_gens)
-                        genre_sim = inter / union if union > 0 else 0
-                    
-                    # Language match (weight 0.20)
-                    lang_sim = 1.0 if i_feat.get('language') == s_feat.get('language') else 0.0
-                    
-                    # Runtime bucket match (weight 0.15)
-                    rt_sim = 1.0 if i_feat.get('runtime_bucket') == s_feat.get('runtime_bucket') else 0.0
-                    
-                    # Decade match (weight 0.15)
-                    dec_sim = 1.0 if (i_feat.get('decade') and i_feat.get('decade') == s_feat.get('decade')) else 0.0
-                    
+                    s_feat = feats.get(sel["tmdb_id"], {})
+                    s_gens = s_feat.get("genres", set())
+                    genre_sim = (len(i_gens & s_gens) / len(i_gens | s_gens)) if (i_gens and s_gens) else 0.0
+                    lang_sim = 1.0 if i_feat.get("language") == s_feat.get("language") else 0.0
+                    rt_sim = 1.0 if i_feat.get("runtime_bucket") == s_feat.get("runtime_bucket") else 0.0
+                    dec_sim = 1.0 if i_feat.get("decade") and i_feat["decade"] == s_feat.get("decade") else 0.0
                     sim = 0.50 * genre_sim + 0.20 * lang_sim + 0.15 * rt_sim + 0.15 * dec_sim
                     if sim > max_sim:
                         max_sim = sim
-                
-                # MMR Formula: Lambda * Relevance - (1-Lambda) * Similarity
-                norm_rating = (item['predicted_rating'] - min_r) / range_r
-                mmr_score = (diversity_alpha * norm_rating) - ((1.0 - diversity_alpha) * max_sim)
-                
-                if mmr_score > best_score:
-                    best_score = mmr_score
+                norm = (item.get("ranking_score", item["predicted_rating"]) - s_min) / s_range
+                mmr = diversity_alpha * norm - (1.0 - diversity_alpha) * max_sim
+                if mmr > best_score:
+                    best_score = mmr
                     best_idx = i
-            
-            if best_idx != -1:
-                selected.append(remaining.pop(best_idx))
-            else:
-                # Fallback if calculation fails
-                selected.append(remaining.pop(0))
-                
+            selected.append(remaining.pop(best_idx if best_idx >= 0 else 0))
+
         return selected
 
-    def get_recommendations_for_user(self, user_id, max_recommendations=10, scope='local'):
-        """
-        Get movie recommendations for a user.
-        """
-        if scope == 'external':
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def get_recommendations_for_user(self, user_id, max_recommendations: int = 10, scope: str = "local"):
+        if scope == "external":
             return self._get_external_recommendations(user_id, max_recommendations)
-            
-        # --- Local Recommendation Logic ---
-        
-        # Get current user's ratings to exclude watched movies
-        user_ratings = Review.objects.filter(
-            user_id=user_id,
-            content_type=self.movie_content_type
-        ).values_list('object_id', flat=True)
-        
-        user_rated_movie_ids = set(user_ratings)
-        
-        # Fallback
+
+        rated = set(
+            Review.objects.filter(user_id=user_id, content_type=self.movie_content_type)
+            .values_list("object_id", flat=True)
+        )
         if not self.model_data:
-            return self._get_popular_movies(max_recommendations, user_rated_movie_ids)
+            return self._get_popular_movies(max_recommendations, rated)
 
-        try:
-            # Candidates: Local movies not seen, with Valid TMDB ID
-            candidates = Movie.objects.exclude(
-                id__in=user_rated_movie_ids
-            ).filter(
-                tmdb_id__isnull=False
-            ).values('id', 'tmdb_id', 'release_date')
-            
-            predictions = []
-            user_id_str = f"loc_{user_id}"
-            
-            # Pre-check if user is in model
-            if user_id_str not in self.user_to_idx:
-                return self._get_popular_movies(max_recommendations, user_rated_movie_ids)
+        user_id_str = f"loc_{user_id}"
+        # User must be known in either the base index or the overlay
+        has_user = (user_id_str in self.user_to_idx) or (self._ov_user_factor(user_id_str) is not None)
+        if not has_user:
+            return self._get_popular_movies(max_recommendations, rated)
 
-            for movie in candidates:
-                tmdb_id = movie['tmdb_id']
-                release_date = movie['release_date']
-                year = release_date.year if release_date else None
-                
-                est = self.predict_rating(user_id_str, tmdb_id, year=year)
-                
-                if est == 0:
-                    continue
+        candidates = (
+            Movie.objects.exclude(id__in=rated)
+            .filter(tmdb_id__isnull=False)
+            .values("id", "tmdb_id", "release_date")
+        )
 
-                # If est is 0, it means item might not be in model or orthogonal
-                # SVD can output neg values or >5. Clamp and scale.
-                # Range 0.5-5.0 -> 1.0-10.0
-                est = max(0.5, min(5.0, est))
-                predicted_rating = round(est * 2, 1)
-                
-                predictions.append({
-                    'id': movie['id'],
-                    'tmdb_id': tmdb_id,
-                    'predicted_rating': predicted_rating
-                })
-            
-            # Sort by predicted rating
-            predictions.sort(key=lambda x: x['predicted_rating'], reverse=True)
-            
-            # MMR Re-ranking for Local (Diversity Check)
-            pool_size = max_recommendations * 3
-            pool = predictions[:pool_size]
-            top_predictions = self._rerank_mmr(pool, max_recommendations)
-            
-            # Fetch predicted movies
-            top_movie_ids = [p['id'] for p in top_predictions]
-            movies = list(Movie.objects.filter(id__in=top_movie_ids))
-            movies_dict = {m.id: m for m in movies}
-            
-            recommendations = []
-            for item in top_predictions:
-                m_id = item['id']
-                if m_id in movies_dict:
-                    movie = movies_dict[m_id]
-                    movie.predicted_rating = item['predicted_rating']
-                    recommendations.append(movie)
-            
-            if not recommendations:
-                 return self._get_popular_movies(max_recommendations, user_rated_movie_ids)
+        predictions = []
+        for movie in candidates:
+            tmdb_id = int(movie["tmdb_id"])
+            year = movie["release_date"].year if movie["release_date"] else None
+            ranking_score = self._score_for_ranking(user_id_str, tmdb_id)
+            est = self.predict_rating(user_id_str, tmdb_id, year=year)
+            if est == 0:
+                continue
+            est = max(0.5, min(5.0, est))
+            predictions.append({
+                "id": movie["id"],
+                "tmdb_id": tmdb_id,
+                "predicted_rating": round(est * 2, 1),  # display in 0-10
+                "ranking_score": ranking_score,
+            })
 
-            return recommendations
+        predictions.sort(key=lambda x: x["ranking_score"], reverse=True)
+        pool = predictions[: max_recommendations * 3]
+        top = self._rerank_mmr(pool, max_recommendations)
 
-        except Exception:
-            return self._get_popular_movies(max_recommendations, user_rated_movie_ids)
+        ids = [p["id"] for p in top]
+        movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=ids)}
+        out = []
+        for item in top:
+            m = movies_by_id.get(item["id"])
+            if m is not None:
+                m.predicted_rating = item["predicted_rating"]
+                out.append(m)
+        return out or self._get_popular_movies(max_recommendations, rated)
 
-    def _get_external_recommendations(self, user_id, max_recommendations):
-        """Get recommendations for movies not in the local database"""
+    def _get_external_recommendations(self, user_id, max_recommendations: int):
         if not self.model_data or not self.known_tmdb_ids:
             return []
-            
-        local_tmdb_ids = set(Movie.objects.exclude(tmdb_id__isnull=True).values_list('tmdb_id', flat=True))
+
+        local_tmdb_ids = set(
+            Movie.objects.exclude(tmdb_id__isnull=True).values_list("tmdb_id", flat=True)
+        )
         candidates = self.known_tmdb_ids - local_tmdb_ids
-        
-        predictions = []
+
         user_id_str = f"loc_{user_id}"
-        
-        if user_id_str not in self.user_to_idx:
+        if user_id_str not in self.user_to_idx and self._ov_user_factor(user_id_str) is None:
             return []
-            
+
+        predictions = []
         for tmdb_id in candidates:
-            # Check if item is in model index before predicting call overhead
             if tmdb_id not in self.item_to_idx:
                 continue
-                
-            est = self.predict_rating(user_id_str, tmdb_id)
+            ranking_score = self._score_for_ranking(user_id_str, int(tmdb_id))
+            est = self.predict_rating(user_id_str, int(tmdb_id))
             est = max(0.5, min(5.0, est))
-            
-            # Only include decent recommendations
-            if est < 3.2: # Lowered to allow diverse candidates
+            if est < 3.2:
                 continue
-                
             predictions.append({
-                'tmdb_id': int(tmdb_id),
-                'predicted_rating': round(est * 2, 1)
+                "tmdb_id": int(tmdb_id),
+                "predicted_rating": round(est * 2, 1),
+                "ranking_score": ranking_score,
             })
-                
-        predictions.sort(key=lambda x: x['predicted_rating'], reverse=True)
-        
-        # [NEW]: fetch a larger pool (3x) and then re-rank for diversity
-        # This solves the "Filter Bubble" problem by balancing relevance with novelty
-        pool_size = max_recommendations * 3
-        pool = predictions[:pool_size]
-        
-        final_list = self._rerank_mmr(pool, max_recommendations)
-        
-        return final_list
-    
-    def _get_popular_movies(self, limit=10, exclude_movie_ids=None):
-        """Get popular movies based on average ratings as fallback"""
-        query = Review.objects.filter(
-            content_type=self.movie_content_type
-        )
+
+        predictions.sort(key=lambda x: x["ranking_score"], reverse=True)
+        return self._rerank_mmr(predictions[: max_recommendations * 3], max_recommendations)
+
+    def _get_popular_movies(self, limit: int = 10, exclude_movie_ids: Optional[set] = None) -> list:
+        qs = Review.objects.filter(content_type=self.movie_content_type)
         if exclude_movie_ids:
-            query = query.exclude(object_id__in=exclude_movie_ids)
-        
-        popular_movies = query.values('object_id').annotate(
-            avg_rating=Avg('rating'),
-            rating_count=Count('id')
-        ).filter(
-            rating_count__gte=1
-        ).order_by('-avg_rating')[:limit]
-        
-        movie_ids = [m['object_id'] for m in popular_movies]
-        return list(Movie.objects.filter(id__in=movie_ids))
+            qs = qs.exclude(object_id__in=exclude_movie_ids)
+        popular = (
+            qs.values("object_id")
+            .annotate(avg_rating=Avg("rating"), rating_count=Count("id"))
+            .filter(rating_count__gte=1)
+            .order_by("-avg_rating")[:limit]
+        )
+        ids = [m["object_id"] for m in popular]
+        return list(Movie.objects.filter(id__in=ids))

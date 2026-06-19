@@ -249,26 +249,16 @@ class Watchlist(models.Model):
 
 # Add signals to automatically remove watchlist entries when media is deleted
 
-# Models with a GenericForeignKey to media that need to be cleaned up
-# whenever a media row is deleted.
-_MEDIA_MODEL_NAMES = {'Movie', 'TVShow', 'Album', 'Book', 'Game'}
-
-
 @receiver(pre_delete)
-def remove_generic_relations_for_media(sender, instance, **kwargs):
-    """Clean up rows that point at deleted media via a GenericForeignKey.
-
-    Django's CASCADE only follows real ForeignKeys, so generic relations
-    (Watchlist, Review, MediaPerson, MediaAlbumRelationship) leak orphaned
-    rows when the underlying Movie/TVShow/Album/Book/Game is deleted.
-    """
-    if sender.__name__ not in _MEDIA_MODEL_NAMES:
-        return
-
-    content_type = ContentType.objects.get_for_model(sender)
-    Watchlist.objects.filter(content_type=content_type, object_id=instance.id).delete()
-    Review.objects.filter(content_type=content_type, object_id=instance.id).delete()
-    MediaPerson.objects.filter(content_type=content_type, object_id=instance.id).delete()
+def remove_from_watchlist(sender, instance, **kwargs):
+    """Remove any watchlist entries when media is deleted."""
+    # Check if the model is one that can be in a watchlist
+    media_models = ['Movie', 'TVShow', 'Album', 'Book', 'Game']
+    
+    if sender.__name__ in media_models:
+        # Direct media deletion
+        content_type = ContentType.objects.get_for_model(sender)
+        Watchlist.objects.filter(content_type=content_type, object_id=instance.id).delete()
     
 class Review(models.Model):
     """Model for user reviews of media items."""

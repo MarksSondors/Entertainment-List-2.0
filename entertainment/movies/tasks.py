@@ -105,6 +105,24 @@ def check_new_movies_today():
     return result
 
 
+def refresh_recommender_overlay():
+    """Run a fold-in pass for users with reviews newer than the base model.
+
+    Writes svd_overlay_latest.pkl; never touches the base pickle. Scheduled
+    biweekly via movies.apps._setup_movie_schedules.
+    """
+    from io import StringIO
+    from django.core.management import call_command
+    buf = StringIO()
+    try:
+        call_command("update_recommender", all_stale=True, stdout=buf, stderr=buf)
+        logger.info("Recommender overlay refresh: %s", buf.getvalue().strip() or "ok")
+        return {"status": "ok"}
+    except Exception as e:
+        logger.exception("Recommender overlay refresh failed")
+        return {"status": "error", "error": str(e)}
+
+
 def update_unreleased_movies():
     """Update information for all movies that haven't been released yet."""
     today = date.today()

@@ -87,11 +87,12 @@ class CrossMediaRecommender:
         
         if include_movies and 'movies' in self._recommenders:
             try:
-                # get_recommendations_for_user returns list of (movie, score) tuples
+                # get_recommendations_for_user returns a list of Movie instances
+                # (with predicted_rating attached as an attribute).
                 recs = self._recommenders['movies'].get_recommendations_for_user(
                     user.id, max_recommendations=limit_per_medium
                 )
-                recommendations['movies'] = [item for item, score in recs]
+                recommendations['movies'] = list(recs)
             except Exception as e:
                 print(f"Error getting movie recommendations: {e}")
                 recommendations['movies'] = []
