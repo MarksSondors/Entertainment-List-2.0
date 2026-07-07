@@ -122,6 +122,27 @@ def process_review_notification(review_id):
     return result
 
 
+def reconcile_person_media_counts():
+    """Weekly safety net for `Person.media_count` drift.
+
+    The counter is normally maintained by MediaPerson post_save / post_delete
+    signals, but signals are silently skipped by `bulk_create`,
+    `queryset.update()`, and raw SQL. This task reruns the same
+    reconciliation the `recount_person_media` management command does so
+    counts converge even after bulk-import paths.
+
+    Registered as a WEEKLY Django Q schedule in `custom_auth/apps.py`.
+    """
+    from django.core.management import call_command
+    from io import StringIO
+
+    out = StringIO()
+    call_command("recount_person_media", stdout=out)
+    summary = out.getvalue().strip()
+    logger.info("reconcile_person_media_counts: %s", summary)
+    return summary
+
+
 def import_imdb_data(user_id, items):
     """
     Background task to import IMDb data (fetch new items + create reviews/watchlist).
