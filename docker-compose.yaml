@@ -90,17 +90,6 @@ services:
     restart: unless-stopped
     environment:
       - DOMAIN=yourdomain.com # Replace with your actual domain
-    
-  watchtower:
-    image: containrrr/watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 86400 --cleanup  # Check for updates once per day
-    environment:
-      - TZ=Europe/Riga
-    networks:
-      - webnet
-    restart: unless-stopped
 
 networks:
   webnet:
