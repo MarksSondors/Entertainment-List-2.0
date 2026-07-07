@@ -65,7 +65,7 @@ services:
     restart: unless-stopped
 
   traefik:
-    image: "traefik:v3.3.5"
+    image: "traefik:v3.7.6"
     command:
       - "--providers.docker=true"
       - "--providers.file.filename=/etc/traefik/dynamic_conf.yml"
