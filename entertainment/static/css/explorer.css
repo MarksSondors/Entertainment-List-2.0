@@ -1,0 +1,638 @@
+/* ================================================================
+ * File Explorer — Windows 98 style layout.
+ *
+ * Layers on top of the globally-loaded 98.css. Everything here is
+ * scoped under `.explorer-window` to avoid bleeding into other pages.
+ * ================================================================ */
+
+.explorer-window {
+    width: min(1400px, calc(100vw - 24px));
+    margin: 12px auto;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 100px);
+}
+
+.explorer-window .titlebar-icon {
+    width: 16px;
+    height: 16px;
+    vertical-align: -3px;
+    margin-right: 4px;
+    image-rendering: pixelated;
+}
+
+.explorer-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    padding: 4px;
+    gap: 4px;
+    min-height: 0;
+}
+
+/* -------- menu bar -------- */
+.explorer-menu {
+    list-style: none;
+    margin: 0;
+    padding: 2px 4px;
+    display: flex;
+    gap: 2px;
+    background: #c0c0c0;
+    border-bottom: 1px solid #808080;
+    font-size: 12px;
+}
+.explorer-menu li {
+    padding: 2px 8px;
+    cursor: default;
+    user-select: none;
+}
+.explorer-menu li.active,
+.explorer-menu li:hover {
+    background: #000080;
+    color: #fff;
+}
+
+/* -------- toolbar -------- */
+.explorer-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid #808080;
+    background: #c0c0c0;
+    flex-wrap: wrap;
+}
+.explorer-toolbar .tb-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: #c0c0c0;
+    border: 1px solid;
+    border-color: #ffffff #808080 #808080 #ffffff;
+    cursor: pointer;
+    font-size: 12px;
+}
+.explorer-toolbar .tb-btn:active {
+    border-color: #808080 #ffffff #ffffff #808080;
+}
+.explorer-toolbar .tb-btn img {
+    width: 16px;
+    height: 16px;
+    image-rendering: pixelated;
+}
+.explorer-toolbar .tb-sep {
+    width: 1px;
+    height: 22px;
+    background: #808080;
+    box-shadow: 1px 0 0 #ffffff;
+    margin: 0 2px;
+}
+.explorer-toolbar .tb-label {
+    font-size: 12px;
+    margin: 0 4px 0 4px;
+}
+.explorer-toolbar .tb-select {
+    font-family: inherit;
+    font-size: 12px;
+    padding: 1px 4px;
+    background: #ffffff;
+    border: 1px solid;
+    border-color: #808080 #ffffff #ffffff #808080;
+}
+
+/* -------- address bar -------- */
+.explorer-address {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border: 1px solid #808080;
+    background: #c0c0c0;
+    flex-wrap: nowrap;
+}
+.address-input {
+    flex: 1 1 auto;
+    background: #fff;
+    border: 1px solid;
+    border-color: #808080 #ffffff #ffffff #808080;
+    padding: 3px 6px;
+    min-width: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    font-size: 12px;
+}
+.address-input .crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 4px;
+    cursor: pointer;
+    color: #000;
+}
+.address-input .crumb + .crumb::before {
+    content: "▶";
+    margin: 0 6px;
+    color: #666;
+    font-size: 10px;
+}
+.address-input .crumb:hover {
+    text-decoration: underline;
+}
+.address-input .crumb img {
+    width: 14px;
+    height: 14px;
+    image-rendering: pixelated;
+}
+
+.address-search {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #fff;
+    border: 1px solid;
+    border-color: #808080 #ffffff #ffffff #808080;
+    padding: 2px 6px;
+}
+.address-search img {
+    width: 14px;
+    height: 14px;
+    image-rendering: pixelated;
+}
+.address-search input[type="search"] {
+    border: none;
+    outline: none;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 2px 2px;
+    background: transparent;
+    min-width: 180px;
+}
+
+/* -------- three-pane layout -------- */
+.explorer-panes {
+    display: grid;
+    grid-template-columns: 220px 220px 1fr;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.explorer-tree,
+.explorer-filters,
+.explorer-results {
+    background: #fff;
+    border: 1px solid;
+    border-color: #808080 #ffffff #ffffff #808080;
+    overflow: auto;
+    padding: 4px;
+    min-height: 0;
+}
+.explorer-results {
+    background: #ffffff;
+}
+.pane-loading {
+    color: #808080;
+    font-size: 12px;
+    padding: 8px;
+    text-align: center;
+}
+
+/* -------- tree pane -------- */
+.tree-node {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+    user-select: none;
+}
+.tree-node:hover {
+    background: #e6e6e6;
+}
+.tree-node.active {
+    background: #000080;
+    color: #fff;
+}
+.tree-node img {
+    width: 16px;
+    height: 16px;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+.tree-toggle {
+    display: inline-block;
+    width: 12px;
+    text-align: center;
+    color: #666;
+    font-size: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+.tree-children {
+    padding-left: 16px;
+    display: none;
+}
+.tree-node.expanded + .tree-children {
+    display: block;
+}
+.tree-count {
+    color: #666;
+    margin-left: auto;
+    font-size: 11px;
+    padding-left: 12px;
+}
+.tree-node.active .tree-count {
+    color: #ccc;
+}
+
+/* -------- filter pane -------- */
+.filter-heading {
+    font-weight: bold;
+    font-size: 12px;
+    padding: 4px 2px;
+    border-bottom: 1px solid #c0c0c0;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.filter-heading-secondary {
+    margin-top: 10px;
+}
+.filter-heading-badge {
+    margin-left: auto;
+    background: #000080;
+    color: #fff;
+    font-size: 10px;
+    font-weight: normal;
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+.filter-group {
+    margin-bottom: 12px;
+    font-size: 12px;
+    padding: 4px 6px 4px 4px;
+    border-left: 3px solid transparent;
+    transition: none;
+}
+.filter-group-active {
+    border-left-color: #000080;
+    background: #eef1fa;
+}
+.filter-group-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.filter-group-active .filter-group-title {
+    color: #000080;
+}
+.filter-badge {
+    background: #000080;
+    color: #fff;
+    font-size: 10px;
+    font-weight: normal;
+    padding: 0 6px;
+    border-radius: 8px;
+    line-height: 14px;
+}
+.filter-clear-x {
+    margin-left: auto;
+    background: #c0c0c0;
+    color: #a02020;
+    font-weight: bold;
+    font-size: 12px;
+    line-height: 14px;
+    border: 1px solid;
+    border-color: #ffffff #808080 #808080 #ffffff;
+    padding: 0 5px;
+    cursor: pointer;
+    min-width: 18px;
+    height: 18px;
+}
+.filter-clear-x:hover {
+    background: #f5d0d0;
+    color: #700;
+}
+.filter-clear-x:active {
+    border-color: #808080 #ffffff #ffffff #808080;
+}
+.filter-range {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+.filter-range input {
+    width: 60px;
+    font-size: 11px;
+    padding: 1px 2px;
+}
+.filter-checkbox-inline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+.filter-group-active .filter-checkbox-inline {
+    font-weight: bold;
+    color: #000080;
+}
+.filter-checkbox-list {
+    max-height: 160px;
+    overflow: auto;
+    background: #fff;
+    border: 1px inset #808080;
+    padding: 2px 4px;
+}
+.filter-checkbox-list label {
+    display: block;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 1px 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.filter-checkbox-list label.filter-option-selected {
+    background: #d9e0f5;
+    font-weight: bold;
+}
+.filter-checkbox-list input {
+    margin-right: 4px;
+    vertical-align: middle;
+}
+.filter-actions {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+    margin-top: 6px;
+}
+.filter-actions button {
+    font-size: 11px;
+    padding: 2px 8px;
+}
+.filter-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* -------- results pane: view modes -------- */
+.results-grid.view-large {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+    padding: 4px;
+}
+.results-grid.view-large .card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 2px;
+    text-decoration: none;
+    color: inherit;
+}
+.results-grid.view-large .card:hover {
+    background: #d8e0f0;
+}
+.results-grid.view-large .card-thumb {
+    width: 90px;
+    height: 130px;
+    object-fit: cover;
+    background: #c0c0c0;
+    border: 1px solid #808080;
+    image-rendering: auto;
+}
+.results-grid.view-large .card-title {
+    margin-top: 4px;
+    font-size: 12px;
+    text-align: center;
+    line-height: 1.2;
+    max-height: 3.6em;
+    overflow: hidden;
+}
+.results-grid.view-large .card-meta {
+    font-size: 10px;
+    color: #666;
+}
+
+/* -------- engagement tier borders (matches the existing all_movies /
+ *   watchlist convention): --------
+ *   .tier-reviewed     — blue    (I've reviewed it)
+ *   .tier-watchlist    — green   (on my watchlist, not yet reviewed)
+ *   .tier-others       — purple  (others reviewed, I haven't engaged)
+ *   .tier-undiscovered — orange  (no reviews anywhere, not on any list)
+ *   .tier-neutral      — grey    (People — engagement doesn't apply)
+ *
+ * NB: selectors here MUST be at least as specific as the per-view-mode
+ *  `.card` rule above (which itself is 3 classes: `.results-grid.view-X
+ *  .card` = 0,3,0) or the shorthand `border: 2px solid transparent` there
+ *  would clobber the colour we want.
+ */
+
+/* Large view: full 2px border in the tier colour. */
+.results-grid.view-large .card.tier-reviewed     { border-color: #2196F3; background: rgba(33,150,243,0.05); }
+.results-grid.view-large .card.tier-watchlist    { border-color: #4CAF50; background: rgba(76,175,80,0.05); }
+.results-grid.view-large .card.tier-others       { border-color: #9C27B0; background: rgba(156,39,176,0.05); }
+.results-grid.view-large .card.tier-undiscovered { border-color: #FF9800; background: rgba(255,152,0,0.05); }
+.results-grid.view-large .card.tier-neutral      { border-color: #a0a0a0; }
+
+.results-grid.view-large .card.tier-reviewed:hover     { background: #d5e6fa; }
+.results-grid.view-large .card.tier-watchlist:hover    { background: #d9edda; }
+.results-grid.view-large .card.tier-others:hover       { background: #ebd7ef; }
+.results-grid.view-large .card.tier-undiscovered:hover { background: #fce6cc; }
+
+/* Small + list views: left-edge colour strip (borders would clutter dense rows). */
+.results-grid.view-small .card.tier-reviewed,
+.results-grid.view-list  .card.tier-reviewed     { box-shadow: inset 4px 0 0 #2196F3; padding-left: 8px; }
+.results-grid.view-small .card.tier-watchlist,
+.results-grid.view-list  .card.tier-watchlist    { box-shadow: inset 4px 0 0 #4CAF50; padding-left: 8px; }
+.results-grid.view-small .card.tier-others,
+.results-grid.view-list  .card.tier-others       { box-shadow: inset 4px 0 0 #9C27B0; padding-left: 8px; }
+.results-grid.view-small .card.tier-undiscovered,
+.results-grid.view-list  .card.tier-undiscovered { box-shadow: inset 4px 0 0 #FF9800; padding-left: 8px; }
+.results-grid.view-small .card.tier-neutral,
+.results-grid.view-list  .card.tier-neutral      { box-shadow: inset 4px 0 0 #a0a0a0; padding-left: 8px; }
+
+/* Details rows: left-edge colour strip inside the row. */
+.results-table tbody tr.tier-reviewed     { box-shadow: inset 4px 0 0 #2196F3; }
+.results-table tbody tr.tier-watchlist    { box-shadow: inset 4px 0 0 #4CAF50; }
+.results-table tbody tr.tier-others       { box-shadow: inset 4px 0 0 #9C27B0; }
+.results-table tbody tr.tier-undiscovered { box-shadow: inset 4px 0 0 #FF9800; }
+.results-table tbody tr.tier-neutral      { box-shadow: inset 4px 0 0 #a0a0a0; }
+
+.results-grid.view-small {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 2px;
+}
+.results-grid.view-small .card {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 2px 4px;
+    cursor: pointer;
+}
+.results-grid.view-small .card:hover {
+    background: #d8e0f0;
+}
+.results-grid.view-small .card-thumb {
+    width: 24px;
+    height: 24px;
+    object-fit: cover;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+.results-grid.view-small .card-title {
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.results-grid.view-small .card-meta {
+    display: none;
+}
+
+.results-grid.view-list {
+    display: flex;
+    flex-direction: column;
+}
+.results-grid.view-list .card {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 3px 6px;
+    cursor: pointer;
+    border-bottom: 1px dotted #d0d0d0;
+}
+.results-grid.view-list .card:hover {
+    background: #d8e0f0;
+}
+.results-grid.view-list .card-thumb {
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    image-rendering: pixelated;
+}
+.results-grid.view-list .card-title {
+    font-size: 12px;
+    flex: 1;
+}
+.results-grid.view-list .card-meta {
+    font-size: 11px;
+    color: #666;
+    margin-left: auto;
+}
+
+/* -------- details view (sortable table) -------- */
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    background: #fff;
+}
+.results-table thead th {
+    background: #c0c0c0;
+    border: 1px solid;
+    border-color: #ffffff #808080 #808080 #ffffff;
+    padding: 3px 8px;
+    text-align: left;
+    cursor: pointer;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    white-space: nowrap;
+    user-select: none;
+    font-weight: normal;
+}
+.results-table thead th:hover {
+    background: #d0d0d0;
+}
+.results-table thead th .sort-arrow {
+    font-size: 10px;
+    margin-left: 4px;
+    color: #000080;
+}
+.results-table tbody tr {
+    cursor: pointer;
+}
+.results-table tbody tr:nth-child(even) {
+    background: #f5f5f5;
+}
+.results-table tbody tr:hover {
+    background: #d8e0f0;
+}
+.results-table td {
+    padding: 3px 8px;
+    border-bottom: 1px solid #eaeaea;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+.results-table td.col-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.results-table td.col-title img {
+    width: 20px;
+    height: 20px;
+    object-fit: cover;
+    image-rendering: pixelated;
+}
+
+/* -------- pagination -------- */
+.explorer-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    background: #f5f5f5;
+    border-top: 1px solid #d0d0d0;
+    font-size: 12px;
+}
+.explorer-pagination button {
+    padding: 2px 8px;
+    font-size: 11px;
+}
+.explorer-pagination button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* -------- status bar -------- */
+.explorer-status {
+    display: flex;
+    gap: 4px;
+    padding: 2px 4px;
+    font-size: 11px;
+}
+.explorer-status p {
+    margin: 0;
+    padding: 2px 6px;
+    flex: 1 1 auto;
+}
+
+/* -------- mobile -------- */
+@media (max-width: 900px) {
+    .explorer-panes {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto 1fr;
+    }
+    .explorer-tree,
+    .explorer-filters {
+        max-height: 200px;
+    }
+    .explorer-window {
+        height: calc(100vh - 90px);
+        margin: 4px;
+    }
+}

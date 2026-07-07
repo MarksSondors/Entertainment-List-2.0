@@ -197,6 +197,11 @@ class Person(models.Model):
     tmdb_id = models.IntegerField(unique=True, blank=True, null=True)
     wikidata_id = models.CharField(max_length=20, blank=True, null=True)
 
+    #: Denormalized count of distinct media appearances (updated by
+    #: MediaPerson signals + `recount_person_media` backfill). Enables
+    #: cheap `ORDER BY media_count` in the file explorer.
+    media_count = models.PositiveIntegerField(default=0, db_index=True)
+
     def __str__(self):
         return self.name
 
@@ -410,6 +415,29 @@ def invalidate_stats_on_watchlist_delete(sender, instance, **kwargs):
     """Invalidate statistics cache when a watchlist item is removed."""
     from custom_auth.services.statistics import invalidate_stats_cache
     invalidate_stats_cache(instance.user_id)
+
+
+# --- Person.media_count maintenance ------------------------------------------
+# Keeps the denormalized appearance count in sync so the file-explorer People
+# view can sort by `-media_count` without a GROUP BY join.
+
+def _adjust_person_media_count(person_id: int | None, delta: int) -> None:
+    if not person_id or delta == 0:
+        return
+    Person.objects.filter(pk=person_id).update(
+        media_count=models.F('media_count') + delta
+    )
+
+
+@receiver(post_save, sender=MediaPerson)
+def increment_person_media_count(sender, instance, created, **kwargs):
+    if created:
+        _adjust_person_media_count(instance.person_id, 1)
+
+
+@receiver(post_delete, sender=MediaPerson)
+def decrement_person_media_count(sender, instance, **kwargs):
+    _adjust_person_media_count(instance.person_id, -1)
 
 
 class Meme(models.Model):

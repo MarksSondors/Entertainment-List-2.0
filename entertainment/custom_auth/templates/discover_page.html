@@ -82,10 +82,12 @@
         </script>
         {% endif %}
         
+        {% if community_pick %}
         <div class="discover-section">
             <!-- Community Movie of the Week -->
             {% include "components/community_movie_week.html" %}
         </div>
+        {% endif %}
           <div class="discover-section">
             <!-- Continue Watching -->
             {% include "components/continue_watching.html" %}
@@ -99,7 +101,13 @@
         <div class="discover-section">
             <!-- Recommended For You -->
             {% include "components/recommended_movies.html" %}
-        </div><div class="discover-section">
+        </div>
+        {% if not community_pick %}
+        <div class="discover-section">
+            <!-- Community Movie of the Week (empty state, shown below recommendations) -->
+            {% include "components/community_movie_week.html" %}
+        </div>
+        {% endif %}<div class="discover-section">
             <!-- Popular Movies -->
             {% include "components/popular_movies.html" %}
         </div>          
@@ -113,25 +121,23 @@
         </div>
         
         <!-- Quick Action Buttons -->
-        <div class="discover-section">
-            <div class="quick-actions-container">
-                <button type="button" onclick="window.location.href='{% url 'shortest_watchlist_movie' %}'">
-                    Quickest Watch
+        <div class="discover-section quick-actions-section">
+            <div class="quick-actions-grid">
+                <button type="button" class="quick-action-btn" onclick="window.location.href='{% url 'shortest_watchlist_movie' %}'">
+                    <img src="{% static 'images/icons/clock_0.png' %}" alt="" class="quick-action-icon">
+                    <span class="quick-action-label">Quickest Watch</span>
                 </button>
-                <button type="button" onclick="window.location.href='{% url 'random_unwatched_movie' %}'">
-                    Random Movie
+                <button type="button" class="quick-action-btn" onclick="window.location.href='{% url 'random_unwatched_movie' %}'">
+                    <img src="{% static 'images/icons/media_player_0.png' %}" alt="" class="quick-action-icon">
+                    <span class="quick-action-label">Random Movie</span>
                 </button>
-            </div>
-        </div>
-        
-        <!-- Browse Actions -->
-        <div class="discover-section">
-            <div class="quick-actions-container">
-                <button type="button" onclick="window.location.href='{% url 'browse_by_country' %}'">
-                    Browse by Country
+                <button type="button" class="quick-action-btn" onclick="window.location.href='{% url 'browse_by_country' %}'">
+                    <img src="{% static 'images/icons/globe_map_0.png' %}" alt="" class="quick-action-icon">
+                    <span class="quick-action-label">Browse by Country</span>
                 </button>
-                <button type="button" onclick="window.location.href='{% url 'browse_by_people' %}'">
-                    Browse by People
+                <button type="button" class="quick-action-btn" onclick="window.location.href='{% url 'browse_by_people' %}'">
+                    <img src="{% static 'images/icons/users_0.png' %}" alt="" class="quick-action-icon">
+                    <span class="quick-action-label">Browse by People</span>
                 </button>
             </div>
         </div>
@@ -213,7 +219,7 @@
         }
         
         /* Reduce margin for action button sections */
-        .discover-section:has(.quick-actions-container) {
+        .discover-section:has(.quick-actions-grid) {
             margin-bottom: 10px;
         }
 
@@ -339,46 +345,126 @@
             .retro-btn:hover {
                 box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
             }
-        }        /* Quick Actions styling - minimal custom styles, let 98.css handle buttons */
-        .quick-actions-container {
+        }
+
+        /* Quick Actions - responsive icon button grid */
+        .quick-actions-section {
+            padding: 8px 0 20px;
+        }
+
+        .quick-actions-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            width: 100%;
+        }
+
+        .quick-action-btn {
             display: flex;
-            gap: 20px;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
-            padding: 20px 0;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            min-height: 96px;
+            padding: 12px 8px;
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 12px;
+            color: var(--button-text);
+            background: var(--button-bg);
+            border: 1px solid var(--border-dark);
+            box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+            cursor: pointer;
+            text-align: center;
+            transition: background-color 0.1s ease;
         }
 
-        .quick-actions-container button {
-            min-width: 120px;
+        .quick-action-btn:hover {
+            background: var(--button-hover);
         }
 
-        /* Dark mode styling for action buttons */
+        .quick-action-btn:active {
+            box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+            padding: 13px 7px 11px 9px;
+        }
+
+        .quick-action-btn:focus-visible {
+            outline: 1px dotted var(--text-color);
+            outline-offset: -4px;
+        }
+
+        .quick-action-icon {
+            width: 40px;
+            height: 40px;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            flex-shrink: 0;
+        }
+
+        .quick-action-label {
+            display: block;
+            line-height: 1.2;
+            word-break: break-word;
+            hyphens: auto;
+        }
+
+        /* Dark mode styling for quick action buttons */
         @media (prefers-color-scheme: dark) {
-            .quick-actions-container button {
-                background: var(--button-bg) !important;
-                color: var(--button-text) !important;
-                border-color: var(--border-light) var(--border-dark) var(--border-dark) var(--border-light) !important;
-                box-shadow: inset -1px -1px var(--border-dark), inset 1px 1px var(--border-light), inset -2px -2px var(--border-dark), inset 2px 2px var(--border-light) !important;
+            .quick-action-btn {
+                background: var(--button-bg);
+                color: var(--button-text);
+                border-color: var(--border-dark);
+                box-shadow: inset -1px -1px #1a1a1a, inset 1px 1px var(--border-light), inset -2px -2px #2a2a2a, inset 2px 2px #6a6a6a;
             }
 
-            .quick-actions-container button:hover {
-                background: var(--button-hover) !important;
+            .quick-action-btn:hover {
+                background: var(--button-hover);
             }
 
-            .quick-actions-container button:active {
-                box-shadow: inset -1px -1px var(--border-light), inset 1px 1px var(--border-dark), inset -2px -2px var(--border-light), inset 2px 2px var(--border-dark) !important;
+            .quick-action-btn:active {
+                box-shadow: inset -1px -1px var(--border-light), inset 1px 1px #1a1a1a, inset -2px -2px #6a6a6a, inset 2px 2px #2a2a2a;
             }
         }
 
-        /* Mobile responsive for action buttons */
-        @media (max-width: 768px) {
-            .quick-actions-container {
-                gap: 15px;
+        /* Tablet: 2 columns */
+        @media (max-width: 720px) {
+            .quick-actions-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
             }
-            
-            .quick-actions-container button {
-                width: 100%;
-                max-width: 200px;
+
+            .quick-action-btn {
+                min-height: 88px;
+                font-size: 11px;
+            }
+
+            .quick-action-icon {
+                width: 36px;
+                height: 36px;
+            }
+        }
+
+        /* Small phones: keep 2 columns but tighter */
+        @media (max-width: 380px) {
+            .quick-actions-grid {
+                gap: 8px;
+            }
+
+            .quick-action-btn {
+                min-height: 80px;
+                padding: 10px 6px;
+            }
+
+            .quick-action-icon {
+                width: 32px;
+                height: 32px;
+            }
+
+            .quick-action-label {
+                font-size: 10px;
             }
         }
     </style>

@@ -4,6 +4,7 @@ Pillow>=11.1.0
 django-bootstrap5>=25.1
 requests>=2.32.3
 djangorestframework>=3.15.2
+django-filter>=24.3
 drf-spectacular>=0.28.0
 django-q2>=1.7.6
 redis>=5.2.1

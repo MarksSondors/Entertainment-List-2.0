@@ -2,21 +2,16 @@ from rest_framework import serializers
 
 from explorer.utils import build_thumbnail
 
-from .models import Movie
+from .models import Book
 
 
-class MovieSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Movie
-        fields = '__all__'
-
-
-class MovieListSerializer(serializers.ModelSerializer):
+class BookListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for explorer list cards."""
 
     media_type = serializers.SerializerMethodField()
     thumbnail = serializers.SerializerMethodField()
     year = serializers.SerializerMethodField()
+    author_names = serializers.SerializerMethodField()
     genre_names = serializers.SerializerMethodField()
     user_rating = serializers.FloatField(read_only=True, allow_null=True)
     user_rating_count = serializers.IntegerField(read_only=True, allow_null=True)
@@ -24,36 +19,39 @@ class MovieListSerializer(serializers.ModelSerializer):
     reviewed_by_me = serializers.BooleanField(read_only=True, default=False)
 
     class Meta:
-        model = Movie
+        model = Book
         fields = [
             "id",
             "media_type",
             "title",
             "original_title",
-            "tmdb_id",
+            "subtitle",
             "thumbnail",
             "year",
-            "release_date",
+            "published_date",
             "rating",
             "user_rating",
             "user_rating_count",
             "on_my_watchlist",
             "reviewed_by_me",
-            "runtime",
-            "status",
-            "is_anime",
+            "pages",
+            "language",
+            "author_names",
             "genre_names",
             "date_added",
         ]
 
     def get_media_type(self, obj):
-        return "movies"
+        return "books"
 
     def get_thumbnail(self, obj):
-        return build_thumbnail(obj.poster)
+        return build_thumbnail(obj.image_url)
 
     def get_year(self, obj):
-        return obj.release_date.year if obj.release_date else None
+        return obj.published_date.year if obj.published_date else None
+
+    def get_author_names(self, obj):
+        return [a.name for a in obj.authors.all()]
 
     def get_genre_names(self, obj):
         return [g.name for g in obj.genres.all()]
