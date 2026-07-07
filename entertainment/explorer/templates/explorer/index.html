@@ -1,0 +1,108 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block title %}File Explorer — Entertainment List{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/explorer.css' %}">
+
+<div id="explorer-app"
+     class="window explorer-window"
+     data-icons-base="{% static 'images/win98/' %}"
+     data-user-id="{{ request.user.pk|default_if_none:'' }}">
+
+    <div class="title-bar">
+        <div class="title-bar-text">
+            <img class="titlebar-icon"
+                 src="{% static 'images/win98/computer.png' %}"
+                 alt="">
+            Entertainment Explorer
+        </div>
+        <div class="title-bar-controls">
+            <button aria-label="Minimize" disabled></button>
+            <button aria-label="Maximize" disabled></button>
+            <button aria-label="Close" onclick="window.history.back();"></button>
+        </div>
+    </div>
+
+    <div class="window-body explorer-body">
+        <!-- Menu bar (decorative — 98 vibes) -->
+        <ul class="explorer-menu">
+            <li>File</li>
+            <li>Edit</li>
+            <li class="active">View</li>
+            <li>Tools</li>
+            <li>Help</li>
+        </ul>
+
+        <!-- Toolbar: navigation + view mode + sort -->
+        <div class="explorer-toolbar">
+            <button type="button" class="tb-btn" data-action="back" title="Back">
+                <img src="{% static 'images/win98/directory_open.png' %}" alt=""> Back
+            </button>
+            <button type="button" class="tb-btn" data-action="forward" title="Forward">
+                <img src="{% static 'images/win98/directory_open.png' %}" alt=""> Forward
+            </button>
+            <button type="button" class="tb-btn" data-action="up" title="Up one folder">
+                <img src="{% static 'images/win98/directory_closed.png' %}" alt=""> Up
+            </button>
+            <span class="tb-sep"></span>
+            <button type="button" class="tb-btn" data-action="refresh" title="Refresh">
+                <img src="{% static 'images/win98/hourglass.png' %}" alt=""> Refresh
+            </button>
+            <span class="tb-sep"></span>
+            <label class="tb-label">View:</label>
+            <select class="tb-select" data-role="view-mode" title="View mode">
+                <option value="large">Large Icons</option>
+                <option value="small">Small Icons</option>
+                <option value="list">List</option>
+                <option value="details">Details</option>
+            </select>
+            <span class="tb-sep"></span>
+            <label class="tb-label">Sort by:</label>
+            <select class="tb-select" data-role="sort-field" title="Sort field"></select>
+            <button type="button" class="tb-btn" data-role="sort-direction" title="Toggle sort direction">
+                <span data-role="sort-arrow">▼</span>
+            </button>
+        </div>
+
+        <!-- Address bar -->
+        <div class="explorer-address">
+            <label class="tb-label">Address:</label>
+            <div class="address-input" data-role="breadcrumbs">
+                <span class="crumb">My Library</span>
+            </div>
+            <div class="address-search">
+                <img src="{% static 'images/win98/magnifying_glass.png' %}" alt="">
+                <input type="search" data-role="search-input"
+                       placeholder="Search this folder…" autocomplete="off">
+            </div>
+        </div>
+
+        <!-- Main pane: tree | filter panel | results -->
+        <div class="explorer-panes">
+            <aside class="explorer-tree" data-role="tree">
+                <div class="pane-loading">Loading tree…</div>
+            </aside>
+
+            <aside class="explorer-filters" data-role="filters">
+                <div class="filter-heading">Filters</div>
+                <div class="pane-loading">Select a folder</div>
+            </aside>
+
+            <section class="explorer-results" data-role="results">
+                <div class="pane-loading">Loading…</div>
+            </section>
+        </div>
+
+        <!-- Status bar -->
+        <div class="status-bar explorer-status">
+            <p class="status-bar-field" data-role="status-count">0 items</p>
+            <p class="status-bar-field" data-role="status-page">Page 1 of 1</p>
+            <p class="status-bar-field" data-role="status-timing"></p>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="{% static 'js/explorer/explorer.js' %}"></script>
+{% endblock %}

@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     # Third-party apps
     'django_bootstrap5',
     'rest_framework',
+    'django_filters',
     'drf_spectacular',
     'django_q',
 
@@ -70,6 +71,7 @@ INSTALLED_APPS = [
     'games',
     'notifications',  # Push notifications
     'stremio',  # Stremio addon
+    'explorer',  # File-explorer style unified browser
 ]
 
 # Add debug apps only in DEBUG mode
@@ -118,6 +120,14 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
     ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.OrderingFilter',
+        'rest_framework.filters.SearchFilter',
+    ],
+    # Note: not set as DEFAULT_PAGINATION_CLASS to avoid breaking existing
+    # viewsets that return non-paginated lists. Explorer viewsets set
+    # pagination_class explicitly.
 }
 
 SPECTACULAR_SETTINGS = {
