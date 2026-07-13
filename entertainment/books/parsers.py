@@ -158,7 +158,11 @@ def extract_book_data(book_details):
             pass
 
     edition = book_details.get('default_physical_edition') or {}
+    if not isinstance(edition, dict):
+        edition = {}
     language_obj = edition.get('language') or {}
+    if not isinstance(language_obj, dict):
+        language_obj = {}
     title = book_details.get('title') or ''
 
     return {
@@ -220,8 +224,10 @@ def process_genres_keywords(book_details):
     keyword_votes = Counter()  # tag_id -> vote count
     tag_meta = {}              # tag_id -> {name, category_id}
 
-    for tagging in book_details.get('taggings', []):
-        tag = tagging.get('tag', {}) if isinstance(tagging, dict) else {}
+    for tagging in book_details.get('taggings') or []:
+        tag = tagging.get('tag') or {} if isinstance(tagging, dict) else {}
+        if not isinstance(tag, dict):
+            continue
         tag_id = tag.get('id')
         tag_name = (tag.get('tag') or '').strip()
         category_id = tag.get('tag_category_id')
@@ -299,14 +305,19 @@ def process_genres_keywords(book_details):
 
 def process_series(book, book_details):
     """Associate the featured series (if any) from book_series entries."""
-    book_series_list = book_details.get('book_series', [])
+    book_series_list = [
+        entry for entry in (book_details.get('book_series') or [])
+        if isinstance(entry, dict)
+    ]
     if not book_series_list:
         return
 
     featured = next((bs for bs in book_series_list if bs.get('featured')), None)
     entry = featured or book_series_list[0]
 
-    series_data = entry.get('series', {})
+    series_data = entry.get('series') or {}
+    if not isinstance(series_data, dict):
+        return
     series_id = series_data.get('id')
     series_name = series_data.get('name')
     if not series_id or not series_name:
@@ -328,8 +339,10 @@ def process_series(book, book_details):
 def process_publishers(book, book_details):
     """Extract publisher from the default physical edition."""
     edition = book_details.get('default_physical_edition') or {}
-    pub_data = edition.get('publisher')
-    if not pub_data:
+    if not isinstance(edition, dict):
+        return
+    pub_data = edition.get('publisher') or {}
+    if not isinstance(pub_data, dict) or not pub_data.get('id'):
         return
 
     pub, _ = Publisher.objects.get_or_create(
@@ -355,7 +368,10 @@ def process_authors(book, book_details):
     """
     book_content_type = ContentType.objects.get_for_model(book)
 
-    contributions = book_details.get('contributions', [])
+    contributions = [
+        contribution for contribution in (book_details.get('contributions') or [])
+        if isinstance(contribution, dict)
+    ]
     author_contributions = [
         c for c in contributions
         if (c.get('contribution') or '').lower() in ('author', 'primary author', '')
@@ -364,8 +380,8 @@ def process_authors(book, book_details):
         author_contributions = contributions
 
     for index, contrib in enumerate(author_contributions):
-        author = contrib.get('author', {})
-        if not author:
+        author = contrib.get('author') or {}
+        if not isinstance(author, dict) or not author:
             continue
 
         author_id = author.get('id')

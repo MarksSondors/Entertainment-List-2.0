@@ -297,6 +297,62 @@
           </div>
         </div>
 
+        <!-- Books Section -->
+        <div class="accordion-section">
+          <div class="section-header" data-target="#books">
+            <h3 class="section-title">
+              <span class="chevron">▶</span> Books
+              <span class="item-count" id="booksCount">({{ books|length }} items)</span>
+            </h3>
+          </div>
+          <div id="books" class="section-content">
+            <div class="sunken-panel content-panel">
+              <div class="content-grid" id="booksContent">
+                {% for item in books %}
+                <div class="grid-item" data-media-id="{{ item.media_id }}">
+                  <a href="{% url 'books:book_page' item.media_id %}" class="item-link">
+                    <div class="item-card">
+                      {% if item.media_cover %}
+                      <img src="{{ item.media_cover }}" class="item-poster" alt="{{ item.media_title }}">
+                      {% else %}
+                      <div class="item-poster no-image">
+                        <span>No Image</span>
+                      </div>
+                      {% endif %}
+                      <div class="item-body">
+                        <h5 class="item-title">{{ item.media_title }}</h5>
+                        <div class="item-meta">
+                          {% if item.media_authors %}
+                          <span>{{ item.media_authors }}</span>
+                          {% endif %}
+                          {% if item.media_published_date %}
+                          <span class="release-year">{{ item.media_published_date|date:"Y" }}</span>
+                          {% endif %}
+                        </div>
+
+                        {% if item.avg_rating %}
+                        <div class="avg-rating-badge">
+                          {{ item.avg_rating }} ({{ item.rating_count }})
+                        </div>
+                        {% endif %}
+                      </div>
+                      <button class="remove-item" data-id="{{ item.id }}">✕</button>
+                    </div>
+                  </a>
+                </div>
+                {% empty %}
+                <div class="no-content-message">
+                  <div class="message-content">
+                    <div class="message-icon">Books</div>
+                    <div class="message-text">No books in your watchlist</div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Games Section -->
         <div class="accordion-section">
           <div class="section-header" data-target="#games">
@@ -355,7 +411,7 @@
       <div class="status-info">
         <span class="status-field">My Watchlist</span>
         <span class="status-separator">•</span>
-        <span class="status-field" id="totalItemsCount">{{ continue_watching|length|add:havent_started|length|add:finished_shows|length|add:movies|length }} items</span>
+        <span class="status-field" id="totalItemsCount">{{ continue_watching|length|add:havent_started|length|add:finished_shows|length|add:movies|length|add:games|length|add:books|length }} items</span>
         <span class="status-separator" id="filterSeparator" style="display: none;">•</span>
         <span class="status-field" id="filterStatus" style="display: none;"></span>
       </div>
@@ -1049,8 +1105,10 @@
         const haventStartedItems = document.querySelectorAll('#haventStartedContent .grid-item').length;
         const finishedShowsItems = document.querySelectorAll('#finishedShowsContent .grid-item').length;
         const moviesItems = document.querySelectorAll('#moviesContent .grid-item').length;
+        const booksItems = document.querySelectorAll('#booksContent .grid-item').length;
+        const gamesItems = document.querySelectorAll('#gamesContent .grid-item').length;
         
-        const totalItems = continueWatchingItems + haventStartedItems + finishedShowsItems + moviesItems;
+        const totalItems = continueWatchingItems + haventStartedItems + finishedShowsItems + moviesItems + booksItems + gamesItems;
         totalCountElement.textContent = `${totalItems} item${totalItems !== 1 ? 's' : ''}`;
     }
 

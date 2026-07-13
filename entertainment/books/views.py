@@ -153,8 +153,8 @@ class AddBookView(APIView):
 
         try:
             book = create_book(hardcover_id, add_to_watchlist=add_to_watchlist, user_id=request.user.id)
-        except Exception as exc:
-            logger.error("create_book failed for hardcover_id=%s: %s", hardcover_id, exc)
+        except Exception:
+            logger.exception("create_book failed for hardcover_id=%s", hardcover_id)
             return Response({'error': 'Failed to add book.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         if not book:
