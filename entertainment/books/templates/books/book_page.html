@@ -486,7 +486,7 @@
                 <button class="retro-btn" onclick="openReviewModal()">Write a Review</button>
             </div>
 
-            {% include "components/movie_review_modal.html" with content_id=book.id content_type='book' %}
+            {% include "components/review_modal.html" with content_id=book.id content_type='book' content_title=book.title %}
         </div>
         <div class="status-bar">
             <div class="status-bar-field">

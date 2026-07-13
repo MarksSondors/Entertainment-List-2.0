@@ -191,8 +191,8 @@
     }
 }
 
-/* Modal Styles */
-.review-modal {
+/* Progress review detail modal styles */
+#progressReviewModal {
     display: none;
     position: fixed;
     z-index: 10000;
@@ -203,7 +203,7 @@
     background-color: rgba(0, 0, 0, 0.5); /* Dotted overlay simulation */
 }
 
-.review-modal .window {
+#progressReviewModal .window {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -395,26 +395,26 @@
 </div>
 
 <!-- Review Modal -->
-<div id="reviewModal" class="review-modal">
+<div id="progressReviewModal" class="progress-review-modal">
     <div class="window review-modal-content">
         <div class="title-bar">
-            <div class="title-bar-text" id="reviewModalTitle">Review Details</div>
+            <div class="title-bar-text" id="progressReviewModalTitle">Review Details</div>
             <div class="title-bar-controls">
-                <button aria-label="Close" id="reviewModalClose"></button>
+                <button aria-label="Close" id="progressReviewModalClose"></button>
             </div>
         </div>
         <div class="window-body">
             <div class="field-row-stacked" style="margin-bottom: 12px;">
                 <label>Rating</label>
-                <div class="review-rating-display" id="reviewModalRating" style="display: flex; align-items: center; gap: 5px;"><img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 16px; height: 16px;"> 0</div>
+                <div class="review-rating-display" id="progressReviewModalRating" style="display: flex; align-items: center; gap: 5px;"><img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 16px; height: 16px;"> 0</div>
                 <div class="review-metadata">
-                    <span id="reviewModalUser">User</span> • <span id="reviewModalDate">Date</span>
+                    <span id="progressReviewModalUser">User</span> • <span id="progressReviewModalDate">Date</span>
                 </div>
             </div>
             
             <div class="field-row-stacked">
                 <label>Review Text</label>
-                <div class="review-text-content" id="reviewModalText">
+                <div class="review-text-content" id="progressReviewModalText">
                     No review text provided.
                 </div>
             </div>
@@ -428,16 +428,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const staticStarUrl = "{% static 'images/win98/star-in-win-98 style.png' %}";
 
     // Modal functionality for review badges
-    const modal = document.getElementById('reviewModal');
-    const modalTitle = document.getElementById('reviewModalTitle');
-    const modalRating = document.getElementById('reviewModalRating');
-    const modalText = document.getElementById('reviewModalText');
-    const modalUser = document.getElementById('reviewModalUser');
-    const modalDate = document.getElementById('reviewModalDate');
-    const modalClose = document.getElementById('reviewModalClose');
+    const modal = document.getElementById('progressReviewModal');
+    const modalTitle = document.getElementById('progressReviewModalTitle');
+    const modalRating = document.getElementById('progressReviewModalRating');
+    const modalText = document.getElementById('progressReviewModalText');
+    const modalUser = document.getElementById('progressReviewModalUser');
+    const modalDate = document.getElementById('progressReviewModalDate');
+    const modalClose = document.getElementById('progressReviewModalClose');
     
     // Function to open modal with review data
-    function openReviewModal(badge) {
+    function openProgressReviewModal(badge) {
         const reviewType = badge.getAttribute('data-review-type');
         const rating = badge.getAttribute('data-review-rating');
         const text = badge.getAttribute('data-review-text');
@@ -456,7 +456,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Function to close modal
-    function closeReviewModal() {
+    function closeProgressReviewModal() {
         modal.style.display = 'none';
         document.body.style.overflow = ''; // Restore scrolling
     }
@@ -466,28 +466,29 @@ document.addEventListener('DOMContentLoaded', function() {
         badge.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            openReviewModal(this);
+            openProgressReviewModal(this);
         });
     });
     
     // Close modal handlers
-    modalClose.addEventListener('click', closeReviewModal);
-    
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            closeReviewModal();
-        }
-    });
-    
-    // Prevent clicks inside the modal window from closing it
-    modal.querySelector('.window').addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
+    if (modal && modalClose) {
+        modalClose.addEventListener('click', closeProgressReviewModal);
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeProgressReviewModal();
+            }
+        });
+
+        // Prevent clicks inside the modal window from closing it.
+        modal.querySelector('.window')?.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
     
     // Close modal with Escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && modal.style.display === 'block') {
-            closeReviewModal();
+            closeProgressReviewModal();
         }
     });
 
@@ -499,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const episodeCount = indicators.length;
         
         // Show controls if there are many episodes (threshold: 50 episodes)
-        if (episodeCount > 50) {
+        if (episodeCount > 50 && progressControls) {
             progressControls.classList.add('show-controls');
         }
         
@@ -514,8 +515,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.add('active');
                 
                 // Update container class
-                progressContainer.classList.remove('detailed-view', 'compact-view');
-                progressContainer.classList.add(mode + '-view');
+                if (progressContainer) {
+                    progressContainer.classList.remove('detailed-view', 'compact-view');
+                    progressContainer.classList.add(mode + '-view');
+                }
                 
                 // Update season labels visibility
                 const seasonLabels = userProgress.querySelectorAll('.season-label');

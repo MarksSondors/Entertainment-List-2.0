@@ -22,6 +22,221 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+class ReviewModalController {
+    constructor() {
+        this.modal = document.getElementById('reviewModal');
+        this.overlay = document.getElementById('reviewModalOverlay');
+        this.form = document.getElementById('reviewForm');
+        this.state = null;
+
+        if (!this.modal || !this.overlay || !this.form) {
+            return;
+        }
+
+        this.rating = document.getElementById('rating');
+        this.ratingValue = document.getElementById('ratingValue');
+        this.reviewText = document.getElementById('reviewText');
+        this.reviewDate = document.getElementById('reviewDate');
+        this.reviewId = document.getElementById('reviewId');
+        this.charCount = document.getElementById('charCount');
+        this.loadingIndicator = document.getElementById('reviewLoadingIndicator');
+        this.submitButton = document.getElementById('submitBtn');
+        this.title = document.getElementById('reviewModalTitle');
+
+        this.form.addEventListener('submit', event => this.submit(event));
+        this.rating.addEventListener('input', () => this.updateRatingDisplay());
+        this.reviewText.addEventListener('input', () => this.updateCharacterCount());
+        this.overlay.addEventListener('click', () => this.close());
+        this.modal.querySelectorAll('[data-review-modal-close]').forEach(button => {
+            button.addEventListener('click', () => this.close());
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !this.modal.hidden) {
+                this.close();
+            }
+        });
+    }
+
+    getDefaultState() {
+        return {
+            contentId: this.modal.dataset.reviewContentId,
+            contentType: this.modal.dataset.reviewMediaType,
+            title: this.modal.dataset.reviewTitle,
+        };
+    }
+
+    open(options = {}) {
+        if (!this.modal) {
+            return;
+        }
+
+        const defaults = this.getDefaultState();
+        const legacyReview = window.userReviewId && !options.forceNew ? {
+            id: window.userReviewId,
+            rating: window.userReviewRating,
+            reviewText: window.userReviewText,
+            dateAdded: window.userWatchDate,
+        } : null;
+        const review = options.review || legacyReview;
+
+        this.state = { ...defaults, ...options, review };
+        this.form.reset();
+        this.reviewId.value = review?.id || '';
+        this.rating.value = review?.rating || 5;
+        this.reviewText.value = review?.reviewText || '';
+        this.reviewDate.value = this.toLocalDate(review?.dateAdded) || this.today();
+        this.title.textContent = review ? 'Edit Review' : (this.state.title ? `Review ${this.state.title}` : 'Write a Review');
+        this.updateRatingDisplay();
+        this.updateCharacterCount();
+        this.overlay.hidden = false;
+        this.modal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        window.setTimeout(() => this.reviewText.focus(), 0);
+    }
+
+    close() {
+        if (!this.modal) {
+            return;
+        }
+
+        this.modal.hidden = true;
+        this.overlay.hidden = true;
+        document.body.style.overflow = '';
+    }
+
+    async submit(event) {
+        event.preventDefault();
+        if (!this.state) {
+            return;
+        }
+
+        const isEdit = Boolean(this.reviewId.value);
+        const requestData = {
+            rating: this.rating.value,
+            review_text: this.reviewText.value,
+            date_added: this.reviewDate.value,
+        };
+
+        if (isEdit) {
+            requestData.review_id = this.reviewId.value;
+        } else if (this.state.contentType === 'tvshow') {
+            requestData.tv_show_id = this.state.contentId;
+            requestData.season_id = this.state.seasonId || null;
+            requestData.episode_subgroup_id = this.state.episodeSubgroupId || null;
+        } else {
+            requestData[`${this.state.contentType}_id`] = this.state.contentId;
+        }
+
+        this.setSubmitting(true);
+        try {
+            const response = await fetch(this.endpoint(), {
+                method: isEdit ? 'PUT' : 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify(requestData),
+            });
+            const responseData = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(responseData.error || 'Failed to submit review');
+            }
+
+            const review = {
+                id: responseData.review_id || responseData.id || this.reviewId.value,
+                rating: Number(this.rating.value),
+                reviewText: this.reviewText.value,
+                dateAdded: this.reviewDate.value,
+            };
+            this.close();
+            if (typeof this.state.onSuccess === 'function') {
+                this.state.onSuccess(review, responseData);
+            } else if (this.state.contentId && this.state.contentType) {
+                loadReviews(this.state.contentId, this.state.contentType);
+            }
+        } catch (error) {
+            console.error('Error submitting review:', error);
+            alert(error.message || 'Error submitting review');
+        } finally {
+            this.setSubmitting(false);
+        }
+    }
+
+    endpoint() {
+        return this.state.contentType === 'tvshow'
+            ? '/tvshows/reviews/'
+            : `/${this.state.contentType}s/reviews/`;
+    }
+
+    updateRatingDisplay() {
+        this.ratingValue.textContent = this.rating.value;
+    }
+
+    updateCharacterCount() {
+        this.charCount.textContent = `${this.reviewText.value.length} characters`;
+    }
+
+    setSubmitting(isSubmitting) {
+        this.submitButton.disabled = isSubmitting;
+        this.loadingIndicator.hidden = !isSubmitting;
+    }
+
+    today() {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    toLocalDate(value) {
+        if (!value) {
+            return '';
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return String(value).slice(0, 10);
+        }
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }
+}
+
+window.ReviewModal = null;
+
+function initializeReviewModal() {
+    if (!window.ReviewModal) {
+        const controller = new ReviewModalController();
+        if (controller.modal) {
+            window.ReviewModal = controller;
+        }
+    }
+    return window.ReviewModal;
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeReviewModal, { once: true });
+} else {
+    initializeReviewModal();
+}
+
+function openReviewModal(options) {
+    const controller = initializeReviewModal();
+    if (!controller) {
+        return;
+    }
+    controller.open(typeof options === 'object' ? options : {});
+}
+
+function closeReviewModal() {
+    window.ReviewModal?.close();
+}
+
+function updateRatingDisplay() {
+    window.ReviewModal?.updateRatingDisplay();
+}
+
+function editReview(id, rating, text, date) {
+    window.ReviewModal?.open({
+        review: { id, rating, reviewText: text, dateAdded: date },
+    });
+}
+
 window.addEventListener('click', function(event) {
         const modal = document.getElementById('reviewDetailModal');
         if (event.target === modal) {
@@ -399,120 +614,19 @@ function updateRatingDisplay(value) {
 
 // Universal openReviewModal that handles all use cases
 function openReviewModal(param1, param2, title) {
-    const modal = document.getElementById('reviewModal');
-    const overlay = document.getElementById('overlay');
-    
-    if (!modal || !overlay) {
-        console.error('Review modal elements not found');
+    const controller = initializeReviewModal();
+    if (!controller) {
         return;
     }
-    
-    // Determine if this is an edit operation based on parameter OR existing user review
-    // This fixes the issue when the button calls openReviewModal() without parameters
-    const isEdit = (typeof param1 === 'boolean' && param1) || 
-                  (param1 === undefined && window.userReviewId);
-    
-    console.log("Opening review modal, isEdit:", isEdit, "userReviewId:", window.userReviewId);
-    
-    // Set modal title
-    const modalTitle = document.getElementById('reviewModalTitle');
-    if (modalTitle) {
-        if (typeof title === 'string') {
-            modalTitle.textContent = `Review ${title}`;
-        } else {
-            modalTitle.textContent = isEdit ? 'Edit Review' : 'Write a Review';
-        }
-    }
-    
-    // For edit operations, pre-populate with existing review data
-    if (isEdit && window.userReviewId) {
-        const rating = document.getElementById('rating');
-        const ratingValue = document.getElementById('ratingValue');
-        const reviewText = document.getElementById('reviewText');
-        const reviewDate = document.getElementById('reviewDate');
-        const charCount = document.getElementById('charCount');
-        
-        if (rating) rating.value = window.userReviewRating;
-        if (ratingValue) ratingValue.textContent = window.userReviewRating;
-        if (reviewText) reviewText.value = window.userReviewText || '';
-        if (charCount) charCount.textContent = (window.userReviewText || '').length + ' characters';
-        
-        // Set the watch date if it exists
-        if (reviewDate) {
-            if (window.userWatchDate) {
-                console.log("Setting form date to:", window.userWatchDate);
-                // Use the locally stored date value that's already in the correct timezone
-                if (window.userWatchLocalDate) {
-                    reviewDate.value = window.userWatchLocalDate;
-                } else {
-                    // Fallback to extracting date from the ISO string
-                    const dateOnly = window.userWatchDate.split('T')[0];
-                    reviewDate.value = dateOnly;
-                }
-            } else {
-                reviewDate.value = new Date().toISOString().split('T')[0];
-            }
-        }
-        
-        // Add hidden input for review ID
-        let reviewIdInput = document.getElementById('reviewId');
-        if (!reviewIdInput) {
-            reviewIdInput = document.createElement('input');
-            reviewIdInput.type = 'hidden';
-            reviewIdInput.id = 'reviewId';
-            reviewIdInput.name = 'reviewId';
-            const form = document.getElementById('reviewForm');
-            if (form) form.appendChild(reviewIdInput);
-        }
-        reviewIdInput.value = window.userReviewId;
-        console.log("Set review ID for edit:", window.userReviewId);
-    } else {
-        // Reset form for new review
-        const rating = document.getElementById('rating');
-        const ratingValue = document.getElementById('ratingValue');
-        const reviewText = document.getElementById('reviewText');
-        const reviewDate = document.getElementById('reviewDate');
-        const charCount = document.getElementById('charCount');
-        const form = document.getElementById('reviewForm');
-        
-        if (form) form.reset();
-        if (rating) rating.value = 5;
-        if (ratingValue) ratingValue.textContent = '5';
-        if (reviewText) reviewText.value = '';
-        if (charCount) charCount.textContent = '0 characters';
-        
-        // For new reviews, set today's date as default
-        if (reviewDate) {
-            const today = new Date().toISOString().split('T')[0];
-            reviewDate.value = today;
-        }
-        
-        // Remove review ID if exists
-        const reviewIdInput = document.getElementById('reviewId');
-        if (reviewIdInput) reviewIdInput.remove();
-    }
-    
-    // Make sure overlay is below modal
-    overlay.style.zIndex = "999";
-    modal.style.zIndex = "1000";
-    
-    // Show modal and overlay
-    modal.style.display = 'block';
-    overlay.style.display = 'block';
-    
-    // Prevent background scrolling
-    document.body.style.overflow = 'hidden';
+
+    const options = typeof param1 === 'object' && param1 !== null
+        ? param1
+        : typeof title === 'string' ? { title } : {};
+    controller.open(options);
 }
 
 function closeReviewModal() {
-    const modal = document.getElementById('reviewModal');
-    const overlay = document.getElementById('overlay');
-    
-    if (modal) modal.style.display = 'none';
-    if (overlay) overlay.style.display = 'none';
-    
-    // Re-enable scrolling
-    document.body.style.overflow = 'auto';
+    window.ReviewModal?.close();
 }
 
 // Initialize review system with enhanced event handlers
