@@ -881,7 +881,7 @@
                             <button 
                                 id="review-button-{{ season.id }}"
                                 class="season-review-button retro-btn"
-                                onclick="event.stopPropagation(); openSeasonReviewModal('{{ season.id }}', '{{ season.title }}');"
+                                onclick="event.stopPropagation(); openTVReviewModal('season', '{{ season.id }}', '{{ season.title|escapejs }}');"
                                 style="margin-top: 8px; display: {% if season.watched_episodes_count == season.episodes.count and season.episodes.count > 0 %}block{% else %}none{% endif %}; font-size: 10px; padding: 3px 6px;">
                                 {% if season.user_rating %}Edit Review{% else %}Review Season{% endif %}
                             </button>
@@ -948,7 +948,7 @@
                             <button 
                                 id="review-button-bottom-{{ season.id }}"
                                 class="retro-btn"
-                                onclick="event.stopPropagation(); openSeasonReviewModal('{{ season.id }}', '{{ season.title }}');"
+                                onclick="event.stopPropagation(); openTVReviewModal('season', '{{ season.id }}', '{{ season.title|escapejs }}');"
                                 style="display: {% if season.watched_episodes_count == season.episodes.count and season.episodes.count > 0 %}inline-block{% else %}none{% endif %}; padding: 6px 12px;">
                                 {% if season.user_rating %}Edit Review{% else %}Review Season{% endif %}
                             </button>
@@ -1025,7 +1025,7 @@
                                         <button 
                                             id="subgroup-review-button-{{ subgroup.id }}"
                                             class="subgroup-review-button retro-btn"
-                                            onclick="event.stopPropagation(); openSubgroupReviewModal('{{ subgroup.id }}', '{{ subgroup.name }}');"
+                                            onclick="event.stopPropagation(); openTVReviewModal('subgroup', '{{ subgroup.id }}', '{{ subgroup.name|escapejs }}');"
                                             style="margin-top: 5px; width: 100%; font-size: 10px; padding: 3px 6px; display: {% if subgroups_data|get_item:subgroup.id|get_item:'completed' %}block{% else %}none{% endif %};">
                                             {% if subgroups_data|get_item:subgroup.id|get_item:'user_rating' %}Edit Review{% else %}Review Group{% endif %}
                                         </button>
@@ -1059,12 +1059,7 @@
         </div>
     </div>
 
-{% include "components/season_review_modal.html" %}
-
-{% if tv_show.episode_groups.exists %}
-<!-- Include the subgroup review modal -->
-{% include "components/subgroup_review_modal.html" %}
-{% endif %}
+{% include "components/review_modal.html" with content_id=tv_show.id content_type='tvshow' content_title=tv_show.title %}
 
 {% include "components/user_progress_section.html" %}
 
@@ -1468,7 +1463,7 @@
                         <button 
                             id="subgroup-review-button-bottom-${subgroupId}"
                             class="retro-btn"
-                            onclick="event.stopPropagation(); openSubgroupReviewModal('${subgroupId}', '${data.subgroup_name || 'Group'}');"
+                            onclick="event.stopPropagation(); openTVReviewModal('subgroup', '${subgroupId}', '${data.subgroup_name || 'Group'}');"
                             style="display: ${isCompleted ? 'inline-block' : 'none'}; padding: 6px 12px;">
                             ${hasUserRating ? 'Edit Review' : 'Review Group'}
                         </button>
@@ -1530,6 +1525,83 @@
             {% endif %}
         {% endfor %}
     };
+
+    function openTVReviewModal(targetType, targetId, targetName) {
+        const isSeason = targetType === 'season';
+        const existingReview = isSeason
+            ? seasonReviews[targetId]
+            : subgroupsData[targetId];
+        const review = existingReview?.review_id ? {
+            id: existingReview.review_id,
+            rating: isSeason ? existingReview.rating : existingReview.user_rating,
+            reviewText: isSeason ? existingReview.review_text : '',
+        } : null;
+
+        openReviewModal({
+            contentId: '{{ tv_show.id }}',
+            contentType: 'tvshow',
+            title: targetName,
+            seasonId: isSeason ? targetId : null,
+            episodeSubgroupId: isSeason ? null : targetId,
+            review,
+            forceNew: !review,
+            onSuccess: savedReview => updateTVReviewUI(targetType, targetId, savedReview),
+        });
+    }
+
+    function updateTVReviewUI(targetType, targetId, review) {
+        const isSeason = targetType === 'season';
+        const buttonIds = isSeason
+            ? [`review-button-${targetId}`, `review-button-bottom-${targetId}`]
+            : [`subgroup-review-button-${targetId}`, `subgroup-review-button-bottom-${targetId}`];
+
+        buttonIds.forEach(buttonId => {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                button.textContent = 'Edit Review';
+            }
+        });
+
+        if (isSeason) {
+            seasonReviews[targetId] = {
+                ...(seasonReviews[targetId] || {}),
+                rating: review.rating,
+                review_text: review.reviewText,
+                review_id: review.id,
+                user_id: {{ user.id }},
+            };
+            const button = document.getElementById(`review-button-${targetId}`);
+            let ratingDisplay = document.getElementById(`season-rating-${targetId}`);
+            if (!ratingDisplay && button) {
+                ratingDisplay = document.createElement('div');
+                ratingDisplay.id = `season-rating-${targetId}`;
+                ratingDisplay.className = 'user-rating';
+                ratingDisplay.style.cssText = 'margin-top: 5px; font-weight: bold; font-size: 11px;';
+                button.parentNode.insertBefore(ratingDisplay, button);
+            }
+            if (ratingDisplay) {
+                ratingDisplay.textContent = `Your Rating: ${review.rating}/10`;
+            }
+            return;
+        }
+
+        subgroupsData[targetId] = {
+            ...(subgroupsData[targetId] || {}),
+            user_rating: review.rating,
+            review_id: review.id,
+        };
+        const card = document.querySelector(`.subgroup-card[onclick*="toggleSubgroup('${targetId}')"]`);
+        let ratingDisplay = card?.querySelector('.user-rating');
+        if (!ratingDisplay && card) {
+            ratingDisplay = document.createElement('div');
+            ratingDisplay.className = 'user-rating';
+            ratingDisplay.style.cssText = 'margin-top: 5px; font-weight: bold; font-size: 11px;';
+            card.querySelector('.subgroup-info')?.appendChild(ratingDisplay);
+        }
+        if (ratingDisplay) {
+            ratingDisplay.textContent = `Your Rating: ${review.rating}/10`;
+        }
+    }
 
     // Toggle production companies visibility
     function toggleProductionCompanies() {

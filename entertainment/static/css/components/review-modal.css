@@ -1,0 +1,148 @@
+.review-modal-overlay {
+    background: rgba(0, 0, 0, 0.5);
+    inset: 0;
+    position: fixed;
+    z-index: 999;
+}
+
+.review-modal-overlay:not([hidden]) {
+    display: block;
+}
+
+.review-modal {
+    box-sizing: border-box;
+    left: 50%;
+    max-height: calc(100dvh - 2rem);
+    max-width: min(42rem, calc(100vw - 2rem));
+    position: fixed;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 30rem;
+    z-index: 1000;
+}
+
+.review-modal:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+}
+
+.review-modal__body {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.review-modal__form {
+    display: block;
+}
+
+.review-modal .field-row-stacked {
+    margin: 0 0 0.8rem;
+}
+
+.review-modal__rating-row {
+    align-items: center;
+    display: flex;
+    flex-direction: row !important;
+    gap: 0.6rem;
+    margin-top: 0.25rem;
+}
+
+.review-modal__rating-row input[type="range"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.review-modal__rating-value {
+    flex: 0 0 auto;
+    margin-left: 0;
+    padding: 2px 8px;
+    width: auto;
+}
+
+.review-modal__review-field textarea {
+    box-sizing: border-box;
+    font-size: 16px;
+    min-height: 8.5rem;
+    resize: vertical;
+    width: 100%;
+}
+
+.review-modal__character-count {
+    font-size: 0.8em;
+    margin: 2px 0 0;
+    text-align: right;
+}
+
+.review-modal__actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: space-between;
+    margin-top: 1rem;
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.review-modal__loading {
+    align-items: center;
+    display: flex;
+    gap: 0.35rem;
+}
+
+.review-modal__buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.review-modal__buttons button {
+    min-width: 5.5rem;
+}
+
+@media (max-width: 600px) {
+    .review-modal {
+        max-height: calc(100dvh - 1rem);
+        max-width: calc(100vw - 1rem);
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 100%;
+    }
+
+    .review-modal__body {
+        padding: 0.75rem;
+    }
+
+    .review-modal input,
+    .review-modal textarea,
+    .review-modal button {
+        font-size: 16px;
+    }
+
+    .review-modal__review-field textarea {
+        min-height: 10rem;
+    }
+
+    .review-modal__actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .review-modal__buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .review-modal__buttons button {
+        min-height: 2.75rem;
+    }
+
+    .review-modal .title-bar-controls button {
+        height: 16px;
+        min-height: 16px;
+        min-width: 16px;
+        padding: 0;
+        width: 16px;
+    }
+}

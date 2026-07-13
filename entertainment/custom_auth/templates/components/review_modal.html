@@ -1,0 +1,52 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/components/review-modal.css' %}">
+
+<div id="reviewModalOverlay" class="review-modal-overlay" hidden></div>
+
+<section id="reviewModal" class="window review-modal" role="dialog" aria-modal="true" aria-labelledby="reviewModalTitle" data-review-media-type="{{ content_type|default:'' }}" data-review-content-id="{{ content_id|default:'' }}" data-review-title="{{ content_title|default:'' }}" hidden>
+    <div class="title-bar">
+        <div class="title-bar-text" id="reviewModalTitle">Write a Review</div>
+        <div class="title-bar-controls">
+            <button type="button" aria-label="Close" data-review-modal-close></button>
+        </div>
+    </div>
+    <div class="window-body review-modal__body">
+        <form id="reviewForm" class="review-modal__form">
+            <input type="hidden" id="reviewId" name="reviewId">
+
+            <div class="field-row-stacked">
+                <label for="reviewDate">Date Watched:</label>
+                <input type="date" id="reviewDate" name="reviewDate" required>
+            </div>
+
+            <div class="field-row-stacked">
+                <label for="rating">Rating:</label>
+                <div class="field-row review-modal__rating-row">
+                    <input type="range" id="rating" name="rating" min="1" max="10" value="5" step="1">
+                    <div class="status-bar review-modal__rating-value">
+                        <span id="ratingValue">5</span>/10
+                    </div>
+                </div>
+            </div>
+
+            <div class="field-row-stacked review-modal__review-field">
+                <label for="reviewText">Review:</label>
+                <textarea id="reviewText" name="reviewText" rows="7" placeholder="Write your review here..." required></textarea>
+                <p id="charCount" class="review-modal__character-count">0 characters</p>
+            </div>
+
+            <div class="review-modal__actions">
+                <div id="reviewLoadingIndicator" class="review-modal__loading" hidden aria-live="polite">
+                    <img src="{% static 'images/hourglass.webp' %}" alt="" width="20" height="20">
+                    <span>Submitting...</span>
+                </div>
+                <div class="review-modal__buttons">
+                    <button type="button" data-review-modal-close>Cancel</button>
+                    <button type="submit" id="submitBtn">Submit</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+<script src="{% static 'js/review.js' %}"></script>

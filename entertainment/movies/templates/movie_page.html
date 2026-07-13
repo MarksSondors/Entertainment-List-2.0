@@ -666,7 +666,7 @@ iframe[src*="tiktok.com"] {
                 
                 <button class="retro-btn" onclick="openCastModal()">Cast</button>
 
-                {% include "components/movie_review_modal.html" with content_id=movie.id content_type='movie' %}
+                {% include "components/review_modal.html" with content_id=movie.id content_type='movie' content_title=movie.title %}
                 {% include "components/cast_modal.html" with cast=movie.cast %}
             </div>
         </div>

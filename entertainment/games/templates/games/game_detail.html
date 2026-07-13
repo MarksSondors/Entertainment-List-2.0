@@ -399,24 +399,77 @@
     color: var(--text-color);
 }
 
-/* Modal Styles */
-.modal {
+.review-card .review-text {
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+/* Game review detail modal */
+.game-review-detail-modal {
     display: none;
     position: fixed;
     z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
+    inset: 0;
+    overflow-y: auto;
     background-color: rgba(0,0,0,0.4);
 }
 
-.modal-content {
-    margin: 10% auto;
+.game-review-detail-modal__content {
+    box-sizing: border-box;
+    margin: 10dvh auto;
+    max-height: calc(100dvh - 2rem);
     width: 80%;
     max-width: 600px;
     position: relative;
+}
+
+.game-review-detail-modal__body {
+    max-height: calc(100dvh - 8rem);
+    overflow-y: auto;
+}
+
+.game-review-detail-modal__metadata {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.game-review-detail-modal__text {
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 768px) {
+    .game-review-detail-modal__content {
+        margin: 0.5rem auto;
+        max-height: calc(100dvh - 1rem);
+        width: calc(100% - 1rem);
+    }
+
+    .game-review-detail-modal__body {
+        max-height: calc(100dvh - 5rem);
+        padding: 0.85rem;
+    }
+
+    .game-review-detail-modal__metadata {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .game-review-detail-modal__actions {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+    }
+
+    .game-review-detail-modal__actions button {
+        font-size: 16px;
+        min-height: 2.75rem;
+    }
 }
 </style>
 
@@ -604,28 +657,28 @@
 </div>
 
 <!-- Review Detail Modal -->
-<div id="reviewDetailModal" class="modal">
-    <div class="modal-content window">
+<div id="reviewDetailModal" class="game-review-detail-modal">
+    <div class="game-review-detail-modal__content window">
         <div class="title-bar">
             <div class="title-bar-text" id="reviewModalUsername">User Review</div>
             <div class="title-bar-controls">
                 <button onclick="closeReviewDetailModal()" aria-label="Close">✕</button>
             </div>
         </div>
-        <div class="window-body">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+        <div class="window-body game-review-detail-modal__body">
+            <div class="game-review-detail-modal__metadata">
                 <p style="margin: 0; color: var(--text-color);"><strong>Rating: </strong><span id="reviewModalRating"></span>/10</p>
                 <p style="margin: 0; color: var(--text-color);"><strong>Date: </strong><span id="reviewModalDate"></span></p>
             </div>
             <p style="margin: 10px 0 5px; color: var(--text-color);"><strong>Review:</strong></p>
-            <div id="reviewModalText" style="color: var(--text-color);"></div>
-            <div id="reviewModalActions" style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 5px;"></div>
+            <div id="reviewModalText" class="game-review-detail-modal__text" style="color: var(--text-color);"></div>
+            <div id="reviewModalActions" class="game-review-detail-modal__actions" style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 5px;"></div>
         </div>
     </div>
 </div>
 
 <!-- Include the review modal component -->
-{% include "components/movie_review_modal.html" with content_id=game.id content_type='game' %}
+{% include "components/review_modal.html" with content_id=game.id content_type='game' content_title=game.title %}
 
 <script>
     // Helper function to sanitize content
@@ -790,10 +843,7 @@
                         });
                         
                         const isAuthor = review.user === currentUsername;
-                        let displayText = review.review_text || '';
-                        const sanitizedText = sanitizeContent(displayText);
-                        const hasLongText = sanitizedText.length > 150;
-                        const truncatedText = hasLongText ? sanitizedText.substring(0, 150) + '...' : sanitizedText;
+                        const displayText = review.review_text || '';
                         
                         const reviewCard = document.createElement('div');
                         reviewCard.className = 'review-card';
@@ -816,12 +866,14 @@
                         
                         const textDiv = document.createElement('div');
                         textDiv.className = 'review-text';
-                        textDiv.style.cssText = 'margin-bottom: 10px; word-break: break-word;';
+                        textDiv.style.cssText = 'margin-bottom: 10px;';
                         
                         if (displayText) {
-                            textDiv.innerHTML = hasLongText ? truncatedText : sanitizedText;
+                            textDiv.textContent = displayText;
                         } else {
-                            textDiv.innerHTML = '<em>No text review</em>';
+                            const emptyText = document.createElement('em');
+                            emptyText.textContent = 'No text review';
+                            textDiv.appendChild(emptyText);
                         }
                         
                         reviewCard.appendChild(headerDiv);
