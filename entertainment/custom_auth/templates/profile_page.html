@@ -189,6 +189,40 @@
                         </div>
                     </div>
 
+                    <!-- Favorite Books Section -->
+                    <div id="favorites-books" class="content-section">
+                        <div class="window" style="width: 100%; margin-top: 20px;">
+                            <div class="title-bar">
+                                <div class="title-bar-text">Favorite Books</div>
+                            </div>
+                            <div class="window-body">
+                                <div class="sunken-panel" style="overflow-x: auto; padding: 10px;">
+                                    {% if favorite_books %}
+                                        <div class="poster-row">
+                                            {% for book in favorite_books %}
+                                                <a href="{% url 'books:book_page' book.id %}" class="poster-link">
+                                                    <img src="{{ book.image_url|default:'#' }}" alt="{{ book.title }}"
+                                                         class="poster-image"
+                                                         onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
+                                                    {% if book.user_rating %}
+                                                    <div class="rating-badge">
+                                                        {{ book.user_rating }}
+                                                    </div>
+                                                    {% endif %}
+                                                    <span class="poster-title" title="{{ book.title }}">{{ book.title|truncatechars:15 }}</span>
+                                                </a>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="field-row" style="justify-content: center;">
+                                            <p>No favorite books added yet.</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Watchlist Section -->
                     <div id="watchlist" class="content-section">
                         <div class="window" style="width: 100%; margin-top: 20px;">
@@ -206,6 +240,8 @@
                                                     <a href="{% url 'tv_show_page' item.tmdb_id %}" class="poster-link">
                                                 {% elif item.media_type == 'Game' or item.media_type == 'game' %}
                                                     <a href="{% url 'game_detail' item.game_id %}" class="poster-link">
+                                                {% elif item.media_type == 'Book' or item.media_type == 'book' %}
+                                                    <a href="{% url 'books:book_page' item.book_id %}" class="poster-link">
                                                 {% else %}
                                                     <a href="#" class="poster-link">
                                                 {% endif %}

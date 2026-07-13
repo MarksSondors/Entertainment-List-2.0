@@ -758,6 +758,7 @@ def profile_page(request, username=None):
     movie_content_type = ContentType.objects.get_for_model(Movie)
     tv_show_content_type = ContentType.objects.get_for_model(TVShow)
     game_content_type = ContentType.objects.get_for_model(Game)
+    book_content_type = ContentType.objects.get_for_model(Book)
     
     # Get user's favorite movies - fetch only top 20 reviews
     movie_reviews = Review.objects.filter(
@@ -779,6 +780,24 @@ def profile_page(request, username=None):
             movie.user_rating = review.rating
             movie.poster = get_low_res_poster_url(movie.poster)
             favorite_movies.append(movie)
+
+    # Get user's favorite books - fetch only top 20 reviews
+    book_reviews = Review.objects.filter(
+        user=user,
+        content_type=book_content_type
+    ).only('object_id', 'rating').order_by('-rating')[:20]
+
+    favorite_books = []
+    book_ids = [review.object_id for review in book_reviews]
+    books_dict = {book.id: book for book in Book.objects.filter(
+        id__in=book_ids
+    ).only('id', 'title', 'image_url')}
+
+    for review in book_reviews:
+        book = books_dict.get(review.object_id)
+        if book:
+            book.user_rating = review.rating
+            favorite_books.append(book)
             
     # Get user's favorite games - fetch only top 20 reviews
     game_reviews = Review.objects.filter(
@@ -881,6 +900,13 @@ def profile_page(request, username=None):
                 )
                 for game in games:
                     media_cache[(ct_id, game.id)] = game
+            elif ct_id == book_content_type.id:
+                book_ids = [item.object_id for item in items]
+                books = Book.objects.filter(id__in=book_ids).only(
+                    'id', 'title', 'image_url'
+                )
+                for book in books:
+                    media_cache[(ct_id, book.id)] = book
         
         # Add reviews data to items (optimized version)
         add_review_data_to_items(watchlist_items, user)
@@ -892,7 +918,6 @@ def profile_page(request, username=None):
                 item_data = {
                     'id': item.id,
                     'title': media.title,
-                    'poster_url': get_low_res_poster_url(media.poster),
                     'media_type': item.content_type.model,
                     'avg_rating': getattr(item, 'avg_rating', None),
                     'rating_count': getattr(item, 'rating_count', None),
@@ -900,12 +925,18 @@ def profile_page(request, username=None):
                 }
                 
                 if item.content_type_id == movie_content_type.id:
+                    item_data['poster_url'] = get_low_res_poster_url(media.poster)
                     item_data['tmdb_id'] = media.tmdb_id
                 elif item.content_type_id == tv_show_content_type.id:
+                    item_data['poster_url'] = get_low_res_poster_url(media.poster)
                     item_data['tmdb_id'] = media.tmdb_id
                 elif item.content_type_id == game_content_type.id:
+                    item_data['poster_url'] = get_low_res_poster_url(media.poster)
                     item_data['rawg_id'] = media.rawg_id
                     item_data['game_id'] = media.id
+                elif item.content_type_id == book_content_type.id:
+                    item_data['poster_url'] = media.image_url
+                    item_data['book_id'] = media.id
                     
                 watchlist_for_template.append(item_data)
     
@@ -926,7 +957,7 @@ def profile_page(request, username=None):
     top_media = None
     if top_media_row:
         ct = ContentType.objects.get(pk=top_media_row['content_type'])
-        top_media = {'movie': 'Movies', 'tvshow': 'TV Shows', 'game': 'Games'}.get(ct.model, ct.model.title())
+        top_media = {'movie': 'Movies', 'tvshow': 'TV Shows', 'game': 'Games', 'book': 'Books'}.get(ct.model, ct.model.title())
 
     profile_stats = {
         'total': total_reviews,
@@ -939,6 +970,7 @@ def profile_page(request, username=None):
         'favorite_movies': favorite_movies,
         'favorite_shows': favorite_shows,
         'favorite_games': favorite_games,
+        'favorite_books': favorite_books,
         'watchlist_items': watchlist_for_template,
         'all_users': all_users,
         'current_user': request.user,
@@ -956,6 +988,7 @@ def watchlist_page(request):
     movie_ct = ContentType.objects.get_for_model(Movie)
     tv_ct = ContentType.objects.get_for_model(TVShow)
     game_ct = ContentType.objects.get_for_model(Game)
+    book_ct = ContentType.objects.get_for_model(Book)
     
     # Get all watchlist items for the user (for initial page load)
     watchlist_items = user.get_watchlist()
@@ -968,6 +1001,7 @@ def watchlist_page(request):
             'finished_shows': [],
             'movies': [],
             'games': [],
+            'books': [],
             'genres': [],
             'countries': [],
             'watchlist_empty': True,
@@ -993,6 +1027,8 @@ def watchlist_page(request):
         # Fetch all media objects of this type in one query
         object_ids = [item.object_id for item in items]
         objects = model_class.objects.filter(id__in=object_ids)
+        if ct_id == book_ct.id:
+            objects = objects.prefetch_related('authors')
         
         # Store all media objects by type for later use
         all_media_by_type[ct_id] = objects
@@ -1025,6 +1061,7 @@ def watchlist_page(request):
     finished_shows = []
     movies = []
     games = []
+    books = []
     
     # First, separate TV shows and movies
     tv_shows_items = []
@@ -1037,6 +1074,8 @@ def watchlist_page(request):
             tv_shows_items.append(item)
         elif item.content_type_id == game_ct.id:
             games.append(item)
+        elif item.content_type_id == book_ct.id:
+            books.append(item)
     
     # If there are TV shows, batch-fetch their watch progress
     if tv_shows_items:
@@ -1220,6 +1259,25 @@ def watchlist_page(request):
             'avg_rating': getattr(item, 'avg_rating', None),
             'rating_count': getattr(item, 'rating_count', None),
         })
+
+    books_for_template = []
+    for item in books:
+        media = get_safe_media(item)
+        if not media:
+            continue
+
+        books_for_template.append({
+            'id': item.id,
+            'date_added': item.date_added,
+            'content_type_model': item.content_type.model,
+            'media_id': media.id,
+            'media_title': media.title,
+            'media_cover': media.image_url,
+            'media_authors': media.author_names,
+            'media_published_date': media.published_date,
+            'avg_rating': getattr(item, 'avg_rating', None),
+            'rating_count': getattr(item, 'rating_count', None),
+        })
     
     # Update your context dictionary to include finished_shows
     context = {
@@ -1228,6 +1286,7 @@ def watchlist_page(request):
         'finished_shows': finished_shows_for_template,  # Add this line
         'movies': movies_for_template,
         'games': games_for_template,
+        'books': books_for_template,
         'genres': genres,
         'countries': countries,
     }
