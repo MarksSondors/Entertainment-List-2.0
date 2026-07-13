@@ -210,7 +210,7 @@ def update_ongoing_tvshows():
     for tvshow in ongoing_tvshows:
         try:
             # Schedule individual TV show updates as separate tasks
-            async_task(update_single_tvshow, tvshow.id)
+            async_task(update_single_tvshow, tvshow.id, True)
         except Exception as e:
             logger.error(f"Error scheduling update for TV show {tvshow.title} (ID: {tvshow.id}): {e}")
     

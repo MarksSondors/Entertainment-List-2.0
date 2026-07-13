@@ -50,14 +50,14 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Episode groups update process complete for {count} TV shows"))
         elif options['id']:
             from tvshows.tasks import update_single_tvshow
-            result = update_single_tvshow(options['id'])
+            result = update_single_tvshow(options['id'], update_people=True)
             self.stdout.write(self.style.SUCCESS(f"Update process complete: {result}"))
         elif options['tmdb']:
             from tvshows.models import TVShow
             from tvshows.tasks import update_single_tvshow
             try:
                 tvshow = TVShow.objects.get(tmdb_id=options['tmdb'])
-                result = update_single_tvshow(tvshow.id)
+                result = update_single_tvshow(tvshow.id, update_people=True)
                 self.stdout.write(self.style.SUCCESS(f"Update process complete: {result}"))
             except TVShow.DoesNotExist:
                 self.stdout.write(self.style.ERROR(f"TV show with TMDB ID {options['tmdb']} not found"))
