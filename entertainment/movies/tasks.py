@@ -13,6 +13,22 @@ from movies.models import *
 logger = logging.getLogger(__name__)
 
 
+RELEASE_DATE_FIELDS = (
+    ('release_date', 'New Release', 'is now available'),
+    ('digital_release_date', 'Digital Release', 'is now available digitally'),
+    ('physical_release_date', 'Physical Release', 'is now available on physical media'),
+)
+
+
+def get_release_events(movie, release_date):
+    """Return the release events for a movie occurring on a given date."""
+    return [
+        (title, availability_text)
+        for field_name, title, availability_text in RELEASE_DATE_FIELDS
+        if getattr(movie, field_name) == release_date
+    ]
+
+
 def check_new_movies_today():
     """
     Scheduled task to check for new movies releasing today and notify users.
@@ -20,6 +36,7 @@ def check_new_movies_today():
     """
     from django.utils import timezone
     from django.contrib.contenttypes.models import ContentType
+    from django.db.models import Q
     from custom_auth.models import Watchlist
     from notifications.utils import send_notification_to_user
     
@@ -27,9 +44,10 @@ def check_new_movies_today():
     
     check_date = timezone.now().date()
     
-    # Get all movies releasing today
     movies_today = Movie.objects.filter(
-        release_date=check_date
+        Q(release_date=check_date)
+        | Q(digital_release_date=check_date)
+        | Q(physical_release_date=check_date)
     ).prefetch_related('genres')
     
     if not movies_today.exists():
@@ -45,7 +63,6 @@ def check_new_movies_today():
     total_notifications = 0
     total_users = set()
     
-    # For each movie releasing today
     for movie in movies_today:
         logger.info(f'Processing: {movie.title}')
         
@@ -61,44 +78,38 @@ def check_new_movies_today():
         
         logger.info(f'  Notifying {watchlist_users.count()} user(s) about {movie.title}')
         
-        # Create notification message
-        title = f"🎬 New Release: {movie.title}"
-        
-        # Add genre info if available
-        genres = movie.genres.all()[:2]  # First 2 genres
-        if genres:
-            genre_text = ", ".join([g.name for g in genres])
-            body = f"{movie.title} is now available! ({genre_text})"
-        else:
-            body = f"{movie.title} is now available!"
-        
-        # Add runtime if available
-        if movie.runtime:
-            body += f" • {movie.minutes_to_hours()}"
-        
-        url = movie.get_absolute_url()
-        
-        # Send notification to each user
-        for watchlist_item in watchlist_users:
-            result = send_notification_to_user(
-                user_id=watchlist_item.user.id,
-                title=title,
-                body=body,
-                notification_type='new_release',
-                url=url,
-                icon=movie.poster or '/static/favicon/web-app-manifest-192x192.png',
-                content_type=movie_content_type,
-                object_id=movie.id,
-            )
-            
-            if result.get('success', 0) > 0 or result.get('queued'):
-                total_notifications += 1
-                total_users.add(watchlist_item.user.id)
+        for release_title, availability_text in get_release_events(movie, check_date):
+            title = f"🎬 {release_title}: {movie.title}"
+            genres = movie.genres.all()[:2]
+            body = f"{movie.title} {availability_text}!"
+            if genres:
+                body += f" ({', '.join(genre.name for genre in genres)})"
+            if movie.runtime:
+                body += f" • {movie.minutes_to_hours()}"
+
+            for watchlist_item in watchlist_users:
+                result = send_notification_to_user(
+                    user_id=watchlist_item.user.id,
+                    title=title,
+                    body=body,
+                    notification_type='new_release',
+                    url=movie.get_absolute_url(),
+                    icon=movie.poster or '/static/favicon/web-app-manifest-192x192.png',
+                    content_type=movie_content_type,
+                    object_id=movie.id,
+                )
+
+                if result.get('success', 0) > 0 or result.get('queued'):
+                    total_notifications += 1
+                    total_users.add(watchlist_item.user.id)
     
     result = {
         'notified_users': len(total_users),
         'notifications_sent': total_notifications,
-        'movies_released': movies_today.count()
+        'movies_released': movies_today.count(),
+        'release_events': sum(
+            len(get_release_events(movie, check_date)) for movie in movies_today
+        ),
     }
     
     logger.info(f'Movie release notification complete: {result}')
@@ -124,13 +135,17 @@ def refresh_recommender_overlay():
 
 
 def update_unreleased_movies():
-    """Update information for all movies that haven't been released yet."""
+    """Update movies with an upcoming theatrical, digital, or physical release."""
+    from django.db.models import Q
+
     today = date.today()
     
-    # Get all unreleased movies (either explicitly marked as unreleased or with future release date)
     unreleased_movies = Movie.objects.filter(
-        status__in=['In Production', 'Post Production', 'Planned'],
-    ) | Movie.objects.filter(release_date__gt=today)
+        Q(status__in=['In Production', 'Post Production', 'Planned'])
+        | Q(release_date__gt=today)
+        | Q(digital_release_date__gt=today)
+        | Q(physical_release_date__gt=today)
+    ).distinct()
     
     # Log how many movies will be updated
     logger.info(f"Updating {unreleased_movies.count()} unreleased movies")
@@ -188,7 +203,7 @@ def update_single_movie(movie_id, update_people=False):
         # Use MoviesService instead of direct requests
         movies_service = MoviesService()
         # Include credits if we're updating people
-        append_to_response = "videos,keywords,credits" if update_people else "videos,keywords"
+        append_to_response = "videos,keywords,release_dates,credits" if update_people else "videos,keywords,release_dates"
         logger.info(f"Fetching TMDB data with append_to_response={append_to_response}")
         data = movies_service.get_movie_details(movie.tmdb_id, append_to_response=append_to_response)
         
@@ -245,6 +260,16 @@ def update_single_movie(movie_id, update_people=False):
                 except (ValueError, TypeError):
                     logger.error(f"Invalid release date format for movie {movie.title}: {data['release_date']}")
                     updates['release_date'] = None
+
+        if 'release_dates' in data:
+            from movies.parsers import extract_release_date
+            for field_name, release_type in (
+                ('digital_release_date', 4),
+                ('physical_release_date', 5),
+            ):
+                new_release_date = extract_release_date(data, release_type)
+                if new_release_date != getattr(movie, field_name):
+                    updates[field_name] = new_release_date
         
         if data.get('belongs_to_collection'):
             print(f"Collection data: {data['belongs_to_collection']}")

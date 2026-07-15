@@ -5,7 +5,9 @@ Usage: python manage.py notify_new_movies
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q
 from movies.models import Movie
+from movies.tasks import get_release_events
 from custom_auth.models import Watchlist
 import logging
 
@@ -36,7 +38,9 @@ class Command(BaseCommand):
         
         # Get all movies releasing today
         movies_today = Movie.objects.filter(
-            release_date=check_date
+            Q(release_date=check_date)
+            | Q(digital_release_date=check_date)
+            | Q(physical_release_date=check_date)
         ).prefetch_related('genres')
         
         if not movies_today.exists():
@@ -68,46 +72,37 @@ class Command(BaseCommand):
             
             self.stdout.write(f'  Notifying {watchlist_users.count()} user(s)')
             
-            # Create notification message
-            title = f"🎬 New Release: {movie.title}"
-            
-            # Add genre info if available
-            genres = movie.genres.all()[:2]  # First 2 genres
-            if genres:
-                genre_text = ", ".join([g.name for g in genres])
-                body = f"{movie.title} is now available! ({genre_text})"
-            else:
-                body = f"{movie.title} is now available!"
-            
-            # Add runtime if available
-            if movie.runtime:
-                body += f" • {movie.minutes_to_hours()}"
-            
-            url = movie.get_absolute_url()
-            
-            # Send notification to each user
-            for watchlist_item in watchlist_users:
-                result = send_notification_to_user(
-                    user_id=watchlist_item.user.id,
-                    title=title,
-                    body=body,
-                    notification_type='new_release',
-                    url=url,
-                    icon=movie.poster or '/static/favicon/web-app-manifest-192x192.png',
-                    content_type=movie_content_type,
-                    object_id=movie.id,
-                )
-                
-                if result.get('success', 0) > 0:
-                    total_notifications += 1
-                    self.stdout.write(f'    ✅ Sent to {watchlist_item.user.username}')
-                elif result.get('queued'):
-                    total_notifications += 1
-                    self.stdout.write(f'    ⏰ Queued for {watchlist_item.user.username} (quiet hours)')
-                elif result.get('skipped'):
-                    self.stdout.write(f'    ⚠️  Skipped {watchlist_item.user.username} (new releases disabled)')
-                else:
-                    self.stdout.write(f'    ❌ Failed {watchlist_item.user.username}')
+            for release_title, availability_text in get_release_events(movie, check_date):
+                title = f"🎬 {release_title}: {movie.title}"
+                genres = movie.genres.all()[:2]
+                body = f"{movie.title} {availability_text}!"
+                if genres:
+                    body += f" ({', '.join(genre.name for genre in genres)})"
+                if movie.runtime:
+                    body += f" • {movie.minutes_to_hours()}"
+
+                for watchlist_item in watchlist_users:
+                    result = send_notification_to_user(
+                        user_id=watchlist_item.user.id,
+                        title=title,
+                        body=body,
+                        notification_type='new_release',
+                        url=movie.get_absolute_url(),
+                        icon=movie.poster or '/static/favicon/web-app-manifest-192x192.png',
+                        content_type=movie_content_type,
+                        object_id=movie.id,
+                    )
+
+                    if result.get('success', 0) > 0:
+                        total_notifications += 1
+                        self.stdout.write(f'    ✅ Sent to {watchlist_item.user.username}')
+                    elif result.get('queued'):
+                        total_notifications += 1
+                        self.stdout.write(f'    ⏰ Queued for {watchlist_item.user.username} (quiet hours)')
+                    elif result.get('skipped'):
+                        self.stdout.write(f'    ⚠️  Skipped {watchlist_item.user.username} (new releases disabled)')
+                    else:
+                        self.stdout.write(f'    ❌ Failed {watchlist_item.user.username}')
             
             total_users += watchlist_users.count()
         

@@ -10,7 +10,7 @@ admin.site.register(MovieOfWeekPick)
 
 
 class MovieAdmin(admin.ModelAdmin):
-    list_display = ('title', 'release_date', 'rating')
+    list_display = ('title', 'release_date', 'digital_release_date', 'physical_release_date', 'rating')
     search_fields = ('title', 'original_title')
     list_filter = ('release_date',)
     
@@ -38,7 +38,10 @@ class MovieAdmin(admin.ModelAdmin):
             'fields': ('poster', 'backdrop', 'trailer')
         }),
         ('Details', {
-            'fields': ('release_date', 'runtime', 'minutes_to_hours', 'rating', 'status', 'is_anime')
+            'fields': (
+                'release_date', 'digital_release_date', 'physical_release_date',
+                'runtime', 'minutes_to_hours', 'rating', 'status', 'is_anime',
+            )
         }),
         ('IDs', {
             'fields': ('tmdb_id', 'imdb_id'),

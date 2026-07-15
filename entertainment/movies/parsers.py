@@ -1,6 +1,32 @@
 from .models import *
 from api.services.movies import MoviesService
 from django.contrib.contenttypes.models import ContentType
+from datetime import datetime
+
+
+def extract_release_date(movie_details, release_type, preferred_country='US'):
+    """Return the earliest release date for a TMDB release type."""
+    country_results = movie_details.get('release_dates', {}).get('results', [])
+    preferred_dates = []
+    fallback_dates = []
+
+    for country_result in country_results:
+        for release in country_result.get('release_dates', []):
+            if release.get('type') != release_type or not release.get('release_date'):
+                continue
+            try:
+                release_date = datetime.fromisoformat(
+                    release['release_date'].replace('Z', '+00:00')
+                ).date()
+            except (TypeError, ValueError):
+                continue
+
+            fallback_dates.append(release_date)
+            if country_result.get('iso_3166_1') == preferred_country:
+                preferred_dates.append(release_date)
+
+    dates = preferred_dates or fallback_dates
+    return min(dates) if dates else None
 
 def extract_movie_data(movie_details, movie_poster=None, movie_backdrop=None, is_anime=False):
     """Extract and format basic movie data from API response"""
@@ -28,6 +54,8 @@ def extract_movie_data(movie_details, movie_poster=None, movie_backdrop=None, is
         'poster': movie_poster,
         'backdrop': movie_backdrop,
         'release_date': movie_details.get('release_date'),
+        'digital_release_date': extract_release_date(movie_details, 4),
+        'physical_release_date': extract_release_date(movie_details, 5),
         'tmdb_id': movie_details.get('id'),
         'imdb_id': movie_details.get('imdb_id'),
         'runtime': movie_details.get('runtime'),
@@ -260,7 +288,7 @@ def create_movie_basic(movie_id, movie_poster=None, movie_backdrop=None, is_anim
     movies_service = MoviesService()
     
     # Get movie details from API
-    movie_details = movies_service.get_movie_details(movie_id, append_to_response='videos,keywords')
+    movie_details = movies_service.get_movie_details(movie_id, append_to_response='videos,keywords,release_dates')
     if not movie_details:
         return None
     
@@ -287,7 +315,7 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     movies_service = MoviesService()
     
     # Get movie details from API
-    movie_details = movies_service.get_movie_details(movie_id, append_to_response='videos,credits,keywords')
+    movie_details = movies_service.get_movie_details(movie_id, append_to_response='videos,credits,keywords,release_dates')
     if not movie_details:
         return None
     

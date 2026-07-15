@@ -26,6 +26,8 @@ class Movie(Media):
     backdrop = models.URLField(blank=True, null=True)
 
     release_date = models.DateField(blank=True, null=True)
+    digital_release_date = models.DateField(blank=True, null=True)
+    physical_release_date = models.DateField(blank=True, null=True)
     
     # ids
     tmdb_id = models.IntegerField(unique=True)
