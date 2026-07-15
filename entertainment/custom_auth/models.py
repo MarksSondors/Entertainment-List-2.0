@@ -207,7 +207,7 @@ class Person(models.Model):
 
 class Media(models.Model):
     title = models.CharField(max_length=255)
-    original_title = models.CharField(max_length=100)
+    original_title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
 
     class Meta:
