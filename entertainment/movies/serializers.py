@@ -34,6 +34,8 @@ class MovieListSerializer(serializers.ModelSerializer):
             "thumbnail",
             "year",
             "release_date",
+            "digital_release_date",
+            "physical_release_date",
             "rating",
             "user_rating",
             "user_rating_count",
