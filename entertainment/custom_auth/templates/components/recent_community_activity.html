@@ -1,43 +1,47 @@
 {% load static %}
 
-<!-- Recent Community Activity Component - Horizontal Scrollable Version -->
-<div class="window" style="width: 100%;">
+<!-- Recent Community Activity Component -->
+<div class="window community-activity-window" style="width: 100%;">
     <div class="title-bar">
         <div class="title-bar-text">Recent Community Activity</div>
-        <div class="title-bar-controls">
-            <button aria-label="Minimize"></button>
-            <button aria-label="Maximize"></button>
-            <button aria-label="Close"></button>
-        </div>
     </div>
     <div class="window-body">
-        <div class="horizontal-activity-container">
-            <div id="horizontal_recent_activity" class="horizontal-activity-scroll">
-                <!-- Activity items will be loaded here -->                <div class="activity-card loading-card">
-                    <div class="poster-container">
-                        <div class="loading-placeholder" style="width: 100%; height: 100%;"></div>
-                    </div>
-                    <div class="activity-info">
-                        <div class="activity-header">
-                            <span class="activity-username">Loading...</span>
-                        </div>
-                        <div class="activity-title">Recent activity</div>
+        <div class="community-activity-toolbar">
+            <label for="community-activity-filter">Filter:</label>
+            <select id="community-activity-filter" aria-label="Filter community activity">
+                <option value="all">All activity</option>
+                <option value="movies">Movies</option>
+                <option value="tvshows">TV shows</option>
+                <option value="books">Books</option>
+                <option value="games">Games</option>
+                <option value="watched">Watched</option>
+                <option value="watchlist">Watchlist</option>
+                <option value="reviews">Reviews</option>
+            </select>
+        </div>
+        <div class="community-activity-panel">
+            <div id="horizontal_recent_activity" class="community-activity-feed" aria-live="polite" aria-busy="true">
+                <div class="community-activity-item community-activity-loading">
+                    <div class="community-activity-poster loading-placeholder"></div>
+                    <div class="community-activity-body">
+                        <div class="loading-placeholder community-activity-loading-line"></div>
+                        <div class="loading-placeholder community-activity-loading-line community-activity-loading-line-short"></div>
                     </div>
                 </div>
             </div>
         </div>
-          <div class="field-row" style="justify-content: flex-end; margin-top: 8px; align-items: center;">
-            <span id="loading-more-activity" style="display: none; margin-right: 10px; font-size: 11px; color: var(--text-muted);">
-                Loading more...
-            </span>
+        <div class="community-activity-controls">
+            <span id="loading-more-activity" class="community-activity-loading-more" hidden>Loading more...</span>
+            <button id="load-more-activity" type="button" hidden>Load more</button>
         </div>
-    </div>        <div class="status-bar">
-            <div class="status-bar-field" id="activity-last-updated-horizontal">Last updated: Just now</div>
-            <div class="status-bar-field">
-                <span id="refresh-indicator-horizontal" style="display: none;"><img src="{% static 'images/win98/world.png' %}" alt="Refreshing" style="width: 16px; height: 16px; vertical-align: middle;"></span>
-                <span id="auto-refresh-status">Auto-refresh: ON</span>
-            </div>
+    </div>
+    <div class="status-bar">
+        <div class="status-bar-field" id="activity-last-updated-horizontal">Last updated: Just now</div>
+        <div class="status-bar-field">
+            <span id="refresh-indicator-horizontal" hidden><img src="{% static 'images/win98/world.png' %}" alt="Refreshing" width="16" height="16"></span>
+            <span id="auto-refresh-status">Auto-refresh: ON</span>
         </div>
+    </div>
 </div>
 
 <style>
@@ -288,6 +292,265 @@
     }
 </style>
 
+<style>
+    .community-activity-window .title-bar-text {
+        font-size: 13px;
+    }
+
+    .community-activity-window .status-bar-field {
+        font-size: 12px;
+    }
+
+    .community-activity-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+        padding: 4px 6px;
+        border: 1px solid var(--border-dark);
+        background-color: var(--bg-color);
+    }
+
+    .community-activity-toolbar label {
+        font-size: 13px;
+        font-weight: bold;
+    }
+
+    .community-activity-toolbar select {
+        width: 100%;
+        height: 30px !important;
+        min-height: 30px !important;
+        padding-top: 2px;
+        padding-right: 34px;
+        padding-bottom: 2px;
+        background-position: calc(100% - 2px) 2px;
+        background-size: 24px 26px;
+        font-size: 13px;
+    }
+
+    .community-activity-panel {
+        border: 1px inset var(--bg-color);
+        background-color: var(--window-bg);
+        padding: 2px 8px;
+    }
+
+    .community-activity-feed {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .community-activity-item {
+        display: grid;
+        grid-template-columns: 56px minmax(0, 1fr);
+        gap: 9px;
+        min-height: 84px;
+        padding: 7px 0;
+        background-color: var(--window-bg);
+        border-bottom: 1px solid var(--border-dark);
+        color: inherit;
+        text-decoration: none;
+        transition: background-color 0.2s;
+    }
+
+    .community-activity-item:last-child {
+        border-bottom: 0;
+    }
+
+    .community-activity-item:hover {
+        background-color: var(--button-hover);
+    }
+
+    .community-activity-poster-link {
+        display: block;
+        width: fit-content;
+        height: fit-content;
+    }
+
+    .community-activity-poster-link:focus-visible,
+    .community-activity-title:focus-visible,
+    .community-activity-review-toggle:focus-visible {
+        outline: 1px dotted var(--text-color);
+        outline-offset: 2px;
+    }
+
+    .community-activity-poster {
+        width: 56px;
+        height: 84px;
+        object-fit: cover;
+        border: 1px solid var(--border-dark);
+        background-color: var(--bg-color);
+    }
+
+    .community-activity-body {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        padding: 1px 4px 1px 0;
+    }
+
+    .community-activity-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        font-size: 13px;
+    }
+
+    .community-activity-username {
+        color: var(--text-color);
+        font-weight: bold;
+        text-decoration: underline;
+    }
+
+    .community-activity-timestamp {
+        flex-shrink: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+    }
+
+    .community-activity-title {
+        width: fit-content;
+        color: var(--text-color);
+        font-size: 15px;
+        font-weight: bold;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+        text-decoration: none;
+    }
+
+    .community-activity-title:hover {
+        text-decoration: underline;
+    }
+
+    .community-activity-details {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 3px;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.3;
+    }
+
+    .community-activity-media {
+        color: var(--text-color);
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .community-activity-detail-separator {
+        color: var(--border-light);
+    }
+
+    .community-activity-review {
+        color: var(--text-muted);
+        font-size: 14px;
+    }
+
+    .community-activity-review {
+        display: -webkit-box !important;
+        margin: 0;
+        overflow: hidden;
+        font-style: italic;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .community-activity-review.is-expanded {
+        display: block !important;
+        overflow: visible;
+        -webkit-line-clamp: unset;
+    }
+
+    .community-activity-review-toggle {
+        align-self: flex-start;
+        min-height: 18px !important;
+        padding: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--text-color);
+        font-size: 12px;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
+    .community-activity-rating {
+        width: fit-content;
+        padding: 2px 5px;
+        border: 1px solid var(--border-dark);
+        color: #fff;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .community-activity-controls {
+        display: flex;
+        min-height: 25px;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 6px;
+    }
+
+    .community-activity-controls #load-more-activity {
+        width: auto;
+        min-width: 72px;
+        min-height: 28px;
+        padding: 2px 9px;
+        font-size: 12px;
+    }
+
+    .community-activity-loading-more {
+        color: var(--text-muted);
+        font-size: 12px;
+    }
+
+    .community-activity-empty {
+        display: block;
+        min-height: auto;
+        padding: 18px 8px;
+        text-align: center;
+    }
+
+    .community-activity-loading-line {
+        width: 85%;
+        height: 12px;
+        margin-top: 8px;
+    }
+
+    .community-activity-loading-line-short {
+        width: 52%;
+    }
+
+    #refresh-indicator-horizontal img {
+        border: 0 !important;
+        box-shadow: none !important;
+        vertical-align: middle;
+    }
+
+    @media (max-width: 480px) {
+        .community-activity-item {
+            grid-template-columns: 52px minmax(0, 1fr);
+            min-height: 78px;
+            gap: 8px;
+        }
+
+        .community-activity-poster {
+            width: 52px;
+            height: 78px;
+        }
+
+        .community-activity-review {
+            -webkit-line-clamp: 1;
+        }
+    }
+</style>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Activity state management
@@ -297,32 +560,37 @@
         let autoRefreshInterval = null;
         let autoRefreshEnabled = true;
         let allActivities = []; // Store all loaded activities
+        let activeFilter = 'all';
+        let reviewToggleId = 0;
         
         const activityContainer = document.getElementById('horizontal_recent_activity');
         const loadingIndicator = document.getElementById('loading-more-activity');
         const refreshIndicator = document.getElementById('refresh-indicator-horizontal');
         const autoRefreshStatus = document.getElementById('auto-refresh-status');
+        const loadMoreButton = document.getElementById('load-more-activity');
+        const activityFilter = document.getElementById('community-activity-filter');
         
         // Initialize
         fetchHorizontalActivity(1, true); // Initial load, replace content
         startAutoRefresh();
         
-        // Infinite scroll detection
-        if (activityContainer) {
-            activityContainer.addEventListener('scroll', function() {
-                // Disable auto-refresh when user starts scrolling
-                if (autoRefreshEnabled) {
-                    disableAutoRefresh();
-                }
-                
-                // Check if near the end (within 100px of the right edge)
-                const scrollLeft = activityContainer.scrollLeft;
-                const scrollWidth = activityContainer.scrollWidth;
-                const clientWidth = activityContainer.clientWidth;
-                
-                if (scrollLeft + clientWidth >= scrollWidth - 100 && !isLoading && hasMoreData) {
-                    loadMoreActivity();
-                }
+        if (loadMoreButton) {
+            loadMoreButton.addEventListener('click', function() {
+                disableAutoRefresh();
+                loadMoreActivity();
+            });
+        }
+
+        if (activityFilter) {
+            activityFilter.addEventListener('change', function() {
+                activeFilter = activityFilter.value;
+                currentPage = 1;
+                hasMoreData = true;
+                allActivities = [];
+                if (loadMoreButton) loadMoreButton.hidden = true;
+                showActivityLoadingState();
+                startAutoRefresh();
+                fetchHorizontalActivity(1, true);
             });
         }
         
@@ -360,29 +628,36 @@
         function fetchHorizontalActivity(page, replaceContent = false) {
             if (isLoading) return;
             isLoading = true;
+            activityContainer.setAttribute('aria-busy', 'true');
             
             // Show loading indicators
             if (refreshIndicator && replaceContent) {
-                refreshIndicator.style.display = 'inline-block';
+                refreshIndicator.hidden = false;
                 refreshIndicator.classList.add('spinning');
             }
             
             if (loadingIndicator && !replaceContent) {
-                loadingIndicator.style.display = 'inline-block';
+                loadingIndicator.hidden = false;
+            }
+            if (loadMoreButton) {
+                loadMoreButton.disabled = true;
+            }
+            if (activityFilter) {
+                activityFilter.disabled = true;
             }
             
-            fetch(`/activity/recent/?page=${page}&limit=10`)
+            fetch(`/activity/recent/?page=${page}&limit=3&filter=${encodeURIComponent(activeFilter)}`)
                 .then(response => response.json())
                 .then(data => {
                     isLoading = false;
                     
                     // Hide loading indicators
                     if (refreshIndicator) {
-                        refreshIndicator.style.display = 'none';
+                        refreshIndicator.hidden = true;
                         refreshIndicator.classList.remove('spinning');
                     }
                     if (loadingIndicator) {
-                        loadingIndicator.style.display = 'none';
+                        loadingIndicator.hidden = true;
                     }
                     
                     // Update last updated time
@@ -396,24 +671,31 @@
                     
                     // Check if we have more data
                     hasMoreData = data.pagination ? data.pagination.has_more : false;
+                    if (loadMoreButton) {
+                        loadMoreButton.hidden = !hasMoreData;
+                        loadMoreButton.disabled = false;
+                    }
+                    if (activityFilter) {
+                        activityFilter.disabled = false;
+                    }
                     
                     if (replaceContent) {
                         // Replace all content (initial load or refresh)
                         allActivities = results;
                         activityContainer.innerHTML = '';
+                        activityContainer.setAttribute('aria-busy', 'false');
                         currentPage = 1;
                     } else {
                         // Append new content (infinite scroll)
                         allActivities = allActivities.concat(results);
+                        activityContainer.setAttribute('aria-busy', 'false');
                     }
                     
                     // Render the new activities
                     if (results.length === 0 && replaceContent) {
                         activityContainer.innerHTML = `
-                            <div class="activity-card">
-                                <div class="activity-info" style="display: flex; align-items: center; justify-content: center; min-height: 120px;">
-                                    <span>No activity yet!</span>
-                                </div>
+                            <div class="community-activity-item community-activity-empty">
+                                <span>No community activity yet.</span>
                             </div>
                         `;
                         return;
@@ -430,34 +712,53 @@
                 .catch(error => {
                     console.error('Error fetching horizontal activity:', error);
                     isLoading = false;
+                    activityContainer.setAttribute('aria-busy', 'false');
+
+                    if (!replaceContent) {
+                        currentPage--;
+                    }
                     
                     // Hide loading indicators
                     if (refreshIndicator) {
-                        refreshIndicator.style.display = 'none';
+                        refreshIndicator.hidden = true;
                         refreshIndicator.classList.remove('spinning');
                     }
                     if (loadingIndicator) {
-                        loadingIndicator.style.display = 'none';
+                        loadingIndicator.hidden = true;
+                    }
+                    if (loadMoreButton) {
+                        loadMoreButton.disabled = false;
+                    }
+                    if (activityFilter) {
+                        activityFilter.disabled = false;
                     }
                     
                     if (replaceContent) {
                         activityContainer.innerHTML = `
-                            <div class="activity-card">
-                                <div class="activity-info" style="display: flex; align-items: center; justify-content: center; min-height: 120px; color: red;">
-                                    <span>Failed to load activity</span>
-                                </div>
+                            <div class="community-activity-item community-activity-empty">
+                                <span>Failed to load activity.</span>
                             </div>
                         `;
                     }
                 });
         }
+
+        function showActivityLoadingState() {
+            activityContainer.setAttribute('aria-busy', 'true');
+            activityContainer.innerHTML = `
+                <div class="community-activity-item community-activity-loading">
+                    <div class="community-activity-poster loading-placeholder"></div>
+                    <div class="community-activity-body">
+                        <div class="loading-placeholder community-activity-loading-line"></div>
+                        <div class="loading-placeholder community-activity-loading-line community-activity-loading-line-short"></div>
+                    </div>
+                </div>
+            `;
+        }
         
         function createActivityCard(activity) {
-            const activityCard = document.createElement('a');
-            activityCard.className = 'activity-card';
-            
-            // Build the poster path
-            const posterPath = activity.poster_path || 'https://via.placeholder.com/200x120/333333/FFFFFF?text=No+Image';
+            const activityCard = document.createElement('article');
+            activityCard.className = 'community-activity-item';
             
             // Set URL based on content type
             let detailUrl = '#';
@@ -470,67 +771,131 @@
             } else if (activity.content_type === 'Book' && activity.media_id) {
                 detailUrl = `/books/${activity.media_id}/`;
             }
-            activityCard.href = detailUrl;              // Build card content based on activity type
+            const poster = document.createElement('img');
+            poster.className = 'community-activity-poster';
+            poster.src = activity.poster_path || "{% static 'images/frontend-logo.png' %}";
+            poster.alt = `${activity.title} poster`;
+            poster.loading = 'lazy';
+
+            const posterLink = document.createElement('a');
+            posterLink.className = 'community-activity-poster-link';
+            posterLink.href = detailUrl;
+            posterLink.setAttribute('aria-label', `View ${activity.title}`);
+            posterLink.appendChild(poster);
+            activityCard.appendChild(posterLink);
+
+            const body = document.createElement('div');
+            body.className = 'community-activity-body';
+
+            const header = document.createElement('div');
+            header.className = 'community-activity-header';
+
+            const username = document.createElement('span');
+            username.className = 'community-activity-username';
+            username.textContent = activity.username;
+
+            const timestamp = document.createElement('time');
+            timestamp.className = 'community-activity-timestamp';
+            const activityDate = parseActivityTimestamp(activity.timestamp);
+            timestamp.dateTime = activityDate ? activityDate.toISOString() : '';
+            timestamp.title = activityDate ? activityDate.toLocaleString() : activity.timestamp;
+            timestamp.textContent = activityDate ? formatRelativeTime(activityDate) : activity.timestamp;
+
+            header.append(username, timestamp);
+            body.appendChild(header);
+
+            const title = document.createElement('a');
+            title.className = 'community-activity-title';
+            title.href = detailUrl;
+            title.textContent = activity.title;
+            body.appendChild(title);
+
+            const details = document.createElement('div');
+            details.className = 'community-activity-details';
+
+            const mediaType = document.createElement('span');
+            mediaType.className = 'community-activity-media';
+            mediaType.textContent = activity.content_type;
+
+            const separator = document.createElement('span');
+            separator.className = 'community-activity-detail-separator';
+            separator.textContent = '·';
+
+            const action = document.createElement('span');
+            action.className = 'community-activity-action';
+            action.textContent = activity.action === 'added to database and added to watchlist'
+                ? 'added to database & watchlist'
+                : activity.action || 'updated';
+
+            details.append(mediaType, separator, action);
+            body.appendChild(details);
+
             if ('rating' in activity) {
-                // Review activity
                 const ratingValue = Math.round(activity.rating);
-                const ratingColor = ratingValue >= 7 ? '#4CAF50' : 
-                                  ratingValue >= 5 ? '#FFC107' : '#F44336';
-                
-                activityCard.innerHTML = `
-                    <div class="poster-container">
-                        <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
-                        <div class="poster-rating-overlay" style="background-color: ${ratingColor};">
-                            ${ratingValue}/10
-                        </div>
-                    </div>
-                    <div class="activity-info">
-                        <div class="activity-header">
-                            <span class="activity-username">${activity.username}</span>
-                            <span class="activity-timestamp">${activity.timestamp}</span>
-                        </div>
-                        <div class="activity-title">
-                            <span class="review-badge"><img src="{% static 'images/win98/document.png' %}" alt="Review" style="width: 12px; height: 12px; vertical-align: middle;"> REVIEW</span>${activity.content_type}: ${activity.title}
-                        </div>
-                        <div class="activity-text">${activity.content ? `"${activity.content}"` : 'No review text provided.'}</div>
-                    </div>
-                `;
-            }else if ('episode_count' in activity) {
-                // Watched episodes activity
-                activityCard.innerHTML = `
-                    <div class="poster-container">
-                        <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
-                    </div>
-                    <div class="activity-info">
-                        <div class="activity-header">
-                            <span class="activity-username">${activity.username}</span>
-                            <span class="activity-timestamp">${activity.timestamp}</span>
-                        </div>
-                        <div class="activity-title">${activity.content_type}: ${activity.title}</div>
-                        <div class="activity-action">
-                            <span class="watched-badge"><img src="{% static 'images/win98/camera_vid.png' %}" alt="Watched" style="width: 16px; height: 16px; vertical-align: middle;"></span> 
-                            ${activity.action || `Watched ${activity.episode_count} episode${activity.episode_count > 1 ? 's' : ''}`}
-                        </div>
-                    </div>
-                `;
-            }            else {
-                // General activity (watchlist, etc.)
-                activityCard.innerHTML = `
-                    <div class="poster-container">
-                        <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
-                    </div>
-                    <div class="activity-info">
-                        <div class="activity-header">
-                            <span class="activity-username">${activity.username}</span>
-                            <span class="activity-timestamp">${activity.timestamp}</span>
-                        </div>
-                        <div class="activity-title">${activity.content_type}: ${activity.title}</div>
-                        <div class="activity-action">${activity.action}</div>
-                    </div>
-                `;
+                const rating = document.createElement('span');
+                rating.className = 'community-activity-rating';
+                rating.style.backgroundColor = ratingValue >= 7 ? '#287d38' : ratingValue >= 5 ? '#8a6900' : '#a12622';
+                rating.textContent = `${ratingValue}/10`;
+                const ratingSeparator = separator.cloneNode(true);
+                details.append(ratingSeparator, rating);
             }
+
+            if (activity.content) {
+                const review = document.createElement('p');
+                review.className = 'community-activity-review';
+                review.id = `community-review-${reviewToggleId++}`;
+                review.textContent = `“${activity.content}”`;
+                body.appendChild(review);
+
+                const reviewToggle = document.createElement('button');
+                reviewToggle.className = 'community-activity-review-toggle';
+                reviewToggle.type = 'button';
+                reviewToggle.textContent = 'Show full review';
+                reviewToggle.setAttribute('aria-expanded', 'false');
+                reviewToggle.setAttribute('aria-controls', review.id);
+                reviewToggle.hidden = true;
+                reviewToggle.addEventListener('click', function() {
+                    const expanded = review.classList.toggle('is-expanded');
+                    reviewToggle.setAttribute('aria-expanded', String(expanded));
+                    reviewToggle.textContent = expanded ? 'Collapse review' : 'Show full review';
+                });
+                body.appendChild(reviewToggle);
+
+                requestAnimationFrame(function() {
+                    reviewToggle.hidden = review.scrollHeight <= review.clientHeight;
+                });
+            }
+
+            activityCard.appendChild(body);
             
             return activityCard;
+        }
+
+        function parseActivityTimestamp(value) {
+            if (!value) return null;
+            const parsed = new Date(value.replace(' ', 'T'));
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        }
+
+        function formatRelativeTime(date) {
+            const elapsedSeconds = Math.round((date.getTime() - Date.now()) / 1000);
+            const ranges = [
+                ['year', 31536000],
+                ['month', 2592000],
+                ['week', 604800],
+                ['day', 86400],
+                ['hour', 3600],
+                ['minute', 60]
+            ];
+            const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+
+            for (const [unit, seconds] of ranges) {
+                if (Math.abs(elapsedSeconds) >= seconds) {
+                    return formatter.format(Math.round(elapsedSeconds / seconds), unit);
+                }
+            }
+
+            return 'just now';
         }
         
         // Clean up on page unload

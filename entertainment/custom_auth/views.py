@@ -2445,20 +2445,53 @@ def recent_activity(request):
     # Get pagination parameters
     page = int(request.GET.get('page', '1'))
     limit = int(request.GET.get('limit', '15'))
+    activity_filter = request.GET.get('filter', 'all').lower()
     offset = (page - 1) * limit
     
-    # Use a more conservative fetch limit to improve performance
-    fetch_limit = limit * 3 
+    # Fetch through the requested page plus a look-ahead page. Filtered streams
+    # use a stable baseline so totals do not change during normal pagination.
+    requested_window = (offset + limit + 1) * 3
+    fetch_limit = max(requested_window, 250) if activity_filter != 'all' else requested_window
     
     try:
         # Get content types once at the beginning
         content_types = _get_content_types()
         
         # Fetch all activities in parallel using a more efficient approach
-        activities_data = _fetch_activities_efficiently(fetch_limit, content_types)
+        activities_data = _fetch_activities_efficiently(
+            fetch_limit, content_types, activity_filter
+        )
         
         # Process and group activities
         grouped_activities = _process_and_group_activities(activities_data, content_types)
+
+        content_type_filters = {
+            'movies': 'Movie',
+            'tvshows': 'TV Show',
+            'books': 'Book',
+            'games': 'Game',
+        }
+        if activity_filter in content_type_filters:
+            content_type = content_type_filters[activity_filter]
+            grouped_activities = [
+                activity for activity in grouped_activities
+                if activity['content_type'] == content_type
+            ]
+        elif activity_filter == 'reviews':
+            grouped_activities = [
+                activity for activity in grouped_activities
+                if 'rating' in activity
+            ]
+        elif activity_filter == 'watched':
+            grouped_activities = [
+                activity for activity in grouped_activities
+                if 'watched' in activity.get('action', '')
+            ]
+        elif activity_filter == 'watchlist':
+            grouped_activities = [
+                activity for activity in grouped_activities
+                if 'watchlist' in activity.get('action', '')
+            ]
         
         # Apply pagination
         total_count = len(grouped_activities)
@@ -2538,9 +2571,9 @@ _WATCHED_EPISODE_ONLY_FIELDS = (
 )
 
 
-def _fetch_activities_efficiently(fetch_limit, content_types):
+def _fetch_activities_efficiently(fetch_limit, content_types, activity_filter='all'):
     """
-    Fetch all activities using optimized queries with proper prefetching.
+    Fetch only the activity streams relevant to the requested filter.
     """
     from custom_auth.models import Review, Watchlist
     from movies.models import Movie
@@ -2550,35 +2583,73 @@ def _fetch_activities_efficiently(fetch_limit, content_types):
     
     reviews = Review.objects.select_related(
         'user', 'content_type', 'season', 'episode_subgroup'
-    ).only(*_REVIEW_ONLY_FIELDS).order_by('-date_added')[:fetch_limit]
+    ).only(*_REVIEW_ONLY_FIELDS).order_by('-date_added')
     
     watchlist_items = Watchlist.objects.select_related(
         'user', 'content_type'
-    ).only(*_WATCHLIST_ONLY_FIELDS).order_by('-date_added')[:fetch_limit]
+    ).only(*_WATCHLIST_ONLY_FIELDS).order_by('-date_added')
     
     movies = Movie.objects.select_related('added_by').only(
         *_MOVIE_NEW_ONLY_FIELDS
-    ).order_by('-date_added')[:fetch_limit]
+    ).order_by('-date_added')
     
     games = Game.objects.select_related('added_by').only(
         *_GAME_NEW_ONLY_FIELDS
-    ).order_by('-date_added')[:fetch_limit]
+    ).order_by('-date_added')
     
     books = Book.objects.select_related('added_by').only(
         *_BOOK_NEW_ONLY_FIELDS
-    ).order_by('-date_added')[:fetch_limit]
+    ).order_by('-date_added')
     
     watched_episodes = WatchedEpisode.objects.select_related(
         'user', 'episode__season__show'
-    ).only(*_WATCHED_EPISODE_ONLY_FIELDS).order_by('-watched_date')[:fetch_limit * 2]
+    ).only(*_WATCHED_EPISODE_ONLY_FIELDS).order_by('-watched_date')
+
+    media_filters = {
+        'movies': 'movie',
+        'tvshows': 'tvshow',
+        'games': 'game',
+        'books': 'book',
+    }
+    if activity_filter in media_filters:
+        media_key = media_filters[activity_filter]
+        content_type = content_types[media_key]
+        reviews = reviews.filter(content_type_id=content_type.id)
+        watchlist_items = watchlist_items.filter(content_type_id=content_type.id)
+        if media_key != 'movie':
+            movies = movies.none()
+        if media_key != 'game':
+            games = games.none()
+        if media_key != 'book':
+            books = books.none()
+        if media_key != 'tvshow':
+            watched_episodes = watched_episodes.none()
+    elif activity_filter == 'reviews':
+        watchlist_items = watchlist_items.none()
+        movies = movies.none()
+        games = games.none()
+        books = books.none()
+        watched_episodes = watched_episodes.none()
+    elif activity_filter == 'watched':
+        reviews = reviews.none()
+        watchlist_items = watchlist_items.none()
+        movies = movies.none()
+        games = games.none()
+        books = books.none()
+    elif activity_filter == 'watchlist':
+        reviews = reviews.none()
+        movies = movies.none()
+        games = games.none()
+        books = books.none()
+        watched_episodes = watched_episodes.none()
     
     return {
-        'reviews': reviews,
-        'watchlist_items': watchlist_items,
-        'movies': movies,
-        'games': games,
-        'books': books,
-        'watched_episodes': watched_episodes
+        'reviews': reviews[:fetch_limit],
+        'watchlist_items': watchlist_items[:fetch_limit],
+        'movies': movies[:fetch_limit],
+        'games': games[:fetch_limit],
+        'books': books[:fetch_limit],
+        'watched_episodes': watched_episodes[:fetch_limit * 2]
     }
 
 
@@ -2895,7 +2966,7 @@ def _process_reviews(reviews, movies_by_id, tvshows_by_id, games_by_id, content_
         activities.append({
             'type': 'review',
             'username': review.user.username,
-            'content': _truncate_text(review.review_text, 100),
+            'content': review.review_text or '',
             'title': title,
             'rating': review.rating,
             'content_type': content_type,
