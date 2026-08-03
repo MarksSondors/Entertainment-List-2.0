@@ -17,13 +17,33 @@ from __future__ import annotations
 
 import gc
 import logging
+import os
 
 import numpy as np
 import pandas as pd
+import psutil
+from scipy import sparse
 
 from .data_loading import RUNTIME_BUCKETS, TMDB_GENRES
 
 logger = logging.getLogger(__name__)
+
+# Users per chunk when batch-solving the per-user ridge systems (see
+# ``compute_user_category_biases_joint``). Bounds the transient (chunk, F, F)
+# buffer to a few hundred MB even when F is large, while still amortizing the
+# Python/LAPACK call overhead of ``np.linalg.solve`` across many users at once.
+_RIDGE_SOLVE_CHUNK = 4096
+
+
+def _log_rss(label: str) -> None:
+    """Best-effort process RSS logger — cheap checkpoints around the memory-heavy
+    steps of bias computation so future regressions show up in logs instead of
+    a silent OOM kill."""
+    try:
+        mb = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+        logger.info("[biases:%s] RSS = %.1f MB", label, mb)
+    except Exception:
+        pass
 
 
 def extrapolate_year_biases(year_biases: dict[int, float], max_future_year: int = 2030) -> dict[int, float]:
@@ -85,49 +105,73 @@ def compute_base_biases(
     return global_mean, year_biases, item_biases, user_biases, base_residual
 
 
-def _build_feature_blocks(df: pd.DataFrame) -> tuple[np.ndarray, list[tuple[str, list]]]:
-    """Build the dense per-row feature matrix X (N, F) for category biases.
+def build_feature_blocks(df: pd.DataFrame) -> tuple[sparse.csr_matrix, list[tuple[str, list]]]:
+    """Build the sparse per-row feature matrix X (N, F) for category biases.
+
+    Built sparse (instead of dense) because N is the full rating count — for
+    the MovieLens-32M dataset a dense (N, F) float32 matrix is tens of GB and
+    reliably OOM-kills the training process. Each row only has a handful of
+    nonzero entries (a few genres + 1 decade + 1 language + 1 runtime bucket),
+    so a CSR matrix is orders of magnitude smaller.
 
     Returns:
-        X (N, F) float32 with columns:
+        X (N, F) sparse CSR float32 with columns:
             [genre[0]..genre[G-1], decade[0]..decade[D-1],
              lang[0]..lang[L-1],   runtime[0]..runtime[R-1]]
         block_spec: ordered list of (block_name, list_of_keys) describing the column ranges.
     """
     n = len(df)
 
+    def _onehot_block(codes: np.ndarray, n_cols: int) -> sparse.csr_matrix:
+        valid = codes >= 0
+        rows = np.where(valid)[0]
+        cols = codes[valid]
+        data = np.ones(len(rows), dtype=np.float32)
+        return sparse.csr_matrix((data, (rows, cols)), shape=(n, n_cols))
+
     # Genres (multi-hot, restricted to TMDB_GENRES so the feature space is fixed)
     genre_idx = {g: i for i, g in enumerate(TMDB_GENRES)}
-    genre_block = np.zeros((n, len(TMDB_GENRES)), dtype=np.float32)
+    genre_rows: list[int] = []
+    genre_cols: list[int] = []
     for row_i, genres in enumerate(df["genres"].values):
-        if genres:
+        # ``genres`` may be a Python list (fresh load) or a numpy array (round-tripped
+        # through the Parquet dataset cache, which deserializes list columns as
+        # ndarrays) — ``if genres:`` raises ValueError on a multi-element ndarray,
+        # so check length explicitly instead of relying on truthiness.
+        if genres is not None and len(genres) > 0:
             for g in genres:
                 col = genre_idx.get(g)
                 if col is not None:
-                    genre_block[row_i, col] = 1.0
+                    genre_rows.append(row_i)
+                    genre_cols.append(col)
+    genre_block = sparse.csr_matrix(
+        (np.ones(len(genre_rows), dtype=np.float32), (genre_rows, genre_cols)),
+        shape=(n, len(TMDB_GENRES)),
+    )
 
     # Decades
     decades = sorted(int(d) for d in df["decade"].unique())
     decade_idx = {d: i for i, d in enumerate(decades)}
-    decade_block = np.zeros((n, len(decades)), dtype=np.float32)
-    decade_block[np.arange(n), df["decade"].astype(int).map(decade_idx).values] = 1.0
+    decade_codes = df["decade"].astype(int).map(decade_idx).values.astype(np.int64)
+    decade_block = _onehot_block(decade_codes, len(decades))
 
     # Languages — restrict to those with >= 100 ratings, others fold into 'other'
     lang_counts = df["language"].value_counts()
     keep_langs = list(lang_counts[lang_counts >= 100].index)
     lang_idx = {lng: i for i, lng in enumerate(keep_langs)}
-    lang_block = np.zeros((n, len(keep_langs)), dtype=np.float32)
     if keep_langs:
-        col_idx = df["language"].map(lang_idx)
-        valid = col_idx.notna()
-        lang_block[np.where(valid)[0], col_idx[valid].astype(int).values] = 1.0
+        lang_codes = df["language"].map(lang_idx)
+        lang_codes = lang_codes.where(lang_codes.notna(), -1).astype(np.int64).values
+        lang_block = _onehot_block(lang_codes, len(keep_langs))
+    else:
+        lang_block = sparse.csr_matrix((n, 0), dtype=np.float32)
 
     # Runtime buckets
     rt_idx = {b: i for i, b in enumerate(RUNTIME_BUCKETS)}
-    rt_block = np.zeros((n, len(RUNTIME_BUCKETS)), dtype=np.float32)
-    rt_block[np.arange(n), df["runtime_bucket"].map(rt_idx).fillna(rt_idx["standard"]).astype(int).values] = 1.0
+    rt_codes = df["runtime_bucket"].map(rt_idx).fillna(rt_idx["standard"]).astype(np.int64).values
+    rt_block = _onehot_block(rt_codes, len(RUNTIME_BUCKETS))
 
-    X = np.concatenate([genre_block, decade_block, lang_block, rt_block], axis=1)
+    X = sparse.hstack([genre_block, decade_block, lang_block, rt_block], format="csr", dtype=np.float32)
     spec = [
         ("genre", list(TMDB_GENRES)),
         ("decade", decades),
@@ -151,16 +195,24 @@ def compute_user_category_biases_joint(
     r_u is base_residual restricted to u, and W_u is diag(weights).
     """
     logger.info("Building category feature matrix...")
-    X, spec = _build_feature_blocks(df)
+    X, spec = build_feature_blocks(df)
     F = X.shape[1]
-    logger.info("Feature matrix: shape=%s, ridge_lambda=%.2f", X.shape, ridge_lambda)
+    logger.info("Feature matrix: shape=%s, nnz=%d, ridge_lambda=%.2f", X.shape, X.nnz, ridge_lambda)
+    _log_rss("after feature matrix")
 
-    # Sort rows by user to enable contiguous slicing (much faster than groupby in tight loop)
-    order = np.argsort(df["user_id"].values, kind="stable")
-    user_sorted = df["user_id"].values[order]
+    # Sort rows by user to enable contiguous slicing (much faster than groupby in tight loop).
+    # X stays sparse throughout — only the small per-user slice is densified in the loop below,
+    # since a dense (N, F) copy of the full matrix is what caused OOM kills on ml-32m.
+    # .to_numpy() materializes the categorical user_id column's actual string labels
+    # (not the int codes) so sorting/grouping semantics match the pre-categorical behavior.
+    user_id_arr = df["user_id"].to_numpy()
+    order = np.argsort(user_id_arr, kind="stable")
+    user_sorted = user_id_arr[order]
     X_sorted = X[order]
     r_sorted = base_residual[order].astype(np.float32)
     w_sorted = weights[order].astype(np.float32)
+    del X
+    gc.collect()
 
     # Find group boundaries
     boundaries = np.concatenate([
@@ -175,25 +227,58 @@ def compute_user_category_biases_joint(
     user_weights = np.zeros((n_users, F), dtype=np.float32)
     eye = ridge_lambda * np.eye(F, dtype=np.float32)
 
+    # Ridge solves are batched in chunks of ``_RIDGE_SOLVE_CHUNK`` users: building each
+    # user's (F, F) normal-equation matrix still requires a per-user loop (row counts are
+    # ragged), but a single vectorized np.linalg.solve call per chunk amortizes the
+    # Python/LAPACK call overhead of hundreds of thousands of individual solve() calls.
+    # Chunking (rather than solving all users at once) bounds the transient (chunk, F, F)
+    # buffer to a fixed size regardless of how many users there are.
     log_every = max(n_users // 10, 1)
-    for u_idx in range(n_users):
-        s, e = boundaries[u_idx], boundaries[u_idx + 1]
-        Xu = X_sorted[s:e]
-        ru = r_sorted[s:e]
-        wu = w_sorted[s:e]
+    logged_through = 0
+    for chunk_start in range(0, n_users, _RIDGE_SOLVE_CHUNK):
+        chunk_end = min(chunk_start + _RIDGE_SOLVE_CHUNK, n_users)
+        chunk_len = chunk_end - chunk_start
 
-        # Weighted normal equations:  (X^T diag(w) X + λI) β = X^T diag(w) r
-        WX = Xu * wu[:, None]
-        A = WX.T @ Xu + eye
-        b = WX.T @ ru
+        A_batch = np.empty((chunk_len, F, F), dtype=np.float32)
+        b_batch = np.empty((chunk_len, F), dtype=np.float32)
+        for local_idx, u_idx in enumerate(range(chunk_start, chunk_end)):
+            s, e = boundaries[u_idx], boundaries[u_idx + 1]
+            Xu = X_sorted[s:e].toarray()  # small per-user slice — safe to densify
+            ru = r_sorted[s:e]
+            wu = w_sorted[s:e]
+
+            # Weighted normal equations:  (X^T diag(w) X + λI) β = X^T diag(w) r
+            WX = Xu * wu[:, None]
+            A_batch[local_idx] = WX.T @ Xu + eye
+            b_batch[local_idx] = WX.T @ ru
+
         try:
-            beta = np.linalg.solve(A, b)
+            # np.linalg.solve's batched gufunc requires b to have the same ndim as a
+            # (i.e. shape (chunk, F, K), not (chunk, F)) — a bare (chunk, F) b_batch
+            # gets misread as a single (chunk, F) matrix rather than `chunk` stacked
+            # F-vectors, causing a core-dimension mismatch. Add/remove a trailing
+            # K=1 axis to force the correct batched-vector interpretation.
+            beta_batch = np.linalg.solve(A_batch, b_batch[..., None])[..., 0]
         except np.linalg.LinAlgError:
-            beta = np.linalg.lstsq(A, b, rcond=None)[0]
-        user_weights[u_idx] = beta
+            # Rare (ridge regularization keeps A positive-definite in practice) — fall
+            # back to solving the chunk row-by-row so a single ill-conditioned user
+            # doesn't force lstsq on the whole chunk.
+            beta_batch = np.empty_like(b_batch)
+            for local_idx in range(chunk_len):
+                try:
+                    beta_batch[local_idx] = np.linalg.solve(A_batch[local_idx], b_batch[local_idx])
+                except np.linalg.LinAlgError:
+                    beta_batch[local_idx] = np.linalg.lstsq(
+                        A_batch[local_idx], b_batch[local_idx], rcond=None
+                    )[0]
 
-        if (u_idx + 1) % log_every == 0:
-            logger.info("  ridge progress %d/%d users", u_idx + 1, n_users)
+        user_weights[chunk_start:chunk_end] = beta_batch
+
+        if chunk_end - logged_through >= log_every:
+            logger.info("  ridge progress %d/%d users", chunk_end, n_users)
+            logged_through = chunk_end
+
+    _log_rss("after ridge solve")
 
     # Unpack into per-block dicts mirroring the legacy export shape
     user_genre_biases: dict[str, dict] = {}
@@ -220,9 +305,61 @@ def compute_user_category_biases_joint(
                 user_runtime_biases[str(key)] = mapping
         col += len(keys)
 
-    del X, X_sorted, r_sorted, w_sorted, user_weights
+    del X_sorted, r_sorted, w_sorted, user_weights
     gc.collect()
     return user_genre_biases, user_decade_biases, user_language_biases, user_runtime_biases
+
+
+def compute_user_time_trend_biases(
+    df: pd.DataFrame,
+    base_residual: np.ndarray,
+    weights: np.ndarray,
+    ridge_lambda: float = 10.0,
+) -> tuple[dict[str, float], dict[str, tuple[float, float]]]:
+    """Per-user linear taste-drift term: rating ≈ ... + slope_u * t_norm.
+
+    ``time_decay()`` (see weights.py) downweights *old* ratings but doesn't model
+    that a user's taste can genuinely shift over their rating history — this adds
+    a small per-user linear trend on top of the static per-user bias.
+
+    For each user, ``t_norm`` is their rating timestamp min-max normalized to
+    [-0.5, 0.5] over that user's own rating history (so the trend is relative to
+    *their* timeline, not a global one), and the slope is a 1-D weighted ridge fit:
+
+        slope_u = sum(w_i * t_i * r_i) / (sum(w_i * t_i^2) + ridge_lambda)
+
+    A closed form (rather than the batched matrix solve used for category biases)
+    is sufficient since there's only one feature. Fit independently of the category
+    joint-ridge above (both regress on the same ``base_residual`` in parallel rather
+    than jointly) — a reasonable approximation that keeps this additive and cheap.
+
+    Returns (user_time_trend: user_id -> slope, user_time_norm: user_id -> (t_min, t_max))
+    used together at prediction time: contribution = slope_u * clip(norm(t), ...).
+    """
+    user_id_arr = df["user_id"].to_numpy()
+    ts = df["timestamp"].to_numpy().astype(np.float64)
+
+    g = pd.DataFrame({"user_id": user_id_arr, "ts": ts})
+    t_min = g.groupby("user_id")["ts"].transform("min").to_numpy()
+    t_max = g.groupby("user_id")["ts"].transform("max").to_numpy()
+    span = np.where(t_max > t_min, t_max - t_min, 1.0)
+    t_norm = ((ts - t_min) / span - 0.5).astype(np.float32)
+
+    num = pd.Series(t_norm * weights * base_residual, index=g.index).groupby(user_id_arr).sum()
+    den = pd.Series((t_norm ** 2) * weights, index=g.index).groupby(user_id_arr).sum() + ridge_lambda
+    slope = (num / den)
+
+    user_time_trend = {str(k): float(v) for k, v in slope.to_dict().items() if abs(v) > 1e-6}
+
+    norm_df = pd.DataFrame({"user_id": user_id_arr, "t_min": t_min, "t_max": t_max})
+    norm_first = norm_df.drop_duplicates("user_id").set_index("user_id")
+    user_time_norm = {
+        str(uid): (float(row.t_min), float(row.t_max))
+        for uid, row in norm_first.iterrows()
+    }
+    logger.info("Computed time-trend slopes for %d users (%d non-trivial)",
+                len(user_time_norm), len(user_time_trend))
+    return user_time_trend, user_time_norm
 
 
 def compute_all_biases(
@@ -236,6 +373,9 @@ def compute_all_biases(
         df, weights, damping
     )
     g, d, l, r = compute_user_category_biases_joint(df, base_residual, weights, ridge_lambda)
+    user_time_trend, user_time_norm = compute_user_time_trend_biases(
+        df, base_residual, weights, ridge_lambda
+    )
     return {
         "global_mean": global_mean,
         "year_biases": year_biases,
@@ -245,4 +385,6 @@ def compute_all_biases(
         "user_decade_biases": d,
         "user_language_biases": l,
         "user_runtime_biases": r,
+        "user_time_trend": user_time_trend,
+        "user_time_norm": user_time_norm,
     }

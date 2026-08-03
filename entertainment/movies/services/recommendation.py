@@ -29,7 +29,9 @@ from custom_auth.models import Review
 from movies.models import Movie
 from movies.services.recommender.cold_start import (
     ColdStartHead,
+    UserColdStartHead,
     predict_factors as cold_start_predict_factors,
+    predict_user_factor,
 )
 from movies.services.recommender.data_loading import CatalogLookups
 
@@ -43,6 +45,11 @@ _OVERLAY_RELOAD_INTERVAL_SECONDS = 300  # 5 min TTL for picking up fold-in updat
 class MovieRecommender:
     """Loads the trained model + overlay; serves predictions and recommendations."""
 
+    # Popularity-penalty weight applied to ranking_score before sort/MMR (item 9):
+    # ranking_score -= _POPULARITY_LAMBDA * log1p(vote_count). Small on purpose —
+    # this nudges towards less-obvious picks without drowning out the learned score.
+    _POPULARITY_LAMBDA = 0.05
+
     def __init__(self):
         self._movie_content_type: Optional[ContentType] = None
         self.model_data: Optional[dict] = None
@@ -51,7 +58,11 @@ class MovieRecommender:
 
         # v5.0 sections
         self.cold_start_head: Optional[ColdStartHead] = None
+        self.user_cold_start_head: Optional[UserColdStartHead] = None
         self.catalog: CatalogLookups = CatalogLookups()
+        self.user_time_trend: dict = {}
+        self.user_time_norm: dict = {}
+        self.explicit_blend_alpha: float = 0.0
 
         # Overlay state
         self._overlay: dict = {}
@@ -115,6 +126,8 @@ class MovieRecommender:
             self.user_decade_biases = biases.get("user_decade_biases") or data.get("user_decade_biases", {})
             self.user_language_biases = biases.get("user_language_biases") or data.get("user_language_biases", {})
             self.user_runtime_biases = biases.get("user_runtime_biases") or data.get("user_runtime_biases", {})
+            self.user_time_trend = biases.get("user_time_trend", {})
+            self.user_time_norm = biases.get("user_time_norm", {})
 
             # Catalog lookups
             self.catalog.tmdb_to_genres = catalog_dict.get("tmdb_to_genres") or data.get("tmdb_to_genres", {})
@@ -122,6 +135,8 @@ class MovieRecommender:
             self.catalog.tmdb_to_runtime_bucket = catalog_dict.get("tmdb_to_runtime_bucket") or data.get("tmdb_to_runtime_bucket", {})
             self.catalog.tmdb_to_year = catalog_dict.get("tmdb_to_year") or data.get("tmdb_id_to_year", {})
             self.catalog.tmdb_vote_data = catalog_dict.get("tmdb_vote_data") or data.get("tmdb_vote_data", {})
+            self.catalog.tmdb_to_director = catalog_dict.get("tmdb_to_director", {})
+            self.catalog.tmdb_to_top_cast = catalog_dict.get("tmdb_to_top_cast", {})
 
             # Aliases preserved for templates / call sites that still read these names
             self.tmdb_to_genres = self.catalog.tmdb_to_genres
@@ -132,6 +147,7 @@ class MovieRecommender:
             self.genre_mapping = data.get("genre_mapping", {})  # empty in v5 (= identity)
 
             self.known_tmdb_ids = set(data.get("known_tmdb_ids") or list(self.item_to_idx.keys()))
+            self.explicit_blend_alpha = float(metadata.get("explicit_blend_alpha", 0.0))
 
             # Cold-start head
             cold = data.get("cold_start")
@@ -142,6 +158,18 @@ class MovieRecommender:
                     decades=list(cold["decades"]),
                     languages=list(cold["languages"]),
                     feature_dim=int(cold["feature_dim"]),
+                    directors=list(cold.get("directors", [])),
+                    top_cast=list(cold.get("top_cast", [])),
+                )
+
+            # Symmetric user cold-start head (item 2): lets brand-new users with a
+            # handful of ratings get a real factor instead of a popularity fallback.
+            user_cold = data.get("user_cold_start")
+            if user_cold is not None:
+                self.user_cold_start_head = UserColdStartHead(
+                    coef=np.asarray(user_cold["coef"], dtype=np.float32),
+                    intercept=np.asarray(user_cold["intercept"], dtype=np.float32),
+                    feature_dim=int(user_cold["feature_dim"]),
                 )
 
             self._build_cold_item_lookup()
@@ -258,12 +286,19 @@ class MovieRecommender:
     # Rating prediction (UI display)
     # ------------------------------------------------------------------
 
-    def predict_rating(self, user_id_str: str, tmdb_id_int: int, year: Optional[int] = None) -> float:
+    def predict_rating(
+        self, user_id_str: str, tmdb_id_int: int, year: Optional[int] = None,
+        user_factor_override: Optional[np.ndarray] = None,
+    ) -> float:
         """Return a 0-5 explicit-rating estimate from the bias hierarchy.
 
-        Does NOT add the iALS factor dot product — those scores live on a
-        different scale and would corrupt the displayed rating. Use
-        ``_score_for_ranking`` to *order* candidates.
+        Adds two small optional terms on top of the bias hierarchy: a per-user
+        linear time-drift term (``user_time_trend``/``user_time_norm``) and a
+        learned-weight iALS factor dot product (``explicit_blend_alpha``, fit by
+        ``evaluation.fit_explicit_blend_weight`` at training time so it stays on
+        a comparable scale to the bias terms instead of distorting the display).
+        ``user_factor_override`` lets ephemeral cold-start user factors (item 2)
+        be scored without needing an entry in ``user_to_idx``.
         """
         if not self.model_data:
             return 0.0
@@ -317,13 +352,36 @@ class MovieRecommender:
             ov = self._ov_category_bias("user_runtime_biases", rt, user_id_str)
             b_rt = ov if ov is not None else self.user_runtime_biases.get(rt, {}).get(user_id_str, 0.0)
 
-        return self.global_mean + b_i + b_u + b_y + b_g + b_dec + b_lang + b_rt
+        # Per-user linear time-drift (see biases.compute_user_time_trend_biases). Projects
+        # "now" onto the user's own [t_min, t_max] rating window the trend was fit on;
+        # extrapolation is clamped to [-1.0, 1.0] since the ridge-shrunk slope is only
+        # reliable near the observed range.
+        b_time = 0.0
+        bounds = self.user_time_norm.get(user_id_str)
+        slope = self.user_time_trend.get(user_id_str)
+        if bounds is not None and slope is not None:
+            t_min, t_max = bounds
+            span = (t_max - t_min) or 1.0
+            t_norm = np.clip((time.time() - t_min) / span - 0.5, -1.0, 1.0)
+            b_time = float(slope) * float(t_norm)
+
+        # Learned-weight iALS factor dot product (see fit_explicit_blend_weight).
+        b_factor = 0.0
+        if self.explicit_blend_alpha:
+            u = self._user_factor(user_id_str, override=user_factor_override)
+            v = self._item_factor(tmdb_id_int)
+            if u is not None and v is not None:
+                b_factor = self.explicit_blend_alpha * float(np.dot(u, v))
+
+        return self.global_mean + b_i + b_u + b_y + b_g + b_dec + b_lang + b_rt + b_time + b_factor
 
     # ------------------------------------------------------------------
     # Ranking score (iALS dot product, with cold-start fallback)
     # ------------------------------------------------------------------
 
-    def _user_factor(self, user_id_str: str) -> Optional[np.ndarray]:
+    def _user_factor(self, user_id_str: str, override: Optional[np.ndarray] = None) -> Optional[np.ndarray]:
+        if override is not None:
+            return override
         ov = self._ov_user_factor(user_id_str)
         if ov is not None:
             return np.asarray(ov, dtype=np.float32)
@@ -344,15 +402,53 @@ class MovieRecommender:
                 return None
         return None
 
-    def _score_for_ranking(self, user_id_str: str, tmdb_id_int: int) -> float:
+    def _score_for_ranking(
+        self, user_id_str: str, tmdb_id_int: int, user_factor_override: Optional[np.ndarray] = None,
+    ) -> float:
         """iALS dot-product score; 0 if no factors are available."""
-        u = self._user_factor(user_id_str)
+        u = self._user_factor(user_id_str, override=user_factor_override)
         if u is None:
             return 0.0
         v = self._item_factor(int(tmdb_id_int))
         if v is None:
             return 0.0
         return float(np.dot(u, v))
+
+    def _get_cold_start_user_factor(self, user_id, min_ratings: int = 1) -> Optional[np.ndarray]:
+        """Symmetric user cold-start (item 2): predict an iALS-shaped factor for a
+        user who isn't in ``user_to_idx``/the overlay yet, from their existing
+        (local) ``Review`` ratings, so brand-new users get real personalization
+        instead of an immediate popularity-only fallback.
+        """
+        if self.user_cold_start_head is None or self.cold_start_head is None:
+            return None
+        try:
+            rows = list(
+                Review.objects.filter(
+                    user_id=user_id, content_type=self.movie_content_type, rating__gte=3.0,
+                ).values_list("object_id", "rating")
+            )
+            if len(rows) < min_ratings:
+                return None
+            movie_ids = [mid for mid, _ in rows]
+            tmdb_by_movie_id = dict(
+                Movie.objects.filter(id__in=movie_ids, tmdb_id__isnull=False)
+                .values_list("id", "tmdb_id")
+            )
+            rated_tmdb_ids, weights = [], []
+            for mid, rating in rows:
+                tid = tmdb_by_movie_id.get(mid)
+                if tid is not None:
+                    rated_tmdb_ids.append(int(tid))
+                    weights.append(max(float(rating), 0.1))
+            if not rated_tmdb_ids:
+                return None
+            return predict_user_factor(
+                self.user_cold_start_head, rated_tmdb_ids, weights, self.catalog, self.cold_start_head,
+            )
+        except Exception:
+            logger.exception("Cold-start user factor prediction failed for user_id=%s", user_id)
+            return None
 
     # ------------------------------------------------------------------
     # Diversity re-ranking (MMR) — unchanged behaviour
@@ -424,8 +520,13 @@ class MovieRecommender:
             return self._get_popular_movies(max_recommendations, rated)
 
         user_id_str = f"loc_{user_id}"
-        # User must be known in either the base index or the overlay
+        # User must be known in either the base index or the overlay; otherwise try the
+        # symmetric cold-start head (item 2) before giving up to a popularity fallback.
+        cold_user_factor = None
         has_user = (user_id_str in self.user_to_idx) or (self._ov_user_factor(user_id_str) is not None)
+        if not has_user:
+            cold_user_factor = self._get_cold_start_user_factor(user_id)
+            has_user = cold_user_factor is not None
         if not has_user:
             return self._get_popular_movies(max_recommendations, rated)
 
@@ -439,11 +540,15 @@ class MovieRecommender:
         for movie in candidates:
             tmdb_id = int(movie["tmdb_id"])
             year = movie["release_date"].year if movie["release_date"] else None
-            ranking_score = self._score_for_ranking(user_id_str, tmdb_id)
-            est = self.predict_rating(user_id_str, tmdb_id, year=year)
+            ranking_score = self._score_for_ranking(user_id_str, tmdb_id, user_factor_override=cold_user_factor)
+            est = self.predict_rating(user_id_str, tmdb_id, year=year, user_factor_override=cold_user_factor)
             if est == 0:
                 continue
             est = max(0.5, min(5.0, est))
+            # Popularity-aware re-ranking (item 9): nudge the sort/MMR order away from
+            # pure-popularity picks without touching the displayed predicted_rating.
+            vote_count = self.tmdb_vote_data.get(tmdb_id, (0.0, 0))[1]
+            ranking_score -= self._POPULARITY_LAMBDA * np.log1p(max(vote_count, 0))
             predictions.append({
                 "id": movie["id"],
                 "tmdb_id": tmdb_id,
@@ -475,18 +580,25 @@ class MovieRecommender:
         candidates = self.known_tmdb_ids - local_tmdb_ids
 
         user_id_str = f"loc_{user_id}"
-        if user_id_str not in self.user_to_idx and self._ov_user_factor(user_id_str) is None:
+        cold_user_factor = None
+        has_user = (user_id_str in self.user_to_idx) or (self._ov_user_factor(user_id_str) is not None)
+        if not has_user:
+            cold_user_factor = self._get_cold_start_user_factor(user_id)
+            has_user = cold_user_factor is not None
+        if not has_user:
             return []
 
         predictions = []
         for tmdb_id in candidates:
             if tmdb_id not in self.item_to_idx:
                 continue
-            ranking_score = self._score_for_ranking(user_id_str, int(tmdb_id))
-            est = self.predict_rating(user_id_str, int(tmdb_id))
+            ranking_score = self._score_for_ranking(user_id_str, int(tmdb_id), user_factor_override=cold_user_factor)
+            est = self.predict_rating(user_id_str, int(tmdb_id), user_factor_override=cold_user_factor)
             est = max(0.5, min(5.0, est))
             if est < 3.2:
                 continue
+            vote_count = self.tmdb_vote_data.get(tmdb_id, (0.0, 0))[1]
+            ranking_score -= self._POPULARITY_LAMBDA * np.log1p(max(vote_count, 0))
             predictions.append({
                 "tmdb_id": int(tmdb_id),
                 "predicted_rating": round(est * 2, 1),

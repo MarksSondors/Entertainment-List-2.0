@@ -36,6 +36,7 @@ class RankingModel:
     alpha: float
     positive_threshold: float
     trained_with_gpu: bool
+    model_type: str = "ials"  # "ials" or "bpr" — see train_bpr()
 
 
 def _gpu_available() -> bool:
@@ -101,16 +102,29 @@ def build_confidence_matrix(
     positive_threshold: float = 3.5,
     alpha: float = 40.0,
     local_user_weight: float = 3.0,
+    watchlist_df: Optional[pd.DataFrame] = None,
+    watchlist_confidence: float = 2.0,
 ) -> tuple[csr_matrix, dict[str, int], dict[int, int]]:
     """Build a (n_users, n_items) confidence-weighted CSR for iALS.
 
     Only rows with rating >= ``positive_threshold`` are kept (implicit positives).
+
+    ``watchlist_df`` (columns ``user_id``, ``tmdb_id`` — see
+    ``data_loading.load_watchlist_pairs``) adds extra low-confidence implicit
+    positives from users adding movies to their watchlist. Scoped to pairs whose
+    user *and* item already appear in the rating-derived vocabulary (i.e. this
+    enriches existing users/items rather than introducing brand-new indices with
+    no bias/cold-start signal elsewhere) — a watchlist-only (user, item) pair with
+    either side unknown is skipped. Where a pair is both rated-positive and
+    watchlisted, confidences add (``sum_duplicates``), giving it a modest boost.
     """
     pos = df[df["rating"] >= positive_threshold].copy()
     if pos.empty:
         raise ValueError(f"No positive interactions at threshold={positive_threshold}")
 
-    user_ids = pos["user_id"].values
+    # .to_numpy() materializes user_id's actual string labels (df may store it as
+    # categorical dtype to save memory) so dict-keying/iteration below is unaffected.
+    user_ids = pos["user_id"].to_numpy()
     item_ids = pos["tmdb_id"].values
 
     user_to_idx = {u: i for i, u in enumerate(pd.unique(user_ids))}
@@ -126,7 +140,24 @@ def build_confidence_matrix(
 
     n_users = len(user_to_idx)
     n_items = len(item_to_idx)
-    R = coo_matrix((confidence, (u_idx, i_idx)), shape=(n_users, n_items), dtype=np.float32).tocsr()
+
+    rows, cols, vals = [u_idx], [i_idx], [confidence]
+    if watchlist_df is not None and not watchlist_df.empty:
+        wl = watchlist_df[
+            watchlist_df["user_id"].isin(user_to_idx) & watchlist_df["tmdb_id"].isin(item_to_idx)
+        ]
+        if not wl.empty:
+            wl_u = np.fromiter((user_to_idx[u] for u in wl["user_id"]), dtype=np.int32, count=len(wl))
+            wl_i = np.fromiter((item_to_idx[int(t)] for t in wl["tmdb_id"]), dtype=np.int32, count=len(wl))
+            rows.append(wl_u)
+            cols.append(wl_i)
+            vals.append(np.full(len(wl), watchlist_confidence, dtype=np.float32))
+            logger.info("Adding %d watchlist positives to the confidence matrix", len(wl))
+
+    R = coo_matrix(
+        (np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
+        shape=(n_users, n_items), dtype=np.float32,
+    ).tocsr()
     R.sum_duplicates()
     logger.info("iALS confidence matrix: %d users x %d items, nnz=%d", n_users, n_items, R.nnz)
     return R, user_to_idx, item_to_idx
@@ -191,6 +222,109 @@ def train_ials(
         alpha=float(alpha),
         positive_threshold=float(positive_threshold),
         trained_with_gpu=bool(use_gpu),
+    )
+
+
+def train_bpr(
+    R_user_item: csr_matrix,
+    user_to_idx: dict[str, int],
+    item_to_idx: dict[int, int],
+    *,
+    factors: int = 64,
+    regularization: float = 0.05,
+    iterations: int = 100,
+    learning_rate: float = 0.01,
+    use_gpu: bool = False,
+    positive_threshold: float = 3.5,
+    random_state: int = 42,
+) -> RankingModel:
+    """Fit ``implicit.bpr.BayesianPersonalizedRanking`` as an alternative ranking head.
+
+    BPR directly optimizes a pairwise ranking loss (rank observed-positive items
+    above unobserved ones), which is closer to what NDCG@K actually measures than
+    iALS's weighted-MSE objective — worth comparing against iALS on the same eval
+    harness (see train_recommender.py's Optuna search, which tries both).
+
+    Only the nonzero *pattern* of ``R_user_item`` is used (BPR treats any nonzero
+    entry as an equally-weighted positive and samples pairwise from there) — the
+    same confidence-weighted matrix built by ``build_confidence_matrix`` works fine
+    as input; the confidence magnitudes themselves are ignored.
+    """
+    from implicit.bpr import BayesianPersonalizedRanking
+
+    requested_gpu = use_gpu
+    if requested_gpu and not _gpu_available():
+        logger.warning("--gpu requested but implicit CUDA backend unavailable; falling back to CPU")
+        use_gpu = False
+
+    logger.info(
+        "Fitting BPR: factors=%d reg=%.4f iters=%d lr=%.4f gpu=%s",
+        factors, regularization, iterations, learning_rate, use_gpu,
+    )
+    model = BayesianPersonalizedRanking(
+        factors=factors,
+        regularization=regularization,
+        iterations=iterations,
+        learning_rate=learning_rate,
+        use_gpu=use_gpu,
+        random_state=random_state,
+    )
+    model.fit(R_user_item, show_progress=False)
+
+    user_factors = _to_numpy(model.user_factors)
+    item_factors = _to_numpy(model.item_factors)
+    if user_factors.__class__.__module__.startswith(("cupy", "implicit.gpu")):
+        raise RuntimeError("user_factors is not a numpy array post-coercion")
+    if item_factors.__class__.__module__.startswith(("cupy", "implicit.gpu")):
+        raise RuntimeError("item_factors is not a numpy array post-coercion")
+
+    return RankingModel(
+        user_factors=user_factors,
+        item_factors=item_factors,
+        user_to_idx=user_to_idx,
+        item_to_idx=item_to_idx,
+        factors=int(factors),
+        regularization=float(regularization),
+        iterations=int(iterations),
+        alpha=float(learning_rate),  # repurposed field: BPR has no "alpha", store the learning rate
+        positive_threshold=float(positive_threshold),
+        trained_with_gpu=bool(use_gpu),
+        model_type="bpr",
+    )
+
+
+def train_ranking_model(
+    model_type: str,
+    R_user_item: csr_matrix,
+    user_to_idx: dict[str, int],
+    item_to_idx: dict[int, int],
+    *,
+    factors: int,
+    regularization: float,
+    iterations: int,
+    alpha: float,
+    use_gpu: bool = False,
+    positive_threshold: float = 3.5,
+    random_state: int = 42,
+) -> RankingModel:
+    """Dispatch to ``train_ials`` or ``train_bpr`` by ``model_type`` ("ials"/"bpr").
+
+    ``alpha`` is iALS's outer confidence multiplier when ``model_type == "ials"``,
+    or BPR's learning rate when ``model_type == "bpr"`` — kept as one hyperparameter
+    slot so both model types share the same Optuna search space shape.
+    """
+    if model_type == "bpr":
+        return train_bpr(
+            R_user_item, user_to_idx, item_to_idx,
+            factors=factors, regularization=regularization, iterations=iterations,
+            learning_rate=alpha, use_gpu=use_gpu, positive_threshold=positive_threshold,
+            random_state=random_state,
+        )
+    return train_ials(
+        R_user_item, user_to_idx, item_to_idx,
+        factors=factors, regularization=regularization, iterations=iterations,
+        alpha=alpha, use_gpu=use_gpu, positive_threshold=positive_threshold,
+        random_state=random_state,
     )
 
 
