@@ -22,7 +22,7 @@ import numpy as np
 from django.conf import settings
 
 from . import MODEL_VERSION
-from .cold_start import ColdStartHead
+from .cold_start import ColdStartHead, UserColdStartHead
 from .data_loading import CatalogLookups
 from .mf_ranking import RankingModel
 
@@ -52,6 +52,10 @@ def assert_pickle_safe(bundle: dict) -> None:
     if cold is not None:
         _assert_numpy("cold_start.coef", cold["coef"])
         _assert_numpy("cold_start.intercept", cold["intercept"])
+    user_cold = bundle.get("user_cold_start")
+    if user_cold is not None:
+        _assert_numpy("user_cold_start.coef", user_cold["coef"])
+        _assert_numpy("user_cold_start.intercept", user_cold["intercept"])
 
 
 def build_bundle(
@@ -61,6 +65,7 @@ def build_bundle(
     ranking: RankingModel,
     cold_start: Optional[ColdStartHead],
     metadata: dict,
+    user_cold_start: Optional[UserColdStartHead] = None,
 ) -> dict:
     """Assemble the v5.0 export bundle. Adds legacy-shaped keys for back-compat
     with the existing ``MovieRecommender`` until inference is updated.
@@ -80,6 +85,7 @@ def build_bundle(
             "alpha": ranking.alpha,
             "positive_threshold": ranking.positive_threshold,
             "trained_with_gpu": ranking.trained_with_gpu,
+            "model_type": ranking.model_type,
         },
         "catalog": {
             "tmdb_to_genres": dict(catalog.tmdb_to_genres),
@@ -87,6 +93,8 @@ def build_bundle(
             "tmdb_to_runtime_bucket": dict(catalog.tmdb_to_runtime_bucket),
             "tmdb_to_year": dict(catalog.tmdb_to_year),
             "tmdb_vote_data": dict(catalog.tmdb_vote_data),
+            "tmdb_to_director": dict(catalog.tmdb_to_director),
+            "tmdb_to_top_cast": dict(catalog.tmdb_to_top_cast),
         },
         "known_tmdb_ids": list(ranking.item_to_idx.keys()),
     }
@@ -97,6 +105,14 @@ def build_bundle(
             "decades": list(cold_start.decades),
             "languages": list(cold_start.languages),
             "feature_dim": int(cold_start.feature_dim),
+            "directors": list(cold_start.directors),
+            "top_cast": list(cold_start.top_cast),
+        }
+    if user_cold_start is not None:
+        bundle["user_cold_start"] = {
+            "coef": user_cold_start.coef,
+            "intercept": user_cold_start.intercept,
+            "feature_dim": int(user_cold_start.feature_dim),
         }
 
     # Legacy-shaped top-level keys so the existing inference code keeps working

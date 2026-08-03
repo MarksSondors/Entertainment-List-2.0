@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import coo_matrix, csr_matrix
 
+from .biases import build_feature_blocks
+from .data_loading import TMDB_GENRES
+
 logger = logging.getLogger(__name__)
 
 
@@ -92,10 +95,14 @@ def predict_explicit(
     item_to_idx: Optional[dict] = None,
     user_factors: Optional[np.ndarray] = None,
     item_factors: Optional[np.ndarray] = None,
+    factor_blend_weight: float = 1.0,
 ) -> np.ndarray:
     """Predict explicit ratings using bias hierarchy + (optional) factor dot product.
 
     Mirrors the legacy bias-prediction path so RMSE numbers stay comparable across runs.
+    ``factor_blend_weight`` scales the factor dot-product term (see
+    ``fit_explicit_blend_weight``) — pass 1.0 for the raw sum, 0.0 to disable it
+    without removing the arrays from the call site.
     """
     n = len(df)
     pred = np.full(n, biases["global_mean"], dtype=np.float32)
@@ -103,12 +110,20 @@ def predict_explicit(
     pred += df["tmdb_id"].map(biases["item_biases"]).fillna(0).astype(np.float32).values
     pred += df["user_id"].map(biases["user_biases"]).fillna(0).astype(np.float32).values
 
-    # Genre (multi-hot)
+    # Genre (multi-hot) — vectorized via a sparse membership matrix instead of one
+    # Python-level .apply() scan of df per genre (build_feature_blocks's genre block
+    # is always the first len(TMDB_GENRES) columns).
     if biases.get("user_genre_biases"):
+        genre_col_idx = {g: i for i, g in enumerate(TMDB_GENRES)}
+        genre_membership, _ = build_feature_blocks(df)
+        user_id_vals = df["user_id"].to_numpy()
         for g, bias_map in biases["user_genre_biases"].items():
-            mask = df["genres"].apply(lambda gs: g in gs if gs else False).values
+            col = genre_col_idx.get(g)
+            if col is None:
+                continue
+            mask = genre_membership[:, col].toarray().ravel() > 0
             if mask.any():
-                pred[mask] += df.loc[mask, "user_id"].map(bias_map).fillna(0).astype(np.float32).values
+                pred[mask] += pd.Series(user_id_vals[mask]).map(bias_map).fillna(0).astype(np.float32).values
 
     # Decade
     if biases.get("user_decade_biases"):
@@ -131,6 +146,29 @@ def predict_explicit(
             if mask.any():
                 pred[mask] += df.loc[mask, "user_id"].map(bias_map).fillna(0).astype(np.float32).values
 
+    # Per-user linear time-drift (see biases.compute_user_time_trend_biases). Normalizes
+    # this row's timestamp against the user's own [t_min, t_max] rating window the trend
+    # was fit on; extrapolation is clamped to [-1.0, 1.0] (i.e. one window-width beyond
+    # either edge) since the ridge-shrunk slope is only reliable near the observed range.
+    trend = biases.get("user_time_trend")
+    norm = biases.get("user_time_norm")
+    if trend and norm and "timestamp" in df.columns:
+        user_id_vals = df["user_id"].to_numpy()
+        ts = df["timestamp"].to_numpy().astype(np.float64)
+        t_norm = np.zeros(n, dtype=np.float32)
+        slope_arr = np.zeros(n, dtype=np.float32)
+        for i in range(n):
+            uid = str(user_id_vals[i])
+            bounds = norm.get(uid)
+            s = trend.get(uid)
+            if bounds is None or s is None:
+                continue
+            t_min, t_max = bounds
+            span = (t_max - t_min) or 1.0
+            t_norm[i] = np.clip((ts[i] - t_min) / span - 0.5, -1.0, 1.0)
+            slope_arr[i] = s
+        pred += slope_arr * t_norm
+
     # Optional factor dot product (used when factors come from a residual-MF; iALS factors
     # are typically NOT added to explicit predictions — pass None there).
     if user_factors is not None and item_factors is not None and user_to_idx and item_to_idx:
@@ -142,9 +180,80 @@ def predict_explicit(
             iv = i_idx[valid].astype(int)
             inter = np.einsum("ij,ij->i", user_factors[uv], item_factors[iv]).astype(np.float32)
             pred_arr = pred.copy()
-            pred_arr[valid] += inter
+            pred_arr[valid] += factor_blend_weight * inter
             pred = pred_arr
     return pred
+
+
+def fit_explicit_blend_weight(
+    val_df: pd.DataFrame,
+    biases: dict,
+    *,
+    user_to_idx: dict[str, int],
+    item_to_idx: dict[int, int],
+    user_factors: np.ndarray,
+    item_factors: np.ndarray,
+) -> float:
+    """Learn a single scalar blending the bias-hierarchy prediction with the iALS
+    factor dot product, minimizing RMSE on ``val_df``:
+
+        rating ≈ bias_pred + alpha * dot(user_factors[u], item_factors[i])
+
+    Closed form (1-D weighted least squares of the residual on the dot product):
+
+        alpha* = sum(resid * dot) / sum(dot^2)
+
+    Falls back to 0.0 (i.e. don't blend) if there aren't enough known-user/item
+    validation rows, or if the fit would be numerically degenerate.
+    """
+    sub = val_df[val_df["user_id"].isin(user_to_idx) & val_df["tmdb_id"].isin(item_to_idx)]
+    if len(sub) < 50:
+        return 0.0
+
+    bias_pred = predict_explicit(sub, biases)
+    resid = sub["rating"].values.astype(np.float32) - bias_pred
+
+    u_idx = sub["user_id"].map(user_to_idx).values.astype(int)
+    i_idx = sub["tmdb_id"].map(item_to_idx).values.astype(int)
+    dot = np.einsum("ij,ij->i", user_factors[u_idx], item_factors[i_idx]).astype(np.float32)
+
+    denom = float(np.sum(dot ** 2))
+    if denom < 1e-6:
+        return 0.0
+    alpha = float(np.sum(resid * dot) / denom)
+    # Guard against a wildly extrapolated alpha from a small/unrepresentative sample.
+    alpha = float(np.clip(alpha, -1.0, 1.0))
+    logger.info("Fitted explicit blend weight alpha=%.4f on %d validation rows", alpha, len(sub))
+    return alpha
+
+
+def global_temporal_split(
+    df: pd.DataFrame,
+    *,
+    cutoff_quantile: float = 0.8,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """A single global timestamp cutoff (train = everything before, val = everything
+    at/after) rather than ``stratified_temporal_split``'s per-user holdout.
+
+    This is a more production-realistic "replay" evaluation: it simulates "train up to
+    date X, see how the model would have performed on what actually happened after X"
+    for the whole user base at once, including users/items that only appear after the
+    cutoff (naturally cold — the per-user split can't surface this failure mode since
+    every user has some rows in both train and val by construction).
+
+    Intended as an additional reported metric alongside the main stratified split, not
+    a replacement for it (the stratified split is still what biases/iALS are trained on).
+    """
+    if df.empty:
+        return df, df
+    cutoff = float(df["timestamp"].quantile(cutoff_quantile))
+    train_df = df[df["timestamp"] < cutoff].reset_index(drop=True)
+    val_df = df[df["timestamp"] >= cutoff].reset_index(drop=True)
+    logger.info(
+        "Global temporal split (cutoff=%.0f, q=%.2f): %d train / %d val (%.1f%%)",
+        cutoff, cutoff_quantile, len(train_df), len(val_df), 100.0 * len(val_df) / max(len(df), 1),
+    )
+    return train_df, val_df
 
 
 def evaluate_pointwise(
@@ -172,6 +281,28 @@ def evaluate_pointwise(
     return rmse, mae
 
 
+def build_train_csr(
+    train_df: pd.DataFrame,
+    user_to_idx: dict[str, int],
+    item_to_idx: dict[int, int],
+) -> csr_matrix:
+    """Build the (n_users, n_items) seen-interactions CSR used to mask training rows
+    out of ranking evaluation. Depends only on ``train_df``/``user_to_idx``/``item_to_idx``,
+    so callers that evaluate repeatedly against the same train split (e.g. an Optuna
+    search loop) should build this once and pass it to ``evaluate_ranking``/``evaluate_full``
+    instead of letting it get rebuilt on every call.
+    """
+    tr = train_df[train_df["user_id"].isin(user_to_idx) & train_df["tmdb_id"].isin(item_to_idx)]
+    if tr.empty:
+        return csr_matrix((len(user_to_idx), len(item_to_idx)), dtype=np.float32)
+    u_arr = np.fromiter((user_to_idx[u] for u in tr["user_id"].to_numpy()), dtype=np.int32, count=len(tr))
+    i_arr = np.fromiter((item_to_idx[int(t)] for t in tr["tmdb_id"].values), dtype=np.int32, count=len(tr))
+    return coo_matrix(
+        (np.ones(len(tr), dtype=np.float32), (u_arr, i_arr)),
+        shape=(len(user_to_idx), len(item_to_idx)),
+    ).tocsr()
+
+
 def evaluate_ranking(
     train_df: pd.DataFrame,
     val_df: pd.DataFrame,
@@ -183,10 +314,13 @@ def evaluate_ranking(
     positive_threshold: float = 3.5,
     k: int = 10,
     max_users: int = 10_000,
+    train_csr: Optional[csr_matrix] = None,
 ) -> EvalResult:
     """Compute NDCG@K / Recall@K / HitRate@K / MRR / Coverage@K on val positives.
 
-    Sample-capped at ``max_users`` for tractability on the 32M dataset.
+    Sample-capped at ``max_users`` for tractability on the 32M dataset. Pass a
+    precomputed ``train_csr`` (see ``build_train_csr``) to skip rebuilding it when
+    called repeatedly against the same train split (e.g. inside an Optuna loop).
     """
     val_pos = val_df[val_df["rating"] >= positive_threshold]
     val_pos = val_pos[val_pos["user_id"].isin(user_to_idx) & val_pos["tmdb_id"].isin(item_to_idx)]
@@ -195,22 +329,13 @@ def evaluate_ranking(
 
     # Group held-out positives per user
     per_user_pos: dict[int, set[int]] = {}
-    for uid, tid in zip(val_pos["user_id"].values, val_pos["tmdb_id"].values):
+    for uid, tid in zip(val_pos["user_id"].to_numpy(), val_pos["tmdb_id"].values):
         u = user_to_idx[uid]
         i = item_to_idx[int(tid)]
         per_user_pos.setdefault(u, set()).add(i)
 
-    # Build train CSR for masking
-    tr = train_df[train_df["user_id"].isin(user_to_idx) & train_df["tmdb_id"].isin(item_to_idx)]
-    if not tr.empty:
-        u_arr = np.fromiter((user_to_idx[u] for u in tr["user_id"].values), dtype=np.int32, count=len(tr))
-        i_arr = np.fromiter((item_to_idx[int(t)] for t in tr["tmdb_id"].values), dtype=np.int32, count=len(tr))
-        train_csr = coo_matrix(
-            (np.ones(len(tr), dtype=np.float32), (u_arr, i_arr)),
-            shape=(len(user_to_idx), len(item_to_idx)),
-        ).tocsr()
-    else:
-        train_csr = csr_matrix((len(user_to_idx), len(item_to_idx)), dtype=np.float32)
+    if train_csr is None:
+        train_csr = build_train_csr(train_df, user_to_idx, item_to_idx)
 
     user_ids = list(per_user_pos.keys())
     if len(user_ids) > max_users:
@@ -285,14 +410,23 @@ def evaluate_full(
     ranking_item_factors: np.ndarray,
     positive_threshold: float = 3.5,
     k: int = 10,
+    train_csr: Optional[csr_matrix] = None,
 ) -> EvalResult:
-    """Full-suite evaluation. Adds per-cohort breakdown (Local vs ML, Cold vs Warm)."""
+    """Full-suite evaluation. Adds per-cohort breakdown (Local vs ML, Cold vs Warm).
+
+    Pass a precomputed ``train_csr`` (see ``build_train_csr``) when calling this
+    repeatedly against the same train split (e.g. across Optuna trials) to avoid
+    rebuilding the seen-items mask on every trial and every cohort.
+    """
+    if train_csr is None:
+        train_csr = build_train_csr(train_df, ranking_user_to_idx, ranking_item_to_idx)
+
     rmse, mae = evaluate_pointwise(train_df, val_df, biases)
     ranking = evaluate_ranking(
         train_df, val_df,
         user_to_idx=ranking_user_to_idx, item_to_idx=ranking_item_to_idx,
         user_factors=ranking_user_factors, item_factors=ranking_item_factors,
-        positive_threshold=positive_threshold, k=k,
+        positive_threshold=positive_threshold, k=k, train_csr=train_csr,
     )
     overall = EvalResult(
         rmse=rmse, mae=mae,
@@ -312,7 +446,7 @@ def evaluate_full(
             train_df, sub_val,
             user_to_idx=ranking_user_to_idx, item_to_idx=ranking_item_to_idx,
             user_factors=ranking_user_factors, item_factors=ranking_item_factors,
-            positive_threshold=positive_threshold, k=k,
+            positive_threshold=positive_threshold, k=k, train_csr=train_csr,
         )
         overall.per_cohort[label] = EvalResult(
             rmse=sub_rmse, mae=sub_mae,
