@@ -41,7 +41,7 @@ def _encode_output(image: Image.Image) -> bytes:
     # lossless WebP would sidestep chroma subsampling entirely but runs ~4x the file size
     # (measured ~2MB vs ~400KB here); lossy VP8's transform/deblocking still beats JPEG at
     # the same subsampling, so this is the better size/quality tradeoff
-    image.save(buf, format='WEBP', quality=WEBP_QUALITY, method=6)
+    image.save(buf, format='WEBP', quality=WEBP_QUALITY, subsampling=0, method=6)
     return buf.getvalue()
 
 
