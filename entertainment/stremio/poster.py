@@ -1,12 +1,12 @@
 """Poster overlay rendering for Stremio catalog grids (rating chip + status chip)."""
 import hashlib
 import io
-import math
 from datetime import date, timedelta
 from functools import lru_cache
 
 import requests
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.staticfiles import finders
 from django.core.cache import cache
 from django.db.models import Avg, Count
 from django.utils import timezone
@@ -21,7 +21,7 @@ RENDERED_POSTER_CACHE_TTL = 3600  # matches agreed staleness tolerance for ratin
 FETCH_TIMEOUT = 4
 WEBP_QUALITY = 95
 
-ACCENT = (255, 176, 59)  # amber
+ACCENT = (0, 112, 216)  # brand blue, sampled from the site logo
 WHITE = (255, 255, 255)
 GLASS_TINT = (18, 18, 20, 150)
 GLASS_BLUR_RADIUS = 6
@@ -32,6 +32,15 @@ CHIP_CORNER_RADIUS_RATIO = 0.28  # rounded rectangle, not a full pill
 def _font(size: int) -> ImageFont.ImageFont:
     """A handful of distinct sizes are ever requested; avoid re-parsing the bitmap font each render."""
     return ImageFont.load_default(size=size)
+
+
+@lru_cache(maxsize=8)
+def _logo_icon(size: int) -> Image.Image:
+    """Site logo, resized once per requested size and reused as the rating chip's icon."""
+    path = finders.find('images/logo.png')
+    assert isinstance(path, str), 'site logo static asset is missing'
+    logo = Image.open(path).convert('RGBA')
+    return logo.resize((size, size), Image.Resampling.LANCZOS)
 
 
 def _encode_output(image: Image.Image) -> bytes:
@@ -120,8 +129,7 @@ def _render_rating_base(media, media_type: str, source_bytes: bytes, rating_text
 
     width, _height = image.size
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    _draw_rating_chip(image, draw, width, rating_text)
+    _draw_rating_chip(image, overlay, width, rating_text)
     composited = Image.alpha_composite(image, overlay)
 
     buf = io.BytesIO()
@@ -210,16 +218,8 @@ def _apply_glass_panel(image: Image.Image, box: tuple, radius: float) -> None:
     image.paste(glass, (x1, y1), mask)
 
 
-def _draw_star(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color: tuple) -> None:
-    points = []
-    for i in range(10):
-        angle = math.pi / 2 + i * math.pi / 5
-        radius = r if i % 2 == 0 else r * 0.45
-        points.append((cx + radius * math.cos(angle), cy - radius * math.sin(angle)))
-    draw.polygon(points, fill=color)
-
-
-def _draw_rating_chip(image: Image.Image, draw: ImageDraw.ImageDraw, width: int, text: str) -> None:
+def _draw_rating_chip(image: Image.Image, overlay: Image.Image, width: int, text: str) -> None:
+    draw = ImageDraw.Draw(overlay)
     font = _font(max(30, round(width * 0.08)))
     margin = max(16, round(width * 0.035))
     pad_x = max(14, round(width * 0.032))
@@ -227,10 +227,10 @@ def _draw_rating_chip(image: Image.Image, draw: ImageDraw.ImageDraw, width: int,
 
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    star_size = text_h + 10
+    icon_size = text_h + 10
 
-    chip_w = star_size + 8 + text_w + pad_x * 2
-    chip_h = max(star_size, text_h) + pad_y * 2
+    chip_w = icon_size + 8 + text_w + pad_x * 2
+    chip_h = max(icon_size, text_h) + pad_y * 2
     x2 = width - margin
     y1 = margin
     x1 = x2 - chip_w
@@ -239,9 +239,10 @@ def _draw_rating_chip(image: Image.Image, draw: ImageDraw.ImageDraw, width: int,
 
     _apply_glass_panel(image, (x1, y1, x2, y2), radius)
     draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, outline=(*ACCENT, 230), width=2)
-    _draw_star(draw, x1 + pad_x + star_size / 2, (y1 + y2) / 2, star_size / 2, ACCENT)
+    logo = _logo_icon(icon_size)
+    overlay.paste(logo, (int(x1 + pad_x), int((y1 + y2) / 2 - icon_size / 2)), logo)
     draw.text(
-        (x1 + pad_x + star_size + 8, y1 + pad_y - bbox[1]), text, font=font, fill=WHITE,
+        (x1 + pad_x + icon_size + 8, y1 + pad_y - bbox[1]), text, font=font, fill=WHITE,
         stroke_width=1, stroke_fill=(0, 0, 0, 160),
     )
 
