@@ -19,7 +19,7 @@ from .formatters import get_poster_url
 SOURCE_IMAGE_CACHE_TTL = 7 * 24 * 3600  # TMDB posters rarely change, cache long
 RENDERED_POSTER_CACHE_TTL = 3600  # matches agreed staleness tolerance for ratings/next-episode
 FETCH_TIMEOUT = 4
-JPEG_QUALITY = 85
+WEBP_QUALITY = 90
 
 ACCENT = (255, 176, 59)  # amber
 WHITE = (255, 255, 255)
@@ -34,11 +34,14 @@ def _font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default(size=size)
 
 
-def _encode_jpeg(image: Image.Image) -> bytes:
+def _encode_output(image: Image.Image) -> bytes:
     if image.mode != 'RGB':
         image = image.convert('RGB')
     buf = io.BytesIO()
-    image.save(buf, format='JPEG', quality=JPEG_QUALITY)
+    # lossless WebP would sidestep chroma subsampling entirely but runs ~4x the file size
+    # (measured ~2MB vs ~400KB here); lossy VP8's transform/deblocking still beats JPEG at
+    # the same subsampling, so this is the better size/quality tradeoff
+    image.save(buf, format='WEBP', quality=WEBP_QUALITY, method=6)
     return buf.getvalue()
 
 
@@ -59,7 +62,7 @@ def get_cached_poster(media, media_type: str, user, ctx: str | None) -> bytes | 
 
 
 def render_catalog_poster(media, media_type: str, user, ctx: str | None) -> bytes | None:
-    """Build the composited poster JPEG, or None if there's nothing to draw / source is unavailable."""
+    """Build the composited poster WebP, or None if there's nothing to draw / source is unavailable."""
     poster_url = get_poster_url(media)
     if not poster_url:
         return None
@@ -87,7 +90,7 @@ def render_catalog_poster(media, media_type: str, user, ctx: str | None) -> byte
             image = Image.open(io.BytesIO(base_bytes))
         except Exception:
             return None
-        return _encode_jpeg(image)
+        return _encode_output(image)
 
     try:
         image = Image.open(io.BytesIO(base_bytes)).convert('RGBA')
@@ -100,7 +103,7 @@ def render_catalog_poster(media, media_type: str, user, ctx: str | None) -> byte
     _draw_context_chip(image, draw, width, height, banner)
 
     composited = Image.alpha_composite(image, overlay)
-    return _encode_jpeg(composited)
+    return _encode_output(composited)
 
 
 def _render_rating_base(media, media_type: str, source_bytes: bytes, rating_text: str) -> bytes | None:
