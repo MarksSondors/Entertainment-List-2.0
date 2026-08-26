@@ -13,7 +13,7 @@ from django.db.models import Avg, Q, Count
 
 from .authentication import require_stremio_auth, get_user_from_config
 from .formatters import to_stremio_meta, to_stremio_catalog_item, get_poster_url
-from .poster import render_catalog_poster, RENDERED_POSTER_CACHE_TTL
+from .poster import get_cached_poster
 
 from movies.models import Movie, MovieOfWeekPick
 from tvshows.models import TVShow, Season
@@ -251,8 +251,22 @@ def catalog(request, config: str, media_type: str, catalog_id: str, extra: str =
         if metas is None:
             metas = handler()
             cache.set(cache_key, metas, CATALOG_CACHE_TTL)
+            _warm_catalog_posters(metas, media_type, user.id)
     
     return cors_response({'metas': metas})
+
+
+def _warm_catalog_posters(metas: list[dict], media_type: str, user_id: int) -> None:
+    """Fire background renders so Stremio's own poster requests land on a warm cache."""
+    from django_q.tasks import async_task
+
+    for item in metas:
+        imdb_id = item.get('id')
+        if not imdb_id:
+            continue
+        poster = item.get('poster') or ''
+        ctx = poster.split('ctx=', 1)[1].split('&', 1)[0] if 'ctx=' in poster else None
+        async_task('stremio.tasks.warm_poster', media_type, imdb_id, user_id, ctx)
 
 
 def get_watchlist_movies(user, poster_base: str, skip: int = 0, genre: str = None) -> list[dict]:
@@ -572,46 +586,50 @@ def get_recommendations(user, poster_base: str) -> list[dict]:
     return metas
 
 
+def _build_discover_external(user) -> list[dict]:
+    """Fetch+cache the external discover list; shared by the live view and the background warm task."""
+    recommender = MovieRecommender()
+    recommendations = recommender.get_recommendations_for_user(
+        user.id, DISCOVER_EXTERNAL_CANDIDATE_COUNT, scope='external'
+    )
+
+    movies_service = MoviesService()
+
+    def fetch_item(rec):
+        try:
+            details = movies_service.get_movie_details(rec['tmdb_id'])
+        except Exception:
+            return None
+        if not details or not details.get('imdb_id') or not details.get('poster_path'):
+            return None
+        media = SimpleNamespace(
+            imdb_id=details['imdb_id'],
+            title=details.get('title', ''),
+            overview=details.get('overview', ''),
+        )
+        poster_url = f"https://image.tmdb.org/t/p/w500{details['poster_path']}"
+        return rec['ranking_score'], to_stremio_catalog_item(media, 'movie', poster_url=poster_url)
+
+    results = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(fetch_item, rec) for rec in recommendations]
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                results.append(result)
+
+    # Preserve the recommender's ranking order (TMDB lookups complete out of order)
+    results.sort(key=lambda r: r[0], reverse=True)
+    metas = [item for _, item in results]
+    cache.set(f"stremio_discover_external_{user.id}", metas, DISCOVER_EXTERNAL_CACHE_TTL)
+    return metas
+
+
 def get_discover_external(user, skip: int = 0) -> list[dict]:
     """Get personalized TMDB recommendations for movies not yet in the local DB (cached per user)."""
-    cache_key = f"stremio_discover_external_{user.id}"
-    metas = cache.get(cache_key)
-
+    metas = cache.get(f"stremio_discover_external_{user.id}")
     if metas is None:
-        recommender = MovieRecommender()
-        recommendations = recommender.get_recommendations_for_user(
-            user.id, DISCOVER_EXTERNAL_CANDIDATE_COUNT, scope='external'
-        )
-
-        movies_service = MoviesService()
-
-        def fetch_item(rec):
-            try:
-                details = movies_service.get_movie_details(rec['tmdb_id'])
-            except Exception:
-                return None
-            if not details or not details.get('imdb_id') or not details.get('poster_path'):
-                return None
-            media = SimpleNamespace(
-                imdb_id=details['imdb_id'],
-                title=details.get('title', ''),
-                overview=details.get('overview', ''),
-            )
-            poster_url = f"https://image.tmdb.org/t/p/w500{details['poster_path']}"
-            return rec['ranking_score'], to_stremio_catalog_item(media, 'movie', poster_url=poster_url)
-
-        results = []
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = [executor.submit(fetch_item, rec) for rec in recommendations]
-            for future in as_completed(futures):
-                result = future.result()
-                if result:
-                    results.append(result)
-
-        # Preserve the recommender's ranking order (TMDB lookups complete out of order)
-        results.sort(key=lambda r: r[0], reverse=True)
-        metas = [item for _, item in results]
-        cache.set(cache_key, metas, DISCOVER_EXTERNAL_CACHE_TTL)
+        metas = _build_discover_external(user)
 
     return metas[skip:skip + PAGE_SIZE]
 
@@ -735,24 +753,15 @@ def poster_image(request, config: str, media_type: str, imdb_id: str):
     except model.DoesNotExist:
         return HttpResponseNotFound()
 
-    fallback_url = get_poster_url(media)
-    cache_key = f"stremio:posterimg:{media_type}:{media.id}:{user.id}:{ctx or ''}"
-    image_bytes = cache.get(cache_key)
-
-    if image_bytes is None:
-        try:
-            image_bytes = render_catalog_poster(media, media_type, user, ctx)
-        except Exception:
-            image_bytes = None
-        if image_bytes:
-            cache.set(cache_key, image_bytes, RENDERED_POSTER_CACHE_TTL)
+    image_bytes = get_cached_poster(media, media_type, user, ctx)
 
     if not image_bytes:
+        fallback_url = get_poster_url(media)
         if fallback_url:
             return HttpResponseRedirect(fallback_url)
         return HttpResponseNotFound()
 
-    response = HttpResponse(image_bytes, content_type='image/png')
+    response = HttpResponse(image_bytes, content_type='image/jpeg')
     response['Cache-Control'] = 'public, max-age=3600'
     return response
 
