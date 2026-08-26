@@ -32,4 +32,11 @@ urlpatterns = [
         views.meta,
         name='meta'
     ),
+
+    # Catalog poster overlay endpoint (rating badge / status banner)
+    path(
+        '<str:config>/poster/<str:media_type>/<str:imdb_id>.png',
+        views.poster_image,
+        name='poster_image'
+    ),
 ]

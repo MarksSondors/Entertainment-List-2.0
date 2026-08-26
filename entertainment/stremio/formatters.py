@@ -106,7 +106,7 @@ def build_description(media, review=None) -> str:
     return '\n\n'.join(parts) if parts else ''
 
 
-def to_stremio_catalog_item(media, media_type: str) -> dict | None:
+def to_stremio_catalog_item(media, media_type: str, poster_url: str | None = None) -> dict | None:
     """Convert media to minimal Stremio catalog item format."""
     imdb_id = getattr(media, 'imdb_id', None)
     if not imdb_id:
@@ -116,7 +116,7 @@ def to_stremio_catalog_item(media, media_type: str) -> dict | None:
         'id': imdb_id,
         'type': media_type,
         'name': getattr(media, 'name', None) or getattr(media, 'title', ''),
-        'poster': get_poster_url(media),
+        'poster': poster_url or get_poster_url(media),
     }
     
     # Add optional fields for richer catalog display
