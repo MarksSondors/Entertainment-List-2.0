@@ -1,8 +1,11 @@
 import base64
 import json
 from functools import wraps
+from django.core.cache import cache
 from django.http import JsonResponse
 from custom_auth.models import CustomUser
+
+AUTH_CACHE_TTL = 300  # seconds; balances DB load against stale API-key revocation
 
 
 def decode_config(encoded_config: str) -> dict:
@@ -19,17 +22,26 @@ def decode_config(encoded_config: str) -> dict:
 
 
 def get_user_from_config(encoded_config: str) -> CustomUser | None:
-    """Extract user from encoded config containing API key."""
+    """Extract user from encoded config containing API key (cached; Stremio polls this on every request)."""
     config = decode_config(encoded_config)
     api_key = config.get('api_key')
     
     if not api_key:
         return None
     
+    cache_key = f"stremio_auth_user_{api_key}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached or None  # False means "looked up already, key doesn't exist"
+    
     try:
-        return CustomUser.objects.get(api_key=api_key)
+        user = CustomUser.objects.get(api_key=api_key)
     except CustomUser.DoesNotExist:
+        cache.set(cache_key, False, AUTH_CACHE_TTL)
         return None
+    
+    cache.set(cache_key, user, AUTH_CACHE_TTL)
+    return user
 
 
 def require_stremio_auth(view_func):
