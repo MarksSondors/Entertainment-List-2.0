@@ -3,6 +3,7 @@ import hashlib
 import io
 import math
 from datetime import date, timedelta
+from functools import lru_cache
 
 import requests
 from django.contrib.contenttypes.models import ContentType
@@ -18,6 +19,7 @@ from .formatters import get_poster_url
 SOURCE_IMAGE_CACHE_TTL = 7 * 24 * 3600  # TMDB posters rarely change, cache long
 RENDERED_POSTER_CACHE_TTL = 3600  # matches agreed staleness tolerance for ratings/next-episode
 FETCH_TIMEOUT = 4
+JPEG_QUALITY = 85
 
 ACCENT = (255, 176, 59)  # amber
 WHITE = (255, 255, 255)
@@ -26,41 +28,104 @@ GLASS_BLUR_RADIUS = 6
 CHIP_CORNER_RADIUS_RATIO = 0.28  # rounded rectangle, not a full pill
 
 
+@lru_cache(maxsize=8)
+def _font(size: int) -> ImageFont.ImageFont:
+    """A handful of distinct sizes are ever requested; avoid re-parsing the bitmap font each render."""
+    return ImageFont.load_default(size=size)
+
+
+def _encode_jpeg(image: Image.Image) -> bytes:
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+    buf = io.BytesIO()
+    image.save(buf, format='JPEG', quality=JPEG_QUALITY)
+    return buf.getvalue()
+
+
+def get_cached_poster(media, media_type: str, user, ctx: str | None) -> bytes | None:
+    """Get-or-render the final per-user poster; shared by the live view and background warm tasks."""
+    cache_key = f"stremio:posterimg:{media_type}:{media.id}:{user.id}:{ctx or ''}"
+    image_bytes = cache.get(cache_key)
+    if image_bytes is not None:
+        return image_bytes
+
+    try:
+        image_bytes = render_catalog_poster(media, media_type, user, ctx)
+    except Exception:
+        image_bytes = None
+    if image_bytes:
+        cache.set(cache_key, image_bytes, RENDERED_POSTER_CACHE_TTL)
+    return image_bytes
+
+
 def render_catalog_poster(media, media_type: str, user, ctx: str | None) -> bytes | None:
-    """Build the composited poster PNG, or None if there's nothing to draw / source is unavailable."""
+    """Build the composited poster JPEG, or None if there's nothing to draw / source is unavailable."""
     poster_url = get_poster_url(media)
     if not poster_url:
-        return None
-
-    source_bytes = _fetch_source_image(poster_url)
-    if not source_bytes:
         return None
 
     rating_text = _rating_badge(media)
     banner = _movie_banner(media) if media_type == 'movie' else _series_banner(media, user, ctx)
 
     if not rating_text and not banner:
-        return source_bytes
+        # nothing to draw at all: skip Pillow entirely and hand back the original bytes
+        return _fetch_source_image(poster_url)
+
+    base_bytes = _fetch_source_image(poster_url)
+    if not base_bytes:
+        return None
+
+    if rating_text:
+        # rating chip is identical for every viewer of this title, so it's rendered once (blur
+        # included) and shared across users instead of redone per-request
+        base_bytes = _render_rating_base(media, media_type, base_bytes, rating_text)
+        if base_bytes is None:
+            return None
+
+    if not banner:
+        try:
+            image = Image.open(io.BytesIO(base_bytes))
+        except Exception:
+            return None
+        return _encode_jpeg(image)
 
     try:
-        image = Image.open(io.BytesIO(source_bytes)).convert('RGBA')
+        image = Image.open(io.BytesIO(base_bytes)).convert('RGBA')
     except Exception:
         return None
 
     width, height = image.size
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
+    _draw_context_chip(image, draw, width, height, banner)
 
-    # glass panels are painted straight onto `image`; overlay only holds crisp foreground vectors
-    if rating_text:
-        _draw_rating_chip(image, draw, width, rating_text)
-    if banner:
-        _draw_context_chip(image, draw, width, height, banner)
+    composited = Image.alpha_composite(image, overlay)
+    return _encode_jpeg(composited)
 
-    composited = Image.alpha_composite(image, overlay).convert('RGB')
+
+def _render_rating_base(media, media_type: str, source_bytes: bytes, rating_text: str) -> bytes | None:
+    """Poster + rating chip only, cached per media item (not per user) so the blur runs once."""
+    cache_key = f"stremio:posterbase:{media_type}:{media.id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        image = Image.open(io.BytesIO(source_bytes)).convert('RGBA')
+    except Exception:
+        return None
+
+    width, _height = image.size
+    overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    _draw_rating_chip(image, draw, width, rating_text)
+    composited = Image.alpha_composite(image, overlay)
+
     buf = io.BytesIO()
-    composited.save(buf, format='PNG', optimize=True)
-    return buf.getvalue()
+    composited.save(buf, format='PNG')  # lossless intermediate; re-decoded once per user on top
+    base_bytes = buf.getvalue()
+    cache.set(cache_key, base_bytes, RENDERED_POSTER_CACHE_TTL)
+    return base_bytes
 
 
 def _fetch_source_image(url: str) -> bytes | None:
@@ -152,7 +217,7 @@ def _draw_star(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color:
 
 
 def _draw_rating_chip(image: Image.Image, draw: ImageDraw.ImageDraw, width: int, text: str) -> None:
-    font = ImageFont.load_default(size=max(30, round(width * 0.08)))
+    font = _font(max(30, round(width * 0.08)))
     margin = max(16, round(width * 0.035))
     pad_x = max(14, round(width * 0.032))
     pad_y = max(10, round(width * 0.024))
@@ -180,7 +245,7 @@ def _draw_rating_chip(image: Image.Image, draw: ImageDraw.ImageDraw, width: int,
 
 def _draw_context_chip(image: Image.Image, draw: ImageDraw.ImageDraw, width: int, height: int, banner: dict) -> None:
     """Minimal caption: plain text over a soft scrim, no box and no icon."""
-    font = ImageFont.load_default(size=max(30, round(width * 0.082)))
+    font = _font(max(30, round(width * 0.082)))
     margin = max(16, round(width * 0.035))
     bar_h = max(10, round(width * 0.028))
     has_progress = banner.get('progress') is not None
