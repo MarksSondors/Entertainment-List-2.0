@@ -85,3 +85,29 @@ def warm_all_discover_external() -> None:
     user_ids = CustomUser.objects.exclude(Q(api_key__isnull=True) | Q(api_key='')).values_list('id', flat=True)
     for user_id in user_ids:
         async_task('stremio.tasks.warm_discover_external', user_id)
+
+
+def warm_recommendations(user_id: int) -> None:
+    """Refresh one user's movie recommendation cache ahead of its expiry."""
+    from custom_auth.models import CustomUser
+
+    from .views import _build_recommendation_movie_ids
+
+    try:
+        user = CustomUser.objects.get(id=user_id)
+    except CustomUser.DoesNotExist:
+        return
+
+    _build_recommendation_movie_ids(user)
+
+
+def warm_all_recommendations() -> None:
+    """Scheduled entrypoint: fan out recommendation cache warming for every addon user."""
+    from django.db.models import Q
+    from django_q.tasks import async_task
+
+    from custom_auth.models import CustomUser
+
+    user_ids = CustomUser.objects.exclude(Q(api_key__isnull=True) | Q(api_key='')).values_list('id', flat=True)
+    for user_id in user_ids:
+        async_task('stremio.tasks.warm_recommendations', user_id)

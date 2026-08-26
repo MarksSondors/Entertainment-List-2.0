@@ -40,5 +40,15 @@ def _setup_stremio_schedules(sender, **kwargs):
                 'repeats': -1,  # Run indefinitely
             }
         )
+        # Refresh the (1h TTL) ML recommendations cache before it expires
+        Schedule.objects.get_or_create(
+            func='stremio.tasks.warm_all_recommendations',
+            defaults={
+                'name': 'Warm Stremio Recommendations Cache',
+                'schedule_type': Schedule.MINUTES,
+                'minutes': 45,
+                'repeats': -1,  # Run indefinitely
+            }
+        )
     except (OperationalError, ProgrammingError):
         pass

@@ -24,7 +24,8 @@ from api.services.movies import MoviesService
 
 # Constants
 PAGE_SIZE = 100
-RECOMMENDATIONS_SIZE = 20
+RECOMMENDATIONS_SIZE = 60
+RECOMMENDATIONS_CACHE_TTL = 3600
 DISCOVER_EXTERNAL_CANDIDATE_COUNT = 60
 DISCOVER_EXTERNAL_CACHE_TTL = 3600
 CATALOG_CACHE_TTL = 120  # short TTL for DB-backed catalogs, since Stremio polls catalogs often
@@ -566,23 +567,40 @@ def get_community_picks(user, poster_base: str, skip: int = 0) -> list[dict]:
     return metas
 
 
-def get_recommendations(user, poster_base: str) -> list[dict]:
-    """Get personalized movie recommendations (fixed 10 items, no pagination)."""
+def _build_recommendation_movie_ids(user) -> list[int]:
+    """Run the ML recommender and cache the resulting movie ids; shared by the live view and the warm task."""
     recommender = MovieRecommender()
     recommendations = recommender.get_recommendations_for_user(
-        user.id, 
+        user.id,
         max_recommendations=RECOMMENDATIONS_SIZE
     )
-    
+
     # Recommendations returns Movie instances or tuples
-    metas = []
+    movie_ids = []
     for rec in recommendations:
         movie = rec if isinstance(rec, Movie) else rec[0] if isinstance(rec, tuple) else None
+        if movie and movie.imdb_id:
+            movie_ids.append(movie.id)
+
+    cache.set(f"stremio_recommendations_{user.id}", movie_ids, RECOMMENDATIONS_CACHE_TTL)
+    return movie_ids
+
+
+def get_recommendations(user, poster_base: str) -> list[dict]:
+    """Get personalized movie recommendations (cached per user; poster URLs built fresh per request)."""
+    movie_ids = cache.get(f"stremio_recommendations_{user.id}")
+    if movie_ids is None:
+        movie_ids = _build_recommendation_movie_ids(user)
+
+    movies_by_id = Movie.objects.in_bulk(movie_ids)
+    metas = []
+    for movie_id in movie_ids:
+        movie = movies_by_id.get(movie_id)
         if movie and movie.imdb_id:
             item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id))
             if item:
                 metas.append(item)
-    
+
     return metas
 
 
