@@ -47,9 +47,10 @@ def _encode_output(image: Image.Image) -> bytes:
     if image.mode != 'RGB':
         image = image.convert('RGB')
     buf = io.BytesIO()
-    # WebP's lossy encoder ignores Pillow's `subsampling` kwarg entirely (still 4:2:0 under the
-    # hood), which is what was blurring the chip/text/logo edges; JPEG actually honors it
-    image.save(buf, format='JPEG', quality=JPEG_QUALITY, subsampling=0)
+    # Lossless WebP: pixel-exact (no subsampling/quality tradeoff at all), unlike lossy WebP
+    # (which silently ignores Pillow's `subsampling` kwarg) or JPEG (needs subsampling=0 to stay
+    # crisp). `quality` here controls compression effort/ratio, not visual fidelity.
+    image.save(buf, format='WEBP', lossless=True, quality=100, method=6)
     return buf.getvalue()
 
 
