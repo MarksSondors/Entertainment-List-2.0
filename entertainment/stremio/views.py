@@ -779,7 +779,7 @@ def poster_image(request, config: str, media_type: str, imdb_id: str):
             return HttpResponseRedirect(fallback_url)
         return HttpResponseNotFound()
 
-    response = HttpResponse(image_bytes, content_type='image/webp')
+    response = HttpResponse(image_bytes, content_type='image/jpeg')
     response['Cache-Control'] = 'public, max-age=3600'
     return response
 
