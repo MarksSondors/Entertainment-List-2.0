@@ -4,6 +4,7 @@ import io
 from datetime import date, timedelta
 from functools import lru_cache
 
+import numpy as np
 import requests
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.staticfiles import finders
@@ -45,7 +46,25 @@ def _logo_icon(size: int) -> Image.Image:
     path = finders.find('images/logo.png')
     assert isinstance(path, str), 'site logo static asset is missing'
     logo = Image.open(path).convert('RGBA')
-    return logo.resize((size, size), Image.Resampling.LANCZOS)
+    return _resize_rgba(logo, (size, size))
+
+
+def _resize_rgba(image: Image.Image, size: tuple) -> Image.Image:
+    """LANCZOS-resize an RGBA image with alpha premultiplied first.
+
+    Pillow resizes R/G/B and A independently, so translucent pixels (like the text stroke's
+    semi-transparent black) blend their raw, un-premultiplied color with neighbouring transparent
+    pixels -- that's what makes supersampled text/icons look muddy once downsampled. Premultiplying
+    before resizing (and undoing it after) gives the correct, crisp result.
+    """
+    arr = np.asarray(image.convert('RGBA'), dtype=np.float32)
+    rgb, a = arr[..., :3], arr[..., 3:4]
+    premultiplied = np.concatenate([rgb * (a / 255.0), a], axis=-1).astype(np.uint8)
+    resized = np.asarray(Image.fromarray(premultiplied, 'RGBA').resize(size, Image.Resampling.LANCZOS), dtype=np.float32)
+    r_rgb, r_a = resized[..., :3], resized[..., 3:4]
+    safe_a = np.where(r_a == 0, 1, r_a)
+    unpremultiplied = np.concatenate([r_rgb / (safe_a / 255.0), r_a], axis=-1)
+    return Image.fromarray(np.clip(unpremultiplied, 0, 255).astype(np.uint8), 'RGBA')
 
 
 def _encode_output(image: Image.Image) -> bytes:
@@ -261,7 +280,7 @@ def _draw_rating_chip(image: Image.Image, overlay: Image.Image, width: int, text
     big_bbox = bdraw.textbbox((0, 0), text, font=big_font)
     text_pos = (round((pad_x + icon_size + 8) * scale), round(pad_y * scale) - big_bbox[1])
     bdraw.text(text_pos, text, font=big_font, fill=WHITE, stroke_width=2 * scale, stroke_fill=(0, 0, 0, 200))
-    chip_img = big.resize((chip_w, chip_h), Image.Resampling.LANCZOS)
+    chip_img = _resize_rgba(big, (chip_w, chip_h))
     overlay.paste(chip_img, (round(x1), round(y1)), chip_img)
 
 
@@ -296,7 +315,7 @@ def _draw_context_chip(image: Image.Image, overlay: Image.Image, width: int, hei
     big_bbox = tdraw.textbbox((0, 0), text, font=big_font)
     text_pos = (stroke_pad * scale, stroke_pad * scale - big_bbox[1])
     tdraw.text(text_pos, text, font=big_font, fill=WHITE, stroke_width=2 * scale, stroke_fill=(0, 0, 0, 200))
-    text_img = text_canvas.resize((text_w_i, text_h_i), Image.Resampling.LANCZOS)
+    text_img = _resize_rgba(text_canvas, (text_w_i, text_h_i))
     overlay.paste(text_img, (round(margin - stroke_pad), round(ty) - stroke_pad), text_img)
 
     if has_progress:
@@ -313,5 +332,5 @@ def _draw_context_chip(image: Image.Image, overlay: Image.Image, width: int, hei
             bdraw.rounded_rectangle(
                 [0, 0, filled_w * scale - 1, bar_h * scale - 1], radius=bar_h * scale / 2, fill=(*ACCENT, 255),
             )
-        bar_img = bar_canvas.resize((bar_w, bar_h), Image.Resampling.LANCZOS)
+        bar_img = _resize_rgba(bar_canvas, (bar_w, bar_h))
         overlay.paste(bar_img, (margin, bar_y), bar_img)
