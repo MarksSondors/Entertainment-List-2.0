@@ -19,20 +19,24 @@ from .formatters import get_poster_url
 SOURCE_IMAGE_CACHE_TTL = 7 * 24 * 3600  # TMDB posters rarely change, cache long
 RENDERED_POSTER_CACHE_TTL = 3600  # matches agreed staleness tolerance for ratings/next-episode
 FETCH_TIMEOUT = 4
-JPEG_QUALITY = 100
+JPEG_QUALITY = 95
 
 ACCENT = (0, 112, 216)  # brand blue, sampled from the site logo
 WHITE = (255, 255, 255)
-GLASS_TINT = (18, 18, 20, 150)
+GLASS_TINT = (18, 18, 20, 185)  # darker tint so light-weight text/icons stay legible over bright art
 GLASS_BLUR_RADIUS = 6
 CHIP_CORNER_RADIUS_RATIO = 0.28  # rounded rectangle, not a full pill
 AA_SCALE = 4  # supersampling factor; Pillow's ImageDraw has no native anti-aliasing
 
 
 @lru_cache(maxsize=8)
-def _font(size: int) -> ImageFont.ImageFont:
-    """A handful of distinct sizes are ever requested; avoid re-parsing the bitmap font each render."""
-    return ImageFont.load_default(size=size)
+def _font(size: int) -> ImageFont.FreeTypeFont:
+    """Roboto pinned to Bold weight -- reads far better than Pillow's light default over busy poster art."""
+    path = finders.find('fonts/Roboto-Variable.ttf')
+    assert isinstance(path, str), 'Roboto font static asset is missing'
+    font = ImageFont.truetype(path, size)
+    font.set_variation_by_axes([700, 100])  # [weight, width]
+    return font
 
 
 @lru_cache(maxsize=8)
@@ -48,10 +52,8 @@ def _encode_output(image: Image.Image) -> bytes:
     if image.mode != 'RGB':
         image = image.convert('RGB')
     buf = io.BytesIO()
-    # Lossless WebP: pixel-exact (no subsampling/quality tradeoff at all), unlike lossy WebP
-    # (which silently ignores Pillow's `subsampling` kwarg) or JPEG (needs subsampling=0 to stay
-    # crisp). `quality` here controls compression effort/ratio, not visual fidelity.
-    image.save(buf, format='WEBP', lossless=True, quality=100, method=6)
+    # subsampling=0 keeps chroma full-resolution so the rating chip/text stay crisp
+    image.save(buf, format='JPEG', quality=JPEG_QUALITY, subsampling=0)
     return buf.getvalue()
 
 
@@ -224,7 +226,7 @@ def _apply_glass_panel(image: Image.Image, box: tuple, radius: float) -> None:
 
 def _draw_rating_chip(image: Image.Image, overlay: Image.Image, width: int, text: str) -> None:
     measure = ImageDraw.Draw(overlay)
-    font_size = max(30, round(width * 0.08))
+    font_size = max(30, round(width * 0.09))
     font = _font(font_size)
     margin = max(16, round(width * 0.035))
     pad_x = max(14, round(width * 0.032))
@@ -232,7 +234,7 @@ def _draw_rating_chip(image: Image.Image, overlay: Image.Image, width: int, text
 
     bbox = measure.textbbox((0, 0), text, font=font)
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    icon_size = text_h + 10
+    icon_size = text_h  # same height as the text so both sit centered at the same size
 
     chip_w = round(icon_size + 8 + text_w + pad_x * 2)
     chip_h = round(max(icon_size, text_h) + pad_y * 2)
@@ -251,16 +253,14 @@ def _draw_rating_chip(image: Image.Image, overlay: Image.Image, width: int, text
     bdraw = ImageDraw.Draw(big)
     bdraw.rounded_rectangle(
         [0, 0, chip_w * scale - 1, chip_h * scale - 1], radius=radius * scale,
-        outline=(*ACCENT, 230), width=2 * scale,
+        outline=(*ACCENT, 230), width=3 * scale,
     )
     logo = _logo_icon(round(icon_size * scale))
     big.paste(logo, (round(pad_x * scale), round(chip_h * scale / 2 - icon_size * scale / 2)), logo)
     big_font = _font(font_size * scale)
     big_bbox = bdraw.textbbox((0, 0), text, font=big_font)
-    bdraw.text(
-        (round((pad_x + icon_size + 8) * scale), round(pad_y * scale) - big_bbox[1]), text, font=big_font,
-        fill=WHITE, stroke_width=scale, stroke_fill=(0, 0, 0, 160),
-    )
+    text_pos = (round((pad_x + icon_size + 8) * scale), round(pad_y * scale) - big_bbox[1])
+    bdraw.text(text_pos, text, font=big_font, fill=WHITE, stroke_width=2 * scale, stroke_fill=(0, 0, 0, 200))
     chip_img = big.resize((chip_w, chip_h), Image.Resampling.LANCZOS)
     overlay.paste(chip_img, (round(x1), round(y1)), chip_img)
 
@@ -288,16 +288,14 @@ def _draw_context_chip(image: Image.Image, overlay: Image.Image, width: int, hei
     ty = height - bottom_reserve - text_h
 
     # text drawn supersampled on its own canvas, then downsampled with LANCZOS for smooth glyphs
-    stroke_pad = 4
+    stroke_pad = 5
     text_w_i, text_h_i = round(text_w) + stroke_pad * 2, round(text_h) + stroke_pad * 2
     text_canvas = Image.new('RGBA', (text_w_i * scale, text_h_i * scale), (0, 0, 0, 0))
     tdraw = ImageDraw.Draw(text_canvas)
     big_font = _font(font_size * scale)
     big_bbox = tdraw.textbbox((0, 0), text, font=big_font)
-    tdraw.text(
-        (stroke_pad * scale, stroke_pad * scale - big_bbox[1]), text, font=big_font, fill=WHITE,
-        stroke_width=2 * scale, stroke_fill=(0, 0, 0, 200),
-    )
+    text_pos = (stroke_pad * scale, stroke_pad * scale - big_bbox[1])
+    tdraw.text(text_pos, text, font=big_font, fill=WHITE, stroke_width=2 * scale, stroke_fill=(0, 0, 0, 200))
     text_img = text_canvas.resize((text_w_i, text_h_i), Image.Resampling.LANCZOS)
     overlay.paste(text_img, (round(margin - stroke_pad), round(ty) - stroke_pad), text_img)
 
