@@ -10,7 +10,7 @@ def get_poster_url(media) -> str | None:
     
     # TMDB poster path
     if str(poster).startswith('/'):
-        return f"https://image.tmdb.org/t/p/w500{poster}"
+        return f"https://image.tmdb.org/t/p/w780{poster}"
     
     return None
 
