@@ -1,27 +1,31 @@
-# Entertainment-List-2.0
+﻿# Entertainment-List-2.0
 
-A comprehensive entertainment tracking platform built with Django that allows users to discover, track, and review movies, TV shows, books, music albums, and games. Features advanced search capabilities, community features, personalized recommendations, and seamless integration with multiple external APIs.
+A comprehensive entertainment tracking platform built with Django that allows users to discover, track, and review movies, TV shows, books, music albums, and games. Features advanced search capabilities, community features, personalized recommendations, network graph analysis, and seamless integration with multiple external APIs.
 
 ## Overview
 
 Entertainment-List-2.0 is a modern Django 5.2+ web application that provides a complete entertainment management experience:
 
 - **Multi-Media Tracking**: Comprehensive support for movies, TV shows, books, music albums, and games
-- **Smart Discovery**: Advanced search and filtering with real-time external API integration
+- **Smart Discovery**: Advanced search and filtering with real-time external API integration, plus a unified cross-media explorer
 - **Personal Management**: Customizable watchlists, reading lists, and personal collections
 - **Social Features**: Community reviews, ratings, and movie-of-the-week discussions
-- **Intelligent Recommendations**: Personalized content suggestions based on user preferences
+- **Intelligent Recommendations**: Personalized content suggestions via a hybrid SVD/content-based recommender
+- **Network Graph Analysis**: Community detection (Leiden algorithm) to visualize relationships between movies, actors, and directors
+- **Notifications**: Web push notifications for background task and activity updates
+- **Stremio Integration**: Companion addon for streaming discovery
 - **Production Ready**: Fully containerized with Docker, production deployment with Traefik
 
 ## Key Features
 
 ### 🎬 **Movies & TV Shows**
-- Real-time search via **The Movie Database (TMDB) API**
+- Real-time search via **The Movie Database (TMDB) API** and **TheTVDB API**
 - Detailed information including cast, crew, genres, production companies
 - Background task processing for data synchronization
 - Episode tracking for TV series with season/episode progress
 - Collection management and movie recommendations
 - Community movie-of-the-week features
+- Interactive network graph of movies, actors, and directors with automatic community naming
 
 ### 📚 **Books**
 - Integration with **Hardcover API** for book discovery
@@ -33,14 +37,19 @@ Entertainment-List-2.0 is a modern Django 5.2+ web application that provides a c
 ### 🎵 **Music**
 - **MusicBrainz API** integration for comprehensive music data
 - Album and artist discovery with detailed metadata
-- Soundtrack linking to movies and TV shows
+- Soundtrack linking to movies and TV shows via IMDb ID matching
 - Featured artist and collaboration tracking
 - Music collection management
 
 ### 🎮 **Games**
-- Game tracking and collection management
-- Platform and genre categorization
-- Gaming statistics and progress tracking
+- **RAWG API** integration for game discovery and metadata
+- **SteamGridDB** integration for cover art/hero images
+- Platform, genre, developer, and publisher tracking
+- Game collection management and progress tracking
+
+### 🔎 **Explorer**
+- Unified search and browsing across all media types (movies, TV shows, books, music, games)
+- Tree-based category browsing with shared filtering/ordering utilities
 
 ### 👥 **Community Features**
 - User reviews and ratings (10-point scale)
@@ -55,7 +64,7 @@ Entertainment-List-2.0 is a modern Django 5.2+ web application that provides a c
 - **Search**: PostgreSQL full-text search with trigram indexes
 - **API Documentation**: Interactive Swagger/ReDoc documentation
 - **Performance Monitoring**: Django Debug Toolbar and Silk profiling
-- **PWA Support**: Progressive Web App capabilities
+- **PWA Support**: Progressive Web App capabilities with web push notifications
 - **Real-time Updates**: Live task status monitoring
 
 ## Technology Stack
@@ -69,8 +78,11 @@ Entertainment-List-2.0 is a modern Django 5.2+ web application that provides a c
 
 ### **External Integrations**
 - **TMDB API** - Movies and TV shows data
+- **TheTVDB API** - Supplemental TV show data
 - **MusicBrainz API** - Music and artist information
 - **Hardcover API** - Books and literature data
+- **RAWG API** - Games data
+- **SteamGridDB API** - Game cover art and hero images
 
 ### **Development & Deployment**
 - **Docker & Docker Compose** - Containerization
@@ -118,10 +130,18 @@ DB_PORT=5432
 
 # External API Keys
 TMDB_BEARER_TOKEN=your-tmdb-bearer-token
+TVDB_API_KEY=your-tvdb-api-key
 HARDCOVER_API_TOKEN=your-hardcover-api-token
+RAWG_API_KEY=your-rawg-api-key
+STEAMGRIDDB_API_KEY=your-steamgriddb-api-key
 APP_NAME=Entertainment-List-2.0
 APP_VERSION=1.0.0
 CONTACT_INFO=your-email@example.com
+
+# Web Push Notifications
+WEBPUSH_VAPID_PUBLIC_KEY=your-vapid-public-key
+WEBPUSH_VAPID_PRIVATE_KEY=your-vapid-private-key
+WEBPUSH_VAPID_ADMIN_EMAIL=your-email@example.com
 
 # Security (Production)
 CSRF_TRUSTED_ORIGINS=https://yourdomain.com
@@ -143,32 +163,37 @@ cp .env.example .env
 
 3. **Deploy with Docker Compose:**
 ```bash
-# Production deployment
-docker-compose -f docker-compose.prod.yml up -d
+# Production deployment (Traefik reverse proxy)
+docker-compose up -d --build
 
 # Development environment
-docker-compose up -d
+docker-compose -f docker-compose.dev.yaml up -d --build
 ```
-
-## Recommender System Setup
-
-To enable the personalized movie recommender system:
-
-1.  **Download Dataset:**
-    -   Download the [MovieLens 32M Dataset](https://grouplens.org/datasets/movielens/32m/).
-    -   Extract the contents (specifically `ratings.csv` and `links.csv`) to `entertainment/data/ml-32m/`.
-
-2.  **Train the Model:**
-    -   Run the training command to build the SVD model:
-        ```bash
-        python manage.py train_recommender
-        ```
-    -   This should be run periodically (e.g., weekly) to update recommendations based on new user interactions.
-
 
 4. **Access the application:**
    - Development: http://localhost:8000
    - Production: https://yourdomain.com (with Traefik)
+
+## Recommender System Setup
+
+To enable the hybrid recommender system (SVD collaborative filtering + content-based):
+
+1. **Download datasets:**
+   - Download the [MovieLens 32M Dataset](https://grouplens.org/datasets/movielens/32m/) (or the Small dataset for development).
+   - Extract `ratings.csv` and `links.csv` to `entertainment/data/ml-32m/`.
+   - Download the [TMDB Movies Dataset](https://www.kaggle.com/datasets/asaniczka/tmdb-movies-dataset-2023-930k-movies) and place `TMDB_movie_dataset_v11.csv` in `entertainment/data/`. This provides content-based enrichment (ratings, runtime, language, status, genres) used to build movie feature vectors.
+
+2. **Train the model:**
+```bash
+python manage.py train_recommender
+```
+   - This merges the external MovieLens data and TMDB catalog data with your local user reviews and trains an SVD model.
+   - The model and mapping files are saved to `entertainment/movies/ml_models/svd_model.pkl`.
+   - Run periodically (e.g., weekly) to update recommendations based on new user interactions.
+
+3. **Usage:**
+   - The dashboard automatically uses the model for personalized recommendations.
+   - Use the `/movies/recommendations/external/` endpoint to get recommendations for movies *not* yet in your database (discovery mode).
 
 ### Local Development Setup
 
@@ -207,44 +232,58 @@ python manage.py runserver
 
 The application uses Django Q2 for background task processing:
 
-- **Movie/TV data synchronization** from TMDB
+- **Movie/TV data synchronization** from TMDB and TheTVDB
 - **Music data processing** from MusicBrainz
 - **Book data fetching** from Hardcover API
+- **Game data fetching** from RAWG and SteamGridDB
 - **Recommendation calculations**
+- **Network graph rebuilding and community detection**
+- **Web push notification delivery**
 - **Search index updates**
 
 ## API Documentation
 
 ### Interactive Documentation
-- **Swagger UI**: `/api/schema/swagger/`
+- **Swagger UI**: `/api/schema/swagger-ui/`
 - **ReDoc**: `/api/schema/redoc/`
 - **OpenAPI Schema**: `/api/schema/`
 
-### Key API Endpoints
+### Key Endpoints
 
-#### Movies
+#### Movies (`/movies/`)
 - `GET /movies/search/` - Search TMDB for movies
 - `POST /movies/` - Create movie from TMDB ID
 - `GET /movies/popular/` - Get popular movies
 - `POST /movies/watchlist/` - Add to watchlist
 - `GET /movies/recommendations/` - Get personalized recommendations
+- `GET /movies/recommendations/external/` - Discover recommendations outside your database
+- `GET /movies/network-graph/` - Movie/actor/director network graph data
 
-#### TV Shows
+#### TV Shows (`/tvshows/`)
 - `GET /tvshows/search/` - Search TMDB for TV shows
 - `POST /tvshows/` - Create TV show from TMDB ID
 - `GET /tvshows/popular/` - Get popular TV shows
 - `POST /tvshows/watchlist/` - Add to watchlist
 
-#### Music
+#### Music (`/music/`)
 - `GET /music/search/` - Search MusicBrainz for music
-- `POST /music/albums/` - Create album from MusicBrainz ID
-- `GET /music/albums/{id}/` - Get album details
+- `POST /music/` - Create album from MusicBrainz ID
 
-#### Books
+#### Books (`/books/`)
 - `GET /books/search/` - Search Hardcover for books
 - `POST /books/` - Create book from Hardcover ID
 
-#### User Management
+#### Games (`/games/`)
+- `GET /games/search/` - Search RAWG for games
+- `POST /games/` - Create game from RAWG ID
+
+#### Explorer (`/explorer/`)
+- Unified cross-media search and category tree browsing
+
+#### Notifications (`/api/notifications/`)
+- Web push subscription management and notification history
+
+#### User Management (`/`)
 - `GET /profile/` - User profile and statistics
 - `GET /watchlist/` - User's watchlist items
 - `POST /reviews/` - Create/update reviews
@@ -254,10 +293,11 @@ The application uses Django Q2 for background task processing:
 
 ### Adding Content
 
-1. **Movies/TV Shows**: Search via TMDB integration, add to database and watchlist
+1. **Movies/TV Shows**: Search via TMDB/TheTVDB integration, add to database and watchlist
 2. **Books**: Search via Hardcover API, track reading progress
 3. **Music**: Search via MusicBrainz, automatic soundtrack linking to movies
-4. **Reviews**: Rate and review any content with detailed comments
+4. **Games**: Search via RAWG, cover art fetched from SteamGridDB
+5. **Reviews**: Rate and review any content with detailed comments
 
 ### Community Features
 
@@ -267,10 +307,12 @@ The application uses Django Q2 for background task processing:
 
 ### Advanced Features
 
-- **Smart Recommendations**: AI-powered content suggestions
+- **Smart Recommendations**: Hybrid SVD/content-based content suggestions
+- **Network Graph**: Explore movie/actor/director relationships with automatic community detection and naming
 - **Progress Tracking**: Episode progress for TV shows, reading progress for books
 - **Collection Management**: Organize content into custom collections
 - **External Linking**: Automatic linking between related content (soundtracks to movies)
+- **Push Notifications**: Get notified of background task completions and activity
 
 ## Project Structure
 
@@ -279,19 +321,26 @@ Entertainment-List-2.0/
 ├── entertainment/              # Main Django project
 │   ├── entertainment/         # Project settings
 │   ├── custom_auth/          # User authentication and shared models
-│   ├── movies/               # Movie management
-│   ├── tvshows/             # TV show management
-│   ├── books/               # Book management
-│   ├── music/               # Music management
-│   ├── games/               # Game management (placeholder)
-│   ├── api/                 # External API services
-│   │   └── services/        # API service classes
-│   ├── static/              # Static files
-│   ├── templates/           # HTML templates
+│   ├── movies/               # Movie management, recommender, network graph
+│   │   └── services/
+│   │       ├── network_graph/    # Graph builders, algorithms (Leiden), types
+│   │       └── recommender/      # Hybrid SVD/content-based recommender
+│   ├── tvshows/              # TV show management
+│   ├── books/                # Book management
+│   ├── music/                # Music management
+│   ├── games/                # Game management (RAWG, SteamGridDB)
+│   ├── notifications/        # Web push notifications
+│   ├── explorer/             # Unified cross-media search/browsing
+│   ├── stremio/              # Stremio addon integration
+│   ├── api/                  # External API services
+│   │   └── services/         # API service classes (TMDB, TVDB, MusicBrainz, Hardcover, RAWG, SteamGridDB)
+│   ├── static/                # Static files
+│   ├── templates/            # HTML templates
 │   └── manage.py
-├── docker-compose.yml        # Development docker setup
-├── docker-compose.prod.yml   # Production docker setup
-├── traefik.yml              # Traefik configuration
+├── nginx/                     # Nginx config (dev reverse proxy)
+├── traefik/                   # Traefik config (production reverse proxy/HTTPS)
+├── docker-compose.yaml         # Production docker setup (Traefik)
+├── docker-compose.dev.yaml     # Development docker setup
 └── README.md
 ```
 
@@ -333,29 +382,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - **The Movie Database (TMDB)** for movie and TV show data
+- **TheTVDB** for supplemental TV show data
 - **MusicBrainz** for comprehensive music information
 - **Hardcover** for book and literature data
+- **RAWG** for game data
+- **SteamGridDB** for game cover art
 - **Django Community** for the excellent framework and packages
-- **Contributors** who have helped improve this project
-## Recommender System Setup
-
-To enable the advanced hybrid recommender system (Collaborative Filtering + Content Based + SVD), you need to set up the Machine Learning environment.
-
-1.  **Download Data**:
-    *   Go to [GroupLens MovieLens Datasets](https://grouplens.org/datasets/movielens/).
-    *   Download the **MovieLens 32M** dataset (or the latest Small dataset for development).
-    *   Extract 
-atings.csv and links.csv into entertainment/data/ml-32m/.
-
-2.  **Training**:
-    *   Run the training command to generate the model:
-        \\\ash
-        python manage.py train_recommender
-        \\\
-    *   This command merges the external MovieLens data with your local user reviews and trains an SVD model.
-    *   The model and mapping files are saved to entertainment/movies/ml_models/svd_model.pkl.
-
-3.  **Usage**:
-    *   The system automatically uses the model for recommendations on the dashboard.
-    *   Use the \/api/movies/recommendations/external/\ endpoint to get recommendations for movies *not* yet in your database (discovery mode).
-
