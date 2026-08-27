@@ -26,6 +26,7 @@ WHITE = (255, 255, 255)
 GLASS_TINT = (18, 18, 20, 150)
 GLASS_BLUR_RADIUS = 6
 CHIP_CORNER_RADIUS_RATIO = 0.28  # rounded rectangle, not a full pill
+AA_SCALE = 4  # supersampling factor; Pillow's ImageDraw has no native anti-aliasing
 
 
 @lru_cache(maxsize=8)
@@ -108,8 +109,7 @@ def render_catalog_poster(media, media_type: str, user, ctx: str | None) -> byte
 
     width, height = image.size
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    _draw_context_chip(image, draw, width, height, banner)
+    _draw_context_chip(image, overlay, width, height, banner)
 
     composited = Image.alpha_composite(image, overlay)
     return _encode_output(composited)
@@ -213,24 +213,29 @@ def _apply_glass_panel(image: Image.Image, box: tuple, radius: float) -> None:
     blurred = region.filter(ImageFilter.GaussianBlur(radius=GLASS_BLUR_RADIUS))
     glass = Image.alpha_composite(blurred, Image.new('RGBA', blurred.size, GLASS_TINT))
 
-    mask = Image.new('L', glass.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, glass.size[0] - 1, glass.size[1] - 1], radius=radius, fill=255)
+    # supersample the mask so the panel's edge blends smoothly into the poster instead of aliasing
+    mask_big = Image.new('L', (glass.size[0] * AA_SCALE, glass.size[1] * AA_SCALE), 0)
+    ImageDraw.Draw(mask_big).rounded_rectangle(
+        [0, 0, mask_big.size[0] - 1, mask_big.size[1] - 1], radius=radius * AA_SCALE, fill=255,
+    )
+    mask = mask_big.resize(glass.size, Image.Resampling.LANCZOS)
     image.paste(glass, (x1, y1), mask)
 
 
 def _draw_rating_chip(image: Image.Image, overlay: Image.Image, width: int, text: str) -> None:
-    draw = ImageDraw.Draw(overlay)
-    font = _font(max(30, round(width * 0.08)))
+    measure = ImageDraw.Draw(overlay)
+    font_size = max(30, round(width * 0.08))
+    font = _font(font_size)
     margin = max(16, round(width * 0.035))
     pad_x = max(14, round(width * 0.032))
     pad_y = max(10, round(width * 0.024))
 
-    bbox = draw.textbbox((0, 0), text, font=font)
+    bbox = measure.textbbox((0, 0), text, font=font)
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     icon_size = text_h + 10
 
-    chip_w = icon_size + 8 + text_w + pad_x * 2
-    chip_h = max(icon_size, text_h) + pad_y * 2
+    chip_w = round(icon_size + 8 + text_w + pad_x * 2)
+    chip_h = round(max(icon_size, text_h) + pad_y * 2)
     x2 = width - margin
     y1 = margin
     x1 = x2 - chip_w
@@ -238,21 +243,37 @@ def _draw_rating_chip(image: Image.Image, overlay: Image.Image, width: int, text
     radius = max(10, round(chip_h * CHIP_CORNER_RADIUS_RATIO))
 
     _apply_glass_panel(image, (x1, y1, x2, y2), radius)
-    draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, outline=(*ACCENT, 230), width=2)
-    logo = _logo_icon(icon_size)
-    overlay.paste(logo, (int(x1 + pad_x), int((y1 + y2) / 2 - icon_size / 2)), logo)
-    draw.text(
-        (x1 + pad_x + icon_size + 8, y1 + pad_y - bbox[1]), text, font=font, fill=WHITE,
-        stroke_width=1, stroke_fill=(0, 0, 0, 160),
+
+    # outline/icon/text drawn supersampled on their own chip-sized canvas, then downsampled with
+    # LANCZOS onto the overlay -- Pillow's ImageDraw/text has no anti-aliasing of its own
+    scale = AA_SCALE
+    big = Image.new('RGBA', (chip_w * scale, chip_h * scale), (0, 0, 0, 0))
+    bdraw = ImageDraw.Draw(big)
+    bdraw.rounded_rectangle(
+        [0, 0, chip_w * scale - 1, chip_h * scale - 1], radius=radius * scale,
+        outline=(*ACCENT, 230), width=2 * scale,
     )
+    logo = _logo_icon(round(icon_size * scale))
+    big.paste(logo, (round(pad_x * scale), round(chip_h * scale / 2 - icon_size * scale / 2)), logo)
+    big_font = _font(font_size * scale)
+    big_bbox = bdraw.textbbox((0, 0), text, font=big_font)
+    bdraw.text(
+        (round((pad_x + icon_size + 8) * scale), round(pad_y * scale) - big_bbox[1]), text, font=big_font,
+        fill=WHITE, stroke_width=scale, stroke_fill=(0, 0, 0, 160),
+    )
+    chip_img = big.resize((chip_w, chip_h), Image.Resampling.LANCZOS)
+    overlay.paste(chip_img, (round(x1), round(y1)), chip_img)
 
 
-def _draw_context_chip(image: Image.Image, draw: ImageDraw.ImageDraw, width: int, height: int, banner: dict) -> None:
+def _draw_context_chip(image: Image.Image, overlay: Image.Image, width: int, height: int, banner: dict) -> None:
     """Minimal caption: plain text over a soft scrim, no box and no icon."""
-    font = _font(max(30, round(width * 0.082)))
+    draw = ImageDraw.Draw(overlay)
+    font_size = max(30, round(width * 0.082))
+    font = _font(font_size)
     margin = max(16, round(width * 0.035))
     bar_h = max(10, round(width * 0.028))
     has_progress = banner.get('progress') is not None
+    scale = AA_SCALE
 
     scrim_h = round(height * 0.22)
     y0 = height - scrim_h
@@ -262,19 +283,37 @@ def _draw_context_chip(image: Image.Image, draw: ImageDraw.ImageDraw, width: int
 
     text = banner['text']
     bbox = draw.textbbox((0, 0), text, font=font)
-    text_h = bbox[3] - bbox[1]
+    text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     bottom_reserve = margin + (bar_h + 12 if has_progress else 0)
     ty = height - bottom_reserve - text_h
 
-    draw.text((margin, ty - bbox[1]), text, font=font, fill=WHITE, stroke_width=2, stroke_fill=(0, 0, 0, 200))
+    # text drawn supersampled on its own canvas, then downsampled with LANCZOS for smooth glyphs
+    stroke_pad = 4
+    text_w_i, text_h_i = round(text_w) + stroke_pad * 2, round(text_h) + stroke_pad * 2
+    text_canvas = Image.new('RGBA', (text_w_i * scale, text_h_i * scale), (0, 0, 0, 0))
+    tdraw = ImageDraw.Draw(text_canvas)
+    big_font = _font(font_size * scale)
+    big_bbox = tdraw.textbbox((0, 0), text, font=big_font)
+    tdraw.text(
+        (stroke_pad * scale, stroke_pad * scale - big_bbox[1]), text, font=big_font, fill=WHITE,
+        stroke_width=2 * scale, stroke_fill=(0, 0, 0, 200),
+    )
+    text_img = text_canvas.resize((text_w_i, text_h_i), Image.Resampling.LANCZOS)
+    overlay.paste(text_img, (round(margin - stroke_pad), round(ty) - stroke_pad), text_img)
 
     if has_progress:
         bar_y = height - margin - bar_h
         bar_w = width - margin * 2
-        draw.rounded_rectangle(
-            [margin, bar_y, margin + bar_w, bar_y + bar_h], radius=bar_h / 2,
-            fill=(255, 255, 255, 90), outline=(0, 0, 0, 140), width=1,
+        bar_canvas = Image.new('RGBA', (bar_w * scale, bar_h * scale), (0, 0, 0, 0))
+        bdraw = ImageDraw.Draw(bar_canvas)
+        bdraw.rounded_rectangle(
+            [0, 0, bar_w * scale - 1, bar_h * scale - 1], radius=bar_h * scale / 2,
+            fill=(255, 255, 255, 90), outline=(0, 0, 0, 140), width=scale,
         )
         filled_w = int(bar_w * banner['progress'] / 100)
         if filled_w > 0:
-            draw.rounded_rectangle([margin, bar_y, margin + filled_w, bar_y + bar_h], radius=bar_h / 2, fill=(*ACCENT, 255))
+            bdraw.rounded_rectangle(
+                [0, 0, filled_w * scale - 1, bar_h * scale - 1], radius=bar_h * scale / 2, fill=(*ACCENT, 255),
+            )
+        bar_img = bar_canvas.resize((bar_w, bar_h), Image.Resampling.LANCZOS)
+        overlay.paste(bar_img, (margin, bar_y), bar_img)
