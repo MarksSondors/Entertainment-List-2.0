@@ -19,7 +19,7 @@ from .formatters import get_poster_url
 SOURCE_IMAGE_CACHE_TTL = 7 * 24 * 3600  # TMDB posters rarely change, cache long
 RENDERED_POSTER_CACHE_TTL = 3600  # matches agreed staleness tolerance for ratings/next-episode
 FETCH_TIMEOUT = 4
-JPEG_QUALITY = 95
+JPEG_QUALITY = 100
 
 ACCENT = (0, 112, 216)  # brand blue, sampled from the site logo
 WHITE = (255, 255, 255)
