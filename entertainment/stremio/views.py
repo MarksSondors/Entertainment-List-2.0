@@ -34,6 +34,8 @@ MANIFEST_GENRES_CACHE_TTL = 3600
 FINISHED_TVSHOW_STATUSES = {'Ended', 'Canceled'}
 # These catalogs already manage their own (longer, personalized) caching internally
 NO_OUTER_CACHE_CATALOGS = {'recommendations', 'discover-external'}
+# Bump on any catalogs/config change so Stremio's client detects it and offers "Update" in Addons
+MANIFEST_VERSION = '1.1.0'
 
 
 def cors_response(data: dict, status: int = 200) -> JsonResponse:
@@ -128,7 +130,7 @@ def manifest(request, config: str = None):
     
     manifest_data = {
         'id': 'com.entertainment-list.addon',
-        'version': '1.0.0',
+        'version': MANIFEST_VERSION,
         'name': 'Entertainment List',
         'description': 'Your personal entertainment tracking addon - watchlists, recommendations, and community picks',
         'logo': request.build_absolute_uri('/static/images/logo.png'),
