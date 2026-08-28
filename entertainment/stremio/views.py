@@ -30,6 +30,8 @@ DISCOVER_EXTERNAL_CANDIDATE_COUNT = 60
 DISCOVER_EXTERNAL_CACHE_TTL = 3600
 CATALOG_CACHE_TTL = 120  # short TTL for DB-backed catalogs, since Stremio polls catalogs often
 MANIFEST_GENRES_CACHE_TTL = 3600
+# TMDB statuses that mean a show won't get more episodes
+FINISHED_TVSHOW_STATUSES = {'Ended', 'Canceled'}
 # These catalogs already manage their own (longer, personalized) caching internally
 NO_OUTER_CACHE_CATALOGS = {'recommendations', 'discover-external'}
 
@@ -148,7 +150,13 @@ def manifest(request, config: str = None):
             },
             {
                 'id': 'watchlist-series',
-                'name': 'My Watchlist',
+                'name': 'Not Started',
+                'type': 'series',
+                'extra': series_filter_extra
+            },
+            {
+                'id': 'waiting-for-new-episodes',
+                'name': 'Waiting for New Episodes',
                 'type': 'series',
                 'extra': series_filter_extra
             },
@@ -165,7 +173,7 @@ def manifest(request, config: str = None):
             },
             {
                 'id': 'discover-external',
-                'name': '🌐 Discover',
+                'name': 'Discover',
                 'type': 'movie',
                 'extra': [{'name': 'skip', 'isRequired': False}]
             },
@@ -233,6 +241,7 @@ def catalog(request, config: str, media_type: str, catalog_id: str, extra: str =
         ('series', 'continue-watching'): lambda: get_continue_watching(user, poster_base, skip),
         ('movie', 'watchlist-movies'): lambda: get_watchlist_movies(user, poster_base, skip, genre),
         ('series', 'watchlist-series'): lambda: get_watchlist_series(user, poster_base, skip, genre),
+        ('series', 'waiting-for-new-episodes'): lambda: get_waiting_for_new_episodes(user, poster_base, skip, genre),
         ('movie', 'community-picks'): lambda: get_community_picks(user, poster_base, skip),
         ('movie', 'recommendations'): lambda: get_recommendations(user, poster_base),
         ('movie', 'discover-external'): lambda: get_discover_external(user, skip),
@@ -440,7 +449,7 @@ def _bulk_watch_progress(user, tvshow_ids) -> dict:
 
 
 def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = None) -> list[dict]:
-    """Get TV shows from user's watchlist that are not fully watched."""
+    """Get TV shows from user's watchlist that haven't been started yet (0% progress)."""
     tvshow_ct = ContentType.objects.get_for_model(TVShow)
     
     if genre:
@@ -465,8 +474,8 @@ def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = Non
         skipped = 0
         
         for tvshow in tvshows_sorted:
-            # Check if show is fully watched (100% progress)
-            if progress_map.get(tvshow.id, 0) >= 100:
+            # Only shows with no watched episodes at all
+            if progress_map.get(tvshow.id, 0) != 0:
                 continue
             
             # Handle pagination
@@ -508,9 +517,9 @@ def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = Non
             
             tvshow = tvshow_dict[tvshow_id]
             
-            # Check if show is fully watched (100% progress)
-            if progress_map.get(tvshow_id, 0) >= 100:
-                continue  # Skip fully watched shows
+            # Only shows with no watched episodes at all
+            if progress_map.get(tvshow_id, 0) != 0:
+                continue
             
             # Handle pagination
             if skipped < skip:
@@ -524,6 +533,43 @@ def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = Non
                     break
         
         return metas
+
+
+def get_waiting_for_new_episodes(user, poster_base: str, skip: int = 0, genre: str = None) -> list[dict]:
+    """Get watchlist shows fully caught up on aired episodes but still renewed for more."""
+    tvshow_ct = ContentType.objects.get_for_model(TVShow)
+
+    watchlist_items = Watchlist.objects.filter(user=user, content_type=tvshow_ct).order_by('-date_added')
+    date_map = {item.object_id: item.date_added for item in watchlist_items}
+    tvshow_ids = list(date_map.keys())
+    if not tvshow_ids:
+        return []
+
+    tvshows_qs = TVShow.objects.filter(
+        id__in=tvshow_ids
+    ).exclude(
+        Q(imdb_id__isnull=True) | Q(imdb_id='')
+    ).exclude(
+        status__in=FINISHED_TVSHOW_STATUSES
+    ).prefetch_related('genres', 'seasons__episodes')
+
+    if genre:
+        tvshows_qs = tvshows_qs.filter(genres__name=genre)
+
+    tvshows = list(tvshows_qs)
+    progress_map = _bulk_watch_progress(user, [t.id for t in tvshows])
+
+    # Caught up on everything aired so far, but the show itself isn't finished
+    caught_up = [t for t in tvshows if progress_map.get(t.id, 0) >= 100]
+    caught_up.sort(key=lambda t: date_map.get(t.id), reverse=True)
+
+    metas = []
+    for tvshow in caught_up[skip:skip + PAGE_SIZE]:
+        item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id))
+        if item:
+            metas.append(item)
+
+    return metas
 
 
 def get_community_picks(user, poster_base: str, skip: int = 0) -> list[dict]:
