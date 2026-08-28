@@ -431,11 +431,14 @@ def get_continue_watching(user, poster_base: str, skip: int = 0) -> list[dict]:
 
 
 def _bulk_watch_progress(user, tvshow_ids) -> dict:
-    """Compute per-show watch progress % in 2 queries instead of N x get_watch_progress() calls."""
+    """Compute per-show watch progress % (aired episodes only) in 2 queries instead of N x get_watch_progress() calls."""
     from tvshows.models import Episode
+    from django.utils import timezone
 
     total_episodes = Episode.objects.filter(
-        season__show_id__in=tvshow_ids
+        season__show_id__in=tvshow_ids,
+        air_date__isnull=False,
+        air_date__lte=timezone.now()
     ).exclude(season__season_number=0).values('season__show_id').annotate(count=Count('id'))
     watched_episodes = user.watched_episodes.filter(
         episode__season__show_id__in=tvshow_ids
