@@ -822,8 +822,10 @@ def update_single_season(season_id):
                 if episode_data.get('overview') and episode_data['overview'] != episode.overview:
                     updates['overview'] = episode_data['overview']
                     
-                if episode_data.get('still_path') and not episode.still:
-                    updates['still'] = f"https://image.tmdb.org/t/p/original{episode_data['still_path']}"
+                if episode_data.get('still_path'):
+                    new_still = f"https://image.tmdb.org/t/p/original{episode_data['still_path']}"
+                    if new_still != episode.still:
+                        updates['still'] = new_still
                     
                 if episode_data.get('air_date'):
                     try:
