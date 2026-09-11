@@ -223,6 +223,12 @@ def update_single_movie(movie_id, update_people=False):
             
         if data.get('vote_average') and data.get('vote_average') != movie.rating:
             updates['rating'] = data.get('vote_average')
+
+        # TMDB often carries no runtime when a title is still unreleased, and the
+        # value it returns can change after release. Only write a truthy value, so a
+        # missing/zero payload never wipes a runtime we already have.
+        if data.get('runtime') and data.get('runtime') != movie.runtime:
+            updates['runtime'] = data.get('runtime')
         
         # Update trailer if available
         if 'videos' in data and data['videos'].get('results'):
