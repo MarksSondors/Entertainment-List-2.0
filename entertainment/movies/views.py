@@ -1021,18 +1021,22 @@ def shortest_watchlist_movie(request):
 def community_page(request):
     """Main community page with Movie of the Week feature"""
     # Get current active movie of the week
-    current_pick = MovieOfWeekPick.objects.filter(status='active').first()
-    
+    current_pick = MovieOfWeekPick.objects.filter(status='active').select_related('movie').first()
+
     # If no active pick but there are queued picks, activate the next one
     if not current_pick and MovieOfWeekPick.objects.filter(status='queued').exists():
         next_pick = MovieOfWeekPick.objects.filter(status='queued').order_by('date_created').first()
         # Code to activate the next pick
-    
+
     # Get queued movie suggestions
-    queued_picks = MovieOfWeekPick.objects.filter(status='queued').order_by('date_created')
-    
+    # select_related: the template walks pick.movie / pick.suggested_by for every row,
+    # which was a query per pick (25 completed picks = 25 extra SELECTs).
+    queued_picks = MovieOfWeekPick.objects.filter(status='queued').select_related(
+        'movie', 'suggested_by').order_by('date_created')
+
     # Get completed movies of the week
-    completed_picks = MovieOfWeekPick.objects.filter(status='completed').order_by('-end_date')
+    completed_picks = MovieOfWeekPick.objects.filter(status='completed').select_related(
+        'movie').order_by('-end_date')
     
     # Get reviews for current movie if one exists
     movie_reviews = []
