@@ -1,0 +1,390 @@
+/* Network Graph — Win98-styled movie relationship explorer.
+   Variable names/patterns match community_page.html for site-wide consistency. */
+
+:root {
+    --bg-color: #c0c0c0;
+    --text-color: #000;
+    --text-muted: #666;
+    --border-dark: #808080;
+    --border-light: #dfdfdf;
+    --window-bg: #c0c0c0;
+    --button-bg: #c0c0c0;
+    --button-hover: #e0e0e0;
+    --canvas-bg: #0a0a1a;
+    --shadow-color: rgba(0, 0, 0, 0.25);
+    --accent: #1084d0;
+    --ng-canvas-height: min(80vh, 900px);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #383838;
+        --text-color: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-dark: #2a2a2a;
+        --border-light: #505050;
+        --window-bg: #404040;
+        --button-bg: #505050;
+        --button-hover: #606060;
+        --canvas-bg: #050510;
+        --shadow-color: rgba(0, 0, 0, 0.5);
+        --accent: #2060a0;
+    }
+}
+
+.ng-window {
+    border: 2px outset var(--bg-color);
+    background-color: var(--bg-color);
+    font-family: 'MS Sans Serif', sans-serif;
+    box-shadow: 2px 2px 4px var(--shadow-color);
+    color: var(--text-color);
+}
+
+.ng-title-bar {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+    color: #fff;
+    padding: 4px 6px;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@media (prefers-color-scheme: dark) {
+    .ng-title-bar {
+        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
+}
+
+.ng-body {
+    background-color: var(--window-bg);
+    padding: 8px;
+}
+
+/* ---- Toolbar ---- */
+.ng-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: var(--bg-color);
+    border: 2px inset var(--bg-color);
+    font-size: 12px;
+}
+
+.ng-toolbar label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.ng-search {
+    position: relative;
+    flex: 1 1 240px;
+    min-width: 180px;
+}
+
+.ng-search input,
+.retro-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 2px inset var(--bg-color);
+    background: #fff;
+    color: #000;
+    padding: 3px 5px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 12px;
+}
+
+.ng-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    background: #fff;
+    color: #000;
+    border: 2px outset var(--bg-color);
+    max-height: 260px;
+    overflow-y: auto;
+    display: none;
+}
+
+.ng-search-results.open { display: block; }
+
+.ng-search-result {
+    display: flex;
+    gap: 6px;
+    padding: 4px 6px;
+    cursor: pointer;
+    border-bottom: 1px solid #ddd;
+    align-items: center;
+}
+
+.ng-search-result:hover { background: var(--accent); color: #fff; }
+
+.ng-search-result img {
+    width: 24px;
+    height: 36px;
+    object-fit: cover;
+    background: #333;
+    flex-shrink: 0;
+}
+
+.ng-btn {
+    border: 2px outset var(--button-bg);
+    background: var(--button-bg);
+    color: var(--text-color);
+    padding: 4px 10px;
+    font-family: 'MS Sans Serif', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ng-btn:hover { background: var(--button-hover); }
+.ng-btn:active { border: 2px inset var(--button-bg); }
+.ng-btn.active { border: 2px inset var(--button-bg); background: var(--accent); color: #fff; }
+
+.ng-slider-value {
+    font-weight: bold;
+    min-width: 2.5em;
+    display: inline-block;
+}
+
+/* ---- Layout: canvas + sidebar ---- */
+.ng-main {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.ng-canvas-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 2px inset var(--bg-color);
+    background: var(--canvas-bg);
+}
+
+#ng-cytoscape {
+    width: 100%;
+    height: var(--ng-canvas-height);
+}
+
+.ng-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 13px;
+    z-index: 20;
+}
+
+.ng-loading.hidden { display: none; }
+
+.ng-empty-state {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    color: #ccc;
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+}
+
+.ng-empty-state.visible { display: flex; }
+
+/* ---- Sidebar ---- */
+.ng-sidebar {
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: var(--ng-canvas-height);
+}
+
+.ng-panel {
+    border: 2px outset var(--bg-color);
+    background: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    box-shadow: 1px 1px 3px var(--shadow-color);
+}
+
+.ng-panel--details {
+    /* fixed, never shrunk by its flexible siblings - this is what was collapsing to nothing */
+    flex: 0 0 auto;
+    min-height: 170px;
+    max-height: 280px;
+}
+
+.ng-panel--communities {
+    flex: 1 1 auto;
+    min-height: 100px;
+}
+
+.ng-panel--legend {
+    flex: 0 0 auto;
+}
+
+.ng-panel-header {
+    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
+    color: #fff;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 4px 7px;
+    letter-spacing: 0.3px;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+    flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+    .ng-panel-header {
+        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    }
+}
+
+.ng-panel-body {
+    padding: 9px;
+    font-size: 12px;
+    overflow-y: hidden;
+    min-height: 0;
+}
+
+.ng-panel--details .ng-panel-body,
+.ng-panel--communities .ng-panel-body {
+    overflow-y: auto;
+}
+
+.ng-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.ng-legend-swatch {
+    width: 22px;
+    height: 3px;
+    flex-shrink: 0;
+}
+
+.ng-legend-swatch.node {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.ng-community-item {
+    padding: 5px 6px;
+    margin-bottom: 3px;
+    background: #fff;
+    color: #000;
+    border: 1px solid var(--border-dark);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.ng-community-item:hover { background: var(--accent); color: #fff; }
+
+.ng-community-item .count {
+    color: var(--text-muted);
+    font-size: 10px;
+}
+
+.ng-community-item:hover .count { color: #e0e0ff; }
+
+/* ---- Node detail panel ---- */
+.ng-detail-empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ng-detail-header {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.ng-detail-poster {
+    width: 64px;
+    height: 96px;
+    object-fit: cover;
+    border: 1px solid var(--border-dark);
+    flex-shrink: 0;
+    background: #333;
+}
+
+.ng-detail-title {
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 2px;
+}
+
+.ng-detail-meta {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.ng-detail-section-title {
+    font-weight: bold;
+    font-size: 11px;
+    margin-top: 8px;
+    margin-bottom: 3px;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.ng-reason-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.ng-reason-list li {
+    padding: 2px 0;
+    font-size: 11px;
+}
+
+.ng-reason-list li::before {
+    content: "\2192\a0";
+}
+
+.ng-expand-btn {
+    margin-top: 8px;
+    width: 100%;
+}
+
+/* ---- Scrollbars (retro) ---- */
+.ng-panel-body::-webkit-scrollbar,
+.ng-search-results::-webkit-scrollbar {
+    width: 16px;
+}
+
+.ng-panel-body::-webkit-scrollbar-track,
+.ng-search-results::-webkit-scrollbar-track {
+    background: var(--bg-color);
+    border: 1px inset var(--bg-color);
+}
+
+.ng-panel-body::-webkit-scrollbar-thumb,
+.ng-search-results::-webkit-scrollbar-thumb {
+    background: var(--button-bg);
+    border: 1px outset var(--button-bg);
+}
+
+@media (max-width: 900px) {
+    .ng-main { flex-direction: column; }
+    .ng-sidebar { flex: none; height: auto; }
+    .ng-panel--details, .ng-panel--communities { max-height: 260px; }
+    #ng-cytoscape { height: 480px; }
+}

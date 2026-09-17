@@ -181,3 +181,45 @@ COMMUNITY_STABILITY_MIN_SIZE = 5  # Minimum community size for stability analysi
 
 # Logging
 LOG_BATCH_SIZE = 100  # Log progress every N items
+
+# ============================================================
+# Movie-Centric Graph (v2) — co-occurrence edge configuration
+# ============================================================
+
+# Minimum shared top-billed cast members required for a shared_actor edge
+MIN_SHARED_ACTORS = 2
+# Only compare cast within this billing order (leads only, skip extras/cameos)
+TOP_CAST_BILLING_LIMIT = 8
+# A shared attribute (keyword/studio) touching more movies than this is treated
+# as too generic/common to be a meaningful signal, and is skipped entirely
+MAX_KEYWORD_GROUP_SIZE = 40
+MAX_STUDIO_GROUP_SIZE = 25
+# Minimum accumulated weight for a keyword_similarity / same_studio edge to be kept
+MIN_KEYWORD_EDGE_WEIGHT = 0.15
+MIN_STUDIO_EDGE_WEIGHT = 0.1
+# Cap on how many edges each movie keeps (strongest-first) - controls visual density
+MAX_EDGES_PER_NODE = 8
+
+# Base weight contribution per relationship type before group-size scaling.
+# Rarer co-occurrences (e.g. a niche shared keyword) score higher per-pair than
+# common ones (e.g. a keyword shared by dozens of movies), since weight is
+# divided by the group size these come from.
+EDGE_BASE_WEIGHTS = {
+    'shared_director': 2.0,
+    'shared_actor': 1.2,
+    'keyword_similarity': 1.0,
+    'same_studio': 0.5,
+    'same_collection': 3.0,
+}
+
+# Node importance blend (popularity/rating/review_count -> node size & fcose mass)
+IMPORTANCE_WEIGHTS = {
+    'popularity': 0.5,
+    'rating': 0.2,
+    'review_count': 0.3,
+}
+
+# Cast/crew display overlay ("Show cast/crew" toggle) - kept low since these are pure
+# display context, not used for clustering; uncapped overlays turn into a dense hairball
+PEOPLE_OVERLAY_TOP_CAST = 3
+MAX_PEOPLE_OVERLAY_NODES = 60

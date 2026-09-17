@@ -33,56 +33,51 @@ User = get_user_model()
 @timed
 @cached(timeout=CacheLevel.MEDIUM, key_prefix='network_graph')
 def build_network_graph(
-    current_user: User,
+    current_user: Optional[User],
     *,
+    rating_threshold: float = 0.0,
+    movie_limit: int = 0,
+    max_nodes: int = 20000,
+    show_people: bool = False,
+    include_social_layer: bool = False,
     min_reviews: int = 2,
-    rating_threshold: float = 7.0,
-    max_nodes: int = 500,
-    chaos_mode: bool = False,
-    show_countries: bool = True,
-    show_genres: bool = True,
-    show_directors: bool = True,
     show_predictions: bool = True,
     predictions_limit: int = 10,
-    movie_limit: int = 100,
-    show_similarity: bool = True,
-    show_actors: bool = False,
-    show_crew: bool = False
+    seed_tmdb_ids: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
-    """Build network graph with all Phase 2A performance optimizations.
-    
-    This is a drop-in replacement for the legacy build_network_graph function
-    that adds:
+    """Build a movie-centric network graph with all Phase 2A performance optimizations.
+
+    Movies are the primary nodes, connected by explainable relationships (shared
+    director/cast, keyword themes, studio, collection). The user review/prediction
+    layer is an opt-in overlay via ``include_social_layer``, not the default lens.
+
+    Adds on top of the raw graph:
     - Execution timing and logging
     - 1-hour result caching
     - Memory tracking and management
     - Automatic graph sampling for large datasets
     - Performance statistics in response
-    
+
     Args:
-        current_user: The user requesting the graph
-        min_reviews: Minimum reviews for user/movie inclusion (default: 2)
-        rating_threshold: Minimum rating for connections (default: 7.0)
+        current_user: The user requesting the graph (only used by the social layer)
+        rating_threshold: Minimum TMDB rating for seed movies (default: 6.0)
+        movie_limit: Max movies to seed the graph with (default: 150)
         max_nodes: Maximum nodes before sampling kicks in (default: 500)
-        chaos_mode: Random layout vs structured (default: False)
-        show_countries: Include country nodes (default: True)
-        show_genres: Include genre nodes (default: True)
-        show_directors: Include director nodes (default: True)
-        show_predictions: Include prediction nodes (default: True)
-        predictions_limit: Max predictions to show (default: 10)
-        movie_limit: Max movies to include (default: 100)
-        show_similarity: Show similarity edges (default: True)
-        show_actors: Include actor nodes (default: False)
-        show_crew: Include crew nodes (default: False)
-    
+        show_people: Include director/actor nodes as a display-only overlay
+        include_social_layer: Include user review/prediction edges as an overlay
+        min_reviews: Minimum reviews for social-layer user inclusion
+        show_predictions: Include collaborative-filtering prediction edges
+        predictions_limit: Max predictions to show
+        seed_tmdb_ids: Explicit TMDB ids to seed with (used for progressive expand)
+
     Returns:
         Dict containing:
         - nodes: List of node dicts
         - edges: List of edge dicts
+        - compound_groups: Collections, for the frontend to render as nested boxes
         - stats: Graph statistics
         - performance: Performance metrics (memory, timing, sampling)
-        - layout_config: MultiGravity Force Atlas configuration
-    
+
     Performance Notes:
         - Results cached for 1 hour per user/parameter combination
         - Memory usage tracked and logged
@@ -92,26 +87,21 @@ def build_network_graph(
     # Track initial memory
     initial_memory = get_memory_usage()
     logger.info(
-        f"Starting build_network_graph for user={current_user.id} "
-        f"(memory: {initial_memory:.1f}MB, max_nodes: {max_nodes})"
+        f"Starting build_network_graph (movie_limit: {movie_limit}, max_nodes: {max_nodes})"
     )
-    
+
     # Call refactored graph builder
     result = build_network_graph_refactored(
         current_user,
-        min_reviews=min_reviews,
         rating_threshold=rating_threshold,
+        movie_limit=movie_limit,
         max_nodes=max_nodes,
-        chaos_mode=chaos_mode,
-        show_countries=show_countries,
-        show_genres=show_genres,
-        show_directors=show_directors,
+        show_people=show_people,
+        include_social_layer=include_social_layer,
+        min_reviews=min_reviews,
         show_predictions=show_predictions,
         predictions_limit=predictions_limit,
-        movie_limit=movie_limit,
-        show_similarity=show_similarity,
-        show_actors=show_actors,
-        show_crew=show_crew
+        seed_tmdb_ids=seed_tmdb_ids,
     )
     
     nodes = result['nodes']

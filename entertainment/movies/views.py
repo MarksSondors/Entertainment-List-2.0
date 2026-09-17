@@ -1419,67 +1419,83 @@ def network_graph_data(request):
     """Parse query params and delegate heavy graph building to service layer."""
     from .services.network_graph import build_network_graph
 
-    def _get_flag(param, default=True):
+    def _get_flag(param, default=False):
         val = request.GET.get(param)
         if val is None:
             return default
         return val.lower() in ['1', 'true', 'yes', 'on']
 
-    min_reviews = int(request.GET.get('min_reviews', 1))
-    rating_threshold = float(request.GET.get('rating_threshold', 5.0))
-    max_nodes = int(request.GET.get('max_nodes', 150))
-    chaos_mode = request.GET.get('chaos') in ['1', 'true', 'True']
-    show_users = _get_flag('users', True)
-    show_movies = _get_flag('movies', True)
-    show_countries = _get_flag('countries', True)
-    show_genres = _get_flag('genres', True)
-    show_directors = _get_flag('directors', True)
+    rating_threshold = float(request.GET.get('rating_threshold', 0.0))
+    movie_limit = max(0, int(request.GET.get('movie_limit', 0)))
+    max_nodes = int(request.GET.get('max_nodes', 20000))
+    show_people = _get_flag('people', False)
+    include_social_layer = _get_flag('social', False)
+    min_reviews = int(request.GET.get('min_reviews', 2))
     show_predictions = _get_flag('predictions', True)
-    show_reviews = _get_flag('reviews', True)
-    show_similarity = _get_flag('similarity', True)
-    show_relationships = _get_flag('relationships', True)
-    show_affinity = _get_flag('affinity', True)
     try:
-        predictions_limit = int(request.GET.get('predictions_limit', 25))
+        predictions_limit = int(request.GET.get('predictions_limit', 10))
     except ValueError:
-        predictions_limit = 25
+        predictions_limit = 10
     predictions_limit = max(0, min(100, predictions_limit))
-    try:
-        movie_limit = int(request.GET.get('movie_limit', max_nodes // 2))
-    except ValueError:
-        movie_limit = max_nodes // 2
-    # No upper limit on movie_limit - let users control it
-    movie_limit = max(1, movie_limit)
-    show_actors = chaos_mode and _get_flag('actors', True)
-    show_crew = chaos_mode and _get_flag('crew', True)
 
-    # Build network graph using MultiGravity Force Atlas (only layout supported)
     data = build_network_graph(
         request.user if request.user.is_authenticated else None,
-        min_reviews=min_reviews,
         rating_threshold=rating_threshold,
+        movie_limit=movie_limit,
         max_nodes=max_nodes,
-        chaos_mode=chaos_mode,
-        show_countries=show_countries,
-        show_genres=show_genres,
-        show_directors=show_directors,
+        show_people=show_people,
+        include_social_layer=include_social_layer,
+        min_reviews=min_reviews,
         show_predictions=show_predictions,
         predictions_limit=predictions_limit,
-        movie_limit=movie_limit,
-        show_similarity=show_similarity,
-        show_actors=show_actors,
-        show_crew=show_crew
     )
-    
-    # Convert edges from source/target to from/to for vis.js
+
+    # Convert edges from source/target to from/to for the frontend graph renderer
     if 'edges' in data:
         for edge in data['edges']:
             if 'source' in edge:
                 edge['from'] = edge.pop('source')
             if 'target' in edge:
                 edge['to'] = edge.pop('target')
-    
+
     return Response(data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def network_graph_expand(request):
+    """Return the direct relationship neighbors of a movie or person, for progressive expand-on-click."""
+    from .services.network_graph.builders.core import build_movie_neighbors, build_person_neighbors
+
+    try:
+        limit = int(request.GET.get('limit', 20))
+    except ValueError:
+        limit = 20
+    limit = max(1, min(50, limit))
+
+    person_id_param = request.GET.get('person_id')
+    if person_id_param:
+        try:
+            person_id = int(person_id_param)
+        except ValueError:
+            return Response({'error': 'A valid person_id query param is required'}, status=400)
+        data = build_person_neighbors(person_id, limit=limit)
+    else:
+        try:
+            tmdb_id = int(request.GET.get('tmdb_id'))
+        except (TypeError, ValueError):
+            return Response({'error': 'A valid tmdb_id or person_id query param is required'}, status=400)
+        show_people = request.GET.get('people', '0').lower() in ('1', 'true', 'yes', 'on')
+        data = build_movie_neighbors(tmdb_id, limit=limit, show_people=show_people)
+
+    for edge in data.get('edges', []):
+        if 'source' in edge:
+            edge['from'] = edge.pop('source')
+        if 'target' in edge:
+            edge['to'] = edge.pop('target')
+
+    return Response(data)
+
 
 
 

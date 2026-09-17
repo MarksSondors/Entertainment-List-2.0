@@ -7,7 +7,7 @@ methods for identifying clusters of densely connected nodes in the graph.
 import logging
 import random
 from collections import defaultdict
-from typing import List, Set, Dict, Any, Optional
+from typing import List, Set, Dict, Any, Optional, Tuple
 
 import networkx as nx
 
@@ -137,598 +137,210 @@ def calculate_community_quality_metrics(community: Set, G: nx.Graph, all_communi
     }
 
 
+_THEME_KEYWORDS = {
+    'Dark': ['murder', 'death', 'violence', 'crime', 'revenge', 'serial killer', 'dark', 'corruption'],
+    'Adventure': ['adventure', 'quest', 'journey', 'exploration', 'treasure', 'expedition'],
+    'Heartfelt': ['love', 'romance', 'family', 'friendship', 'loss', 'grief', 'coming of age'],
+    'Cerebral': ['philosophy', 'science', 'technology', 'conspiracy', 'mystery', 'puzzle'],
+    'Action-Packed': ['fight', 'war', 'battle', 'combat', 'martial arts', 'soldier', 'military'],
+}
+
+
+def _quality_descriptor(ratings: List[float]) -> str:
+    if not ratings:
+        return ""
+    avg = sum(ratings) / len(ratings)
+    if avg >= 8.0:
+        return "Elite"
+    if avg >= 7.5:
+        return "Premium"
+    if avg >= 7.0:
+        return "Quality"
+    if avg >= 6.5:
+        return "Solid"
+    if avg >= 5.5:
+        return "Mixed"
+    return "Cult"
+
+
+def _era_descriptors(years: List[int]) -> Tuple[str, str]:
+    if not years:
+        return "", ""
+    avg_year = sum(years) / len(years)
+    year_range = max(years) - min(years)
+    decade = int(avg_year // 10) * 10
+    if decade >= 2020:
+        era = "Modern"
+    elif decade >= 2010:
+        era = "Contemporary"
+    elif decade >= 2000:
+        era = "2000s"
+    elif decade >= 1990:
+        era = "90s"
+    elif decade >= 1980:
+        era = "80s"
+    elif decade >= 1970:
+        era = "70s"
+    elif decade >= 1960:
+        era = "Golden Age"
+    else:
+        era = "Classic"
+    decade_label = f"{decade}s" if year_range <= 5 else (era if year_range <= 15 else "")
+    return era, decade_label
+
+
+def _theme_descriptor(keyword_counts: Dict[str, int]) -> str:
+    if not keyword_counts:
+        return ""
+    top_keywords = sorted(keyword_counts.items(), key=lambda kv: kv[1], reverse=True)[:5]
+    for kw, _ in top_keywords:
+        for theme, matches in _THEME_KEYWORDS.items():
+            if any(match in kw for match in matches):
+                return theme
+    return ""
+
+
+def _size_descriptor(total_nodes: int) -> str:
+    if total_nodes < 5:
+        return "Micro"
+    if total_nodes < 15:
+        return "Small"
+    if total_nodes < 40:
+        return "Medium"
+    if total_nodes < 100:
+        return "Large"
+    return "Mega"
+
+
+def _with_suffix(name: str, suffix: str) -> str:
+    """Avoid doubling up e.g. 'X Collection Collection' when the DB name already has the word."""
+    if name.rstrip().lower().endswith(suffix.lower()):
+        return name
+    return f"{name} {suffix}"
+
+
 def generate_community_name(
-    community_node_ids: List[int], 
+    community_node_ids: List[Any],
     all_nodes: List[NodeDict],
-    all_edges: List[EdgeDict] = None
+    all_edges: List[EdgeDict] = None,
 ) -> str:
-    """Generate a meaningful, semantic name for a community based on rich metadata.
-    
-    Uses keywords, ratings, release dates, genres, countries, and people to create
-    descriptive names that capture the essence of the community.
-    
-    Args:
-        community_node_ids: List of node IDs in the community
-        all_nodes: List of all node dictionaries
-        all_edges: Optional list of all edge dictionaries (for director-movie tracking)
-    
-    Returns:
-        A descriptive name for the community
+    """Generate a community name straight from its movies' own relationship metadata.
+
+    The old approach only really distinguished "same collection" from "mixed
+    nodes" because it depended on generic genre/country/director hub nodes to
+    infer structure. This version reads directly off each movie's director(s),
+    top-billed cast, studio, keywords, rating and year - the exact signals that
+    formed the community's edges in the first place - so a director's run, a
+    studio's slate, a recurring cast, or a thematic cluster all get named for
+    what they actually are instead of falling back to "N nodes".
     """
-    # Safety check for empty input
     if not community_node_ids:
         logger.warning("generate_community_name called with empty community_node_ids")
         return "🔷 Isolated Cluster"
-    
-    # Create a mapping of node_id to node data
-    node_mapping = {node['id']: node for node in all_nodes}
-    
-    # Get the actual node data for this community
-    community_nodes = [node_mapping[node_id] for node_id in community_node_ids if node_id in node_mapping]
-    
-    if not community_nodes:
-        logger.warning(f"No valid nodes found for community IDs: {community_node_ids[:5]}{'...' if len(community_node_ids) > 5 else ''}")
-        return "🔷 Isolated Cluster"
-    
-    # Count node types and collect metadata
-    type_counts: Dict[str, int] = {}
-    genre_counts: Dict[str, int] = {}
-    country_counts: Dict[str, int] = {}
-    keyword_counts: Dict[str, int] = {}
-    collection_ids: Dict[int, List[str]] = {}  # collection_id -> movie titles
-    movie_connectivity: Dict[str, int] = {}  # movie_id -> number of connected people
-    director_names: List[str] = []
-    director_to_movies: Dict[str, List[str]] = {}  # director_id -> movie titles
-    actor_names: List[str] = []
-    movie_titles: List[str] = []
-    movie_id_to_title: Dict[str, str] = {}  # Track movie IDs to titles
-    movie_to_directors: Dict[str, List[str]] = {}  # movie_id -> director names
-    
-    # Collect movie-specific semantic data
-    movie_ratings: List[float] = []
-    movie_years: List[int] = []
-    
-    for node in community_nodes:
-        node_type = node.get('type', 'unknown')
-        type_counts[node_type] = type_counts.get(node_type, 0) + 1
-        
-        # Extract detailed info based on node type
-        if node_type == 'genre':
-            genre_name = node.get('label', 'Unknown Genre')
-            genre_counts[genre_name] = genre_counts.get(genre_name, 0) + 1
-        elif node_type == 'country':
-            country_name = node.get('label', 'Unknown Country')
-            country_counts[country_name] = country_counts.get(country_name, 0) + 1
-        elif node_type == 'director' and len(director_names) < 3:
-            director_names.append(node.get('label', 'Unknown'))
-        elif node_type == 'actor' and len(actor_names) < 3:
-            actor_names.append(node.get('label', 'Unknown'))
-        elif node_type == 'movie':
-            movie_id = node.get('id', '')
-            movie_title = node.get('label', 'Unknown')
-            
-            # Track movie ID to title mapping
-            if movie_id:
-                movie_id_to_title[movie_id] = movie_title
-                movie_connectivity[movie_id] = 0  # Initialize connectivity counter
-            
-            if len(movie_titles) < 3:
-                movie_titles.append(movie_title)
-            
-            # Track movie collections
-            collection_id = node.get('collection_id')
-            if collection_id is not None:
-                if collection_id not in collection_ids:
-                    collection_ids[collection_id] = []
-                collection_ids[collection_id].append(movie_title)
-            
-            # Collect semantic metadata from movies
-            rating = node.get('rating') or node.get('avg_rating')
-            if rating and isinstance(rating, (int, float)):
-                movie_ratings.append(float(rating))
-            
-            year = node.get('year')
-            if year and isinstance(year, (int, str)):
-                try:
-                    movie_years.append(int(year))
-                except (ValueError, TypeError):
-                    pass
-            
-            # Extract keywords (if available in node metadata)
-            keywords = node.get('keywords', [])
-            if isinstance(keywords, list):
-                for keyword in keywords[:10]:  # Limit to top 10 keywords
-                    if isinstance(keyword, dict):
-                        kw_name = keyword.get('name', '').strip()
-                    else:
-                        kw_name = str(keyword).strip()
-                    
-                    if kw_name:
-                        keyword_counts[kw_name] = keyword_counts.get(kw_name, 0) + 1
-                    if kw_name:
-                        keyword_counts[kw_name] = keyword_counts.get(kw_name, 0) + 1
-    
-    # ========== TRACK DIRECTOR-MOVIE CONNECTIONS ==========
-    # Analyze edges to find which directors worked on which movies in this community
-    if all_edges:
-        community_node_set = set(community_node_ids)
-        for edge in all_edges:
-            source = edge.get('source', edge.get('from'))
-            target = edge.get('target', edge.get('to'))
-            edge_type = edge.get('type', '')
-            
-            # Check if this is a director-movie edge within the community
-            if edge_type == 'directed_by' and source in community_node_set and target in community_node_set:
-                # Find which is the movie and which is the director
-                source_node = node_mapping.get(source)
-                target_node = node_mapping.get(target)
-                
-                if source_node and target_node:
-                    if source_node.get('type') == 'movie' and target_node.get('type') == 'director':
-                        movie_id = source
-                        director_id = target
-                        director_name = target_node.get('label', 'Unknown')
-                        movie_title = source_node.get('label', 'Unknown')
-                    elif source_node.get('type') == 'director' and target_node.get('type') == 'movie':
-                        movie_id = target
-                        director_id = source
-                        director_name = source_node.get('label', 'Unknown')
-                        movie_title = target_node.get('label', 'Unknown')
-                    else:
-                        continue
-                    
-                    # Track director -> movies mapping
-                    if director_id not in director_to_movies:
-                        director_to_movies[director_id] = []
-                    director_to_movies[director_id].append(movie_title)
-                    
-                    # Track movie -> directors mapping
-                    if movie_id not in movie_to_directors:
-                        movie_to_directors[movie_id] = []
-                    movie_to_directors[movie_id].append(director_name)
-    
-    # Get movie count for later checks
-    movie_count = type_counts.get('movie', 0)
-    
-    # Check if all movies are from a single director
-    dominant_director_name = None
-    all_movies_same_director = False
-    if director_to_movies and movie_count > 0:
-        # Find director with most movies
-        director_with_most_movies = max(director_to_movies.items(), key=lambda x: len(x[1]))
-        director_id, directed_movies = director_with_most_movies
-        
-        # Check if this director directed ALL movies in the community
-        if len(directed_movies) == movie_count and movie_count >= 2:
-            all_movies_same_director = True
-            # Get director name from the first directed movie's director list
-            if directed_movies:
-                # Find this director's name
-                for d_id, d_name in [(nid, node_mapping[nid].get('label')) for nid in community_node_ids if node_mapping.get(nid, {}).get('type') == 'director']:
-                    if d_id == director_id:
-                        dominant_director_name = d_name
-                        break
-    
-    # ========== ANALYZE MOVIE CONNECTIVITY ==========
-    # For actor/crew-heavy communities, find movies with most people
-    # This helps identify "hub" movies that connect the community
-    actor_count = type_counts.get('actor', 0)
-    director_count = type_counts.get('director', 0)
-    crew_count = type_counts.get('crew', 0)
-    movie_count = type_counts.get('movie', 0)
-    people_count = actor_count + director_count + crew_count
-    
-    most_connected_movie = None
-    most_connected_movie_title = None
-    
-    # If lots of people but few movies, the movies are "hubs"
-    if people_count > 10 and movie_count > 0 and movie_count <= 5:
-        # Estimate connectivity: people / movies ratio
-        # The movie(s) are likely the central connection point
-        if movie_titles:
-            most_connected_movie_title = movie_titles[0]  # Use first movie as representative
-    
-    # ========== SEMANTIC ANALYSIS ==========
-    # Analyze temporal patterns
-    decade_descriptor = ""
-    era_descriptor = ""
-    if movie_years:
-        avg_year = sum(movie_years) / len(movie_years)
-        min_year = min(movie_years)
-        max_year = max(movie_years)
-        year_range = max_year - min_year
-        
-        # Determine decade/era
-        decade = int(avg_year // 10) * 10
-        if decade >= 2020:
-            era_descriptor = "Modern"
-        elif decade >= 2010:
-            era_descriptor = "Contemporary"
-        elif decade >= 2000:
-            era_descriptor = "2000s"
-        elif decade >= 1990:
-            era_descriptor = "90s"
-        elif decade >= 1980:
-            era_descriptor = "80s"
-        elif decade >= 1970:
-            era_descriptor = "70s"
-        elif decade >= 1960:
-            era_descriptor = "Golden Age"
-        else:
-            era_descriptor = "Classic"
-        
-        # If tight clustering in time
-        if year_range <= 5:
-            decade_descriptor = f"{decade}s"
-        elif year_range <= 15:
-            decade_descriptor = era_descriptor
-    
-    # Analyze quality/rating patterns
-    quality_descriptor = ""
-    if movie_ratings:
-        avg_rating = sum(movie_ratings) / len(movie_ratings)
-        if avg_rating >= 8.0:
-            quality_descriptor = "Elite"
-        elif avg_rating >= 7.5:
-            quality_descriptor = "Premium"
-        elif avg_rating >= 7.0:
-            quality_descriptor = "Quality"
-        elif avg_rating >= 6.5:
-            quality_descriptor = "Solid"
-        elif avg_rating >= 5.5:
-            quality_descriptor = "Mixed"
-        else:
-            quality_descriptor = "Cult"
-    
-    # Find dominant keywords (themes)
-    top_keywords = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:3]
-    theme_descriptor = ""
-    
-    # Map keywords to thematic categories
-    if top_keywords:
-        dominant_keyword = top_keywords[0][0].lower()
-        
-        # Thematic mappings
-        dark_themes = ['murder', 'death', 'violence', 'crime', 'revenge', 'serial killer', 'dark', 'corruption']
-        adventure_themes = ['adventure', 'quest', 'journey', 'exploration', 'treasure', 'expedition']
-        emotional_themes = ['love', 'romance', 'family', 'friendship', 'loss', 'grief', 'coming of age']
-        intellectual_themes = ['philosophy', 'science', 'technology', 'conspiracy', 'mystery', 'puzzle']
-        action_themes = ['fight', 'war', 'battle', 'combat', 'martial arts', 'soldier', 'military']
-        
-        for kw, count in top_keywords:
-            kw_lower = kw.lower()
-            if any(theme in kw_lower for theme in dark_themes):
-                theme_descriptor = "Dark"
-                break
-            elif any(theme in kw_lower for theme in adventure_themes):
-                theme_descriptor = "Adventure"
-                break
-            elif any(theme in kw_lower for theme in emotional_themes):
-                theme_descriptor = "Heartfelt"
-                break
-            elif any(theme in kw_lower for theme in intellectual_themes):
-                theme_descriptor = "Cerebral"
-                break
-            elif any(theme in kw_lower for theme in action_themes):
-                theme_descriptor = "Action-Packed"
-                break
-    
-    # Determine the total nodes and dominant characteristics (needed for collection check)
-    total_nodes = len(community_nodes)
-    dominant_type = max(type_counts.items(), key=lambda x: x[1])
-    dominant_percentage = (dominant_type[1] / total_nodes) * 100
-    
-    # Check if community is dominated by a movie collection
-    dominant_collection = None
-    dominant_collection_name = None
-    collection_movie_percentage = 0.0
-    
-    if collection_ids:
-        # Find the collection with the most movies in this community
-        largest_collection = max(collection_ids.items(), key=lambda x: len(x[1]))
-        collection_id, collection_movies = largest_collection
-        
-        # Calculate what percentage of ALL movies in the community belong to this collection
-        movie_count_in_community = type_counts.get('movie', 0)
-        if movie_count_in_community > 0:
-            collection_movie_percentage = len(collection_movies) / movie_count_in_community
-        
-        # Collection is dominant if:
-        # - Has 2+ movies AND represents 50%+ of all movies in the community
-        # - OR has 3+ movies (always significant)
-        if (len(collection_movies) >= 2 and collection_movie_percentage >= 0.5) or len(collection_movies) >= 3:
-            dominant_collection = collection_id
-            # Fetch collection name from database
-            try:
-                from movies.models import Collection
-                collection_obj = Collection.objects.filter(id=collection_id).first()
-                if collection_obj:
-                    dominant_collection_name = collection_obj.name
-            except Exception as e:
-                logger.warning(f"Failed to fetch collection name for ID {collection_id}: {e}")
-    
-    # Size categories for more descriptive names
-    size_descriptor = ""
-    if total_nodes < 5:
-        size_descriptor = "Micro"
-    elif total_nodes < 15:
-        size_descriptor = "Small"
-    elif total_nodes < 40:
-        size_descriptor = "Medium"
-    elif total_nodes < 100:
-        size_descriptor = "Large"
-    else:
-        size_descriptor = "Mega"
-    
-    # Generate name based on community composition
-    # PRIORITY 1: Complete collection (100% of movies from one collection)
-    if dominant_collection_name and collection_movie_percentage >= 0.99:
-        # All movies are from the same collection - this is a complete collection community
-        name_parts = []
-        if quality_descriptor and len(movie_ratings) >= 3:
-            name_parts.append(quality_descriptor)
-        name_parts.append(dominant_collection_name)
-        
-        movie_count = type_counts.get('movie', 0)
-        
-        # Determine suffix based on composition
-        if movie_count < total_nodes * 0.3:
-            # Movies are minority - it's the universe (cast/crew dominant)
-            return f"🎬 {' '.join(name_parts)} Universe"
-        else:
-            # Movies are significant - it's the collection
-            return f"🎬 {' '.join(name_parts)} Collection"
-    
-    # PRIORITY 2: Single director (all movies directed by same person)
-    if all_movies_same_director and dominant_director_name and movie_count >= 2:
-        # All movies in the community are from the same director
-        name_parts = []
-        if quality_descriptor and len(movie_ratings) >= 3:
-            name_parts.append(quality_descriptor)
-        name_parts.append(f"{dominant_director_name}'s")
-        
-        # Determine suffix based on composition
-        if movie_count >= 5:
-            return f"🎥 {' '.join(name_parts)} Filmography"
-        elif movie_count >= 3:
-            return f"🎥 {' '.join(name_parts)} Works"
-        else:
-            return f"🎥 {' '.join(name_parts)} Films"
-    
-    # PRIORITY 3: Partial collection (50%+ of movies from one collection)
-    if dominant_collection_name:
-        # Use collection name as the primary identifier
-        name_parts = []
-        if quality_descriptor and len(movie_ratings) >= 3:
-            name_parts.append(quality_descriptor)
-        name_parts.append(dominant_collection_name)
-        
-        movie_count = type_counts.get('movie', 0)
-        
-        # Determine suffix based on composition
-        # If collection represents 80%+ of all movies, it's the core of the community
-        if collection_movie_percentage >= 0.8:
-            # Nearly complete collection
-            return f"🎬 {' '.join(name_parts)} Collection"
-        elif movie_count < total_nodes * 0.3:
-            # Movies are minority but from same collection - it's the universe (cast/crew dominant)
-            return f"🎬 {' '.join(name_parts)} Universe"
-        else:
-            # Collection is significant but mixed with other movies
-            return f"🎬 {' '.join(name_parts)} Series"
-    
-    # PRIORITY 4: Very homogeneous community (80%+)
-    if dominant_percentage >= 80:
-        if dominant_type[0] == 'genre' and genre_counts:
-            top_genre = max(genre_counts.items(), key=lambda x: x[1])[0]
-            
-            # Build semantic name with quality, era, and theme
-            name_parts = []
-            if quality_descriptor and len(movie_ratings) >= 3:
-                name_parts.append(quality_descriptor)
-            if theme_descriptor:
-                name_parts.append(theme_descriptor)
-            if decade_descriptor and len(movie_years) >= 3:
-                name_parts.append(decade_descriptor)
-            
-            if name_parts:
-                return f"🎬 {' '.join(name_parts)} {top_genre} ({total_nodes} nodes)"
-            return f"🎬 {top_genre} Universe ({total_nodes} nodes)"
-            
-        elif dominant_type[0] == 'country' and country_counts:
-            top_country = max(country_counts.items(), key=lambda x: x[1])[0]
-            
-            # Add era and quality for country-based communities
-            name_parts = []
-            if decade_descriptor and len(movie_years) >= 3:
-                name_parts.append(decade_descriptor)
-            if quality_descriptor and len(movie_ratings) >= 3:
-                name_parts.append(quality_descriptor)
-            
-            if name_parts:
-                return f"🌍 {' '.join(name_parts)} {top_country} Cinema ({total_nodes} nodes)"
-            return f"🌍 {top_country} Cinema ({total_nodes} nodes)"
-            
-        elif dominant_type[0] == 'director':
-            if director_names:
-                lead_director = director_names[0]
-                if quality_descriptor and len(movie_ratings) >= 2:
-                    return f"🎥 {lead_director}'s {quality_descriptor} Works ({total_nodes} nodes)"
-                return f"🎥 {lead_director}'s Circle ({total_nodes} collaborators)"
-            return f"🎥 {size_descriptor} Director Network ({total_nodes} directors)"
-            
-        elif dominant_type[0] == 'actor':
-            # For actor-dominated communities, check if there's a central movie
-            # that connects most of the actors (hub movie pattern)
-            if most_connected_movie_title and people_count > 10 and movie_count <= 3:
-                # This is likely a movie + its cast/crew
-                movie_name = most_connected_movie_title
-                # Truncate long movie names
-                if len(movie_name) > 30:
-                    movie_name = movie_name[:27] + "..."
-                return f"🎬 {movie_name} Production ({total_nodes} nodes)"
-            
-            # For actor-dominated communities, try to use genre/theme if available
-            # to avoid generic "Actor-Centric" names
-            if genre_counts and len(movie_titles) >= 2:
-                top_genre = max(genre_counts.items(), key=lambda x: x[1])[0]
-                name_parts = []
-                if decade_descriptor:
-                    name_parts.append(decade_descriptor)
-                if quality_descriptor:
-                    name_parts.append(quality_descriptor)
-                name_parts.append(top_genre)
-                return f"🎬 {' '.join(name_parts)} Ensemble ({total_nodes} nodes)"
-            elif actor_names:
-                lead_actor = actor_names[0]
-                if decade_descriptor and len(movie_years) >= 2:
-                    return f"⭐ {lead_actor}'s {decade_descriptor} Era ({total_nodes} nodes)"
-                return f"⭐ {lead_actor}'s Circle ({total_nodes} connections)"
-            elif movie_titles:
-                # Use movie-based naming if we have movies
-                name_parts = []
-                if decade_descriptor:
-                    name_parts.append(decade_descriptor)
-                if theme_descriptor:
-                    name_parts.append(theme_descriptor)
-                if name_parts:
-                    return f"🎬 {' '.join(name_parts)} Cast Network ({total_nodes} nodes)"
-            return f"⭐ {size_descriptor} Actor Ensemble ({total_nodes} actors)"
-            
-        elif dominant_type[0] == 'movie':
-            # Movie-heavy communities with semantic enrichment
-            name_parts = []
-            if quality_descriptor and len(movie_ratings) >= 5:
-                name_parts.append(quality_descriptor)
-            if theme_descriptor and top_keywords:
-                name_parts.append(theme_descriptor)
-            if decade_descriptor and len(movie_years) >= 5:
-                name_parts.append(decade_descriptor)
-            
-            if name_parts:
-                return f"🎞️ {' '.join(name_parts)} Collection ({total_nodes} movies)"
-            return f"🎞️ {size_descriptor} Film Collection ({total_nodes} movies)"
-            
-        elif dominant_type[0] == 'user':
-            return f"👥 {size_descriptor} User Group ({total_nodes} members)"
-        else:
-            return f"🔹 {dominant_type[0].title()} Cluster ({total_nodes} nodes)"
-    
-    elif dominant_percentage >= 50:  # Moderately homogeneous (50-80%)
-        if dominant_type[0] == 'genre' and genre_counts:
-            top_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:2]
-            
-            # Add semantic richness to fusion names
-            prefix_parts = []
-            if quality_descriptor and len(movie_ratings) >= 3:
-                prefix_parts.append(quality_descriptor)
-            if decade_descriptor and len(movie_years) >= 3:
-                prefix_parts.append(decade_descriptor)
-            
-            prefix = ' '.join(prefix_parts) + ' ' if prefix_parts else ''
-            
-            if len(top_genres) == 2:
-                return f"🎬 {prefix}{top_genres[0][0]}-{top_genres[1][0]} Fusion ({total_nodes} nodes)"
-            return f"🎬 {prefix}{top_genres[0][0]}-Centric Network ({total_nodes} nodes)"
-            
-        elif dominant_type[0] == 'country' and country_counts:
-            top_countries = sorted(country_counts.items(), key=lambda x: x[1], reverse=True)[:2]
-            
-            # Add era to international collaborations
-            prefix = f"{era_descriptor} " if era_descriptor and len(movie_years) >= 3 else ""
-            
-            if len(top_countries) == 2:
-                return f"🌍 {prefix}{top_countries[0][0]}-{top_countries[1][0]} Films ({total_nodes} nodes)"
-            return f"🌍 {prefix}{top_countries[0][0]}-Led Cinema ({total_nodes} nodes)"
-            
-        elif dominant_type[0] == 'director':
-            if theme_descriptor:
-                return f"🎥 {theme_descriptor} Director Collaborative ({total_nodes} nodes)"
-            return f"🎥 Director-Led Collaborative ({total_nodes} nodes)"
-            
-        elif dominant_type[0] == 'actor':
-            # Check if there's a central movie connecting the actors
-            if most_connected_movie_title and people_count > 8 and movie_count <= 3:
-                movie_name = most_connected_movie_title
-                if len(movie_name) > 30:
-                    movie_name = movie_name[:27] + "..."
-                return f"🎬 {movie_name} Cast ({total_nodes} nodes)"
-            
-            # Try to use genre/theme for more meaningful names
-            if genre_counts and len(movie_titles) >= 2:
-                top_genre = max(genre_counts.items(), key=lambda x: x[1])[0]
-                prefix_parts = []
-                if decade_descriptor and len(movie_years) >= 3:
-                    prefix_parts.append(decade_descriptor)
-                if quality_descriptor and len(movie_ratings) >= 2:
-                    prefix_parts.append(quality_descriptor)
-                prefix = ' '.join(prefix_parts) + ' ' if prefix_parts else ''
-                return f"🎬 {prefix}{top_genre} Cast ({total_nodes} nodes)"
-            elif theme_descriptor and len(movie_titles) >= 2:
-                prefix = f"{decade_descriptor} " if decade_descriptor else ""
-                return f"🎬 {prefix}{theme_descriptor} Cast Network ({total_nodes} nodes)"
-            elif decade_descriptor and len(movie_years) >= 3:
-                return f"⭐ {decade_descriptor} Actor Network ({total_nodes} nodes)"
-            else:
-                # Last resort - use movie titles if available
-                if len(movie_titles) >= 2:
-                    return f"🎬 Mixed Cast Network ({total_nodes} nodes)"
-                return f"⭐ Actor Network ({total_nodes} nodes)"
-            
-        elif dominant_type[0] == 'movie':
-            # Use keyword themes for movie clusters
-            if theme_descriptor and top_keywords:
-                keyword_hint = top_keywords[0][0].title()
-                return f"🎞️ {theme_descriptor} Cinema: {keyword_hint} ({total_nodes} nodes)"
-            return f"🎞️ Movie-Heavy Cluster ({total_nodes} nodes)"
-        else:
-            return f"🔹 {dominant_type[0].title()}-Dominant Mix ({total_nodes} nodes)"
-    
-    else:  # Highly mixed community (<50% dominant)
-        # Get top 3 types
-        type_list = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)[:3]
-        
-        # Use semantic descriptors for mixed communities
-        descriptor_parts = []
-        
-        # Add quality if movies are present
-        if 'movie' in type_counts and quality_descriptor and len(movie_ratings) >= 3:
-            descriptor_parts.append(quality_descriptor)
-        
-        # Add era if temporal clustering exists
-        if 'movie' in type_counts and era_descriptor and len(movie_years) >= 3:
-            descriptor_parts.append(era_descriptor)
-        
-        # Add theme from keywords
-        if theme_descriptor and top_keywords:
-            descriptor_parts.append(theme_descriptor)
-        
-        # Build the name
-        prefix = ' '.join(descriptor_parts) + ' ' if descriptor_parts else ''
-        
-        # Create descriptive mix based on actual composition
-        if len(type_list) >= 3:
-            types_str = f"{type_list[0][0]}s, {type_list[1][0]}s & {type_list[2][0]}s"
-            
-            # If we have strong keywords, use them
-            if top_keywords and len(top_keywords) >= 2:
-                kw1, kw2 = top_keywords[0][0].title(), top_keywords[1][0].title()
-                return f"🌟 {prefix}Diverse: {kw1} & {kw2} ({total_nodes} nodes)"
-            
-            return f"🌟 {prefix}Diverse Network: {types_str} ({total_nodes} nodes)"
-            
-        elif len(type_list) == 2:
-            types_str = f"{type_list[0][0]}s & {type_list[1][0]}s"
-            
-            # Use top keyword if available
-            if top_keywords:
-                keyword_hint = top_keywords[0][0].title()
-                return f"🌟 {prefix}Mixed: {types_str} - {keyword_hint} ({total_nodes} nodes)"
-            
-            return f"🌟 {prefix}Mixed Community: {types_str} ({total_nodes} nodes)"
-        else:
-            return f"🌟 {prefix}Varied Network ({total_nodes} nodes)"
 
+    node_mapping = {node['id']: node for node in all_nodes}
+    movies = [
+        node_mapping[node_id] for node_id in community_node_ids
+        if node_id in node_mapping and node_mapping[node_id].get('type') == 'movie'
+    ]
+    total_nodes = len(community_node_ids)
+
+    if not movies:
+        return f"🔷 Cluster ({total_nodes} nodes)"
+
+    movie_count = len(movies)
+
+    director_counts: Dict[str, int] = defaultdict(int)
+    actor_counts: Dict[str, int] = defaultdict(int)
+    studio_counts: Dict[str, int] = defaultdict(int)
+    genre_counts: Dict[str, int] = defaultdict(int)
+    keyword_counts: Dict[str, int] = defaultdict(int)
+    collection_counts: Dict[str, int] = defaultdict(int)
+    ratings: List[float] = []
+    years: List[int] = []
+
+    for movie in movies:
+        for name in movie.get('director_names') or []:
+            director_counts[name] += 1
+        for name in movie.get('top_cast') or []:
+            actor_counts[name] += 1
+        studio = movie.get('studio')
+        if studio:
+            studio_counts[studio] += 1
+        for genre in movie.get('genres') or []:
+            genre_counts[genre] += 1
+        for kw in movie.get('keywords') or []:
+            keyword_counts[str(kw).lower()] += 1
+        collection_name = movie.get('collection_name')
+        if collection_name:
+            collection_counts[collection_name] += 1
+        rating = movie.get('rating')
+        if isinstance(rating, (int, float)) and rating:
+            ratings.append(float(rating))
+        year = movie.get('year')
+        if isinstance(year, int):
+            years.append(year)
+
+    quality_descriptor = _quality_descriptor(ratings)
+    era_descriptor, decade_descriptor = _era_descriptors(years)
+    theme_descriptor = _theme_descriptor(keyword_counts)
+    size_descriptor = _size_descriptor(total_nodes)
+
+    def _dominant(counts: Dict[str, int]):
+        if not counts:
+            return None
+        name, count = max(counts.items(), key=lambda kv: kv[1])
+        return name, count / movie_count
+
+    # PRIORITY 1: complete/near-complete collection
+    collection = _dominant(collection_counts)
+    if collection and collection[1] >= 0.99 and movie_count >= 2:
+        prefix = f"{quality_descriptor} " if quality_descriptor and len(ratings) >= 3 else ""
+        suffix = "Universe" if movie_count < total_nodes * 0.3 else "Collection"
+        return f"🎬 {prefix}{_with_suffix(collection[0], suffix)}"
+
+    # PRIORITY 2: single dominant director
+    director = _dominant(director_counts)
+    if director and director[1] >= 0.8 and movie_count >= 2:
+        prefix = f"{quality_descriptor} " if quality_descriptor and len(ratings) >= 3 else ""
+        if movie_count >= 5:
+            suffix = "Filmography"
+        elif movie_count >= 3:
+            suffix = "Works"
+        else:
+            suffix = "Films"
+        return f"🎥 {prefix}{director[0]}'s {suffix}"
+
+    # PRIORITY 3: partial collection (50%+)
+    if collection and collection[1] >= 0.5:
+        prefix = f"{quality_descriptor} " if quality_descriptor and len(ratings) >= 3 else ""
+        suffix = "Collection" if collection[1] >= 0.8 else "Series"
+        return f"🎬 {prefix}{_with_suffix(collection[0], suffix)}"
+
+    # PRIORITY 4: dominant studio slate
+    studio = _dominant(studio_counts)
+    if studio and studio[1] >= 0.6 and movie_count >= 3:
+        prefix_parts = [p for p in (quality_descriptor, decade_descriptor) if p]
+        prefix = ' '.join(prefix_parts) + ' ' if prefix_parts else ''
+        return f"🏢 {prefix}{studio[0]} Slate ({movie_count} films)"
+
+    # PRIORITY 5: recurring lead actor / ensemble
+    actor = _dominant(actor_counts)
+    if actor and actor[1] >= 0.5 and movie_count >= 3:
+        prefix = f"{era_descriptor} " if era_descriptor and len(years) >= 3 else ""
+        return f"⭐ {prefix}{actor[0]}'s Roles ({movie_count} films)"
+
+    # PRIORITY 6: thematic cluster - shared keyword/genre + quality/era
+    if theme_descriptor or genre_counts:
+        name_parts = [p for p in (quality_descriptor, theme_descriptor, decade_descriptor) if p]
+        top_genre = max(genre_counts.items(), key=lambda kv: kv[1])[0] if genre_counts else None
+        label = top_genre or "Cinema"
+        if name_parts:
+            return f"🎬 {' '.join(name_parts)} {label} ({total_nodes} nodes)"
+        return f"🎬 {label} Cluster ({total_nodes} nodes)"
+
+    # Fallback
+    return f"🌟 {size_descriptor} Film Cluster ({total_nodes} nodes)"
 
 
 def leiden_communities(
