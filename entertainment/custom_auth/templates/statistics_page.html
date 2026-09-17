@@ -941,12 +941,13 @@
         );
         charts.decades.render();
 
-        // 3c. Production Countries — horizontal bar (movies/tv only)
+        // 3c. Production Countries — horizontal bar, top 10 (movies/tv only)
         const countryPanel = document.getElementById('panel-countries');
-        const countryLabels = Object.keys(data.count_by_country || {});
+        const countryEntries = Object.entries(data.count_by_country || {}).slice(0, 10);
+        const countryLabels = countryEntries.map(([name]) => name);
         if (countryLabels.length > 0) {
             countryPanel.style.display = '';
-            const countryValues = Object.values(data.count_by_country);
+            const countryValues = countryEntries.map(([, v]) => v);
             const countryHeight = Math.max(280, countryLabels.length * 28);
             charts.countries = new ApexCharts(
                 document.querySelector('#chart-countries'),
