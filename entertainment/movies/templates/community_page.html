@@ -971,7 +971,7 @@ input[type=text], input[type=url], select {
                     {% endif %}
                 {% else %}
                     <div style="padding: 12px; background-color: var(--progress-bg); border: 1px inset var(--border-dark); text-align: center;">
-                        <p style="margin: 0;">Please <a href="{% url 'login' %}" style="color: var(--text-color);">log in</a> to review this movie.</p>
+                        <p style="margin: 0;">Please <a href="{% url 'login_page' %}" style="color: var(--text-color);">log in</a> to review this movie.</p>
                     </div>
                 {% endif %}
             </div>
@@ -1056,7 +1056,7 @@ input[type=text], input[type=url], select {
                 {% endif %}
             {% else %}
                 <div style="padding: 12px; background-color: var(--progress-bg); border: 1px inset var(--border-dark); text-align: center;">
-                    <p style="margin: 0;">Please <a href="{% url 'login' %}" style="color: var(--text-color);">log in</a> to suggest a movie.</p>
+                    <p style="margin: 0;">Please <a href="{% url 'login_page' %}" style="color: var(--text-color);">log in</a> to suggest a movie.</p>
                 </div>
             {% endif %}
         </div>

@@ -10,6 +10,7 @@ router.register(r'api', GameViewSet, basename='games')
 urlpatterns = [
     # Page views
     path('', views.game_list, name='game_list'),
+    path('all/', views.game_list, name='game_all'),
     path('<int:pk>/', views.game_detail, name='game_detail'),
     path('developer/<int:pk>/', views.developer_detail, name='developer_detail'),
     path('publisher/<int:pk>/', views.publisher_detail, name='publisher_detail'),

@@ -380,8 +380,30 @@ def save_user_settings(sender, instance, **kwargs):
         # If for some reason the settings don't exist, create them
         UserSettings.objects.create(user=instance)
 
-# Signal to send notification when a review is created
-@receiver(post_save, sender=Review)
+class WatchlistEvent(models.Model):
+    """Log of watchlist add/remove events, for the statistics watchlist chart.
+
+    Created by signals on Watchlist (post_save/post_delete). Removals are only
+    recorded from the day this model shipped — historical removals are unknown,
+    so the running-size chart is exact only from that point on.
+    """
+    ACTIONS = [('add', 'add'), ('remove', 'remove')]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='watchlist_events')
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField(db_index=True)
+    action = models.CharField(max_length=6, choices=ACTIONS)
+    date = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'content_type', 'date']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} {self.action} {self.content_type}#{self.object_id}"
+
+
 def send_review_notification(sender, instance, created, **kwargs):
     """Send notification when a new review is created"""
     if created:
@@ -404,15 +426,28 @@ def invalidate_stats_on_review_delete(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=Watchlist)
-def invalidate_stats_on_watchlist_save(sender, instance, **kwargs):
-    """Invalidate statistics cache when a watchlist item is added."""
+def invalidate_stats_on_watchlist_save(sender, instance, created, **kwargs):
+    """Log an add event + invalidate statistics cache when a watchlist item is added."""
+    if created:
+        WatchlistEvent.objects.create(
+            user=instance.user,
+            content_type=instance.content_type,
+            object_id=instance.object_id,
+            action='add',
+        )
     from custom_auth.services.statistics import invalidate_stats_cache
     invalidate_stats_cache(instance.user_id)
 
 
 @receiver(post_delete, sender=Watchlist)
 def invalidate_stats_on_watchlist_delete(sender, instance, **kwargs):
-    """Invalidate statistics cache when a watchlist item is removed."""
+    """Log a remove event + invalidate statistics cache when a watchlist item is removed."""
+    WatchlistEvent.objects.create(
+        user=instance.user,
+        content_type=instance.content_type,
+        object_id=instance.object_id,
+        action='remove',
+    )
     from custom_auth.services.statistics import invalidate_stats_cache
     invalidate_stats_cache(instance.user_id)
 

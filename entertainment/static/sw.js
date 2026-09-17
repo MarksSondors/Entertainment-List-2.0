@@ -1,5 +1,5 @@
 // Service Worker for Entertainment List PWA
-const CACHE_NAME = 'entertainment-list-v1';
+const CACHE_NAME = 'entertainment-list-v2';
 const urlsToCache = [
   '/',
   '/static/css/',
@@ -27,13 +27,21 @@ self.addEventListener('install', (event) => {
 });
 
 // Fetch event
+// Network-first: try the network, fall back to cache only when offline.
+// The old cache-first strategy served stale HTML forever (pages never
+// updated after a deploy until the SW cache was manually cleared).
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
+        // Opportunistically refresh the cache with fresh responses
+        if (response && response.ok && event.request.method === 'GET') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
       })
+      .catch(() => caches.match(event.request))
   );
 });
 
