@@ -21,8 +21,13 @@ RUN apk update && apk add --no-cache \
 # Copy the requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies.
+# The BuildKit cache mount persists pip's wheel cache across builds, so
+# heavy source builds (notably `implicit`) compile once and are reused on
+# every later build — cuts deploy time from minutes to seconds when
+# requirements are unchanged.
+RUN --mount=type=cache,target=/root/.cache/pip,id=pip-cache,sharing=locked \
+    pip install -r requirements.txt
 
 # Copy the project files
 COPY . .

@@ -1,6 +1,9 @@
 import logging
 import random
 from datetime import date
+
+import requests
+
 from django.conf import settings
 from django_q.models import Schedule
 from django_q.tasks import async_task, schedule
@@ -904,16 +907,24 @@ def create_movie_fast(movie_id, movie_poster=None, movie_backdrop=None, is_anime
     """
     # Use a local import to avoid circular imports
     from .parsers import create_movie_basic
-    
+
     # Create movie with basic information first
-    movie = create_movie_basic(
-        movie_id=movie_id, 
-        movie_poster=movie_poster, 
-        movie_backdrop=movie_backdrop, 
-        is_anime=is_anime, 
-        add_to_watchlist=add_to_watchlist, 
-        user_id=user_id
-    )
+    try:
+        movie = create_movie_basic(
+            movie_id=movie_id,
+            movie_poster=movie_poster,
+            movie_backdrop=movie_backdrop,
+            is_anime=is_anime,
+            add_to_watchlist=add_to_watchlist,
+            user_id=user_id
+        )
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 404:
+            # TMDB id no longer exists (removed from TMDB, or a stale link).
+            # Return None so the caller can serve a clean 404 instead of 500ing.
+            logger.warning(f"TMDB movie {movie_id} not found (404); skipping creation.")
+            return None
+        raise
     
     if movie:
         # Queue background task to enrich with cast, crew, collections, etc.

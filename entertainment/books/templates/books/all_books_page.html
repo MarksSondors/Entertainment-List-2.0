@@ -1,0 +1,104 @@
+{% extends "components/base.html" %}
+{% load static %}
+{% load book_extras %}
+
+{% block title %}All Books | Entertainment List{% endblock %}
+
+{% block content %}
+<style>
+    .allbooks-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .book-card {
+        background: var(--card-bg, #f0f0f0);
+        border: 1px solid var(--card-border, #c0c0c0);
+        transition: transform 0.1s ease;
+        height: 100%;
+    }
+    .book-card:hover {
+        transform: translateY(-2px);
+    }
+    .book-card img {
+        height: 280px;
+        object-fit: cover;
+        width: 100%;
+    }
+    .book-card .no-cover {
+        height: 280px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #888;
+    }
+    .badge-pill {
+        font-size: 0.75rem;
+    }
+</style>
+
+<div class="allbooks-container">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">Books Database</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            <div class="field-row" style="justify-content: space-between; margin-bottom: 15px;">
+                <div>
+                    <strong>Total Books:</strong> {{ books|length }}
+                </div>
+            </div>
+
+            {% if books %}
+            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+                {% for book in books %}
+                <div class="col">
+                    <a href="{% url 'books:book_page' book.pk %}" class="text-decoration-none">
+                        <div class="card h-100 book-card">
+                            {% if book.image_url %}
+                            <img src="{{ book.image_url }}" class="card-img-top" alt="{{ book.title }}">
+                            {% else %}
+                            <div class="card-img-top no-cover">
+                                <span>No Cover</span>
+                            </div>
+                            {% endif %}
+                            <div class="card-body">
+                                <h6 class="card-title text-truncate" title="{{ book.title }}">{{ book.title }}</h6>
+                                {% if book.authors.all %}
+                                <p class="card-text text-muted small text-truncate">
+                                    {% for author in book.authors.all %}{{ author.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                </p>
+                                {% endif %}
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    {% if avg_ratings and book.id in avg_ratings %}
+                                    <span class="badge bg-warning text-dark badge-pill">
+                                        ★ {{ avg_ratings|get_item:book.id }}
+                                    </span>
+                                    {% endif %}
+                                    {% if watchlist_counts and book.id in watchlist_counts %}
+                                    <span class="badge bg-secondary badge-pill">
+                                        {{ watchlist_counts|get_item:book.id }} reading
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">No books in the database yet.</p>
+            {% endif %}
+        </div>
+        <div class="status-bar">
+            <p class="status-bar-field">Books: {{ books|length }}</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
