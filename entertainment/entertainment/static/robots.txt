@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /watchlist/
+Disallow: /profile/
+Disallow: /accounts/
+
+Sitemap: https://entertaint.men/sitemap.xml
