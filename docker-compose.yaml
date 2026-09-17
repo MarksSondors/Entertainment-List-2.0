@@ -42,8 +42,11 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     env_file:
       - .env
+    # Bind to loopback only: the app talks to postgres over the internal
+    # docker network (`postgres` service name), so a public 0.0.0.0 binding
+    # served no purpose except exposing the DB to the whole internet.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     networks:
       - webnet
     restart: unless-stopped
