@@ -734,9 +734,10 @@
                     }
                     
                     if (replaceContent) {
+                        const errText = (error && error.message) ? String(error.message).slice(0, 80) : 'unknown error';
                         activityContainer.innerHTML = `
                             <div class="community-activity-item community-activity-empty">
-                                <span>Failed to load activity.</span>
+                                <span>Failed to load activity. [widget v3 — ${errText}]</span>
                                 <button type="button" id="activity-retry-btn" class="retro-btn" style="margin-top:8px;">Retry</button>
                             </div>
                         `;
