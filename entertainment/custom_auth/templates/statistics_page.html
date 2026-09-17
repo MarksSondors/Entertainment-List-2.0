@@ -519,6 +519,32 @@
                     </div>
                 </div>
 
+                <!-- Release Decades -->
+                <div class="window">
+                    <div class="title-bar">
+                        <div class="title-bar-text">
+                            <img src="{% static 'images/win98/calendar.png' %}" alt="" class="win98-icon">
+                            Release Decades
+                        </div>
+                    </div>
+                    <div class="window-body">
+                        <div id="chart-decades" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <!-- Production Countries -->
+                <div class="window" id="panel-countries">
+                    <div class="title-bar">
+                        <div class="title-bar-text">
+                            <img src="{% static 'images/win98/world.png' %}" alt="" class="win98-icon">
+                            Production Countries
+                        </div>
+                    </div>
+                    <div class="window-body">
+                        <div id="chart-countries" class="chart-container"></div>
+                    </div>
+                </div>
+
                 <!-- Rated per Genre -->
                 <div class="window">
                     <div class="title-bar">
@@ -723,8 +749,10 @@
                 ratings_over_time:    media.ratings_over_time,
                 release_year_distribution: media.release_year_distribution,
                 avg_rating_by_release_year: media.avg_rating_by_release_year,
+                decade_distribution:  media.decade_distribution,
                 count_by_genre:       media.count_by_genre,
                 avg_rating_by_genre:  media.avg_rating_by_genre,
+                count_by_country:     media.count_by_country,
                 watch_time_by_month:  media.watch_time_by_month,
                 watchlist_by_month:   media.watchlist_by_month,
                 top_directors:        media.top_directors,
@@ -889,6 +917,61 @@
         );
         charts.releaseYears.render();
 
+        // 3b. Release Decades — bar chart
+        const decadeLabels = Object.keys(data.decade_distribution || {});
+        const decadeValues = Object.values(data.decade_distribution || {});
+        charts.decades = new ApexCharts(
+            document.querySelector('#chart-decades'),
+            baseOptions({
+                chart: { type: 'bar', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false } },
+                series: [{ name: 'Count', data: decadeValues }],
+                xaxis: {
+                    categories: decadeLabels,
+                    title: { text: 'Decade', style: { color: c.text, fontSize: '10px' } },
+                    labels: { style: { colors: c.text, fontSize: '10px' } },
+                    axisBorder: { color: c.gridLine }, axisTicks: { color: c.gridLine },
+                },
+                yaxis: {
+                    title: { text: 'Count', style: { color: c.text, fontSize: '10px' } },
+                    labels: { style: { colors: c.text, fontSize: '10px' } },
+                },
+                colors: ['#000080'],
+                plotOptions: { bar: { borderRadius: 0, columnWidth: '70%' } },
+            })
+        );
+        charts.decades.render();
+
+        // 3c. Production Countries — horizontal bar, top 10 (movies/tv only)
+        const countryPanel = document.getElementById('panel-countries');
+        const countryEntries = Object.entries(data.count_by_country || {}).slice(0, 10);
+        const countryLabels = countryEntries.map(([name]) => name);
+        if (countryLabels.length > 0) {
+            countryPanel.style.display = '';
+            const countryValues = countryEntries.map(([, v]) => v);
+            const countryHeight = Math.max(280, countryLabels.length * 28);
+            charts.countries = new ApexCharts(
+                document.querySelector('#chart-countries'),
+                baseOptions({
+                    chart: { type: 'bar', height: countryHeight, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false } },
+                    series: [{ name: 'Count', data: countryValues }],
+                    xaxis: {
+                        categories: countryLabels,
+                        labels: { style: { colors: c.text, fontSize: '10px' } },
+                        axisBorder: { color: c.gridLine }, axisTicks: { color: c.gridLine },
+                    },
+                    yaxis: {
+                        labels: { style: { colors: c.text, fontSize: '10px' } },
+                    },
+                    colors: c.palette,
+                    plotOptions: { bar: { horizontal: true, borderRadius: 0, barHeight: '65%', distributed: true } },
+                    legend: { show: false },
+                })
+            );
+            charts.countries.render();
+        } else {
+            countryPanel.style.display = 'none';
+        }
+
         // 4. Average Rating by Release Year — line chart
         const avgYearLabels = Object.keys(data.avg_rating_by_release_year || {});
         const avgYearValues = Object.values(data.avg_rating_by_release_year || {});
@@ -915,9 +998,10 @@
         );
         charts.avgYear.render();
 
-        // 5. Rated per Genre — horizontal bar
+        // 5. Rated per Genre — horizontal bar, bars deep-link to the explorer
         const genreCountLabels = Object.keys(data.count_by_genre);
-        const genreCountValues = Object.values(data.count_by_genre);
+        const genreCountValues = genreCountLabels.map(g => data.count_by_genre[g][0]);
+        const genreCountIds = Object.fromEntries(genreCountLabels.map(g => [g, data.count_by_genre[g][1]]));
         const genreCountHeight = Math.max(280, genreCountLabels.length * 28);
         charts.genreCount = new ApexCharts(
             document.querySelector('#chart-genre-count'),
@@ -939,6 +1023,14 @@
             })
         );
         charts.genreCount.render();
+        // Clicking a genre bar opens the explorer pre-filtered to that genre.
+        document.querySelector('#chart-genre-count').addEventListener('dataPointSelection', (e) => {
+            const genre = genreCountLabels[e.dataPointIndex];
+            const gid = genreCountIds[genre];
+            if (gid) {
+                window.location.href = `/explorer/#/${currentMedia}/genres/${gid}`;
+            }
+        });
 
         // 6. Avg Rating per Genre — horizontal bar
         const genreAvgLabels = Object.keys(data.avg_rating_by_genre);
@@ -973,18 +1065,24 @@
             const allMonths = [...new Set([...wtData.map(d => d.month), ...wlData.map(d => d.month)])].sort();
             if (allMonths.length > 0) {
                 const wtMap = Object.fromEntries(wtData.map(d => [d.month, d.hours]));
-                const wlMap = Object.fromEntries(wlData.map(d => [d.month, d.count]));
+                const wlMap = Object.fromEntries(wlData.map(d => [d.month, d]));
                 const wtValues = allMonths.map(m => wtMap[m] ?? 0);
-                // Compute running cumulative total for watchlist size
+                // Watchlist size per month: adds backfilled from existing rows,
+                // removes only recorded since the event log shipped, so the
+                // running net is exact from that point onward.
                 let running = 0;
-                const wlRunning = allMonths.map(m => { running += wlMap[m] ?? 0; return running; });
+                const wlRunning = allMonths.map(m => { running += (wlMap[m] ? wlMap[m].net : 0); return running; });
+                const wlAdds = allMonths.map(m => (wlMap[m] ? wlMap[m].adds : 0));
+                const wlRemoves = allMonths.map(m => (wlMap[m] ? -(wlMap[m].removes) : 0));
                 charts.watchTime = new ApexCharts(
                     document.querySelector('#chart-watch-time'),
                     baseOptions({
-                        chart: { type: 'line', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false } },
+                        chart: { type: 'line', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false }, stacked: false },
                         series: [
                             { name: 'Hours Watched', data: wtValues, type: 'area' },
-                            { name: 'Watchlist Size', data: wlRunning, type: 'area' },
+                            { name: 'Watchlist Size', data: wlRunning, type: 'line' },
+                            { name: 'Added', data: wlAdds, type: 'column' },
+                            { name: 'Removed', data: wlRemoves, type: 'column' },
                         ],
                         xaxis: {
                             categories: allMonths,
@@ -1005,14 +1103,15 @@
                                 min: 0,
                             },
                         ],
-                        colors: ['#008080', '#e040fb'],
-                        stroke: { width: [2, 2], curve: ['smooth', 'smooth'] },
+                        colors: ['#008080', '#e040fb', '#1084d0', '#d04040'],
+                        stroke: { width: [2, 2, 0, 0], curve: ['smooth', 'smooth', 'straight', 'straight'] },
                         fill: {
-                            type: ['gradient', 'gradient'],
+                            type: ['gradient', 'solid', 'solid', 'solid'],
                             gradient: [
                                 { type: 'vertical', shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05 },
                                 { type: 'vertical', shadeIntensity: 1, opacityFrom: 0, opacityTo: 0 },
                             ],
+                            opacity: [1, 1, 0.7, 0.7],
                         },
                         markers: { size: 0 },
                         dataLabels: { enabled: false },
@@ -1046,9 +1145,12 @@
             let html = '<div class="top-directors-list">';
             list.forEach((d, i) => {
                 const plural = d.count !== 1 ? (itemLabel + 's') : itemLabel;
+                const nameHtml = d.person_id
+                    ? `<a href="/people/${d.person_id}/" class="director-name" style="color:inherit;text-decoration:underline;">${d.name}</a>`
+                    : `<span class="director-name">${d.name}</span>`;
                 html += `<div class="director-row">
                     <span class="director-rank">${i + 1}</span>
-                    <span class="director-name">${d.name}</span>
+                    ${nameHtml}
                     <span class="director-count">${d.count} ${plural}</span>
                     <span class="director-rating">★ ${d.avg_rating}</span>
                 </div>`;
