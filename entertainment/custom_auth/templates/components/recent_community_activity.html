@@ -737,8 +737,23 @@
                         activityContainer.innerHTML = `
                             <div class="community-activity-item community-activity-empty">
                                 <span>Failed to load activity.</span>
+                                <button type="button" id="activity-retry-btn" class="retro-btn" style="margin-top:8px;">Retry</button>
                             </div>
                         `;
+                        const retryBtn = document.getElementById('activity-retry-btn');
+                        if (retryBtn) {
+                            retryBtn.addEventListener('click', function() {
+                                retryBtn.disabled = true;
+                                retryBtn.textContent = 'Retrying...';
+                                fetchHorizontalActivity(1, true);
+                            });
+                        }
+                        // Auto-retry once after 5s in case of a transient blip
+                        setTimeout(function() {
+                            if (document.getElementById('activity-retry-btn')) {
+                                fetchHorizontalActivity(1, true);
+                            }
+                        }, 5000);
                     }
                 });
         }
