@@ -6,7 +6,6 @@ app_name = 'books'
 urlpatterns = [
     path('search/', views.HardcoverSearchView.as_view(), name='hardcover_search'),
     path('add/<int:hardcover_id>/', views.AddBookView.as_view(), name='add_book'),
-    path('all/', views.all_books_page, name='all_books_page'),
     path('<int:book_id>/', views.book_page, name='book_page'),
     path('collections/<int:collection_id>/', views.book_collection_page, name='book_collection_page'),
     path('series/<int:series_id>/', views.book_series_page, name='book_series_page'),
