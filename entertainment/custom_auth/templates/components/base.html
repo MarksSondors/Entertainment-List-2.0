@@ -352,7 +352,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
-                navigator.serviceWorker.register('{% static "sw.js" %}')
+                navigator.serviceWorker.register('{% static "sw.js" %}?v=2')
                     .then(function(registration) {
                         console.log('ServiceWorker registration successful with scope: ', registration.scope);
                     })
