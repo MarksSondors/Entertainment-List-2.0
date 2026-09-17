@@ -41,4 +41,5 @@ urlpatterns = [
     # Network Graph (Graph Theory)
     path('network-graph/', views.network_graph_page, name='network_graph_page'),
     path('network-graph/data/', views.network_graph_data, name='network_graph_data'),
+    path('network-graph/expand/', views.network_graph_expand, name='network_graph_expand'),
 ] + router.urls
