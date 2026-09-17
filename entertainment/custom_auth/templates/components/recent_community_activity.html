@@ -646,8 +646,11 @@
                 activityFilter.disabled = true;
             }
             
-            fetch(`/activity/recent/?page=${page}&limit=3&filter=${encodeURIComponent(activeFilter)}`)
-                .then(response => response.json())
+            fetch(`/activity/recent/?page=${page}&limit=3&filter=${encodeURIComponent(activeFilter)}&_=${Date.now()}`, { cache: 'no-store' })
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.json();
+                })
                 .then(data => {
                     isLoading = false;
                     
