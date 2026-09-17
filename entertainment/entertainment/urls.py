@@ -24,6 +24,9 @@ from django.views.generic.base import RedirectView
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.contrib.sitemaps.views import sitemap
+
+from .sitemaps import sitemaps as sitemap_registry
 
 @require_http_methods(["GET"])
 def chrome_devtools_manifest(request):
@@ -45,7 +48,6 @@ def well_known_handler(request, path):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-
     
     # Custom auth appv
     path('', include('custom_auth.urls')),
@@ -65,7 +67,15 @@ urlpatterns = [
     path('.well-known/appspecific/com.chrome.devtools.json', chrome_devtools_manifest, name='chrome-devtools-manifest'),
     path('.well-known/<path:path>', well_known_handler, name='well-known-handler'),
 
+    # SEO: robots.txt (static file, redirected) and sitemap.xml
+    path('robots.txt', RedirectView.as_view(url=staticfiles_storage.url('robots.txt'), permanent=True)),
+    path('sitemap.xml', sitemap, {'sitemaps': sitemap_registry}, name='django.contrib.sitemaps.views.sitemap'),
+
 ]
+
+# Project-wide 404 handler (Win98-styled). Rendered whenever a page 404s,
+# including movie/TV pages whose TMDB id has gone stale.
+handler404 = 'movies.views.tmdb_404'
 
 if settings.DEBUG:
     try:

@@ -1,0 +1,69 @@
+{% extends "components/base.html" %}
+
+{% block title %}Not Found | Entertainment List{% endblock %}
+
+{% block content %}
+<style>
+    .nf-container {
+        max-width: 480px;
+        margin: 60px auto;
+        font-family: 'Pixelated MS Sans Serif', Arial, sans-serif;
+    }
+    .nf-window {
+        border: 2px outset #c0c0c0;
+        background: #c0c0c0;
+        box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    @media (prefers-color-scheme: dark) {
+        .nf-window {
+            background: #383838;
+            border-color: #585858;
+        }
+        .nf-body { color: #e0e0e0; }
+        .nf-btn {
+            background: #484848 !important;
+            color: #e0e0e0 !important;
+            border: 2px outset #585858 !important;
+        }
+    }
+    .nf-titlebar {
+        background: linear-gradient(90deg, #000080, #1084d0);
+        color: #fff;
+        padding: 3px 5px;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+    }
+    .nf-body {
+        padding: 18px 16px;
+        text-align: center;
+        color: #000;
+    }
+    .nf-body p { margin: 10px 0; }
+    .nf-btn {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 4px 18px;
+        background: #c0c0c0;
+        border: 2px outset #dfdfdf;
+        color: #000;
+        text-decoration: none;
+        font-size: 13px;
+    }
+    .nf-btn:active { border-style: inset; }
+</style>
+
+<div class="nf-container">
+    <div class="nf-window">
+        <div class="nf-titlebar">
+            <span>Error</span>
+            <span>&#9633;&#10005;</span>
+        </div>
+        <div class="nf-body">
+            <p><strong>404 &mdash; Not Found</strong></p>
+            <p>This title doesn't exist (or it was removed from its database).</p>
+            <a href="/" class="nf-btn">OK</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

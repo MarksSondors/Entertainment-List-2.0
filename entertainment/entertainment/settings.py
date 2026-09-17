@@ -37,7 +37,10 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=lambda v: v.split(','))
 if DEBUG != True:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = False
+    # Behind Traefik -> nginx. nginx now forwards the proto Traefik saw in
+    # X-Forwarded-Proto, so Django can trust it to detect real https requests.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
     # HSTS Settings
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_PRELOAD = True
@@ -52,6 +55,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sitemaps',
     
     'django.contrib.postgres',
 

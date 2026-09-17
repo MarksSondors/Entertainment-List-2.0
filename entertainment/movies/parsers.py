@@ -1,7 +1,13 @@
+import logging
+
+import requests
+
 from .models import *
 from api.services.movies import MoviesService
 from django.contrib.contenttypes.models import ContentType
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 def extract_release_date(movie_details, release_type, preferred_country='US'):
@@ -354,7 +360,14 @@ def enrich_movie_with_details(movie_id):
         movies_service = MoviesService()
         
         # Get detailed movie information including credits
-        movie_details = movies_service.get_movie_details(movie.tmdb_id, append_to_response='credits')
+        try:
+            movie_details = movies_service.get_movie_details(movie.tmdb_id, append_to_response='credits')
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                # Entry vanished from TMDB — nothing to enrich with; keep local data.
+                logger.warning(f"TMDB movie {movie.tmdb_id} (db id {movie_id}) not found during enrichment; keeping local data.")
+                return movie
+            raise
         if not movie_details:
             return movie
         
