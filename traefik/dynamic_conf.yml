@@ -1,7 +1,10 @@
+# DOMAIN VALUE IS INTENTIONALLY NOT IN THIS PUBLIC REPO.
+# gha-deploy.sh restores the real host rules from root-only /root/traefik/dynamic_conf.local.yml
+# after every git reset --hard. Keep this placeholder structurally identical to that file.
 http:
   routers:
     entertainment:
-      rule: "Host(`${DOMAIN:-localhost}`)"
+      rule: "Host(`REPLACED-BY-DEPLOY-SCRIPT.example.com`)"
       service: entertainment
       entryPoints:
         - websecure
@@ -13,7 +16,7 @@ http:
         - large-upload
 
     entertainment-http:
-      rule: "Host(`${DOMAIN:-localhost}`)"
+      rule: "Host(`REPLACED-BY-DEPLOY-SCRIPT.example.com`)"
       service: entertainment
       entryPoints:
         - web
@@ -21,7 +24,7 @@ http:
         - redirect-to-https
 
     api:
-      rule: "Host(`${DOMAIN:-localhost}`) && PathPrefix(`/dashboard`)"
+      rule: "Host(`REPLACED-BY-DEPLOY-SCRIPT.example.com`) && PathPrefix(`/dashboard`)"
       service: "api@internal"
       entrypoints:
         - websecure
@@ -60,7 +63,7 @@ http:
         users:
           # Generate these with: htpasswd -nb admin secure_password
           # The below is example only - replace with your own credentials!
-          - "admin:$apr1$ruca84Hq$mbjdMZBAG.KWn7vfN/SNK/"  
+          - "REPLACE-WITH-HTPASSWD-LINE-FROM-ROOT-OVERRIDE"  
 
     large-upload:
       buffering:
