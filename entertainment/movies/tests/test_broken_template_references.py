@@ -18,6 +18,7 @@ from django.contrib.auth import get_user_model
 from django.template.loader import get_template
 from django.template.exceptions import TemplateDoesNotExist
 from django.test import TestCase
+from django.test import override_settings
 from django.urls import reverse
 
 User = get_user_model()
@@ -25,6 +26,20 @@ User = get_user_model()
 
 class HomePageTemplateTests(TestCase):
     """The home page must render, and every template it includes must exist."""
+
+    # These tests target templates/URLs, not the TLS redirect middleware; without the
+    # override, SECURE_SSL_REDIRECT 301s the test client before the page renders.
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._override = override_settings(SECURE_SSL_REDIRECT=False)
+        cls._override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override.disable()
+        super().tearDownClass()
+
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -47,6 +62,18 @@ class HomePageTemplateTests(TestCase):
 
 class CommunityPageLoginLinkTests(TestCase):
     """The anonymous "please log in" prompt must not reverse a non-existent name."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._override = override_settings(SECURE_SSL_REDIRECT=False)
+        cls._override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override.disable()
+        super().tearDownClass()
+
 
     def test_anonymous_community_page_renders(self):
         response = self.client.get(reverse('community_page'))
