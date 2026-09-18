@@ -13,6 +13,7 @@ import datetime
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase
+from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -23,6 +24,19 @@ User = get_user_model()
 
 
 class CommunityPageQueryScalingTests(TestCase):
+    # Same SSL-redirect note as test_broken_template_references: the page-render assertions
+    # need the test client to reach the view, not the 301 from SECURE_SSL_REDIRECT.
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._override = override_settings(SECURE_SSL_REDIRECT=False)
+        cls._override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override.disable()
+        super().tearDownClass()
+
     def setUp(self):
         self.user = User.objects.create_user(
             username='community-query-tester', password='irrelevant-pw'
