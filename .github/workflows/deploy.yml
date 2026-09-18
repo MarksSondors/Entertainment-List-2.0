@@ -5,16 +5,60 @@ on:
     branches: [prod]
   workflow_dispatch: {}
 
+permissions: {}
+
 concurrency:
   group: deploy-prod
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: testdb
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.14'
+      - name: Install dependencies
+        run: pip install -r entertainment/requirements.txt
+      - name: Run test suite
+        working-directory: entertainment
+        env:
+          DJANGO_SETTINGS_MODULE: entertainment.settings
+          # dummy value for the test run only; production key stays in the VPS .env
+          SECRET_KEY: ci-test-run-dummy-key
+          DEBUG: 'False'
+          CSRF_TRUSTED_ORIGINS: https://tests.invalid
+          DB_ENGINE: django.db.backends.postgresql
+          POSTGRES_DB: testdb
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+        run: python manage.py test movies
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.2
+        uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f # v1.2.2
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
