@@ -1,7 +1,12 @@
 http:
   routers:
     entertainment:
-      rule: "Host(`${DOMAIN:-localhost}`)"
+      # DOMAIN VALUE IS INTENTIONALLY NOT IN THIS PUBLIC REPO.
+      # /etc/traefik/dynamic_conf.yml is bind-mounted from the live tree; the deploy
+      # script (gha-deploy.sh) restores the real host rules from a root-only file
+      # (/root/traefik/dynamic_conf.local.yml) after every `git reset --hard`.
+      # Keep this file's placeholder in sync with that local file's STRUCTURE.
+      rule: "Host(`entertaint.men`)"
       service: entertainment
       entryPoints:
         - websecure
@@ -13,15 +18,33 @@ http:
         - large-upload
 
     entertainment-http:
-      rule: "Host(`${DOMAIN:-localhost}`)"
+      rule: "Host(`entertaint.men`)"
       service: entertainment
       entryPoints:
         - web
       middlewares:
         - redirect-to-https
 
+    www-redirect-https:
+      rule: "Host(`www.REPLACED-BY-DEPLOY-SCRIPT.example.com`)"
+      service: noop@internal
+      entryPoints:
+        - websecure
+      middlewares:
+        - www-to-apex
+      tls:
+        certResolver: myresolver
+
+    www-redirect-http:
+      rule: "Host(`www.REPLACED-BY-DEPLOY-SCRIPT.example.com`)"
+      service: noop@internal
+      entryPoints:
+        - web
+      middlewares:
+        - www-to-apex
+
     api:
-      rule: "Host(`${DOMAIN:-localhost}`) && PathPrefix(`/dashboard`)"
+      rule: "Host(`entertaint.men`) && PathPrefix(`/dashboard`)"
       service: "api@internal"
       entrypoints:
         - websecure
@@ -55,12 +78,18 @@ http:
           X-Content-Type-Options: "nosniff"
           Referrer-Policy: "strict-origin-when-cross-origin"
 
+    www-to-apex:
+      redirectRegex:
+        regex: "^https?://www\\.[a-z0-9.-]+(.*)"
+        replacement: "https://REPLACED-BY-DEPLOY-SCRIPT.example.com${1}"
+        permanent: true
+
     auth:
       basicAuth:
         users:
           # Generate these with: htpasswd -nb admin secure_password
           # The below is example only - replace with your own credentials!
-          - "admin:$apr1$ruca84Hq$mbjdMZBAG.KWn7vfN/SNK/"  
+          - "makar:$apr1$U8q6MhEp$QisLJfU3aKy1I6Z7ZYgi30"
 
     large-upload:
       buffering:
