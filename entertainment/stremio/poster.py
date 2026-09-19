@@ -15,10 +15,24 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from custom_auth.models import Review
 
+import hashlib
+
 from .formatters import get_poster_url
 
 SOURCE_IMAGE_CACHE_TTL = 7 * 24 * 3600  # TMDB posters rarely change, cache long
 RENDERED_POSTER_CACHE_TTL = 3600  # matches agreed staleness tolerance for ratings/next-episode
+
+
+def poster_version(media) -> str:
+    """Short hash of the source poster URL; changes whenever the poster art changes.
+
+    Embedded into catalog poster URLs as ?v=... so Stremio's image cache treats a
+    re-postered title as a brand-new image instead of serving its cached copy.
+    """
+    poster = getattr(media, 'poster', None) or getattr(media, 'poster_path', None) or ''
+    return hashlib.sha1(str(poster).encode()).hexdigest()[:8]
+
+
 FETCH_TIMEOUT = 4
 JPEG_QUALITY = 95
 
@@ -78,7 +92,7 @@ def _encode_output(image: Image.Image) -> bytes:
 
 def get_cached_poster(media, media_type: str, user, ctx: str | None) -> bytes | None:
     """Get-or-render the final per-user poster; shared by the live view and background warm tasks."""
-    cache_key = f"stremio:posterimg:{media_type}:{media.id}:{user.id}:{ctx or ''}"
+    cache_key = f"stremio:posterimg:{media_type}:{media.id}:{user.id}:{ctx or ''}:{poster_version(media)}"
     image_bytes = cache.get(cache_key)
     if image_bytes is not None:
         return image_bytes
@@ -138,7 +152,7 @@ def render_catalog_poster(media, media_type: str, user, ctx: str | None) -> byte
 
 def _render_rating_base(media, media_type: str, source_bytes: bytes, rating_text: str) -> bytes | None:
     """Poster + rating chip only, cached per media item (not per user) so the blur runs once."""
-    cache_key = f"stremio:posterbase:{media_type}:{media.id}"
+    cache_key = f"stremio:posterbase:{media_type}:{media.id}:{poster_version(media)}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
