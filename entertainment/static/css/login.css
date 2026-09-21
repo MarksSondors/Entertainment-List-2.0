@@ -1,0 +1,427 @@
+/* login.css — Sign-in page only.
+   Global foundation (fonts, tokens, base, wallpaper, reduced-motion) lives in
+   css/main.css. This file adds the login window chrome and form components. */
+
+.desktop {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+/* ---------- Window chrome ---------- */
+
+.window {
+  position: relative;
+  width: min(400px, 100%);
+  background-color: var(--face);
+  padding: 3px;
+  box-shadow:
+    inset -1px -1px 0 0 var(--dark),
+    inset 1px 1px 0 0 var(--face-light),
+    inset -2px -2px 0 0 var(--shadow),
+    inset 2px 2px 0 0 var(--highlight),
+    var(--shadow-cast);
+}
+
+.title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  padding: 2px 2px 2px 5px;
+  background: linear-gradient(90deg, var(--title-a) 0%, var(--title-b) 100%);
+  color: var(--title-text);
+}
+
+.title-bar-text {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title-bar-controls {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.tb-btn {
+  position: relative;
+  display: inline-block;
+  width: 17px;
+  height: 15px;
+  background-color: var(--face);
+  border: 1px solid var(--highlight);
+  border-right-color: var(--dark);
+  border-bottom-color: var(--dark);
+  box-shadow: inset -1px -1px 0 0 var(--shadow), inset 1px 1px 0 0 var(--face-light);
+}
+
+.tb-min::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  width: 6px;
+  height: 2px;
+  background-color: var(--text);
+}
+
+.tb-max::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  width: 7px;
+  height: 6px;
+  border: 1px solid var(--text);
+  border-top-width: 2px;
+}
+
+.tb-close::before,
+.tb-close::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  width: 8px;
+  height: 2px;
+  background-color: var(--text);
+}
+
+.tb-close::before { transform: rotate(45deg); }
+.tb-close::after { transform: rotate(-45deg); }
+
+.window-body {
+  padding: 20px 18px 18px;
+  color: var(--text);
+}
+
+/* ---------- Brand ---------- */
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  image-rendering: pixelated;
+}
+
+.brand-mark {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-shadow: 1px 1px 0 var(--highlight);
+}
+
+@media (prefers-color-scheme: dark) {
+  .brand-mark { text-shadow: 1px 1px 0 #000; }
+}
+
+.brand-tagline {
+  margin: 0;
+  max-width: 30ch;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-wrap: balance;
+}
+
+/* ---------- Alert ---------- */
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background-color: var(--face-light);
+  border: 1px solid var(--highlight);
+  border-right-color: var(--shadow);
+  border-bottom-color: var(--shadow);
+  box-shadow: inset 1px 1px 0 0 var(--highlight), inset -1px -1px 0 0 var(--shadow);
+}
+
+.alert[hidden] { display: none; }
+
+.alert-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.alert-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* ---------- Form: fields ---------- */
+
+.field { margin-bottom: 14px; }
+
+.field-label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.field-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.field-input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 7px 9px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--input-text);
+  background-color: var(--input-bg);
+  border: 1px solid var(--dark);
+  border-right-color: var(--highlight);
+  border-bottom-color: var(--highlight);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.32);
+  border-radius: 0;
+  appearance: none;
+}
+
+.field-input::placeholder { color: var(--text-muted); opacity: 1; }
+
+.field-input:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+  border-right-color: var(--focus-ring);
+  border-bottom-color: var(--focus-ring);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.32), 0 0 0 2px var(--focus-ring);
+}
+
+.field-input[aria-invalid="true"] {
+  border-color: var(--error-accent);
+  border-right-color: var(--error-accent);
+  border-bottom-color: var(--error-accent);
+}
+
+.field-error {
+  display: none;
+  margin: 5px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--error-accent);
+}
+
+.field-error.is-visible { display: block; }
+
+/* ---------- Form: buttons ---------- */
+
+.btn {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background-color: var(--face);
+  border: 1px solid var(--highlight);
+  border-right-color: var(--dark);
+  border-bottom-color: var(--dark);
+  box-shadow: inset -1px -1px 0 0 var(--shadow), inset 1px 1px 0 0 var(--face-light);
+  border-radius: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.btn:hover { background-color: var(--face-light); }
+
+.btn:active {
+  padding: 1px 0 0 1px;
+  box-shadow: inset 1px 1px 0 0 var(--shadow);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.btn[disabled] {
+  color: var(--input-disabled-text);
+  cursor: progress;
+}
+
+.btn[disabled]:hover { background-color: var(--face); }
+
+.btn-secondary {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.btn-primary {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.btn-primary:active { padding: 7px 0 0 7px; }
+
+/* ---------- Form: checkbox ---------- */
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.checkbox input[type="checkbox"] {
+  position: relative;
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  appearance: none;
+  background-color: var(--input-bg);
+  border: 1px solid var(--dark);
+  border-right-color: var(--highlight);
+  border-bottom-color: var(--highlight);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.32);
+  cursor: pointer;
+}
+
+.checkbox input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border-right: 2px solid var(--text);
+  border-bottom: 2px solid var(--text);
+  transform: rotate(42deg);
+}
+
+.checkbox input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.checkbox-label { font-size: 12px; }
+
+/* ---------- Options row ---------- */
+
+.options-row {
+  display: flex;
+  align-items: center;
+  margin: 2px 0 12px;
+}
+
+/* ---------- Status bar ---------- */
+
+.status-bar {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background-color: var(--face);
+}
+
+.status-bar-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid var(--shadow);
+  border-right-color: var(--highlight);
+  border-bottom-color: var(--highlight);
+}
+
+.status-bar-field:last-child { flex: 0 0 auto; }
+
+/* ---------- Shake (sign-in failure) ---------- */
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+.shake { animation: shake 0.4s ease-in-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .shake { animation: none; }
+}
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 640px) {
+  .desktop {
+    padding: calc(16px + env(safe-area-inset-top)) 12px
+             calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .window { width: 100%; }
+
+  .window-body { padding: 22px 18px 20px; }
+
+  .brand { margin-bottom: 18px; }
+  .brand-logo { width: 48px; height: 48px; }
+  .brand-mark { font-size: 18px; }
+}
+
+/* ---------- Touch devices ---------- */
+
+@media (pointer: coarse) {
+  .field-input {
+    min-height: 50px;
+    font-size: 16px; /* blocks iOS zoom-on-focus */
+  }
+
+  .btn-secondary {
+    min-height: 50px;
+    font-size: 13px;
+  }
+
+  .btn-primary {
+    min-height: 54px;
+    font-size: 16px;
+  }
+
+  .checkbox { min-height: 48px; }
+  .checkbox input[type="checkbox"] { width: 22px; height: 22px; }
+  .checkbox input[type="checkbox"]:checked::after {
+    left: 7px;
+    top: 1px;
+    width: 6px;
+    height: 13px;
+  }
+  .checkbox-label { font-size: 13px; }
+
+  .field-label { font-size: 13px; }
+}

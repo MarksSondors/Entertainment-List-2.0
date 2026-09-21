@@ -1,0 +1,152 @@
+/* main.css — Global foundation for the whole site.
+   Retro Win98 system (OpenDesign design, entertaint.men).
+
+   Contents:
+   - Self-hosted font
+   - Design tokens (light/dark via prefers-color-scheme, device-level — no in-app toggle)
+   - Base typography and body/wallpaper layers
+   - Motion language tokens and shared keyframes
+   - Global reduced-motion handling
+
+   Page-specific component styles (windows, fields, buttons, …) live in
+   per-page stylesheets, e.g. css/login.css. */
+
+@font-face {
+  font-family: 'Pixelated MS Sans Serif';
+  src: url('../fonts/ms-sans-serif-1.otf.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- Design tokens ---------- */
+
+:root {
+  color-scheme: light dark;
+  --desktop: #008080;
+  --wallpaper: url('../images/background-light.webp');
+
+  --face: #c0c0c0;
+  --face-light: #dfdfdf;
+  --highlight: #ffffff;
+  --shadow: #808080;
+  --dark: #0a0a0a;
+
+  --text: #000000;
+  --text-muted: #4a4a4a;
+
+  --title-a: #000080;
+  --title-b: #1084d0;
+  --title-text: #ffffff;
+
+  --input-bg: #ffffff;
+  --input-text: #000000;
+  --input-disabled-text: #808080;
+
+  --link: #0000a0;
+  --link-hover-bg: #000080;
+  --link-hover-text: #ffffff;
+
+  --error-accent: #a80000;
+  --on-error: #ffffff;
+  --success-accent: #0d5c0d;
+  --on-success: #ffffff;
+  --focus-ring: #000080;
+
+  --shadow-cast: 0 10px 30px rgba(0, 0, 0, 0.38);
+  --progress-bar: #008080;
+
+  /* Motion language: quick and useful — 140ms controls, 180ms modals, one easing. */
+  --motion-fast: 140ms;
+  --motion-modal: 180ms;
+  --motion-ease: cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --desktop: #01090c;
+    --wallpaper: url('../images/background-dark.jpeg');
+
+    --face: #303030;
+    --face-light: #3f3f3f;
+    --highlight: #5c5c5c;
+    --shadow: #141414;
+    --dark: #000000;
+
+    --text: #eaeaea;
+    --text-muted: #b4b4b4;
+
+    --title-a: #000040;
+    --title-b: #0a5f9e;
+    --title-text: #ffffff;
+
+    --input-bg: #1b1b1b;
+    --input-text: #f2f2f2;
+    --input-disabled-text: #7a7a7a;
+
+    --link: #9cc4ff;
+    --link-hover-bg: #9cc4ff;
+    --link-hover-text: #101010;
+
+    --error-accent: #ff8a8a;
+    --on-error: #2b0000;
+    --success-accent: #5fd35f;
+    --on-success: #0a2a0a;
+    --focus-ring: #9cc4ff;
+
+    --shadow-cast: 0 10px 30px rgba(0, 0, 0, 0.6);
+    --progress-bar: #00a0a0;
+  }
+}
+
+/* ---------- Base ---------- */
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: 'Pixelated MS Sans Serif', 'MS Sans Serif', Tahoma, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  background-color: var(--desktop);
+  -webkit-font-smoothing: none;
+  text-rendering: geometricPrecision;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Animated wallpaper layer — transform-only so it stays smooth on mobile */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -3%;
+  background-image: var(--wallpaper);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Wallpaper drifts in both themes (transform-only, stays smooth on mobile). */
+body::before {
+  animation: wallpaper-drift 55s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes wallpaper-drift {
+  from { transform: scale(1.02) translate3d(-1.2%, 0.8%, 0); }
+  to { transform: scale(1.02) translate3d(1.2%, -0.8%, 0); }
+}
+
+/* ---------- Reduced motion (global) ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+  * { transition: none !important; }
+}

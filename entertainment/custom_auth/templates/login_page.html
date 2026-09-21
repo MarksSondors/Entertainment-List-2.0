@@ -1,236 +1,184 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Login | Entertainment List</title>
-    {% load django_bootstrap5 %}
-    {% load static %}
-    {% bootstrap_css %}
-    {% bootstrap_javascript %}
-    <link rel="stylesheet" href="https://unpkg.com/98.css" />
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+    <title>Sign In | Entertainment List</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="EntList">
+    <meta name="description" content="Sign in to Entertainment List — track movies, TV, books, music and games in one place.">
+    <meta name="theme-color" content="#008080" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#032028" media="(prefers-color-scheme: dark)">
+
     <!-- Favicon -->
     <link rel="shortcut icon" type="image/x-icon" href="{% static 'favicon/favicon.ico' %}">
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}">
-    
-    <style>
-        @font-face {
-            font-family: 'Pixelated MS Sans Serif';
-            src: url("{% static 'fonts/ms-sans-serif-1.otf.woff2' %}") format('woff2');
-            font-weight: 400;
-            font-style: normal;
-        }
 
-        body, button, input, select, textarea, .window, .title-bar, .status-bar, h1, h2, h3, h4, h5, h6, p, span, div, a, label {
-            font-family: 'Pixelated MS Sans Serif', Arial, sans-serif !important;
-        }
-
-        /* Theme-adaptive CSS variables */
-        :root {
-            --bg-color: #008080;
-            --text-color: #000;
-            --text-muted: #666;
-            --win98-gray: #c0c0c0;
-            --win98-light: #ffffff;
-            --win98-dark: #808080;
-            --win98-black: #000000;
-            --win98-text: #000000;
-            --win98-input-bg: #ffffff;
-            --win98-input-text: #000000;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg-color: #004040;
-                --text-color: #ffffff;
-                --text-muted: #b0b0b0;
-                --win98-gray: #303030;
-                --win98-light: #606060;
-                --win98-dark: #151515;
-                --win98-black: #000000;
-                --win98-text: #e0e0e0;
-                --win98-input-bg: #383838;
-                --win98-input-text: #ffffff;
-            }
-        }
-
-        body {
-            background-image: url("{% static 'images/background-auth.gif' %}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-            height: 100vh;
-        }
-        
-        .login-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 15px;
-        }
-        
-        .login-window {
-            width: 100%;
-            max-width: 380px;
-            background-color: var(--win98-gray);
-        }
-
-        .window-body {
-            background-color: var(--win98-gray);
-            color: var(--win98-text);
-            padding: 16px;
-        }
-
-        .login-logo {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 16px;
-            gap: 10px;
-        }
-
-        .login-logo img {
-            width: 48px;
-            height: 48px;
-            image-rendering: pixelated;
-        }
-
-        .login-logo-text {
-            font-size: 18px;
-            font-weight: bold;
-            color: var(--win98-text);
-        }
-
-        .field-row-stacked {
-            margin-bottom: 12px;
-        }
-
-        .field-row-stacked label {
-            display: block;
-            margin-bottom: 4px;
-            font-size: 11px;
-            color: var(--win98-text);
-        }
-
-        .field-row-stacked input[type="text"],
-        .field-row-stacked input[type="password"] {
-            width: 100%;
-            padding: 4px 6px;
-            font-size: 11px;
-            background-color: var(--win98-input-bg);
-            color: var(--win98-input-text);
-            border: 2px solid;
-            border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
-            box-sizing: border-box;
-        }
-
-        .login-btn {
-            width: 100%;
-            padding: 6px 12px;
-            margin-top: 8px;
-            font-size: 11px;
-            cursor: pointer;
-            background-color: var(--win98-gray);
-            color: var(--win98-text);
-            border-top: 1px solid var(--win98-light);
-            border-left: 1px solid var(--win98-light);
-            border-right: 1px solid var(--win98-black);
-            border-bottom: 1px solid var(--win98-black);
-            box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
-        }
-
-        .login-btn:hover {
-            background-color: var(--win98-gray);
-        }
-
-        .login-btn:active {
-            border-top: 1px solid var(--win98-black);
-            border-left: 1px solid var(--win98-black);
-            border-right: 1px solid var(--win98-light);
-            border-bottom: 1px solid var(--win98-light);
-            box-shadow: inset 1px 1px 0 var(--win98-dark);
-            padding-top: 7px;
-            padding-left: 13px;
-            padding-bottom: 5px;
-            padding-right: 11px;
-        }
-
-        .status-bar {
-            display: flex;
-            justify-content: space-between;
-            border: 2px solid;
-            border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
-            border-top: none;
-            padding: 2px 4px;
-            background-color: var(--win98-gray);
-            color: var(--win98-text);
-            font-size: 11px;
-        }
-
-        .status-bar-field {
-            font-size: 11px;
-            border: 1px solid;
-            border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
-            padding: 0 4px;
-            flex: 1;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            .title-bar {
-                background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
-            }
-        }
-
-        @media (max-width: 576px) {
-            .login-container {
-                padding: 10px;
-            }
-            
-            .login-window {
-                max-width: 100%;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    <link rel="stylesheet" href="{% static 'css/login.css' %}">
 </head>
-<body>
-    <div class="login-container">
-        <div class="login-window">
-            <div class="window">
-                <div class="title-bar">
-                    <div class="title-bar-text">Welcome to Entertainment List</div>
-                    <div class="title-bar-controls">
-                        <button aria-label="Minimize"></button>
-                        <button aria-label="Maximize"></button>
-                        <button aria-label="Close"></button>
-                    </div>
-                </div>
-                <div class="window-body">
-                    <div class="login-logo">
-                        <img src="{% static 'favicon/web-app-manifest-192x192.png' %}" alt="Entertainment List">
-                        <span class="login-logo-text">entertaint.men</span>
-                    </div>
-                    
-                    <form method="post" action="{% url 'login_request' %}">
-                        {% csrf_token %}
-                        <div class="field-row-stacked">
-                            <label for="username">Username:</label>
-                            <input type="text" id="username" name="username" required>
-                        </div>
-                        <div class="field-row-stacked">
-                            <label for="password">Password:</label>
-                            <input type="password" id="password" name="password" required>
-                        </div>
-                        <button type="submit" class="login-btn">Sign In</button>
-                    </form>
-                </div>
-                <div class="status-bar">
-                    <div class="status-bar-field">Ready</div>
-                    <div class="status-bar-field">© Entertainment List 2025</div>
-                </div>
-            </div>
+<body{% if login_error %} data-login-error="true"{% endif %}>
+  <div class="desktop">
+    <main class="window{% if login_error %} shake{% endif %}" id="login-window" aria-labelledby="login-title">
+      <div class="title-bar">
+        <span class="title-bar-text" id="login-title">Welcome to Entertainment List</span>
+        <span class="title-bar-controls" aria-hidden="true">
+          <span class="tb-btn tb-min"></span>
+          <span class="tb-btn tb-max"></span>
+          <span class="tb-btn tb-close"></span>
+        </span>
+      </div>
+
+      <div class="window-body">
+        <div class="brand">
+          <img class="brand-logo" src="{% static 'images/logo.png' %}" alt="" width="56" height="56">
+          <span class="brand-mark">entertaint.men</span>
+          <p class="brand-tagline">Movies, shows, books, music and games — one list.</p>
         </div>
-    </div>
+
+        <div class="alert" id="login-alert" role="alert" hidden>
+          <svg class="alert-icon" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+            <circle cx="10" cy="10" r="9" fill="var(--error-accent)"/>
+            <circle cx="10" cy="10" r="7.5" fill="none" stroke="var(--on-error)" stroke-width="1.2" opacity="0.85"/>
+            <path d="M7 7l6 6M13 7l-6 6" stroke="var(--on-error)" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <p class="alert-text" id="login-alert-text">Incorrect username or password.</p>
+        </div>
+
+        <form id="login-form" method="post" action="{% url 'login_request' %}">
+          {% csrf_token %}
+          <div class="field">
+            <label class="field-label" for="username">Username</label>
+            <div class="field-row">
+              <input class="field-input" type="text" id="username" name="username"
+                     autocomplete="username" autocapitalize="none" autocorrect="off"
+                     spellcheck="false" enterkeyhint="next"
+                     aria-describedby="username-error" required{% if login_error %} aria-invalid="true"{% endif %}>
+            </div>
+            <p class="field-error" id="username-error">Enter your username.</p>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="password">Password</label>
+            <div class="field-row">
+              <input class="field-input" type="password" id="password" name="password"
+                     autocomplete="current-password" enterkeyhint="go"
+                     aria-describedby="password-error caps-warning" required{% if login_error %} aria-invalid="true"{% endif %}>
+              <button class="btn btn-secondary" type="button" id="toggle-password"
+                       aria-label="Show password" aria-pressed="false">Show</button>
+            </div>
+            <p class="field-error" id="caps-warning">Caps Lock is on.</p>
+            <p class="field-error" id="password-error">Enter your password.</p>
+          </div>
+
+          <div class="options-row">
+            <label class="checkbox">
+              <input type="checkbox" id="remember" name="remember" checked>
+              <span class="checkbox-label">Remember me</span>
+            </label>
+          </div>
+
+          <button class="btn btn-primary" type="submit" id="login-submit">Sign In</button>
+        </form>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-bar-field" id="status" role="status">Ready</div>
+        <div class="status-bar-field">© 2025 Entertainment List</div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var form = document.getElementById('login-form');
+      var alertBox = document.getElementById('login-alert');
+      var userInput = document.getElementById('username');
+      var passInput = document.getElementById('password');
+      var statusEl = document.getElementById('status');
+      var loginWindow = document.getElementById('login-window');
+      var capsWarning = document.getElementById('caps-warning');
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function showAlert(message) {
+        if (message) {
+          document.getElementById('login-alert-text').textContent = message;
+          alertBox.hidden = false;
+        } else {
+          alertBox.hidden = true;
+        }
+      }
+
+      function setFieldError(input, visible) {
+        var errorEl = document.getElementById(input.id + '-error');
+        input.setAttribute('aria-invalid', visible ? 'true' : 'false');
+        if (errorEl) errorEl.classList.toggle('is-visible', visible);
+      }
+
+      function clearErrors() {
+        setFieldError(userInput, false);
+        setFieldError(passInput, false);
+        showAlert(null);
+      }
+
+      form.addEventListener('submit', function (event) {
+        clearErrors();
+
+        var username = userInput.value.trim();
+        var password = passInput.value;
+
+        if (!username || !password) {
+          event.preventDefault();
+          if (!username) setFieldError(userInput, true);
+          if (!password) setFieldError(passInput, true);
+          showAlert('Please enter your username and password.');
+          setStatus('Sign-in failed');
+          (username ? passInput : userInput).focus();
+        } else {
+          var submitBtn = document.getElementById('login-submit');
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Signing in…';
+          setStatus('Signing in…');
+        }
+      });
+
+      userInput.addEventListener('input', function () { setFieldError(userInput, false); });
+      passInput.addEventListener('input', function () { setFieldError(passInput, false); });
+
+      function updateCapsWarning(event) {
+        var on = false;
+        try { on = !!event && typeof event.getModifierState === 'function' && event.getModifierState('CapsLock'); } catch (e) {}
+        capsWarning.classList.toggle('is-visible', on);
+      }
+      passInput.addEventListener('keyup', updateCapsWarning);
+      passInput.addEventListener('blur', function () { capsWarning.classList.remove('is-visible'); });
+
+      var toggleBtn = document.getElementById('toggle-password');
+      toggleBtn.addEventListener('click', function () {
+        var revealed = passInput.type === 'password';
+        passInput.type = revealed ? 'text' : 'password';
+        toggleBtn.textContent = revealed ? 'Hide' : 'Show';
+        toggleBtn.setAttribute('aria-label', revealed ? 'Hide password' : 'Show password');
+        toggleBtn.setAttribute('aria-pressed', revealed ? 'true' : 'false');
+        passInput.focus();
+      });
+
+      // Server-side auth failure: alert + window shake, focus back into the password field.
+      {% if login_error %}
+      showAlert('Incorrect username or password. Check your details and try again.');
+      setStatus('Sign-in failed');
+      passInput.focus();
+      passInput.select();
+      passInput.addEventListener('input', function () { loginWindow.classList.remove('shake'); });
+      {% endif %}
+    })();
+  </script>
 </body>
 </html>
