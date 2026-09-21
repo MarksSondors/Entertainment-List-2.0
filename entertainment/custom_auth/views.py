@@ -533,6 +533,11 @@ def login_request(request):
         password = request.POST['password']
         user = authenticate(request, username=username, password=password)
         if user is not None:
+            # "Remember me": checked → persistent session (SESSION_COOKIE_AGE);
+            # unchecked → session ends when the browser closes.
+            remember = request.POST.get('remember') == 'on'
+            if not remember:
+                request.session.set_expiry(3600 * 24)
             login(request, user)
             return redirect('discover_page')
         # Re-render with an inline error (alert + window shake) instead of a silent redirect.
