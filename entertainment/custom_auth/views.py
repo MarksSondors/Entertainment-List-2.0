@@ -535,8 +535,8 @@ def login_request(request):
         if user is not None:
             login(request, user)
             return redirect('discover_page')
-        else:
-            return redirect('login_page')
+        # Re-render with an inline error (alert + window shake) instead of a silent redirect.
+        return render(request, 'login_page.html', {'login_error': True}, status=401)
     return render(request, 'login_page.html')
 
 def logout_request(request):
