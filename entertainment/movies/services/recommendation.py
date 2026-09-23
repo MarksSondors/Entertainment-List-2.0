@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import pickle
+import threading
 import time
 from typing import Optional
 
@@ -608,6 +609,72 @@ class MovieRecommender:
         predictions.sort(key=lambda x: x["ranking_score"], reverse=True)
         return self._rerank_mmr(predictions[: max_recommendations * 3], max_recommendations)
 
+    # ------------------------------------------------------------------
+    # Taste-map helpers (movie network graph)
+    # ------------------------------------------------------------------
+
+    _TASTE_PROFILE_KINDS = (
+        ("genres", "user_genre_biases"),
+        ("decades", "user_decade_biases"),
+        ("languages", "user_language_biases"),
+        ("runtime", "user_runtime_biases"),
+    )
+
+    def get_user_taste_profile(self, user_id_str: str) -> dict:
+        """The user's learned preference terms per genre/decade/language/runtime bucket.
+
+        These are the same per-user bias terms ``predict_rating`` adds up, read with
+        the same overlay-first precedence, and returned on the 0-10 display scale
+        (x2) - i.e. "how many points above/below expectation this user rates X".
+        Zero/missing terms are omitted.
+        """
+        if not self.model_data:
+            return {}
+        self._maybe_reload_overlay()
+        profile = {}
+        for label, kind in self._TASTE_PROFILE_KINDS:
+            base = getattr(self, kind, None) or {}
+            keys = set(base.keys()) | set((self._overlay.get(kind) or {}).keys())
+            values = {}
+            for key in keys:
+                value = self._ov_category_bias(kind, key, user_id_str)
+                if value is None:
+                    value = (base.get(key) or {}).get(user_id_str)
+                if value is not None and abs(value) > 1e-4:
+                    values[str(key)] = round(float(value) * 2, 2)
+            profile[label] = values
+        return profile
+
+    def get_user_factor(self, user_id) -> Optional[np.ndarray]:
+        """Ranking-space factor for a local user: overlay/base index first, then the
+        symmetric cold-start head from their reviews. None if neither is available."""
+        if not self.model_data:
+            return None
+        self._maybe_reload_overlay()
+        factor = self._user_factor(f"loc_{user_id}")
+        if factor is None:
+            factor = self._get_cold_start_user_factor(user_id)
+        return factor
+
+    def get_item_factors(self, tmdb_ids: list[int]) -> dict[int, np.ndarray]:
+        """Ranking-space factors for the given movies (cold-start head for unseen ones)."""
+        out = {}
+        cold = []
+        for tmdb_id in tmdb_ids:
+            idx = self.item_to_idx.get(int(tmdb_id))
+            if idx is not None and self.item_factors is not None:
+                out[int(tmdb_id)] = np.asarray(self.item_factors[idx], dtype=np.float32)
+            else:
+                cold.append(int(tmdb_id))
+        # one batched cold-start call instead of _item_factor's per-movie one
+        if cold and self.cold_start_head is not None and self.catalog.tmdb_to_genres:
+            try:
+                vecs = cold_start_predict_factors(self.cold_start_head, cold, self.catalog)
+                out.update({tid: np.asarray(v, dtype=np.float32) for tid, v in zip(cold, vecs)})
+            except Exception:
+                logger.exception("Batched cold-start item factor prediction failed")
+        return out
+
     def _get_popular_movies(self, limit: int = 10, exclude_movie_ids: Optional[set] = None) -> list:
         qs = Review.objects.filter(content_type=self.movie_content_type)
         if exclude_movie_ids:
@@ -620,3 +687,37 @@ class MovieRecommender:
         )
         ids = [m["object_id"] for m in popular]
         return list(Movie.objects.filter(id__in=ids))
+
+
+_MODEL_FILENAME = "svd_model_latest.pkl"
+_shared_recommender: Optional[MovieRecommender] = None
+_shared_recommender_stamp: Optional[float] = None
+_shared_recommender_lock = threading.Lock()
+
+
+def model_stamp() -> Optional[float]:
+    """mtime of the trained model file - a cheap version tag for caches built from it.
+
+    ``model_version`` stays "5.0" across retrains, so it can't be used to bust caches.
+    Returns None when no model file is present.
+    """
+    try:
+        return os.path.getmtime(os.path.join(settings.BASE_DIR, "movies", "ml_models", _MODEL_FILENAME))
+    except OSError:
+        return None
+
+
+def get_shared_recommender() -> MovieRecommender:
+    """Process-wide MovieRecommender, rebuilt only when the model file changes.
+
+    The model pickle is ~300 MB, so building ``MovieRecommender()`` per call re-reads
+    it every time. Intended for background (Django Q) work - web requests should read
+    results those tasks cached rather than keep the model resident in every worker.
+    """
+    global _shared_recommender, _shared_recommender_stamp
+    stamp = model_stamp()
+    with _shared_recommender_lock:
+        if _shared_recommender is None or stamp != _shared_recommender_stamp:
+            _shared_recommender = MovieRecommender()
+            _shared_recommender_stamp = stamp
+        return _shared_recommender

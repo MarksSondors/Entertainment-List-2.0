@@ -1,115 +1,180 @@
 /* Network Graph — Win98-styled movie relationship explorer.
-   Variable names/patterns match community_page.html for site-wide consistency. */
-
-:root {
-    --bg-color: #c0c0c0;
-    --text-color: #000;
-    --text-muted: #666;
-    --border-dark: #808080;
-    --border-light: #dfdfdf;
-    --window-bg: #c0c0c0;
-    --button-bg: #c0c0c0;
-    --button-hover: #e0e0e0;
-    --canvas-bg: #0a0a1a;
-    --shadow-color: rgba(0, 0, 0, 0.25);
-    --accent: #1084d0;
-    --ng-canvas-height: min(80vh, 900px);
-}
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg-color: #383838;
-        --text-color: #ffffff;
-        --text-muted: #b0b0b0;
-        --border-dark: #2a2a2a;
-        --border-light: #505050;
-        --window-bg: #404040;
-        --button-bg: #505050;
-        --button-hover: #606060;
-        --canvas-bg: #050510;
-        --shadow-color: rgba(0, 0, 0, 0.5);
-        --accent: #2060a0;
-    }
-}
+   Token names/values mirror css/main.css (the shared Win98 foundation) so this page
+   reads as part of the same system. Tokens are scoped to .ng-window rather than :root
+   so they can't clobber base.html's own --bg-color and friends. */
 
 .ng-window {
-    border: 2px outset var(--bg-color);
-    background-color: var(--bg-color);
-    font-family: 'MS Sans Serif', sans-serif;
-    box-shadow: 2px 2px 4px var(--shadow-color);
-    color: var(--text-color);
-}
+    --face: #c0c0c0;
+    --face-light: #dfdfdf;
+    --highlight: #ffffff;
+    --shadow: #808080;
+    --dark: #0a0a0a;
+    --text: #000000;
+    --text-muted: #4a4a4a;
+    --title-a: #000080;
+    --title-b: #1084d0;
+    --title-text: #ffffff;
+    --input-bg: #ffffff;
+    --input-text: #000000;
+    --select-bg: #000080;
+    --select-text: #ffffff;
+    --tooltip-bg: #ffffe1;
+    --focus-ring: #000080;
+    --canvas-bg: #0b0d1f;
+    --canvas-dot: rgba(255, 255, 255, 0.07);
+    --shadow-cast: 0 10px 30px rgba(0, 0, 0, 0.38);
+    --motion-fast: 140ms;
+    --motion-ease: cubic-bezier(0.2, 0.9, 0.3, 1);
+    --ng-canvas-height: min(calc(100vh - 225px), 900px);
 
-.ng-title-bar {
-    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
-    color: #fff;
-    padding: 4px 6px;
+    /* the four classic Win98 bevels, straight from 98.css geometry */
+    --bevel-window: inset -1px -1px 0 var(--dark), inset 1px 1px 0 var(--face-light),
+                    inset -2px -2px 0 var(--shadow), inset 2px 2px 0 var(--highlight);
+    --bevel-button: inset -1px -1px 0 var(--dark), inset 1px 1px 0 var(--highlight),
+                    inset -2px -2px 0 var(--shadow), inset 2px 2px 0 var(--face-light);
+    --bevel-pressed: inset -1px -1px 0 var(--highlight), inset 1px 1px 0 var(--dark),
+                     inset -2px -2px 0 var(--face-light), inset 2px 2px 0 var(--shadow);
+    --bevel-field: inset -1px -1px 0 var(--highlight), inset 1px 1px 0 var(--shadow),
+                   inset -2px -2px 0 var(--face-light), inset 2px 2px 0 var(--dark);
+    --bevel-status: inset -1px -1px 0 var(--face-light), inset 1px 1px 0 var(--shadow);
+
+    position: relative;
+    max-width: 1680px;
+    margin: 12px auto;
+    padding: 3px;
+    background-color: var(--face);
+    color: var(--text);
     font-size: 12px;
-    font-weight: bold;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    box-shadow: var(--bevel-window), var(--shadow-cast);
 }
 
 @media (prefers-color-scheme: dark) {
-    .ng-title-bar {
-        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
+    .ng-window {
+        --face: #303030;
+        --face-light: #3f3f3f;
+        --highlight: #5c5c5c;
+        --shadow: #141414;
+        --dark: #000000;
+        --text: #eaeaea;
+        --text-muted: #b4b4b4;
+        --title-a: #000040;
+        --title-b: #0a5f9e;
+        --input-bg: #1b1b1b;
+        --input-text: #f2f2f2;
+        --select-bg: #0a5f9e;
+        --tooltip-bg: #2a2a1c;
+        --focus-ring: #9cc4ff;
+        --canvas-bg: #05060f;
+        --canvas-dot: rgba(255, 255, 255, 0.05);
+        --shadow-cast: 0 10px 30px rgba(0, 0, 0, 0.6);
     }
+}
+
+/* ---- Title bar ---- */
+.ng-title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 24px;
+    padding: 2px 4px 2px 5px;
+    background: linear-gradient(90deg, var(--title-a) 0%, var(--title-b) 100%);
+    color: var(--title-text);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.ng-title-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ng-title-hint {
+    font-weight: 400;
+    font-size: 11px;
+    opacity: 0.85;
+    white-space: nowrap;
 }
 
 .ng-body {
-    background-color: var(--window-bg);
-    padding: 8px;
+    padding: 6px 4px 4px;
 }
 
 /* ---- Toolbar ---- */
 .ng-toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 6px 10px;
     align-items: center;
-    padding: 8px;
-    margin-bottom: 8px;
-    background: var(--bg-color);
-    border: 2px inset var(--bg-color);
-    font-size: 12px;
+    padding: 4px 6px;
+    margin-bottom: 6px;
 }
 
-.ng-toolbar label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+.ng-toolbar-label {
     white-space: nowrap;
 }
 
-.ng-search {
-    position: relative;
-    flex: 1 1 240px;
-    min-width: 180px;
+/* classic etched vertical divider between toolbar groups */
+.ng-toolbar-sep {
+    align-self: stretch;
+    width: 2px;
+    min-height: 20px;
+    border-left: 1px solid var(--shadow);
+    border-right: 1px solid var(--highlight);
 }
 
-.ng-search input,
-.retro-input {
+.ng-check {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    min-height: 23px;
+}
+
+.ng-check label { cursor: pointer; user-select: none; }
+
+.ng-search {
+    position: relative;
+    flex: 1 1 260px;
+    min-width: 180px;
+    max-width: 420px;
+}
+
+.ng-window .ng-search input {
     width: 100%;
-    box-sizing: border-box;
-    border: 2px inset var(--bg-color);
-    background: #fff;
-    color: #000;
-    padding: 3px 5px;
-    font-family: 'MS Sans Serif', sans-serif;
+    height: 23px;
+    padding: 3px 6px;
+    border: none;
+    border-radius: 0;
+    background: var(--input-bg);
+    color: var(--input-text);
     font-size: 12px;
+    box-shadow: var(--bevel-field);
+}
+
+.ng-window .ng-search input::placeholder { color: var(--text-muted); opacity: 1; }
+
+.ng-window .ng-search input:focus {
+    outline: 1px dotted var(--focus-ring);
+    outline-offset: -4px;
 }
 
 .ng-search-results {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 2px);
     left: 0;
     right: 0;
     z-index: 40;
-    background: #fff;
-    color: #000;
-    border: 2px outset var(--bg-color);
-    max-height: 260px;
+    padding: 2px;
+    background: var(--input-bg);
+    color: var(--input-text);
+    box-shadow: var(--bevel-window), 2px 2px 0 rgba(0, 0, 0, 0.35);
+    max-height: 300px;
     overflow-y: auto;
     display: none;
 }
@@ -118,14 +183,16 @@
 
 .ng-search-result {
     display: flex;
-    gap: 6px;
-    padding: 4px 6px;
+    gap: 8px;
+    padding: 3px 5px;
     cursor: pointer;
-    border-bottom: 1px solid #ddd;
     align-items: center;
 }
 
-.ng-search-result:hover { background: var(--accent); color: #fff; }
+.ng-search-result:hover {
+    background: var(--select-bg);
+    color: var(--select-text);
+}
 
 .ng-search-result img {
     width: 24px;
@@ -133,32 +200,85 @@
     object-fit: cover;
     background: #333;
     flex-shrink: 0;
+    box-shadow: 0 0 0 1px var(--shadow);
 }
 
-.ng-btn {
-    border: 2px outset var(--button-bg);
-    background: var(--button-bg);
-    color: var(--text-color);
-    padding: 4px 10px;
-    font-family: 'MS Sans Serif', sans-serif;
+.ng-search-year { color: var(--text-muted); }
+.ng-search-result:hover .ng-search-year { color: inherit; opacity: 0.8; }
+
+/* ---- Buttons ---- */
+.ng-window .ng-btn {
+    min-width: 0;
+    min-height: 23px;
+    padding: 3px 12px;
+    border: none;
+    border-radius: 0;
+    background: var(--face);
+    color: var(--text);
     font-size: 12px;
     cursor: pointer;
+    box-shadow: var(--bevel-button);
+    transition: background-color var(--motion-fast) var(--motion-ease);
 }
 
-.ng-btn:hover { background: var(--button-hover); }
-.ng-btn:active { border: 2px inset var(--button-bg); }
-.ng-btn.active { border: 2px inset var(--button-bg); background: var(--accent); color: #fff; }
+.ng-window .ng-btn:hover { background: var(--face-light); }
 
-.ng-slider-value {
-    font-weight: bold;
-    min-width: 2.5em;
-    display: inline-block;
+.ng-window .ng-btn:active {
+    box-shadow: var(--bevel-pressed);
+    padding: 4px 11px 2px 13px;
 }
+
+.ng-window .ng-btn:focus-visible {
+    outline: 1px dotted var(--text);
+    outline-offset: -4px;
+}
+
+/* Win98 disabled: grey text with a white emboss, no hover */
+.ng-window .ng-btn:disabled {
+    color: var(--shadow);
+    text-shadow: 1px 1px 0 var(--highlight);
+    cursor: default;
+}
+
+.ng-window .ng-btn:disabled:hover { background: var(--face); }
+
+/* ---- Segmented toggles (Layout / View): the active one stays pushed in ---- */
+.ng-segmented {
+    display: inline-flex;
+}
+
+.ng-window .ng-segmented .ng-btn { padding: 3px 9px; }
+
+.ng-window .ng-segmented .ng-btn[aria-pressed="true"] {
+    box-shadow: var(--bevel-pressed);
+    background-color: var(--face-light);
+    background-image: repeating-conic-gradient(var(--face) 0 25%, var(--face-light) 0 50%);
+    background-size: 2px 2px;
+    padding: 4px 8px 2px 10px;
+}
+
+.ng-window .ng-select {
+    height: 23px;
+    padding: 2px 22px 2px 5px;
+    font-size: 12px;
+    color: var(--input-text);
+    background-color: var(--input-bg);
+    border: none;
+    border-radius: 0;
+    box-shadow: var(--bevel-field);
+}
+
+.ng-toolbar--secondary {
+    margin-top: -4px;
+    padding-top: 0;
+}
+
+.ng-toolbar-spacer { flex: 1 1 auto; }
 
 /* ---- Layout: canvas + sidebar ---- */
 .ng-main {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     align-items: stretch;
 }
 
@@ -166,182 +286,443 @@
     position: relative;
     flex: 1 1 auto;
     min-width: 0;
-    border: 2px inset var(--bg-color);
-    background: var(--canvas-bg);
+    padding: 2px;
+    background: var(--face);
+    box-shadow: var(--bevel-field);
 }
 
+/* Cytoscape's canvas is transparent, so the dot grid + vignette show through
+   and give the dark void some depth without competing with the graph. */
 #ng-cytoscape {
     width: 100%;
     height: var(--ng-canvas-height);
+    background-color: var(--canvas-bg);
+    background-image:
+        radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.45) 100%),
+        radial-gradient(var(--canvas-dot) 1px, transparent 1.4px);
+    background-size: 100% 100%, 22px 22px;
 }
 
-.ng-loading {
+/* ---- Canvas overlays: zoom controls, tooltip ---- */
+.ng-canvas-controls {
     position: absolute;
-    inset: 0;
+    right: 12px;
+    bottom: 12px;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    padding: 2px;
+    gap: 2px;
+    background: var(--face);
+    box-shadow: var(--bevel-window), 2px 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+.ng-window .ng-canvas-controls .ng-btn {
+    width: 28px;
+    height: 26px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.ng-window .ng-canvas-controls .ng-btn:active { padding: 1px 0 0 1px; }
+
+.ng-canvas-controls .ng-btn--fit { font-size: 10px; }
+
+.ng-tooltip {
+    position: absolute;
+    z-index: 16;
+    max-width: 240px;
+    padding: 3px 6px;
+    background: var(--tooltip-bg);
+    color: var(--text);
+    border: 1px solid var(--dark);
+    font-size: 11px;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.ng-tooltip.visible { opacity: 1; }
+
+.ng-tooltip-meta { color: var(--text-muted); }
+
+/* ---- Loading + empty dialogs (small Win98 message boxes over the canvas) ---- */
+.ng-overlay {
+    position: absolute;
+    inset: 2px;
+    z-index: 20;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
-    font-size: 13px;
-    z-index: 20;
-}
-
-.ng-loading.hidden { display: none; }
-
-.ng-empty-state {
-    position: absolute;
-    inset: 0;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    color: #ccc;
-    font-size: 13px;
-    text-align: center;
     padding: 20px;
+    background: rgba(0, 0, 0, 0.35);
 }
 
-.ng-empty-state.visible { display: flex; }
+.ng-overlay.hidden,
+.ng-empty-state:not(.visible) { display: none; }
+
+.ng-empty-state { background: transparent; }
+
+.ng-dialog {
+    width: min(300px, 100%);
+    padding: 3px;
+    background: var(--face);
+    box-shadow: var(--bevel-window), var(--shadow-cast);
+}
+
+.ng-dialog .ng-title-bar { min-height: 20px; font-size: 11px; }
+
+.ng-dialog-body {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 12px 12px;
+}
+
+.ng-dialog-body--stack {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.ng-dialog-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #1c5cd6;
+    color: #fff;
+    font-family: Georgia, 'Times New Roman', serif !important;
+    font-size: 20px;
+    font-weight: 700;
+    font-style: italic;
+    box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.3), inset 2px 2px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Win98 "marquee" progress: chunky blocks sliding through a sunken track */
+.ng-progress {
+    position: relative;
+    height: 18px;
+    padding: 3px;
+    overflow: hidden;
+    background: var(--input-bg);
+    box-shadow: var(--bevel-status);
+}
+
+.ng-progress::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 0;
+    width: 40%;
+    background: repeating-linear-gradient(90deg, var(--title-a) 0 9px, transparent 9px 11px);
+    animation: ng-marquee 1.4s steps(24) infinite;
+}
+
+@keyframes ng-marquee {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(250%); }
+}
 
 /* ---- Sidebar ---- */
 .ng-sidebar {
-    flex: 0 0 320px;
+    flex: 0 0 330px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    height: var(--ng-canvas-height);
+    gap: 6px;
+    height: calc(var(--ng-canvas-height) + 4px);
 }
 
 .ng-panel {
-    border: 2px outset var(--bg-color);
-    background: var(--bg-color);
     display: flex;
     flex-direction: column;
     min-height: 0;
-    box-shadow: 1px 1px 3px var(--shadow-color);
+    padding: 3px;
+    background: var(--face);
+    box-shadow: var(--bevel-window);
 }
 
 .ng-panel--details {
-    /* fixed, never shrunk by its flexible siblings - this is what was collapsing to nothing */
+    /* fixed, never shrunk by its flexible siblings */
     flex: 0 0 auto;
-    min-height: 170px;
-    max-height: 280px;
+    min-height: 180px;
+    max-height: 46%;
 }
 
 .ng-panel--communities {
     flex: 1 1 auto;
-    min-height: 100px;
+    min-height: 110px;
 }
 
-.ng-panel--legend {
-    flex: 0 0 auto;
-}
+.ng-panel--legend { flex: 0 0 auto; }
 
 .ng-panel-header {
-    background: linear-gradient(90deg, #0f0f81 0%, #1084d0 100%);
-    color: #fff;
-    font-size: 11px;
-    font-weight: bold;
-    padding: 4px 7px;
-    letter-spacing: 0.3px;
-    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     flex-shrink: 0;
+    min-height: 20px;
+    padding: 2px 5px;
+    background: linear-gradient(90deg, var(--title-a) 0%, var(--title-b) 100%);
+    color: var(--title-text);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
 }
 
-@media (prefers-color-scheme: dark) {
-    .ng-panel-header {
-        background: linear-gradient(90deg, #1a1a3a 0%, #2060a0 100%);
-    }
+.ng-panel-count {
+    font-weight: 400;
+    opacity: 0.85;
 }
 
 .ng-panel-body {
-    padding: 9px;
+    padding: 8px 6px 6px;
     font-size: 12px;
-    overflow-y: hidden;
     min-height: 0;
+    overflow: hidden;
 }
 
-.ng-panel--details .ng-panel-body,
+.ng-panel--details .ng-panel-body { overflow-y: auto; }
+
+/* Community list sits in a white sunken listbox, like a Win98 ListView */
 .ng-panel--communities .ng-panel-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    padding: 6px;
+}
+
+.ng-listbox {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    padding: 2px;
+    background: var(--input-bg);
+    color: var(--input-text);
+    box-shadow: var(--bevel-field);
+}
+
+.ng-community-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 5px;
+    cursor: pointer;
+    font-size: 11px;
+    border: 1px dotted transparent;
+}
+
+.ng-community-item:hover { border-color: var(--text-muted); }
+
+.ng-community-item.active {
+    background: var(--select-bg);
+    color: var(--select-text);
+    border-color: var(--face-light);
+}
+
+.ng-community-swatch {
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    box-shadow: 0 0 0 1px var(--dark);
+}
+
+.ng-community-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ng-community-item .count {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+}
+
+.ng-community-item.active .count { color: inherit; opacity: 0.85; }
+
+/* ---- Legend ---- */
+.ng-legend-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 10px;
 }
 
 .ng-legend-item {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 4px;
+    font-size: 11px;
+    white-space: nowrap;
 }
 
 .ng-legend-swatch {
-    width: 22px;
-    height: 3px;
     flex-shrink: 0;
+    width: 20px;
+    height: 3px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 }
 
 .ng-legend-swatch.node {
-    width: 12px;
-    height: 12px;
+    width: 9px;
+    height: 13px;
+    box-shadow: 0 0 0 1px var(--dark), 2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.ng-legend-swatch.node.round {
+    width: 11px;
+    height: 11px;
     border-radius: 50%;
 }
 
-.ng-community-item {
-    padding: 5px 6px;
-    margin-bottom: 3px;
-    background: #fff;
-    color: #000;
-    border: 1px solid var(--border-dark);
+.ng-legend-swatch.dotted {
+    height: 0;
+    border-top: 2px dotted currentColor;
+    box-shadow: none;
+}
+
+.ng-legend-note {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-bottom: 5px;
+}
+
+.ng-legend-note:empty { display: none; }
+
+/* current Colour-by scale: one row per bucket, swatch + label in text ink */
+.ng-legend-scale {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 10px;
+    margin-bottom: 6px;
+}
+
+.ng-legend-scale .ng-legend-item { min-width: 0; }
+
+.ng-legend-scale .ng-legend-item span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ng-legend-scale .ng-legend-swatch {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--dark);
+}
+
+.ng-legend-details summary {
     cursor: pointer;
     font-size: 11px;
+    margin-bottom: 4px;
+    user-select: none;
 }
 
-.ng-community-item:hover { background: var(--accent); color: #fff; }
+.ng-legend-details[open] summary { margin-bottom: 6px; }
 
-.ng-community-item .count {
-    color: var(--text-muted);
-    font-size: 10px;
+.ng-legend-divider {
+    grid-column: 1 / -1;
+    height: 2px;
+    margin: 4px 0;
+    border-top: 1px solid var(--shadow);
+    border-bottom: 1px solid var(--highlight);
 }
-
-.ng-community-item:hover .count { color: #e0e0ff; }
 
 /* ---- Node detail panel ---- */
 .ng-detail-empty {
     color: var(--text-muted);
-    font-style: italic;
+    padding: 4px 2px;
 }
+
+.ng-detail-empty strong { color: var(--text); font-weight: 700; }
 
 .ng-detail-header {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     margin-bottom: 8px;
 }
 
 .ng-detail-poster {
-    width: 64px;
-    height: 96px;
+    width: 68px;
+    height: 102px;
     object-fit: cover;
-    border: 1px solid var(--border-dark);
     flex-shrink: 0;
-    background: #333;
+    padding: 2px;
+    background: var(--face);
+    box-shadow: var(--bevel-field);
 }
 
+.ng-detail-poster.round {
+    width: 72px;
+    height: 72px;
+}
+
+.ng-detail-info { min-width: 0; }
+
 .ng-detail-title {
-    font-weight: bold;
+    font-weight: 700;
     font-size: 13px;
-    margin-bottom: 2px;
+    line-height: 1.25;
+    margin-bottom: 4px;
 }
 
 .ng-detail-meta {
     color: var(--text-muted);
     font-size: 11px;
+    margin-top: 3px;
+}
+
+.ng-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+/* status-bar style sunken chip */
+.ng-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 5px;
+    font-size: 11px;
+    white-space: nowrap;
+    box-shadow: var(--bevel-status);
+}
+
+.ng-chip-dot {
+    width: 8px;
+    height: 8px;
+    box-shadow: 0 0 0 1px var(--dark);
 }
 
 .ng-detail-section-title {
-    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 10px 0 4px;
+    font-weight: 700;
     font-size: 11px;
-    margin-top: 8px;
-    margin-bottom: 3px;
-    border-bottom: 1px solid var(--border-dark);
+}
+
+/* etched rule trailing the section title */
+.ng-detail-section-title::after {
+    content: '';
+    flex: 1 1 auto;
+    height: 2px;
+    border-top: 1px solid var(--shadow);
+    border-bottom: 1px solid var(--highlight);
 }
 
 .ng-reason-list {
@@ -351,40 +732,242 @@
 }
 
 .ng-reason-list li {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
     padding: 2px 0;
     font-size: 11px;
+    line-height: 1.35;
 }
 
-.ng-reason-list li::before {
-    content: "\2192\a0";
+.ng-reason-dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    transform: translateY(1px);
+    box-shadow: 0 0 0 1px var(--dark);
 }
 
-.ng-expand-btn {
-    margin-top: 8px;
+.ng-reason-link {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.ng-reason-link:hover {
+    background: var(--select-bg);
+    color: var(--select-text);
+}
+
+.ng-window .ng-expand-btn {
+    margin-top: 10px;
     width: 100%;
 }
 
-/* ---- Scrollbars (retro) ---- */
-.ng-panel-body::-webkit-scrollbar,
-.ng-search-results::-webkit-scrollbar {
-    width: 16px;
+.ng-detail-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 10px;
 }
 
-.ng-panel-body::-webkit-scrollbar-track,
-.ng-search-results::-webkit-scrollbar-track {
-    background: var(--bg-color);
-    border: 1px inset var(--bg-color);
+.ng-window .ng-detail-actions .ng-btn {
+    flex: 1 1 0;
+    text-align: center;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.ng-panel-body::-webkit-scrollbar-thumb,
-.ng-search-results::-webkit-scrollbar-thumb {
-    background: var(--button-bg);
-    border: 1px outset var(--button-bg);
+.ng-chip--gold { box-shadow: var(--bevel-status), inset 0 0 0 1px #c9a400; }
+
+/* ---- Insight panels: cluster profile + your map ---- */
+.ng-insight-lead {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin: -2px 0 6px;
 }
 
+/* "distinctive trait" chips: kind in muted ink, the lift multiplier in bold */
+.ng-traits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.ng-trait {
+    display: inline-flex;
+    gap: 4px;
+    align-items: baseline;
+    padding: 1px 5px;
+    font-size: 11px;
+    box-shadow: var(--bevel-status);
+    white-space: nowrap;
+}
+
+.ng-trait-kind { color: var(--text-muted); font-size: 10px; }
+.ng-trait-lift { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* horizontal mini bar chart: label | sunken track with navy fill | value */
+.ng-bars {
+    display: grid;
+    grid-template-columns: minmax(0, 7.5em) 1fr auto;
+    gap: 3px 6px;
+    align-items: center;
+    font-size: 11px;
+}
+
+.ng-bar-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ng-bar-track {
+    position: relative;
+    height: 10px;
+    padding: 2px;
+    background: var(--input-bg);
+    box-shadow: var(--bevel-status);
+}
+
+.ng-bar-fill {
+    height: 100%;
+    background: var(--title-a);
+}
+
+@media (prefers-color-scheme: dark) {
+    .ng-bar-fill { background: var(--title-b); }
+}
+
+.ng-bar-value {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+/* diverging bar (taste DNA): fills grow left (dislike) or right (like) from the centre line */
+.ng-bar-track--diverging::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: var(--shadow);
+}
+
+.ng-bar-track--diverging .ng-bar-fill {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    height: auto;
+}
+
+.ng-bar-fill--like { left: 50%; background: #1c5cab; }
+.ng-bar-fill--dislike { right: 50%; background: #a33a3a; }
+
+@media (prefers-color-scheme: dark) {
+    .ng-bar-fill--like { background: #5598e7; }
+    .ng-bar-fill--dislike { background: #e66767; }
+}
+
+/* 2-up stat tiles (avg ratings, watched, etc.) */
+.ng-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+}
+
+.ng-stat {
+    padding: 3px 6px;
+    box-shadow: var(--bevel-status);
+}
+
+.ng-stat-value {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.ng-stat-label {
+    color: var(--text-muted);
+    font-size: 10px;
+}
+
+.ng-delta-up { color: #0d5c0d; }
+.ng-delta-down { color: #a80000; }
+
+@media (prefers-color-scheme: dark) {
+    .ng-delta-up { color: #5fd35f; }
+    .ng-delta-down { color: #ff8a8a; }
+}
+
+.ng-community-item .seen {
+    flex: 0 0 auto;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.ng-community-item.active .seen { color: inherit; opacity: 0.85; }
+
+/* ---- Status bar ---- */
+.ng-status-bar {
+    display: flex;
+    gap: 2px;
+    margin-top: 4px;
+}
+
+.ng-status-field {
+    flex: 0 0 auto;
+    min-width: 0;
+    padding: 2px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+    box-shadow: var(--bevel-status);
+}
+
+.ng-status-field--grow { flex: 1 1 auto; }
+
+/* ---- Scrollbars (Win98) ---- */
+.ng-window ::-webkit-scrollbar { width: 16px; height: 16px; }
+
+.ng-window ::-webkit-scrollbar-track {
+    background-color: var(--face-light);
+    background-image: repeating-conic-gradient(var(--face) 0 25%, var(--highlight) 0 50%);
+    background-size: 2px 2px;
+}
+
+.ng-window ::-webkit-scrollbar-thumb {
+    background: var(--face);
+    box-shadow: var(--bevel-button);
+}
+
+.ng-window ::-webkit-scrollbar-button:single-button {
+    display: block;
+    height: 16px;
+    background: var(--face);
+    box-shadow: var(--bevel-button);
+}
+
+/* ---- Responsive ---- */
 @media (max-width: 900px) {
+    .ng-window { margin: 0 0 12px; }
+    .ng-title-hint { display: none; }
     .ng-main { flex-direction: column; }
     .ng-sidebar { flex: none; height: auto; }
-    .ng-panel--details, .ng-panel--communities { max-height: 260px; }
-    #ng-cytoscape { height: 480px; }
+    .ng-panel--details { max-height: 300px; }
+    .ng-panel--communities { max-height: 260px; }
+    #ng-cytoscape { height: 60vh; min-height: 380px; }
+    .ng-status-field:not(.ng-status-field--grow):nth-child(n+3) { display: none; }
+}
+
+@media (pointer: coarse) {
+    .ng-window .ng-canvas-controls .ng-btn { width: 40px; height: 38px; }
+    .ng-window .ng-search input { height: 36px; font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ng-progress::before { animation: none; transform: translateX(75%); }
 }
