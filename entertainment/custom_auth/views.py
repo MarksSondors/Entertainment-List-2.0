@@ -3817,8 +3817,7 @@ def settings_page(request):
     )
     
     if request.user.api_key is None:
-        request.user.generate_api_key()  # Use the method on the user model
-        request.user.save()  # Make sure to save the user
+        request.user.generate_api_key()  # Use the method on the user model (saves the key)
         
     if request.method == 'POST':
         # Check if admin is sending a broadcast notification
@@ -3862,8 +3861,7 @@ def settings_page(request):
         
         # Check if user wants to regenerate API key
         if 'regenerate_api_key' in request.POST:
-            request.user.generate_api_key()  # Generate a new key
-            request.user.save()  # Save the user with the new key
+            request.user.generate_api_key()  # Generate and save a new key
             from django.contrib import messages
             messages.success(request, "New API key generated successfully!")
             return redirect('settings_page')
@@ -3926,27 +3924,30 @@ def stremio_addon_page(request):
     """
     import base64
     import json
+    from stremio.views import MANIFEST_VERSION, catalog_choices
     
     # Generate API key if not exists
     if request.user.api_key is None:
         request.user.generate_api_key()
-        request.user.save()
     
-    # Build the install URL with encoded config
+    # Build the install URL with encoded config (the page's catalog checkboxes rebuild it client-side)
     if request.user.api_key:
         config = {'api_key': request.user.api_key}
         encoded_config = base64.urlsafe_b64encode(
             json.dumps(config).encode()
         ).decode().rstrip('=')
         
-        # Build the full addon URL
-        base_url = request.build_absolute_uri('/stremio/')
+        manifest_url = request.build_absolute_uri(f'/stremio/{encoded_config}/manifest.json')
         install_url = f"stremio://{request.get_host()}/stremio/{encoded_config}/manifest.json"
     else:
-        install_url = None
+        manifest_url = install_url = None
     
     return render(request, 'stremio_addon.html', {
         'install_url': install_url,
+        'manifest_url': manifest_url,
+        'base_url': request.build_absolute_uri('/stremio/'),
+        'catalog_choices': catalog_choices(),
+        'manifest_version': MANIFEST_VERSION,
     })
 
 

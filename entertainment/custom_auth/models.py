@@ -67,6 +67,10 @@ class CustomUser(AbstractUser):
         
     def generate_api_key(self):
         """Generate a new unique API key for this user."""
+        from stremio.authentication import forget_api_key
+
+        # the Stremio addon caches key -> user; drop it so the old key stops working right away
+        forget_api_key(self.api_key)
         self.api_key = secrets.token_urlsafe(32)
         self.save(update_fields=['api_key'])
         return self.api_key

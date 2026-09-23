@@ -15,8 +15,6 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from custom_auth.models import Review
 
-import hashlib
-
 from .formatters import get_poster_url
 
 SOURCE_IMAGE_CACHE_TTL = 7 * 24 * 3600  # TMDB posters rarely change, cache long
@@ -238,8 +236,11 @@ def _series_banner(tvshow, user, ctx: str | None) -> dict | None:
 
     if watched_aired < total_aired:
         return None
-    next_ep = tvshow.get_next_episode()
-    if not next_ep or not next_ep.air_date:
+    # regular episodes only, with the season joined so the caption doesn't trigger another query
+    next_ep = Episode.objects.filter(
+        season__show=tvshow, season__season_number__gt=0, air_date__gt=today,
+    ).select_related('season').order_by('air_date', 'season__season_number', 'episode_number').first()
+    if not next_ep:
         return None
     date_str = next_ep.air_date.strftime('%b %d').upper()
     return {'icon': 'next', 'text': f"NEXT: {date_str} \u00b7 S{next_ep.season.season_number}E{next_ep.episode_number}"}
