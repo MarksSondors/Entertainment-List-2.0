@@ -3,20 +3,20 @@ import re
 _TMDB_IMAGE_SIZE_RE = re.compile(r'(image\.tmdb\.org/t/p/)(?:original|w\d+)(/)')
 
 
-def get_poster_url(media) -> str | None:
-    """Get full poster URL for a media item, downsized to w780 to keep catalog posters small."""
+def get_poster_url(media, size: str = 'w780') -> str | None:
+    """Get full poster URL for a media item, downsized (w780 by default) to keep catalog posters small."""
     poster = getattr(media, 'poster', None) or getattr(media, 'poster_path', None)
     if not poster:
         return None
     poster = str(poster)
 
-    # Already a full URL: if it's TMDB, force it down to w780 regardless of what size was stored
+    # Already a full URL: if it's TMDB, force it down to `size` regardless of what size was stored
     if poster.startswith('http'):
-        return _TMDB_IMAGE_SIZE_RE.sub(r'\1w780\2', poster)
+        return _TMDB_IMAGE_SIZE_RE.sub(rf'\g<1>{size}\g<2>', poster)
 
     # TMDB poster path
     if poster.startswith('/'):
-        return f"https://image.tmdb.org/t/p/w780{poster}"
+        return f"https://image.tmdb.org/t/p/{size}{poster}"
 
     return None
 

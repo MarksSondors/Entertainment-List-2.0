@@ -30,7 +30,12 @@ def poster_version(media) -> str:
     re-postered title as a brand-new image instead of serving its cached copy.
     """
     poster = getattr(media, 'poster', None) or getattr(media, 'poster_path', None) or ''
-    return hashlib.sha1(str(poster).encode()).hexdigest()[:8]
+    return poster_url_version(str(poster))
+
+
+def poster_url_version(poster: str) -> str:
+    """poster_version() for callers that only have the stored poster URL, not the model."""
+    return hashlib.sha1(poster.encode()).hexdigest()[:8]
 
 
 FETCH_TIMEOUT = 4
@@ -117,9 +122,9 @@ def render_catalog_poster(media, media_type: str, user, ctx: str | None) -> byte
 
     if not rating_text and not banner:
         # nothing to draw at all: skip Pillow entirely and hand back the original bytes
-        return _fetch_source_image(poster_url)
+        return fetch_source_image(poster_url)
 
-    base_bytes = _fetch_source_image(poster_url)
+    base_bytes = fetch_source_image(poster_url)
     if not base_bytes:
         return None
 
@@ -174,8 +179,12 @@ def _render_rating_base(media, media_type: str, source_bytes: bytes, rating_text
     return base_bytes
 
 
-def _fetch_source_image(url: str) -> bytes | None:
-    """Download the raw poster bytes, cached long-term to avoid re-hitting TMDB."""
+def fetch_source_image(url: str) -> bytes | None:
+    """Download the raw poster bytes, cached long-term to avoid re-hitting TMDB.
+
+    Public because it's also the poster cache behind the movie network graph
+    (movies.views.network_graph_poster).
+    """
     cache_key = f"stremio:posrc:{hashlib.sha1(url.encode()).hexdigest()}"
     cached = cache.get(cache_key)
     if cached is not None:

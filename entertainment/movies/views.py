@@ -1429,6 +1429,71 @@ def network_graph_page(request):
     return render(request, 'network_graph.html')
 
 
+# Graph nodes are at most ~80px wide, so a small TMDB size is plenty - stored posters are
+# TMDB *originals* (often 1-3 MB each), which is far too heavy for hundreds of nodes at once.
+GRAPH_POSTER_SIZE = 'w185'
+# Matches stremio.poster.SOURCE_IMAGE_CACHE_TTL; the ?v= poster hash busts it when the art changes
+GRAPH_POSTER_MAX_AGE = 7 * 24 * 3600
+
+
+def _proxy_graph_posters(data):
+    """Point movie-node posters at network_graph_poster instead of the raw TMDB originals.
+
+    Done here rather than in the graph builder so the builder's cached output stays
+    route-agnostic. Idempotent: an already-proxied URL is left alone.
+    """
+    from django.urls import reverse
+    from stremio.poster import poster_url_version
+
+    for node in data.get('nodes', []):
+        poster = node.get('poster')
+        if node.get('type') != 'movie' or not poster or not node.get('tmdb_id') or not poster.startswith('http'):
+            continue
+        base = reverse('network_graph_poster', args=[node['tmdb_id']])
+        node['poster'] = f"{base}?v={poster_url_version(poster)}"
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def network_graph_taste(request):
+    """Taste-map data for the graph: your ratings/watchlist plus the recommender's taste
+    neighbours, your predicted ratings, picks and taste profile.
+
+    Model-derived parts are built in the background (see services.network_graph.taste);
+    until they're cached this answers status='pending' and the page polls again.
+    """
+    from .services.network_graph.taste import get_taste_payload
+
+    return Response(get_taste_payload(request.user))
+
+
+@login_required
+def network_graph_poster(request, tmdb_id):
+    """Serve a small graph-node poster through the Stremio addon's poster source cache.
+
+    Reuses stremio.poster.fetch_source_image, so each image is downloaded from TMDB once and
+    then served from the shared cache (7 days). Same-origin also keeps the Cytoscape canvas
+    untainted. Falls back to redirecting to TMDB if the fetch fails.
+    """
+    from django.http import HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+    from stremio.formatters import get_poster_url
+    from stremio.poster import fetch_source_image
+
+    movie = Movie.objects.filter(tmdb_id=tmdb_id).only('poster').first()
+    poster_url = get_poster_url(movie, size=GRAPH_POSTER_SIZE) if movie else None
+    if not poster_url:
+        return HttpResponseNotFound()
+
+    image_bytes = fetch_source_image(poster_url)
+    if not image_bytes:
+        return HttpResponseRedirect(poster_url)
+
+    response = HttpResponse(image_bytes, content_type='image/jpeg')
+    # URL carries ?v=<poster hash>, so the browser can keep it for the full cache lifetime
+    response['Cache-Control'] = f'private, max-age={GRAPH_POSTER_MAX_AGE}, immutable'
+    return response
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def network_graph_data(request):
@@ -1474,6 +1539,7 @@ def network_graph_data(request):
             if 'target' in edge:
                 edge['to'] = edge.pop('target')
 
+    _proxy_graph_posters(data)
     return Response(data)
 
 
@@ -1510,6 +1576,7 @@ def network_graph_expand(request):
         if 'target' in edge:
             edge['to'] = edge.pop('target')
 
+    _proxy_graph_posters(data)
     return Response(data)
 
 
