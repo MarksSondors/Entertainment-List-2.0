@@ -21,7 +21,7 @@
 </head>
 <body{% if login_error %} data-login-error="true"{% endif %}>
   <div class="desktop">
-    <main class="window{% if login_error %} shake{% endif %}" id="login-window" aria-labelledby="login-title">
+    <main class="window{% if login_error or lockout_message %} shake{% endif %}" id="login-window" aria-labelledby="login-title">
       <div class="title-bar">
         <span class="title-bar-text" id="login-title">Welcome to Entertainment List</span>
         <span class="title-bar-controls" aria-hidden="true">
@@ -49,11 +49,12 @@
 
         <form id="login-form" method="post" action="{% url 'login_request' %}">
           {% csrf_token %}
+          {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
           <div class="field">
             <label class="field-label" for="username">Username</label>
             <div class="field-row">
               <input class="field-input" type="text" id="username" name="username"
-                     autocomplete="username" autocapitalize="none" autocorrect="off"
+                     value="{{ username|default:'' }}" autocomplete="username" autocapitalize="none" autocorrect="off"
                      spellcheck="false" enterkeyhint="next"
                      aria-describedby="username-error" required{% if login_error %} aria-invalid="true"{% endif %}>
             </div>
@@ -69,7 +70,7 @@
               <button class="btn btn-secondary" type="button" id="toggle-password"
                        aria-label="Show password" aria-pressed="false">Show</button>
             </div>
-            <p class="field-error" id="caps-warning">Caps Lock is on.</p>
+            <p class="field-hint" id="caps-warning">Caps Lock is on.</p>
             <p class="field-error" id="password-error">Enter your password.</p>
           </div>
 
@@ -86,7 +87,7 @@
 
       <div class="status-bar">
         <div class="status-bar-field" id="status" role="status">Ready</div>
-        <div class="status-bar-field">© 2025 Entertainment List</div>
+        <div class="status-bar-field">© {% now "Y" %} Entertainment List</div>
       </div>
     </main>
   </div>
@@ -102,6 +103,7 @@
       var statusEl = document.getElementById('status');
       var loginWindow = document.getElementById('login-window');
       var capsWarning = document.getElementById('caps-warning');
+      var submitBtn = document.getElementById('login-submit');
 
       function setStatus(text) {
         statusEl.textContent = text;
@@ -142,11 +144,18 @@
           setStatus('Sign-in failed');
           (username ? passInput : userInput).focus();
         } else {
-          var submitBtn = document.getElementById('login-submit');
           submitBtn.disabled = true;
           submitBtn.textContent = 'Signing in…';
           setStatus('Signing in…');
         }
+      });
+
+      // Back button restores the page from bfcache with the button still disabled — reset it.
+      window.addEventListener('pageshow', function (event) {
+        if (!event.persisted) return;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign In';
+        setStatus('Ready');
       });
 
       userInput.addEventListener('input', function () { setFieldError(userInput, false); });
@@ -157,7 +166,9 @@
         try { on = !!event && typeof event.getModifierState === 'function' && event.getModifierState('CapsLock'); } catch (e) {}
         capsWarning.classList.toggle('is-visible', on);
       }
+      passInput.addEventListener('keydown', updateCapsWarning);
       passInput.addEventListener('keyup', updateCapsWarning);
+      passInput.addEventListener('mousedown', updateCapsWarning);
       passInput.addEventListener('blur', function () { capsWarning.classList.remove('is-visible'); });
 
       var toggleBtn = document.getElementById('toggle-password');
@@ -177,6 +188,12 @@
       passInput.focus();
       passInput.select();
       passInput.addEventListener('input', function () { loginWindow.classList.remove('shake'); });
+      {% endif %}
+
+      // django-axes lockout (too many failed attempts) — see custom_auth/lockout.py.
+      {% if lockout_message %}
+      showAlert('{{ lockout_message|escapejs }}');
+      setStatus('Locked out');
       {% endif %}
     })();
   </script>
