@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_spectacular',
     'django_q',
+    'axes',  # brute-force login protection
 
     # Custom apps
     'custom_auth',  # user info and tables which are not unique to other apps
@@ -151,6 +152,12 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'custom_auth.middleware.UpdateLastActiveMiddleware',
+    'axes.middleware.AxesMiddleware',  # keep last
+]
+
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',  # must be first
+    'django.contrib.auth.backends.ModelBackend',
 ]
 
 # Add debug middleware only in DEBUG mode
@@ -330,6 +337,20 @@ WEBPUSH_VAPID_PRIVATE_KEY = config('WEBPUSH_VAPID_PRIVATE_KEY', default='')
 WEBPUSH_VAPID_ADMIN_EMAIL = config('WEBPUSH_VAPID_ADMIN_EMAIL', default='admin@entertainment-list.com')
 
 SESSION_COOKIE_AGE = 1209600 * 3
+
+# Where @login_required sends signed-out users (default /accounts/login/ doesn't exist here).
+LOGIN_URL = 'login_page'
+
+# django-axes: lock a username+IP pair after repeated failed sign-ins.
+# Keyed on the pair (not the username alone) so a stranger can't lock a real user out.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 1  # hours
+AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
+AXES_RESET_ON_SUCCESS = True
+AXES_CLIENT_IP_CALLABLE = 'custom_auth.lockout.get_client_ip'
+AXES_LOCKOUT_CALLABLE = 'custom_auth.lockout.lockout_response'
+# Proxies that append to X-Forwarded-For in front of Django: Traefik + nginx in production, none in dev.
+TRUSTED_PROXY_COUNT = config('TRUSTED_PROXY_COUNT', default=0 if DEBUG else 2, cast=int)
 
 # Shared secret for uploading trained SVD model from local → production
 MODEL_UPLOAD_KEY = config('MODEL_UPLOAD_KEY', default='')

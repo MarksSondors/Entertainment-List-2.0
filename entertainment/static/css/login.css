@@ -229,6 +229,18 @@
 
 .field-error.is-visible { display: block; }
 
+/* Non-blocking hint (Caps Lock) — muted so it doesn't read as a failed field. */
+.field-hint {
+  display: none;
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.field-hint::before { content: '\26A0\FE0E\00A0'; }
+
+.field-hint.is-visible { display: block; }
+
 /* ---------- Form: buttons ---------- */
 
 .btn {
@@ -272,6 +284,7 @@
   font-size: 12px;
 }
 
+/* Default (Enter-key) button: Win98 draws an extra dark ring outside the bevel. */
 .btn-primary {
   display: block;
   width: 100%;
@@ -279,9 +292,15 @@
   margin-top: 6px;
   font-size: 14px;
   font-weight: 700;
+  box-shadow:
+    0 0 0 1px var(--dark),
+    inset -1px -1px 0 0 var(--shadow),
+    inset 1px 1px 0 0 var(--face-light);
 }
 
-.btn-primary:active { padding: 7px 0 0 7px; }
+.btn-primary:active {
+  box-shadow: 0 0 0 1px var(--dark), inset 1px 1px 0 0 var(--shadow);
+}
 
 /* ---------- Form: checkbox ---------- */
 
