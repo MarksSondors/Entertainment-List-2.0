@@ -2448,68 +2448,109 @@ def recent_reviews(request):
         })
     return JsonResponse(review_data, safe=False)
 
+_ACTIVITY_MEDIA_FILTERS = {
+    'movies': 'Movie',
+    'tvshows': 'TV Show',
+    'books': 'Book',
+    'games': 'Game',
+}
+_ACTIVITY_KIND_FILTERS = ('reviews', 'watched', 'watchlist')
+
+
+def _parse_positive_int(value, default, maximum=None):
+    """Parse a query param as a positive int, falling back to the default."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    if parsed < 1:
+        return default
+    if maximum is not None:
+        parsed = min(parsed, maximum)
+    return parsed
+
+
+def _parse_activity_filters(params):
+    """
+    Read the `media` and `kind` filter axes. The legacy single `filter` param
+    is mapped onto whichever axis it belongs to.
+    """
+    media = params.get('media', 'all').lower()
+    kind = params.get('kind', 'all').lower()
+    legacy = params.get('filter', 'all').lower()
+    if legacy in _ACTIVITY_MEDIA_FILTERS and media == 'all':
+        media = legacy
+    elif legacy in _ACTIVITY_KIND_FILTERS and kind == 'all':
+        kind = legacy
+    if media not in _ACTIVITY_MEDIA_FILTERS:
+        media = 'all'
+    if kind not in _ACTIVITY_KIND_FILTERS:
+        kind = 'all'
+    return media, kind
+
+
 def recent_activity(request):
     """
-    Improved version of recent_activity with better performance and maintainability.
+    Community activity feed for the Discover page, filterable by media type
+    and activity kind. Bursts of low-signal activity are collapsed into bundles.
     """
-    # Get pagination parameters
-    page = int(request.GET.get('page', '1'))
-    limit = int(request.GET.get('limit', '15'))
-    activity_filter = request.GET.get('filter', 'all').lower()
+    page = _parse_positive_int(request.GET.get('page'), 1)
+    limit = _parse_positive_int(request.GET.get('limit'), 15, maximum=20)
+    media, kind = _parse_activity_filters(request.GET)
     offset = (page - 1) * limit
-    
-    # Fetch through the requested page plus a look-ahead page. Filtered streams
-    # use a stable baseline so totals do not change during normal pagination.
+
+    # Fetch through the requested page plus a look-ahead page. Streams use a
+    # stable baseline so bundles and totals do not shift during pagination.
     requested_window = (offset + limit + 1) * 3
-    fetch_limit = max(requested_window, 250) if activity_filter != 'all' else requested_window
-    
+    is_filtered = media != 'all' or kind != 'all'
+    fetch_limit = max(requested_window, 250 if is_filtered else 100)
+
     try:
         # Get content types once at the beginning
         content_types = _get_content_types()
-        
-        # Fetch all activities in parallel using a more efficient approach
+
         activities_data = _fetch_activities_efficiently(
-            fetch_limit, content_types, activity_filter
+            fetch_limit, content_types, media, kind
         )
-        
+
         # Process and group activities
         grouped_activities = _process_and_group_activities(activities_data, content_types)
 
-        content_type_filters = {
-            'movies': 'Movie',
-            'tvshows': 'TV Show',
-            'books': 'Book',
-            'games': 'Game',
-        }
-        if activity_filter in content_type_filters:
-            content_type = content_type_filters[activity_filter]
+        if media in _ACTIVITY_MEDIA_FILTERS:
+            content_type = _ACTIVITY_MEDIA_FILTERS[media]
             grouped_activities = [
                 activity for activity in grouped_activities
                 if activity['content_type'] == content_type
             ]
-        elif activity_filter == 'reviews':
+        if kind == 'reviews':
             grouped_activities = [
                 activity for activity in grouped_activities
                 if 'rating' in activity
             ]
-        elif activity_filter == 'watched':
+        elif kind == 'watched':
             grouped_activities = [
                 activity for activity in grouped_activities
                 if 'watched' in activity.get('action', '')
             ]
-        elif activity_filter == 'watchlist':
+        elif kind == 'watchlist':
             grouped_activities = [
                 activity for activity in grouped_activities
                 if 'watchlist' in activity.get('action', '')
             ]
-        
+
+        grouped_activities = _merge_episode_reviews(grouped_activities)
+        grouped_activities = _collapse_activity_bursts(grouped_activities)
+
         # Apply pagination
         total_count = len(grouped_activities)
         paginated_results = grouped_activities[offset:offset + limit]
-        
+
+        _annotate_activities_for_viewer(paginated_results, request.user, content_types)
+        _serialize_activity_dates(paginated_results)
+
         # Optimize poster URLs for better performance
         _optimize_poster_urls(paginated_results)
-        
+
         return JsonResponse({
             'results': paginated_results,
             'pagination': {
@@ -2573,92 +2614,67 @@ _BOOK_NEW_ONLY_FIELDS = (
 _WATCHED_EPISODE_ONLY_FIELDS = (
     'id', 'watched_date',
     'user__username',
-    'episode__id',
-    'episode__season__id', 'episode__season__poster',
+    'episode__id', 'episode__episode_number',
+    'episode__season__id', 'episode__season__poster', 'episode__season__season_number',
     'episode__season__show__id', 'episode__season__show__title',
     'episode__season__show__original_title', 'episode__season__show__poster',
     'episode__season__show__tmdb_id',
 )
 
 
-def _fetch_activities_efficiently(fetch_limit, content_types, activity_filter='all'):
+def _fetch_activities_efficiently(fetch_limit, content_types, media='all', kind='all'):
     """
-    Fetch only the activity streams relevant to the requested filter.
+    Fetch only the activity streams relevant to the requested media/kind filters.
+
+    "Added to database" rows are left out of the community feed: they are
+    bookkeeping, not something people did, and they almost always coincide
+    with a watchlist add or review that already shows up.
     """
     from custom_auth.models import Review, Watchlist
-    from movies.models import Movie
     from tvshows.models import WatchedEpisode
-    from games.models import Game
-    from books.models import Book
-    
+
     reviews = Review.objects.select_related(
         'user', 'content_type', 'season', 'episode_subgroup'
     ).only(*_REVIEW_ONLY_FIELDS).order_by('-date_added')
-    
+
     watchlist_items = Watchlist.objects.select_related(
         'user', 'content_type'
     ).only(*_WATCHLIST_ONLY_FIELDS).order_by('-date_added')
-    
-    movies = Movie.objects.select_related('added_by').only(
-        *_MOVIE_NEW_ONLY_FIELDS
-    ).order_by('-date_added')
-    
-    games = Game.objects.select_related('added_by').only(
-        *_GAME_NEW_ONLY_FIELDS
-    ).order_by('-date_added')
-    
-    books = Book.objects.select_related('added_by').only(
-        *_BOOK_NEW_ONLY_FIELDS
-    ).order_by('-date_added')
-    
+
     watched_episodes = WatchedEpisode.objects.select_related(
         'user', 'episode__season__show'
     ).only(*_WATCHED_EPISODE_ONLY_FIELDS).order_by('-watched_date')
 
-    media_filters = {
+    media_keys = {
         'movies': 'movie',
         'tvshows': 'tvshow',
         'games': 'game',
         'books': 'book',
     }
-    if activity_filter in media_filters:
-        media_key = media_filters[activity_filter]
+    if media in media_keys:
+        media_key = media_keys[media]
         content_type = content_types[media_key]
         reviews = reviews.filter(content_type_id=content_type.id)
         watchlist_items = watchlist_items.filter(content_type_id=content_type.id)
-        if media_key != 'movie':
-            movies = movies.none()
-        if media_key != 'game':
-            games = games.none()
-        if media_key != 'book':
-            books = books.none()
         if media_key != 'tvshow':
             watched_episodes = watched_episodes.none()
-    elif activity_filter == 'reviews':
+
+    if kind == 'reviews':
         watchlist_items = watchlist_items.none()
-        movies = movies.none()
-        games = games.none()
-        books = books.none()
         watched_episodes = watched_episodes.none()
-    elif activity_filter == 'watched':
+    elif kind == 'watched':
         reviews = reviews.none()
         watchlist_items = watchlist_items.none()
-        movies = movies.none()
-        games = games.none()
-        books = books.none()
-    elif activity_filter == 'watchlist':
+    elif kind == 'watchlist':
         reviews = reviews.none()
-        movies = movies.none()
-        games = games.none()
-        books = books.none()
         watched_episodes = watched_episodes.none()
-    
+
     return {
         'reviews': reviews[:fetch_limit],
         'watchlist_items': watchlist_items[:fetch_limit],
-        'movies': movies[:fetch_limit],
-        'games': games[:fetch_limit],
-        'books': books[:fetch_limit],
+        'movies': [],
+        'games': [],
+        'books': [],
         'watched_episodes': watched_episodes[:fetch_limit * 2]
     }
 
@@ -2714,8 +2730,8 @@ def user_recent_activity(request, username):
     """
     target_user = get_object_or_404(CustomUser, username=username)
 
-    page = int(request.GET.get('page', '1'))
-    limit = int(request.GET.get('limit', '15'))
+    page = _parse_positive_int(request.GET.get('page'), 1)
+    limit = _parse_positive_int(request.GET.get('limit'), 15, maximum=50)
     offset = (page - 1) * limit
     fetch_limit = limit * 3
 
@@ -2726,6 +2742,7 @@ def user_recent_activity(request, username):
 
         total_count = len(grouped_activities)
         paginated_results = grouped_activities[offset:offset + limit]
+        _serialize_activity_dates(paginated_results)
         _optimize_poster_urls(paginated_results)
 
         return JsonResponse({
@@ -2918,10 +2935,49 @@ def _process_watched_episodes(watched_episodes, tvshows_by_id):
             'action': f'watched {episode_count} episode{"s" if episode_count > 1 else ""}',
             'poster_path': poster,
             'tmdb_id': tv_show.tmdb_id,
-            'episode_count': episode_count
+            'episode_count': episode_count,
+            'episode_label': _format_episode_label(episodes),
         })
     
     return activities
+
+
+def _format_episode_label(watched_episodes):
+    """
+    Summarise watched episodes as compact ranges, e.g. "S2 E3–E5" or
+    "S1 E9–E10, S2 E1–E2". Non-consecutive runs in a season are comma-joined.
+    """
+    by_season = defaultdict(set)
+    for watched in watched_episodes:
+        episode = watched.episode
+        season_number = getattr(episode.season, 'season_number', None)
+        episode_number = getattr(episode, 'episode_number', None)
+        if season_number is None or episode_number is None:
+            continue
+        by_season[season_number].add(episode_number)
+
+    segments = []
+    for season_number in sorted(by_season):
+        numbers = sorted(by_season[season_number])
+        runs = []
+        start = prev = numbers[0]
+        for number in numbers[1:]:
+            if number == prev + 1:
+                prev = number
+                continue
+            runs.append((start, prev))
+            start = prev = number
+        runs.append((start, prev))
+
+        run_labels = [
+            f"E{a}" if a == b else f"E{a}–E{b}"
+            for a, b in runs
+        ]
+        segments.append(f"S{season_number} " + ", ".join(run_labels))
+
+    if len(segments) > 3:
+        return ", ".join(segments[:2]) + f" +{len(segments) - 2} more"
+    return ", ".join(segments)
 
 
 def _process_reviews(reviews, movies_by_id, tvshows_by_id, games_by_id, content_types, books_by_id=None):
@@ -3191,16 +3247,22 @@ def _group_activities_by_timestamp_and_media(activities):
                 'tmdb_id': latest_activity.get('tmdb_id'),
                 'rawg_id': latest_activity.get('rawg_id'),
                 'media_id': latest_activity['media_id'],
+                '_date': latest_activity['date'],
                 'actions': []
             }
-            
+
             # Add optional fields from the latest activity (prefer review content if available)
             review_activity = next((a for a in group if a['type'] == 'review'), None)
             source_activity = review_activity or latest_activity
-            
+
             for field in ['content', 'rating', 'episode_count']:
                 if field in source_activity:
                     grouped_activities[group_key][field] = source_activity[field]
+
+            episode_activity = next((a for a in group if a['type'] == 'watched_episodes'), None)
+            if episode_activity:
+                grouped_activities[group_key]['episode_count'] = episode_activity['episode_count']
+                grouped_activities[group_key]['episode_label'] = episode_activity.get('episode_label', '')
             
             # Add all actions from the group
             action_map = {
@@ -3236,10 +3298,233 @@ def _group_activities_by_timestamp_and_media(activities):
         del activity_data['actions']
         result_list.append(activity_data)
     
-    # Sort by timestamp (newest first)
-    result_list.sort(key=lambda x: x['timestamp'], reverse=True)
-    
+    # Sort newest first
+    result_list.sort(key=lambda x: x['_date'], reverse=True)
+
     return result_list
+
+
+_BURST_GAP = timedelta(minutes=45)
+# Season reviews carry a date-only (midnight) timestamp, so the binge they
+# follow is usually a day or so later.
+_EPISODE_REVIEW_WINDOW = timedelta(hours=48)
+_BUNDLE_ITEM_LIMIT = 12
+_BUNDLE_NOUNS = {'Movie': 'movies', 'TV Show': 'shows', 'Game': 'games', 'Book': 'books'}
+_CONTENT_TYPE_KEYS = {'Movie': 'movie', 'TV Show': 'tvshow', 'Game': 'game', 'Book': 'book'}
+
+
+def _activity_kind(activity):
+    """Classify a grouped activity so the frontend can pick a layout."""
+    if 'rating' in activity:
+        return 'review'
+    action = activity.get('action', '')
+    if action == 'added to watchlist':
+        return 'watchlist'
+    if 'episode_count' in activity and action.startswith('watched') and ' and ' not in action:
+        return 'episodes'
+    return 'other'
+
+
+def _merge_episode_reviews(activities):
+    """
+    Fold a watched-episodes entry into the same user's review of that show
+    when the two fall within _EPISODE_REVIEW_WINDOW, so a binge and its season
+    review read as one event. Expects and returns entries sorted newest first.
+    """
+    episodes_by_key = defaultdict(list)
+    for activity in activities:
+        if _activity_kind(activity) == 'episodes':
+            episodes_by_key[(activity['username'], activity['media_id'])].append(activity)
+
+    merged_ids = set()
+    for activity in activities:
+        if _activity_kind(activity) != 'review' or activity.get('content_type') != 'TV Show':
+            continue
+        candidates = episodes_by_key.get((activity['username'], activity['media_id']), [])
+        match = next(
+            (
+                episode for episode in candidates
+                if id(episode) not in merged_ids
+                and abs(activity['_date'] - episode['_date']) <= _EPISODE_REVIEW_WINDOW
+            ),
+            None,
+        )
+        if not match:
+            continue
+
+        merged_ids.add(id(match))
+        label = match.get('episode_label') or f"{match.get('episode_count', 0)} episodes"
+        activity['episode_label'] = label
+        activity['episode_count'] = match.get('episode_count', 0)
+        activity['action'] = f"watched {label} and reviewed"
+        if match['_date'] > activity['_date']:
+            activity['_date'] = match['_date']
+            activity['timestamp'] = match['timestamp']
+
+    if not merged_ids:
+        return activities
+
+    remaining = [activity for activity in activities if id(activity) not in merged_ids]
+    remaining.sort(key=lambda activity: activity['_date'], reverse=True)
+    return remaining
+
+
+def _collapse_activity_bursts(activities):
+    """
+    Collapse runs of low-signal activity (watchlist adds, watched episodes) by
+    the same user within _BURST_GAP of each other into a single bundle entry,
+    placed where the newest member was. Reviews never collapse.
+    Expects `activities` sorted newest first.
+    """
+    slots = []
+    open_bundles = {}  # (username, kind) -> (slot index, oldest member date)
+
+    for activity in activities:
+        kind = _activity_kind(activity)
+        activity['kind'] = kind
+        if kind not in ('watchlist', 'episodes'):
+            slots.append([activity])
+            continue
+
+        key = (activity['username'], kind)
+        open_bundle = open_bundles.get(key)
+        if open_bundle and open_bundle[1] - activity['_date'] <= _BURST_GAP:
+            slots[open_bundle[0]].append(activity)
+            open_bundles[key] = (open_bundle[0], activity['_date'])
+        else:
+            open_bundles[key] = (len(slots), activity['_date'])
+            slots.append([activity])
+
+    return [slot[0] if len(slot) == 1 else _build_activity_bundle(slot) for slot in slots]
+
+
+def _build_activity_bundle(members):
+    """Build one bundle entry from activities of the same user and kind."""
+    head = members[0]
+    kind = head['kind']
+
+    items = []
+    seen = set()
+    for member in members:
+        item_key = (member['content_type'], member['media_id'])
+        if item_key in seen:
+            continue
+        seen.add(item_key)
+        item = {
+            field: member.get(field)
+            for field in ('title', 'content_type', 'poster_path', 'media_id', 'tmdb_id', 'rawg_id')
+        }
+        if kind == 'episodes':
+            item['episode_label'] = member.get('episode_label', '')
+            item['episode_count'] = member.get('episode_count', 0)
+        items.append(item)
+
+    # The same show watched either side of midnight dedupes to one item.
+    if len(items) == 1:
+        return head
+
+    count = len(items)
+    media_types = {item['content_type'] for item in items}
+    content_type = next(iter(media_types)) if len(media_types) == 1 else 'Mixed'
+
+    if kind == 'watchlist':
+        noun = _BUNDLE_NOUNS.get(content_type, 'titles')
+        action = f"added {count} {noun} to watchlist"
+    else:
+        episode_total = sum(member.get('episode_count', 0) for member in members)
+        action = f"watched {episode_total} episodes across {count} shows"
+
+    return {
+        'kind': 'bundle',
+        'bundle_of': kind,
+        'username': head['username'],
+        'timestamp': head['timestamp'],
+        '_date': head['_date'],
+        'title': items[0]['title'],
+        'content_type': content_type,
+        'poster_path': items[0]['poster_path'],
+        'media_id': items[0]['media_id'],
+        'tmdb_id': items[0]['tmdb_id'],
+        'action': action,
+        'count': count,
+        'items': items[:_BUNDLE_ITEM_LIMIT],
+    }
+
+
+def _activity_detail_url(item):
+    """Detail page URL for an activity or bundle item."""
+    content_type = item.get('content_type')
+    if content_type == 'Movie' and item.get('tmdb_id'):
+        return f"/movies/{item['tmdb_id']}"
+    if content_type == 'TV Show' and item.get('tmdb_id'):
+        return f"/tvshows/{item['tmdb_id']}"
+    if content_type == 'Game' and item.get('media_id'):
+        return f"/games/{item['media_id']}/"
+    if content_type == 'Book' and item.get('media_id'):
+        return f"/books/{item['media_id']}/"
+    return None
+
+
+def _annotate_activities_for_viewer(activities, user, content_types):
+    """
+    Add link targets plus the viewer's own relation to each title
+    (`viewer_state`: 'reviewed', 'watchlist' or None) for quick actions.
+    """
+    from django.urls import reverse, NoReverseMatch
+    from custom_auth.models import Review, Watchlist
+
+    targets = []
+    for activity in activities:
+        activity.setdefault('kind', _activity_kind(activity))
+        activity['detail_url'] = _activity_detail_url(activity)
+        username = activity.get('username')
+        try:
+            activity['profile_url'] = reverse('profile_with_username', args=[username]) if username else None
+        except NoReverseMatch:
+            activity['profile_url'] = None
+        activity['is_own'] = bool(user.is_authenticated and username == user.username)
+        activity['viewer_state'] = None
+        if activity['kind'] != 'bundle':
+            targets.append(activity)
+        for item in activity.get('items', []):
+            item['detail_url'] = _activity_detail_url(item)
+            item['viewer_state'] = None
+            targets.append(item)
+
+    if not user.is_authenticated or not targets:
+        return
+
+    type_ids = {label: content_types[key].id for label, key in _CONTENT_TYPE_KEYS.items()}
+    object_ids = {
+        target['media_id'] for target in targets
+        if target.get('content_type') in type_ids and target.get('media_id')
+    }
+    if not object_ids:
+        return
+
+    watchlisted = set(
+        Watchlist.objects.filter(user=user, object_id__in=object_ids)
+        .values_list('content_type_id', 'object_id')
+    )
+    reviewed = set(
+        Review.objects.filter(user=user, object_id__in=object_ids)
+        .values_list('content_type_id', 'object_id')
+    )
+
+    for target in targets:
+        key = (type_ids.get(target.get('content_type')), target.get('media_id'))
+        if key in reviewed:
+            target['viewer_state'] = 'reviewed'
+        elif key in watchlisted:
+            target['viewer_state'] = 'watchlist'
+
+
+def _serialize_activity_dates(activities):
+    """Replace the internal datetime with an offset-aware ISO timestamp."""
+    for activity in activities:
+        activity_date = activity.pop('_date', None)
+        if activity_date is not None:
+            activity['timestamp_iso'] = timezone.localtime(activity_date).isoformat()
 
 
 def _format_title(media_object):
@@ -3270,9 +3555,10 @@ def _optimize_poster_urls(activities):
     Modifies the activities list in-place.
     """
     for activity in activities:
-        poster_path = activity.get('poster_path')
-        if poster_path:
-            activity['poster_path'] = _convert_to_low_quality_tmdb_url(poster_path)
+        for entry in [activity, *activity.get('items', [])]:
+            poster_path = entry.get('poster_path')
+            if poster_path:
+                entry['poster_path'] = _convert_to_low_quality_tmdb_url(poster_path)
 
 
 def _convert_to_low_quality_tmdb_url(poster_path):
