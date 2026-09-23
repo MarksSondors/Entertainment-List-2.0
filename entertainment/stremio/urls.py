@@ -6,6 +6,8 @@ app_name = 'stremio'
 urlpatterns = [
     # Configure page (shown when user clicks Configure in Stremio)
     path('', views.configure, name='configure'),
+    # Stremio opens <manifest base>/configure, which is this for the config-less manifest
+    path('configure', views.configure, name='configure_bare'),
     path('<str:config>/configure', views.configure, name='configure_with_config'),
     
     # Manifest without config (for initial addon discovery)
