@@ -8,14 +8,17 @@ def warm_poster(media_type: str, imdb_id: str, user_id: int, ctx: str | None = N
     from tvshows.models import TVShow
 
     from .poster import get_cached_poster
+    from .views import _get_by_imdb
 
     model = {'movie': Movie, 'series': TVShow}.get(media_type)
     if model is None:
         return
     try:
         user = CustomUser.objects.get(id=user_id)
-        media = model.objects.get(imdb_id=imdb_id)
-    except (CustomUser.DoesNotExist, model.DoesNotExist):
+    except CustomUser.DoesNotExist:
+        return
+    media = _get_by_imdb(model, imdb_id)
+    if media is None:
         return
 
     get_cached_poster(media, media_type, user, ctx)

@@ -34,6 +34,7 @@
                                 <li><img src="{% static 'images/win98/magnifying_glass.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>Recommended For You</strong> - Personalized picks based on your ratings</li>
                                 <li><img src="{% static 'images/win98/users.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>Movie of the Week</strong> - Community picks you haven't seen</li>
                                 <li><img src="{% static 'images/win98/star.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>Top Rated (Unseen)</strong> - Highest rated movies you haven't seen</li>
+                                <li><img src="{% static 'images/win98/magnifying_glass.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;"> <strong>Search</strong> - Find titles from your library in Stremio's search</li>
                             </ul>
                         </div>
                     </div>
@@ -46,9 +47,22 @@
                             <p style="margin: 0 0 15px 0;">
                                 Click the button below to install the addon. Your API key will be automatically configured.
                             </p>
+
+                            <p style="margin: 0 0 6px 0;"><strong>Catalogs to show:</strong></p>
+                            <div class="catalog-grid">
+                                {% for choice in catalog_choices %}
+                                <label class="catalog-option">
+                                    <input type="checkbox" class="catalog-toggle" value="{{ choice.key }}" checked>
+                                    {{ choice.label }} <span class="catalog-type">({{ choice.type_label }})</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <small style="display: block; margin-top: 6px;">
+                                Changing catalogs changes the install URL, so reinstall the addon afterwards.
+                            </small>
                             
                             <div style="text-align: center; margin: 20px 0;">
-                                <a href="{{ install_url }}" class="btn install-btn" target="_blank" style="font-size: 14px; padding: 10px 30px; text-decoration: none;">
+                                <a href="{{ install_url }}" id="install-btn" class="btn install-btn" target="_blank" style="font-size: 14px; padding: 10px 30px; text-decoration: none;">
                                     <img src="{% static 'images/win98/network_television.png' %}" alt="" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 6px;"> Install Addon in Stremio
                                 </a>
                             </div>
@@ -58,7 +72,7 @@
                             </p>
                             
                             <div class="field-row" style="margin-bottom: 10px;">
-                                <input type="text" id="addon-url" value="{{ install_url }}" readonly style="width: 100%; font-size: 10px;">
+                                <input type="text" id="addon-url" value="{{ manifest_url }}" readonly style="width: 100%; font-size: 10px;">
                             </div>
                             <div class="field-row">
                                 <button type="button" id="copy-addon-url" class="btn">
@@ -142,7 +156,7 @@
                 </div>
                 <div class="status-bar">
                     <div class="status-bar-field">User: {{ request.user.username }}</div>
-                    <div class="status-bar-field">Addon Version: 1.0.0</div>
+                    <div class="status-bar-field">Addon Version: {{ manifest_version }}</div>
                 </div>
             </div>
         </div>
@@ -280,6 +294,24 @@
         background-color: #006666;
     }
 
+    .catalog-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 4px 12px;
+        margin-bottom: 4px;
+    }
+
+    .catalog-option {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+    }
+
+    .catalog-type {
+        color: var(--text-muted);
+    }
+
     input[type="text"] {
         background-color: var(--win98-input-bg);
         color: var(--win98-input-text);
@@ -367,6 +399,24 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Rebuild the install/manifest URLs whenever the catalog selection changes
+        const baseUrl = "{{ base_url }}";
+        const apiKeyField = document.getElementById('api_key');
+        const toggles = Array.from(document.querySelectorAll('.catalog-toggle'));
+
+        function updateAddonUrls() {
+            if (!apiKeyField) return;
+            const config = { api_key: apiKeyField.value };
+            const checked = toggles.filter(t => t.checked).map(t => t.value);
+            // leave the list out when everything is on, so new catalogs show up for this install too
+            if (checked.length !== toggles.length) config.catalogs = checked;
+            const encoded = btoa(JSON.stringify(config)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            const manifestUrl = baseUrl + encoded + '/manifest.json';
+            document.getElementById('addon-url').value = manifestUrl;
+            document.getElementById('install-btn').href = manifestUrl.replace(/^https?:\/\//, 'stremio://');
+        }
+        toggles.forEach(t => t.addEventListener('change', updateAddonUrls));
+
         // Copy addon URL to clipboard
         const copyAddonUrlBtn = document.getElementById('copy-addon-url');
         if (copyAddonUrlBtn) {

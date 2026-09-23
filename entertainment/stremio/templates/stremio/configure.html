@@ -38,6 +38,24 @@
                         </div>
                     </div>
 
+                    <!-- Catalog Picker Section -->
+                    <div class="field-row-stacked" style="margin-bottom: 15px;">
+                        <h4><img src="{% static 'images/win98/favorites.png' %}" alt="" class="win98-icon"> Catalogs</h4>
+                        <div class="sunken-panel" style="padding: 10px;">
+                            <div class="catalog-grid">
+                                {% for choice in catalog_choices %}
+                                <label class="catalog-option">
+                                    <input type="checkbox" class="catalog-toggle" value="{{ choice.key }}" {% if enabled_catalogs is None or choice.key in enabled_catalogs %}checked{% endif %}>
+                                    {{ choice.label }} <span class="catalog-type">({{ choice.type_label }})</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <small style="display: block; margin-top: 8px; color: var(--text-muted);">
+                                Changing catalogs changes the install URL, so reinstall the addon afterwards.
+                            </small>
+                        </div>
+                    </div>
+
                     <!-- Install Button Section -->
                     <div class="field-row-stacked" style="margin-bottom: 15px;">
                         <h4><img src="{% static 'images/win98/cd_audio.png' %}" alt="" class="win98-icon"> Installation</h4>
@@ -80,7 +98,8 @@
                                 <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/magnifying_glass.png' %}" alt="" class="win98-icon"> Personalized movie recommendations</li>
                                 <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/users.png' %}" alt="" class="win98-icon"> Movie of the Week picks you haven't seen</li>
                                 <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/star.png' %}" alt="" class="win98-icon"> Top rated movies you haven't seen</li>
-                                <li style="margin-bottom: 0;"><img src="{% static 'images/win98/notepad_file.png' %}" alt="" class="win98-icon"> Your ratings displayed on movie details</li>
+                                <li style="margin-bottom: 6px;"><img src="{% static 'images/win98/magnifying_glass.png' %}" alt="" class="win98-icon"> Search your library from Stremio's search</li>
+                                <li style="margin-bottom: 0;"><img src="{% static 'images/win98/notepad_file.png' %}" alt="" class="win98-icon"> Your ratings and episode progress on title details</li>
                             </ul>
                         </div>
                     </div>
@@ -91,7 +110,7 @@
                 </div>
                 <div class="status-bar">
                     <div class="status-bar-field">Entertainment List Stremio Addon</div>
-                    <div class="status-bar-field">Version 1.0.0</div>
+                    <div class="status-bar-field">Version {{ manifest_version }}</div>
                 </div>
             </div>
         </div>
@@ -204,6 +223,23 @@
         border: 2px solid;
     }
 
+    .catalog-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 4px 12px;
+    }
+
+    .catalog-option {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+    }
+
+    .catalog-type {
+        color: var(--text-muted);
+    }
+
     .status-message.success {
         background-color: #d4edda;
         border-color: #155724;
@@ -245,10 +281,20 @@
 <script>
         const BASE_URL = "{{ base_url }}";
         
+        function selectedCatalogs() {
+            const toggles = Array.from(document.querySelectorAll('.catalog-toggle'));
+            const checked = toggles.filter(t => t.checked).map(t => t.value);
+            // leave the list out when everything is on, so new catalogs show up for this install too
+            return checked.length === toggles.length ? null : checked;
+        }
+        
         function encodeConfig(apiKey) {
-            const config = JSON.stringify({ api_key: apiKey });
+            const config = { api_key: apiKey };
+            const catalogs = selectedCatalogs();
+            if (catalogs) config.catalogs = catalogs;
+            const json = JSON.stringify(config);
             // URL-safe base64 encoding
-            return btoa(config)
+            return btoa(json)
                 .replace(/\+/g, '-')
                 .replace(/\//g, '_')
                 .replace(/=+$/, '');
@@ -310,7 +356,8 @@
         function showStatus(message, type) {
             const status = document.getElementById('status');
             status.textContent = message;
-            status.className = 'status ' + type;
+            status.className = 'status-message ' + type;
+            status.style.display = 'block';
         }
         
         function updateInstallButton() {
@@ -347,6 +394,12 @@
         document.getElementById('api_key').addEventListener('input', function() {
             updateInstallButton();
             updateUrlDisplay();
+        });
+        document.querySelectorAll('.catalog-toggle').forEach(function(toggle) {
+            toggle.addEventListener('change', function() {
+                updateInstallButton();
+                updateUrlDisplay();
+            });
         });
         
         // Initial state
