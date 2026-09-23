@@ -7,6 +7,7 @@ from django.db.models import Q, Avg
 from django.contrib.contenttypes.models import ContentType
 
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 import subprocess
 # Create your views here.
 # import services
@@ -522,27 +523,41 @@ def browse_by_country(request):
 
 # old and vibe coded code
 
+def _safe_next_url(request, url):
+    """Return `url` if it points back at this site, else None (blocks open redirects)."""
+    if url and url_has_allowed_host_and_scheme(
+        url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return url
+    return None
+
 def login_page(request):
+    next_url = _safe_next_url(request, request.GET.get('next'))
     if request.user.is_authenticated:
-        return redirect('discover_page')
-    return render(request, 'login_page.html')
+        return redirect(next_url or 'discover_page')
+    return render(request, 'login_page.html', {'next': next_url or ''})
 
 def login_request(request):
     if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
+        username = request.POST.get('username', '')
+        password = request.POST.get('password', '')
+        next_url = _safe_next_url(request, request.POST.get('next'))
         user = authenticate(request, username=username, password=password)
         if user is not None:
             # "Remember me": checked → persistent session (SESSION_COOKIE_AGE);
             # unchecked → session ends when the browser closes.
             remember = request.POST.get('remember') == 'on'
             if not remember:
-                request.session.set_expiry(3600 * 24)
+                request.session.set_expiry(0)
             login(request, user)
-            return redirect('discover_page')
+            return redirect(next_url or 'discover_page')
         # Re-render with an inline error (alert + window shake) instead of a silent redirect.
-        return render(request, 'login_page.html', {'login_error': True}, status=401)
-    return render(request, 'login_page.html')
+        return render(request, 'login_page.html', {
+            'login_error': True,
+            'username': username,
+            'next': next_url or '',
+        }, status=401)
+    return redirect('login_page')
 
 def logout_request(request):
     if request.user.is_authenticated:
