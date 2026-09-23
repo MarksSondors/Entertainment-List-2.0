@@ -10,7 +10,6 @@ router.register(r'', MovieViewSet, basename='movies')
 urlpatterns = [
     path('<int:movie_id>/', views.movie_page, name='movie_page'),
     path('collections/<int:collection_id>/', views.collection_detail, name='collection_detail'),
-    path('all/', views.all_movies_page, name='all_movies_page'),
 
     # API
     path('search/', TMDBSearchView.as_view(), name='tmdb_search'),

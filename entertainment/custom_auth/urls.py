@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 from . import views
 from . import views_imdb
 
@@ -12,8 +13,8 @@ urlpatterns = [    # discover page
     path('', views.login_page, name='login_page'),
     path('login/', views.login_request, name='login_request'),
 
-    # home page
-    path('home/', views.home_page, name='home_page'),
+    # old home page, kept as a redirect for bookmarks and installed PWAs
+    path('home/', RedirectView.as_view(pattern_name='discover_page', permanent=True), name='home_page'),
     path('logout/', views.logout_request, name='logout_request'),
 
     # genres
