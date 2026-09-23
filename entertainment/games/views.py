@@ -625,7 +625,7 @@ class GameReviewView(APIView):
         if existing_review:
             return Response({"error": "You have already reviewed this game"}, status=status.HTTP_400_BAD_REQUEST)
         
-        today_date = timezone.now().date()
+        today_date = timezone.localdate()
 
         if isinstance(date_added, str):
             date_added = timezone.datetime.strptime(date_added, '%Y-%m-%d').date()
@@ -689,7 +689,7 @@ class GameReviewView(APIView):
         review.review_text = review_text
         
         if date_added:
-            today_date = timezone.now().date()
+            today_date = timezone.localdate()
             if isinstance(date_added, str):
                 date_added = timezone.datetime.strptime(date_added, '%Y-%m-%d').date()
             

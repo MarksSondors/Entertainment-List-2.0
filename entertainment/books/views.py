@@ -474,7 +474,7 @@ class BookReviewView(APIView):
         if Review.objects.filter(user=request.user, content_type=content_type, object_id=book_id).exists():
             return Response({'error': 'You have already reviewed this book'}, status=status.HTTP_400_BAD_REQUEST)
 
-        today = timezone.now().date()
+        today = timezone.localdate()
         if date_added:
             try:
                 date_added = timezone.datetime.strptime(date_added, '%Y-%m-%d').date()
@@ -532,14 +532,14 @@ class BookReviewView(APIView):
         if review_text is not None:
             review.review_text = review_text
 
-        today = timezone.now().date()
+        today = timezone.localdate()
         if date_added:
             try:
                 date_added = timezone.datetime.strptime(date_added, '%Y-%m-%d').date()
             except ValueError:
                 return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
             if date_added == today:
-                if review.date_added.date() == today:
+                if timezone.localdate(review.date_added) == today:
                     date_added = review.date_added
                 else:
                     date_added = timezone.now()

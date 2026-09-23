@@ -567,7 +567,7 @@ class MovieReviewView(APIView):
         if existing_review:
             return Response({"error": "You have already reviewed this movie"}, status=status.HTTP_400_BAD_REQUEST)
         
-        today_date = timezone.now().date()
+        today_date = timezone.localdate()
 
         date_added = timezone.datetime.strptime(date_added, '%Y-%m-%d').date() if date_added else today_date
 
@@ -643,12 +643,12 @@ class MovieReviewView(APIView):
         if review_text is not None:
             review.review_text = review_text
         
-        today_date = timezone.now().date()
+        today_date = timezone.localdate()
 
         date_added = timezone.datetime.strptime(date_added, '%Y-%m-%d').date() if date_added else today_date
 
         if date_added == today_date:
-            if review.date_added.date() == today_date:
+            if timezone.localdate(review.date_added) == today_date:
                 date_added = review.date_added
             else:
                 date_added = timezone.now()
@@ -1102,7 +1102,7 @@ def check_and_update_movie_status(pick):
     watched_percentage = (pick.watched_by.count() / active_users) * 100
     
     # Check if end date passed or enough users watched (100%)
-    end_date_passed = pick.end_date and timezone.now().date() >= pick.end_date
+    end_date_passed = pick.end_date and timezone.localdate() >= pick.end_date
     enough_watched = watched_percentage >= 100
     
     if end_date_passed or enough_watched:
@@ -1118,7 +1118,7 @@ def activate_next_movie():
     next_pick = MovieOfWeekPick.objects.filter(status='queued').order_by('date_created').first()
     
     if next_pick:
-        start_date = timezone.now().date()
+        start_date = timezone.localdate()
         # Set end date to 7 days from now
         end_date = start_date + timedelta(days=7)
         
