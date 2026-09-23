@@ -3,10 +3,13 @@
 
 {% comment %}
 Movie-centric network graph. Movies are the primary nodes, connected by explainable
-relationships (shared director/cast, thematic keywords, studio, collection). Collections
-and detected communities render as nested Cytoscape compound boxes. Rendering/interaction
+relationships (shared director/cast, thematic keywords, studio, collection) or by the
+recommender's taste space. The map is laid out ForceAtlas2-style into named regions;
+region/collection outlines appear only when a region is picked or a movie in a collection
+is selected. Rendering/interaction
 logic lives in static/js/network-graph.js + cytoscape-graph-config.js, styling in
 static/css/network-graph.css - this template is intentionally just the DOM shell.
+Checkboxes use the 98.css input+label pattern (base.html loads 98.css).
 {% endcomment %}
 
 {% block title %}Movie Network Graph{% endblock %}
@@ -16,54 +19,145 @@ static/css/network-graph.css - this template is intentionally just the DOM shell
 
 <div class="ng-window">
     <div class="ng-title-bar">
-        <span>🎬 Movie Network Graph</span>
+        <span class="ng-title-text">🎬 Movie Network Graph</span>
+        <span class="ng-title-hint">Click to focus &middot; Double-click to expand</span>
     </div>
     <div class="ng-body">
         <div class="ng-toolbar">
+            <label class="ng-toolbar-label" for="ng-search-input">Find:</label>
             <div class="ng-search" id="ng-search">
-                <input type="text" id="ng-search-input" class="retro-input" placeholder="Search for a movie...">
+                <input type="text" id="ng-search-input" placeholder="Search for a movie..." autocomplete="off">
                 <div class="ng-search-results" id="ng-search-results"></div>
             </div>
-            <label><input type="checkbox" id="ng-show-people"> Show cast/crew</label>
-            <label><input type="checkbox" id="ng-my-taste"> My Taste overlay</label>
+            <span class="ng-toolbar-sep" aria-hidden="true"></span>
+            <span class="ng-toolbar-label">Layout:</span>
+            <span class="ng-segmented" role="group" aria-label="Layout">
+                <button type="button" class="ng-btn" data-setting="layout" data-value="relations" title="Movies linked by shared directors, cast, themes, studios and collections">Relationships</button>
+                <button type="button" class="ng-btn" data-setting="layout" data-value="taste" title="Movies placed by the recommender: close together = liked by the same people">Taste space</button>
+            </span>
+            <span class="ng-toolbar-label">View:</span>
+            <span class="ng-segmented" role="group" aria-label="View">
+                <button type="button" class="ng-btn" data-setting="view" data-value="dots">Dots</button>
+                <button type="button" class="ng-btn" data-setting="view" data-value="posters">Posters</button>
+            </span>
+            <label class="ng-toolbar-label" for="ng-color-by">Colour:</label>
+            <select id="ng-color-by" class="ng-select">
+                <option value="region">Region</option>
+                <option value="genre">Genre</option>
+                <option value="decade">Decade</option>
+                <option value="tmdb">TMDB rating</option>
+                <option value="mine">My rating</option>
+                <option value="predicted">Predicted for me</option>
+            </select>
+        </div>
+        <div class="ng-toolbar ng-toolbar--secondary">
+            <span class="ng-check">
+                <input type="checkbox" id="ng-highlight-mine">
+                <label for="ng-highlight-mine">Highlight my movies</label>
+            </span>
+            <span class="ng-check">
+                <input type="checkbox" id="ng-show-users">
+                <label for="ng-show-users">Show other users</label>
+            </span>
+            <span class="ng-check">
+                <input type="checkbox" id="ng-show-people">
+                <label for="ng-show-people">Show cast/crew</label>
+            </span>
+            <span class="ng-toolbar-spacer"></span>
+            <button type="button" class="ng-btn" id="ng-find-me" disabled title="Show where you are on the map">&#128205; Find me</button>
             <button type="button" class="ng-btn" id="ng-apply">Refresh</button>
         </div>
 
         <div class="ng-main">
             <div class="ng-canvas-wrap">
                 <div id="ng-cytoscape"></div>
-                <div class="ng-loading hidden" id="ng-loading">Building graph&hellip;</div>
-                <div class="ng-empty-state" id="ng-empty-state">No movies matched these filters. Try lowering the rating threshold.</div>
+
+                <div class="ng-tooltip" id="ng-tooltip" role="tooltip"></div>
+
+                <div class="ng-canvas-controls" aria-label="Zoom controls">
+                    <button type="button" class="ng-btn" id="ng-zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+                    <button type="button" class="ng-btn" id="ng-zoom-out" title="Zoom out" aria-label="Zoom out">&minus;</button>
+                    <button type="button" class="ng-btn ng-btn--fit" id="ng-zoom-fit" title="Fit graph to view" aria-label="Fit graph to view">FIT</button>
+                </div>
+
+                <div class="ng-overlay hidden" id="ng-loading">
+                    <div class="ng-dialog" role="status" aria-live="polite">
+                        <div class="ng-title-bar"><span class="ng-title-text">Please wait</span></div>
+                        <div class="ng-dialog-body ng-dialog-body--stack">
+                            <div>Building graph&hellip;</div>
+                            <div class="ng-progress"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ng-overlay ng-empty-state" id="ng-empty-state">
+                    <div class="ng-dialog">
+                        <div class="ng-title-bar"><span class="ng-title-text">Movie Network Graph</span></div>
+                        <div class="ng-dialog-body">
+                            <span class="ng-dialog-icon" aria-hidden="true">i</span>
+                            <div>No movies matched these filters. Try searching for a movie above to start from it.</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="ng-sidebar">
                 <div class="ng-panel ng-panel--details">
                     <div class="ng-panel-header">Movie Details</div>
                     <div class="ng-panel-body" id="ng-detail-body">
-                        <div class="ng-detail-empty">Click a movie to see its connections. Double-click to expand its neighbors.</div>
+                        <div class="ng-detail-empty"><strong>Click</strong> a movie to see its connections.<br><strong>Double-click</strong> to expand its neighbors.</div>
                     </div>
                 </div>
 
                 <div class="ng-panel ng-panel--communities">
-                    <div class="ng-panel-header">Communities</div>
-                    <div class="ng-panel-body" id="ng-community-list">
-                        <div class="ng-detail-empty">Loading&hellip;</div>
+                    <div class="ng-panel-header">
+                        <span>Regions</span>
+                        <span class="ng-panel-count" id="ng-community-count"></span>
+                    </div>
+                    <div class="ng-panel-body">
+                        <div class="ng-listbox" id="ng-community-list">
+                            <div class="ng-detail-empty">Loading&hellip;</div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="ng-panel ng-panel--legend">
-                    <div class="ng-panel-header">Legend</div>
+                    <div class="ng-panel-header">
+                        <span>Legend</span>
+                        <span class="ng-panel-count" id="ng-legend-title"></span>
+                    </div>
                     <div class="ng-panel-body">
-                        <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#ED8936"></span> Shared director</div>
-                        <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#FFD700"></span> Shared cast</div>
-                        <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#9F7AEA"></span> Shared themes</div>
-                        <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#48BB78"></span> Same studio</div>
-                        <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#F56565"></span> Same collection</div>
-                        <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#4299E1"></span> Review (My Taste)</div>
-                        <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#FF6B6B"></span> Prediction (My Taste)</div>
+                        <div class="ng-legend-note" id="ng-legend-note"></div>
+                        <div class="ng-legend-scale" id="ng-legend-scale"></div>
+                        <details class="ng-legend-details">
+                            <summary>Connections &amp; markers</summary>
+                        <div class="ng-legend-grid">
+                            <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#ED8936"></span> Shared director</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#FFD700"></span> Shared cast</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#9F7AEA"></span> Shared themes</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#48BB78"></span> Same studio</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch" style="background:#F56565"></span> Same collection</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch dotted" style="color:#cde2fb"></span> Liked by same people</div>
+                            <div class="ng-legend-divider"></div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch node round" style="background:#000080; box-shadow:0 0 0 2px #fff"></span> You</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch node round" style="background:#404040; box-shadow:0 0 0 2px #c0c0c0"></span> Other user</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch node" style="background:#2b2f55; box-shadow:0 0 0 2px #FFD700"></span> Pick for you</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch node" style="background:#2b2f55; outline:2px dashed #fff; outline-offset:-1px"></span> On watchlist</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch node round" style="background:#ED8936"></span> Director</div>
+                            <div class="ng-legend-item"><span class="ng-legend-swatch node round" style="background:#FFD700"></span> Actor</div>
+                        </div>
+                        </details>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div class="ng-status-bar">
+            <div class="ng-status-field ng-status-field--grow" id="ng-status-text">Ready</div>
+            <div class="ng-status-field" id="ng-status-movies">0 movies</div>
+            <div class="ng-status-field" id="ng-status-edges">0 connections</div>
+            <div class="ng-status-field" id="ng-status-communities">0 regions</div>
+            <div class="ng-status-field" id="ng-status-taste">Taste map: loading&hellip;</div>
         </div>
     </div>
 </div>
@@ -72,6 +166,11 @@ static/css/network-graph.css - this template is intentionally just the DOM shell
 <script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>
 <script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>
 <script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
+<script src="https://unpkg.com/cytoscape-layout-utilities@1.1.1/cytoscape-layout-utilities.js"></script>
+<!-- ForceAtlas2 + Louvain + noverlap for the map layout (network-graph-insights.js mapLayout) -->
+<script src="https://cdn.jsdelivr.net/npm/graphology@0.25.4/dist/graphology.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/graphology-library@0.8.0/dist/graphology-library.min.js"></script>
 <script src="{% static 'js/cytoscape-graph-config.js' %}"></script>
+<script src="{% static 'js/network-graph-insights.js' %}"></script>
 <script src="{% static 'js/network-graph.js' %}"></script>
 {% endblock %}

@@ -42,4 +42,6 @@ urlpatterns = [
     path('network-graph/', views.network_graph_page, name='network_graph_page'),
     path('network-graph/data/', views.network_graph_data, name='network_graph_data'),
     path('network-graph/expand/', views.network_graph_expand, name='network_graph_expand'),
+    path('network-graph/poster/<int:tmdb_id>/', views.network_graph_poster, name='network_graph_poster'),
+    path('network-graph/taste/', views.network_graph_taste, name='network_graph_taste'),
 ] + router.urls

@@ -13,6 +13,7 @@ entertainment/movies/services/network_graph/
 ├── constants.py                # All configuration constants
 ├── cache.py                    # Cache management utilities
 ├── utils.py                    # Utility functions
+├── taste.py                    # Taste map from the recommender (built in Django Q, served from cache)
 │
 ├── algorithms/                 # Graph analysis algorithms
 │   ├── __init__.py
