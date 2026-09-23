@@ -1,298 +1,91 @@
 {% load static %}
 
 <!-- Recent Community Activity Component -->
-<div class="window community-activity-window" style="width: 100%;">
+<div class="window community-activity-window" id="community-activity" style="width: 100%;">
     <div class="title-bar">
         <div class="title-bar-text">Recent Community Activity</div>
-    </div>
-    <div class="window-body">
-        <div class="community-activity-toolbar">
-            <label for="community-activity-filter">Filter:</label>
-            <select id="community-activity-filter" aria-label="Filter community activity">
-                <option value="all">All activity</option>
-                <option value="movies">Movies</option>
-                <option value="tvshows">TV shows</option>
-                <option value="books">Books</option>
-                <option value="games">Games</option>
-                <option value="watched">Watched</option>
-                <option value="watchlist">Watchlist</option>
-                <option value="reviews">Reviews</option>
-            </select>
+        <div class="title-bar-controls">
+            <button type="button" id="ca-minimize" aria-label="Minimize" aria-expanded="true" aria-controls="ca-window-body"></button>
+            <button type="button" aria-label="Maximize"></button>
+            <button type="button" aria-label="Close"></button>
         </div>
-        <div class="community-activity-panel">
-            <div id="horizontal_recent_activity" class="community-activity-feed" aria-live="polite" aria-busy="true">
-                <div class="community-activity-item community-activity-loading">
-                    <div class="community-activity-poster loading-placeholder"></div>
-                    <div class="community-activity-body">
-                        <div class="loading-placeholder community-activity-loading-line"></div>
-                        <div class="loading-placeholder community-activity-loading-line community-activity-loading-line-short"></div>
-                    </div>
+    </div>
+    <div class="window-body" id="ca-window-body">
+        <div class="ca-filters" role="toolbar" aria-label="Filter community activity">
+            <div class="ca-chip-scroll" id="ca-chip-scroll">
+                <div class="ca-chip-group" role="group" aria-label="Media type" data-axis="media">
+                    <button type="button" class="ca-chip" data-value="all" aria-pressed="true">All</button>
+                    <button type="button" class="ca-chip" data-value="movies" aria-pressed="false">Movies</button>
+                    <button type="button" class="ca-chip" data-value="tvshows" aria-pressed="false">TV</button>
+                    <button type="button" class="ca-chip" data-value="books" aria-pressed="false">Books</button>
+                    <button type="button" class="ca-chip" data-value="games" aria-pressed="false">Games</button>
+                </div>
+                <span class="ca-chip-divider" aria-hidden="true"></span>
+                <div class="ca-chip-group" role="group" aria-label="Activity type" data-axis="kind">
+                    <button type="button" class="ca-chip" data-value="reviews" aria-pressed="false">Reviews</button>
+                    <button type="button" class="ca-chip" data-value="watched" aria-pressed="false">Watched</button>
+                    <button type="button" class="ca-chip" data-value="watchlist" aria-pressed="false">Watchlist</button>
                 </div>
             </div>
         </div>
-        <div class="community-activity-controls">
-            <span id="loading-more-activity" class="community-activity-loading-more" hidden>Loading more...</span>
-            <button id="load-more-activity" type="button" hidden>Load more</button>
+        <div class="ca-panel">
+            <div id="ca-feed" class="ca-feed" aria-live="polite" aria-busy="true"></div>
         </div>
+        <button type="button" id="ca-show-more" class="ca-show-more" hidden>Show more</button>
     </div>
-    <div class="status-bar">
-        <div class="status-bar-field" id="activity-last-updated-horizontal">Last updated: Just now</div>
-        <div class="status-bar-field">
-            <span id="refresh-indicator-horizontal" hidden><img src="{% static 'images/win98/world.png' %}" alt="Refreshing" width="16" height="16"></span>
-            <span id="auto-refresh-status">Auto-refresh: ON</span>
+    <div class="status-bar" id="ca-status-bar">
+        <div class="status-bar-field" id="ca-status" aria-live="polite">Last updated: Just now</div>
+        <div class="status-bar-field ca-status-right">
+            <span id="ca-refresh-indicator" class="ca-refresh-indicator" hidden><img src="{% static 'images/win98/world.png' %}" alt="Refreshing" width="16" height="16"></span>
+            <span id="ca-auto-refresh">Auto-refresh: ON</span>
         </div>
     </div>
 </div>
 
 <style>
-    /* Horizontal Activity Styles */
-    .horizontal-activity-container {
-        position: relative;
-        overflow: hidden;
-        border: 1px inset var(--bg-color);
-        background-color: var(--window-bg);
-        padding: 8px;
+    .community-activity-window {
+        --ca-field: #ffffff;
+        --ca-text: #000000;
+        --ca-muted: #464646;
+        --ca-rule: #d6d6d6;
+        --ca-hover: #ececf6;
+        --ca-press: #dcdcee;
+        --ca-bevel-light: #ffffff;
+        --ca-bevel-dark: #0a0a0a;
+        --ca-dither: #ffffff;
+        --ca-quote-bg: #f4f4f4;
+        --ca-accent: #000080;
+        --ca-accent-text: #ffffff;
+        --ca-good: #1e6b2e;
+        --ca-mid: #7a5d00;
+        --ca-bad: #9c1f1b;
+        --ca-poster-w: 60px;
+        --ca-poster-h: 90px;
     }
 
-    /* Fix for icons inheriting border from global styles */
-    .activity-title img,
-    .activity-action img,
-    .watched-badge img,
-    .review-badge img {
-        border: none !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-    }
-    
-    .horizontal-activity-scroll {
-        display: flex;
-        overflow-x: auto;
-        scroll-behavior: smooth;
-        gap: 12px;
-        padding: 4px;
-        scrollbar-width: thin;
-        scrollbar-color: var(--border-dark) var(--bg-color);
-    }
-    
-    .horizontal-activity-scroll::-webkit-scrollbar {
-        height: 8px;
-    }
-    
-    .horizontal-activity-scroll::-webkit-scrollbar-thumb {
-        background: var(--border-dark);
-        border-radius: 4px;
-    }
-    
-    .horizontal-activity-scroll::-webkit-scrollbar-track {
-        background: var(--bg-color);
-    }
-      .activity-card {
-        flex: 0 0 auto;
-        width: 200px;
-        background-color: var(--window-bg);
-        border: 1px solid var(--border-dark);
-        border-radius: 0;
-        overflow: hidden;
-        transition: background-color 0.2s;
-        cursor: pointer;
-        text-decoration: none;
-        color: inherit;
-        display: block;
-        height: auto;
-    }
-    
-    .activity-card:hover {
-        background-color: var(--button-hover);
-        text-decoration: none;
-        color: inherit;
-    }
-    
-    .activity-card.loading-card {
-        background-color: var(--bg-color);
-        cursor: default;
-    }      .activity-poster {
-        width: 100%;
-        height: 240px;
-        object-fit: cover;
-        border-bottom: 1px solid var(--border-dark);
-    }.poster-container {
-        position: relative;
-        width: 100%;
-        height: 240px;
-        overflow: hidden;
-    }.poster-container img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-bottom: 1px solid var(--border-dark);
-        background-color: var(--bg-color);
-    }
-    
-    .poster-rating-overlay {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        z-index: 10;
-        background-color: rgba(0, 0, 0, 0.8);
-        border-radius: 4px;
-        padding: 4px 6px;
-        font-weight: bold;
-        font-size: 14px;
-        color: white;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(4px);
-    }
-    
-    .loading-placeholder {
-        background: linear-gradient(90deg, var(--bg-color) 25%, var(--button-hover) 50%, var(--bg-color) 75%);
-        background-size: 200% 100%;
-        animation: loading-shimmer 1.5s infinite;
-    }
-    
-    @keyframes loading-shimmer {
-        0% { background-position: -200% 0; }
-        100% { background-position: 200% 0; }
-    }      .activity-info {
-        padding: 8px;
-        font-size: 14px;
-        min-height: 100px;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-        gap: 4px;
-    }
-      .activity-header {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 6px;
-        font-size: 12px;
-    }
-    
-    .activity-username {
-        font-weight: bold;
-        color: var(--text-color);
-        text-decoration: underline;
-    }
-    
-    .activity-timestamp {
-        color: var(--text-muted);
-        font-size: 10px;
-    }      .activity-title {
-        font-weight: bold;
-        margin-bottom: 6px;
-        font-size: 13px;
-        line-height: 1.2;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        color: var(--text-color);
-        flex-grow: 0;
-    }.activity-text {
-        font-style: italic;
-        margin-bottom: 6px;
-        font-size: 12px;
-        color: var(--text-muted);
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        flex-grow: 1;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        line-height: 1.2;
-    }
-    .activity-action {
-        font-size: 12px;
-        color: var(--text-muted);
-        margin-top: 6px;
-    }
-      .watched-badge {
-        display: inline-block;
-        margin-right: 2px;
-        font-size: 14px;
-    }
-    
-    .review-badge {
-        display: inline-block;
-        margin-right: 4px;
-        font-size: 12px;
-        background-color: var(--button-hover);
-        color: var(--text-color);
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-weight: bold;
-        border: 1px solid var(--border-dark);
-    }
-      .activity-controls {
-        display: flex;
-        align-items: center;
-    }
-    
-    .activity-controls .retro-btn {
-        padding: 2px 6px;
-        font-size: 12px;
-        min-width: 24px;
-    }
-    
-    /* Loading indicator */
-    .loading-more-activity {
-        font-size: 11px;
-        color: var(--text-muted);
-    }        /* Mobile adjustments */
-        @media (max-width: 768px) {
-            .activity-card {
-                width: 160px;
-            }
-            
-            .activity-poster, .poster-container {
-                height: 200px;
-            }
-            
-            .activity-info {
-                padding: 6px;
-                min-height: 90px;
-                font-size: 12px;
-            }
-            
-            .activity-title {
-                font-size: 11px;
-            }
-            
-            .activity-text {
-                font-size: 10px;
-            }
-            
-            .poster-rating-overlay {
-                font-size: 12px;
-                padding: 3px 5px;
-                top: 6px;
-                right: 6px;
-            }
-            
-            .review-badge {
-                font-size: 10px;
-                padding: 1px 4px;
-            }
-        }
-      /* Dark mode enhancements */
     @media (prefers-color-scheme: dark) {
-        .activity-card {
-            border-color: var(--border-light);
-        }
-        
-        .activity-card:hover {
-            background-color: var(--button-hover);
-        }
-        
-        .activity-poster, .poster-container img {
-            border-bottom-color: var(--border-light);
+        .community-activity-window {
+            --ca-field: #262626;
+            --ca-text: #f0f0f0;
+            --ca-muted: #bdbdbd;
+            --ca-rule: #3a3a3a;
+            --ca-hover: #30303e;
+            --ca-press: #3a3a4c;
+            --ca-bevel-light: #6a6a6a;
+            --ca-bevel-dark: #111111;
+            --ca-dither: #6a6a6a;
+            --ca-quote-bg: #1e1e1e;
+            --ca-accent: #1084d0;
         }
     }
-</style>
 
-<style>
+    @media (min-width: 600px) {
+        .community-activity-window {
+            --ca-poster-w: 64px;
+            --ca-poster-h: 96px;
+        }
+    }
+
     .community-activity-window .title-bar-text {
         font-size: 13px;
     }
@@ -301,598 +94,1706 @@
         font-size: 12px;
     }
 
-    .community-activity-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        margin-bottom: 6px;
-        padding: 4px 6px;
-        border: 1px solid var(--border-dark);
-        background-color: var(--bg-color);
+    .community-activity-window.is-minimized .window-body,
+    .community-activity-window.is-minimized .status-bar {
+        display: none;
     }
 
-    .community-activity-toolbar label {
-        font-size: 13px;
-        font-weight: bold;
+    .community-activity-window img {
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
     }
 
-    .community-activity-toolbar select {
-        width: 100%;
-        height: 30px !important;
-        min-height: 30px !important;
-        padding-top: 2px;
-        padding-right: 34px;
-        padding-bottom: 2px;
-        background-position: calc(100% - 2px) 2px;
-        background-size: 24px 26px;
-        font-size: 13px;
-    }
-
-    .community-activity-panel {
-        border: 1px inset var(--bg-color);
-        background-color: var(--window-bg);
-        padding: 2px 8px;
-    }
-
-    .community-activity-feed {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .community-activity-item {
-        display: grid;
-        grid-template-columns: 56px minmax(0, 1fr);
-        gap: 9px;
-        min-height: 84px;
-        padding: 7px 0;
-        background-color: var(--window-bg);
-        border-bottom: 1px solid var(--border-dark);
-        color: inherit;
-        text-decoration: none;
-        transition: background-color 0.2s;
-    }
-
-    .community-activity-item:last-child {
-        border-bottom: 0;
-    }
-
-    .community-activity-item:hover {
-        background-color: var(--button-hover);
-    }
-
-    .community-activity-poster-link {
-        display: block;
-        width: fit-content;
-        height: fit-content;
-    }
-
-    .community-activity-poster-link:focus-visible,
-    .community-activity-title:focus-visible,
-    .community-activity-review-toggle:focus-visible {
-        outline: 1px dotted var(--text-color);
+    .community-activity-window :focus-visible {
+        outline: 1px dotted var(--ca-text);
         outline-offset: 2px;
     }
 
-    .community-activity-poster {
-        width: 56px;
-        height: 84px;
-        object-fit: cover;
-        border: 1px solid var(--border-dark);
-        background-color: var(--bg-color);
+    /* ---------- Win98 buttons used inside the widget ---------- */
+
+    .community-activity-window .ca-chip,
+    .community-activity-window .ca-show-more,
+    .community-activity-window .ca-quick,
+    .community-activity-window .ca-retry {
+        border: 0;
+        border-radius: 0;
+        background-color: var(--button-bg, #c0c0c0);
+        color: var(--button-text, #000000);
+        text-shadow: none;
+        box-shadow:
+            inset -1px -1px var(--ca-bevel-dark),
+            inset 1px 1px var(--ca-bevel-light),
+            inset -2px -2px var(--border-dark),
+            inset 2px 2px var(--button-hover);
+        cursor: pointer;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
     }
 
-    .community-activity-body {
+    .community-activity-window .ca-chip:active,
+    .community-activity-window .ca-show-more:active,
+    .community-activity-window .ca-quick:active,
+    .community-activity-window .ca-retry:active,
+    .community-activity-window .ca-chip[aria-pressed="true"],
+    .community-activity-window .ca-quick[aria-pressed="true"] {
+        text-shadow: none;
+        box-shadow:
+            inset -1px -1px var(--ca-bevel-light),
+            inset 1px 1px var(--ca-bevel-dark),
+            inset -2px -2px var(--button-hover),
+            inset 2px 2px var(--border-dark);
+    }
+
+    /* ---------- Filter chips ---------- */
+
+    .ca-filters {
+        position: relative;
+        margin-bottom: 6px;
+    }
+
+    .ca-chip-scroll {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .ca-chip-scroll::-webkit-scrollbar {
+        display: none;
+    }
+
+    .ca-chip-scroll.has-more-right {
+        -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+        mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+    }
+
+    .ca-chip-group {
+        display: flex;
+        gap: 6px;
+    }
+
+    .ca-chip {
+        flex: 0 0 auto;
+        min-width: 0 !important;
+        min-height: 38px !important;
+        padding: 0 14px !important;
+        font-size: 13px;
+        white-space: nowrap;
+        scroll-snap-align: start;
+    }
+
+    .ca-chip[aria-pressed="true"] {
+        font-weight: bold;
+        background-image: repeating-conic-gradient(var(--ca-dither) 0% 25%, transparent 0% 50%);
+        background-size: 2px 2px;
+    }
+
+    .ca-chip-divider {
+        flex: 0 0 auto;
+        width: 2px;
+        height: 26px;
+        border-left: 1px solid var(--border-dark);
+        border-right: 1px solid var(--ca-bevel-light);
+    }
+
+    /* ---------- Feed panel ---------- */
+
+    .ca-panel {
+        background-color: var(--ca-field);
+        color: var(--ca-text);
+        box-shadow:
+            inset -1px -1px var(--ca-bevel-light),
+            inset 1px 1px var(--border-dark),
+            inset -2px -2px var(--button-hover),
+            inset 2px 2px var(--ca-bevel-dark);
+        padding: 2px;
+    }
+
+    .ca-feed {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .ca-row {
+        position: relative;
+        display: grid;
+        grid-template-columns: var(--ca-poster-w) minmax(0, 1fr) auto;
+        align-items: start;
+        column-gap: 10px;
+        padding: 10px 8px 10px 10px;
+        border-bottom: 1px solid var(--ca-rule);
+        color: var(--ca-text);
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .ca-feed > .ca-row:last-child {
+        border-bottom: 0;
+    }
+
+    @media (hover: hover) {
+        .ca-row:hover {
+            background-color: var(--ca-hover);
+        }
+    }
+
+    .ca-row:active {
+        background-color: var(--ca-press);
+    }
+
+    .ca-poster {
+        display: block;
+        width: var(--ca-poster-w);
+        height: var(--ca-poster-h);
+        object-fit: cover;
+        background-color: var(--bg-color);
+        outline: 1px solid var(--border-dark);
+    }
+
+    .ca-main {
         display: flex;
         min-width: 0;
         flex-direction: column;
-        justify-content: center;
         gap: 4px;
-        padding: 1px 4px 1px 0;
     }
 
-    .community-activity-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        gap: 8px;
-        font-size: 13px;
-    }
-
-    .community-activity-username {
-        color: var(--text-color);
-        font-weight: bold;
-        text-decoration: underline;
-    }
-
-    .community-activity-timestamp {
-        flex-shrink: 0;
-        color: var(--text-muted);
-        font-size: 12px;
-    }
-
-    .community-activity-title {
-        width: fit-content;
-        color: var(--text-color);
-        font-size: 15px;
-        font-weight: bold;
-        line-height: 1.35;
-        overflow-wrap: anywhere;
-        text-decoration: none;
-    }
-
-    .community-activity-title:hover {
-        text-decoration: underline;
-    }
-
-    .community-activity-details {
+    .ca-meta {
         display: flex;
         align-items: baseline;
         flex-wrap: wrap;
-        gap: 3px;
-        color: var(--text-muted);
+        column-gap: 6px;
+        color: var(--ca-muted);
         font-size: 13px;
-        line-height: 1.3;
     }
 
-    .community-activity-media {
-        color: var(--text-color);
-        font-size: 12px;
+    .ca-user {
+        position: relative;
+        z-index: 1;
+        color: var(--ca-text) !important;
         font-weight: bold;
+        text-decoration: none;
+        /* Taller tap target without changing the line height */
+        padding: 6px 0;
+        margin: -6px 0;
+    }
+
+    .ca-user:hover {
+        text-decoration: underline;
+    }
+
+    .ca-line {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        overflow: hidden;
+    }
+
+    .ca-verb {
+        color: var(--ca-muted);
+    }
+
+    .ca-title {
+        color: var(--ca-text) !important;
+        font-weight: bold;
+        text-decoration: none;
+    }
+
+    .ca-title:hover {
+        text-decoration: underline;
+    }
+
+    /* Stretched link: the whole row opens the title */
+    .ca-stretch::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+    }
+
+    .ca-tags {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-size: 12px;
+    }
+
+    .ca-tag {
+        padding: 1px 5px;
+        border: 1px solid var(--border-dark);
+        color: var(--ca-text);
+        font-weight: bold;
+        letter-spacing: 0.04em;
         text-transform: uppercase;
     }
 
-    .community-activity-detail-separator {
-        color: var(--border-light);
+    .ca-note {
+        color: var(--ca-muted);
+        font-size: 13px;
     }
 
-    .community-activity-review {
-        color: var(--text-muted);
+    .ca-rating {
+        padding: 2px 6px;
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: bold;
+        outline: 1px solid var(--ca-bevel-dark);
+    }
+
+    .ca-rating--good { background-color: var(--ca-good); }
+    .ca-rating--mid { background-color: var(--ca-mid); }
+    .ca-rating--bad { background-color: var(--ca-bad); }
+
+    .ca-quote {
+        margin: 2px 0 0;
+        padding: 6px 8px;
+        border-left: 3px solid var(--ca-accent);
+        background-color: var(--ca-quote-bg);
+        box-shadow: inset 1px 1px var(--border-dark);
+        color: var(--ca-text);
         font-size: 14px;
-    }
-
-    .community-activity-review {
-        display: -webkit-box !important;
-        margin: 0;
-        overflow: hidden;
         font-style: italic;
-        line-height: 1.35;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+        display: -webkit-box;
         -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
+        -webkit-line-clamp: 3;
+        overflow: hidden;
     }
 
-    .community-activity-review.is-expanded {
-        display: block !important;
-        overflow: visible;
+    .ca-quote.is-expanded {
+        display: block;
         -webkit-line-clamp: unset;
     }
 
-    .community-activity-review-toggle {
+    .ca-text-toggle {
+        position: relative;
+        z-index: 1;
         align-self: flex-start;
-        min-height: 18px !important;
+        min-width: 0 !important;
+        min-height: 32px !important;
         padding: 0 !important;
         border: 0 !important;
         background: transparent !important;
         box-shadow: none !important;
-        color: var(--text-color);
-        font-size: 12px;
+        color: var(--ca-text);
+        text-shadow: none;
+        font-size: 13px;
         text-decoration: underline;
         cursor: pointer;
     }
 
-    .community-activity-rating {
-        width: fit-content;
-        padding: 2px 5px;
-        border: 1px solid var(--border-dark);
-        color: #fff;
+    /* ---------- Quick watchlist action ---------- */
+
+    .ca-quick {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        min-width: 44px !important;
+        height: 44px;
+        min-height: 44px !important;
+        padding: 0 !important;
+        align-self: center;
+    }
+
+    .ca-quick[hidden] {
+        display: none;
+    }
+
+    .ca-quick[disabled] {
+        cursor: progress;
+    }
+
+    /* Pixel plus / check drawn in CSS so they stay crisp in any font */
+    .ca-quick-icon {
+        position: relative;
+        display: block;
+        width: 14px;
+        height: 14px;
+    }
+
+    .ca-quick-icon::before,
+    .ca-quick-icon::after {
+        content: "";
+        position: absolute;
+        background-color: currentColor;
+    }
+
+    .ca-quick[aria-pressed="false"] .ca-quick-icon::before {
+        left: 6px; top: 0; width: 2px; height: 14px;
+    }
+
+    .ca-quick[aria-pressed="false"] .ca-quick-icon::after {
+        left: 0; top: 6px; width: 14px; height: 2px;
+    }
+
+    .ca-quick[aria-pressed="true"] .ca-quick-icon::before {
+        left: 1px; top: 7px; width: 5px; height: 2px;
+        transform: rotate(45deg);
+        transform-origin: left center;
+    }
+
+    .ca-quick[aria-pressed="true"] .ca-quick-icon::after {
+        left: 4px; top: 10px; width: 11px; height: 2px;
+        transform: rotate(-50deg);
+        transform-origin: left center;
+    }
+
+    .community-activity-window .ca-quick[aria-pressed="true"] {
+        color: var(--ca-good);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .community-activity-window .ca-quick[aria-pressed="true"] {
+            color: #7fdc8f;
+        }
+    }
+
+    /* ---------- Bundles ---------- */
+
+    /* Posters cascade like Win98 "Cascade Windows" */
+    .ca-stack {
+        position: relative;
+        /* Own stacking context so the row's tap overlay stays on top */
+        z-index: 0;
+        width: var(--ca-poster-w);
+        height: var(--ca-poster-h);
+    }
+
+    .ca-stack-poster {
+        position: absolute;
+        width: calc(var(--ca-poster-w) - 14px);
+        height: calc(var(--ca-poster-h) - 18px);
+        object-fit: cover;
+        background-color: var(--bg-color);
+        outline: 1px solid var(--ca-bevel-dark);
+        box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35) !important;
+    }
+
+    .ca-stack-poster:nth-child(1) { left: 0; top: 0; z-index: 3; }
+    .ca-stack-poster:nth-child(2) { left: 7px; top: 9px; z-index: 2; }
+    .ca-stack-poster:nth-child(3) { left: 14px; top: 18px; z-index: 1; }
+
+    .ca-stack-count {
+        position: absolute;
+        right: -4px;
+        bottom: -4px;
+        z-index: 4;
+        min-width: 26px;
+        padding: 1px 4px;
+        background-color: var(--ca-accent);
+        color: var(--ca-accent-text);
         font-size: 12px;
+        font-weight: bold;
+        text-align: center;
+        outline: 1px solid var(--ca-bevel-dark);
+    }
+
+    .ca-preview {
+        margin: 0;
+        color: var(--ca-muted);
+        font-size: 13px;
+        line-height: 1.35;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 1;
+        overflow: hidden;
+    }
+
+    .ca-row.is-expanded .ca-preview {
+        display: none;
+    }
+
+    .ca-text-toggle.ca-bundle-toggle {
+        /* Static so its ::after overlay spans the row, not the button */
+        position: static;
+        text-align: left;
+    }
+
+    .ca-bundle-toggle::after {
+        /* Let the whole bundle row expand/collapse */
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+    }
+
+    .ca-row.is-expanded .ca-bundle-toggle::after {
+        bottom: auto;
+        height: calc(var(--ca-poster-h) + 20px);
+    }
+
+    .ca-strip {
+        position: relative;
+        z-index: 1;
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 10px;
+        margin: 10px -8px -2px -10px;
+        padding: 2px 10px 6px;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scroll-padding-left: 10px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+
+    .ca-strip[hidden] {
+        display: none;
+    }
+
+    .ca-strip-item {
+        position: relative;
+        flex: 0 0 80px;
+        scroll-snap-align: start;
+    }
+
+    .ca-strip-link {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--ca-text) !important;
+        text-decoration: none;
+    }
+
+    .ca-strip-link img {
+        width: 80px;
+        height: 120px;
+        object-fit: cover;
+        background-color: var(--bg-color);
+        outline: 1px solid var(--border-dark);
+    }
+
+    .ca-strip-title {
+        font-size: 13px;
+        font-weight: bold;
+        line-height: 1.25;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+    }
+
+    .ca-strip-note {
+        color: var(--ca-muted);
+        font-size: 12px;
+    }
+
+    .ca-strip-item .ca-quick {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 36px;
+        min-width: 36px !important;
+        height: 36px;
+        min-height: 36px !important;
+    }
+
+    /* ---------- Context menu ---------- */
+
+    .ca-row.is-menu-target,
+    .ca-strip-item.is-menu-target {
+        outline: 1px dotted var(--ca-text);
+        outline-offset: -3px;
+    }
+
+    .ca-row.is-menu-target {
+        background-color: var(--ca-press);
+    }
+
+    .ca-row a,
+    .ca-row img {
+        -webkit-touch-callout: none;
+    }
+
+    @media (pointer: coarse) {
+        /* Long-press opens the menu; "Copy review" replaces text selection */
+        .ca-row {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+    }
+
+    /* Appended to <body>, so it carries its own tokens */
+    .ca-menu {
+        --m-bg: #c0c0c0;
+        --m-text: #000000;
+        --m-light: #ffffff;
+        --m-face-light: #dfdfdf;
+        --m-shadow: #808080;
+        --m-dark: #0a0a0a;
+        --m-hi: #000080;
+        --m-hi-text: #ffffff;
+        position: fixed;
+        z-index: 3000;
+        min-width: 180px;
+        max-width: calc(100vw - 16px);
+        padding: 3px;
+        background-color: var(--m-bg);
+        color: var(--m-text);
+        box-shadow:
+            inset -1px -1px var(--m-dark),
+            inset 1px 1px var(--m-face-light),
+            inset -2px -2px var(--m-shadow),
+            inset 2px 2px var(--m-light),
+            2px 2px 0 rgba(0, 0, 0, 0.35);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .ca-menu {
+            --m-bg: #404040;
+            --m-text: #f0f0f0;
+            --m-light: #6a6a6a;
+            --m-face-light: #505050;
+            --m-shadow: #1a1a1a;
+            --m-dark: #000000;
+            --m-hi: #1084d0;
+        }
+    }
+
+    .ca-menu[hidden] {
+        display: none;
+    }
+
+    .ca-menu .ca-menu-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        min-width: 0 !important;
+        min-height: 24px !important;
+        padding: 0 20px 0 22px !important;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none !important;
+        color: var(--m-text);
+        text-shadow: none !important;
+        font-size: 13px;
+        text-align: left;
+        white-space: nowrap;
+        cursor: default;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .ca-menu .ca-menu-item.is-default {
         font-weight: bold;
     }
 
-    .community-activity-controls {
-        display: flex;
-        min-height: 25px;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 8px;
+    .ca-menu .ca-menu-item:hover,
+    .ca-menu .ca-menu-item:focus {
+        background-color: var(--m-hi);
+        color: var(--m-hi-text);
+        outline: none;
+    }
+
+    .ca-menu-sep {
+        height: 0;
+        margin: 3px 2px;
+        border-top: 1px solid var(--m-shadow);
+        border-bottom: 1px solid var(--m-light);
+    }
+
+    @media (pointer: coarse) {
+        .ca-menu {
+            min-width: 220px;
+        }
+
+        .ca-menu .ca-menu-item {
+            min-height: 44px !important;
+            font-size: 15px;
+        }
+    }
+
+    /* ---------- Loading, empty, error ---------- */
+
+    .ca-skeleton .ca-poster,
+    .ca-skeleton-line {
+        background: linear-gradient(90deg, var(--ca-rule) 25%, var(--ca-hover) 50%, var(--ca-rule) 75%);
+        background-size: 200% 100%;
+        animation: ca-shimmer 1.5s infinite;
+        outline: 0;
+    }
+
+    .ca-skeleton-line {
+        width: 85%;
+        height: 12px;
         margin-top: 6px;
     }
 
-    .community-activity-controls #load-more-activity {
-        width: auto;
-        min-width: 72px;
-        min-height: 28px;
-        padding: 2px 9px;
-        font-size: 12px;
+    .ca-skeleton-line.is-short {
+        width: 50%;
     }
 
-    .community-activity-loading-more {
-        color: var(--text-muted);
-        font-size: 12px;
+    @keyframes ca-shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
     }
 
-    .community-activity-empty {
-        display: block;
-        min-height: auto;
-        padding: 18px 8px;
+    .ca-message {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 22px 12px;
+        color: var(--ca-text);
+        font-size: 14px;
         text-align: center;
     }
 
-    .community-activity-loading-line {
-        width: 85%;
-        height: 12px;
-        margin-top: 8px;
+    .ca-retry {
+        min-height: 38px !important;
+        padding: 0 16px !important;
+        font-size: 13px;
     }
 
-    .community-activity-loading-line-short {
-        width: 52%;
+    .ca-show-more {
+        display: block;
+        width: 100%;
+        min-height: 44px !important;
+        margin-top: 6px;
+        font-size: 14px;
     }
 
-    #refresh-indicator-horizontal img {
-        border: 0 !important;
-        box-shadow: none !important;
-        vertical-align: middle;
+    .ca-show-more[hidden] {
+        display: none;
     }
 
-    @media (max-width: 480px) {
-        .community-activity-item {
-            grid-template-columns: 52px minmax(0, 1fr);
-            min-height: 78px;
-            gap: 8px;
-        }
+    .ca-status-right {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex: 0 0 auto;
+    }
 
-        .community-activity-poster {
-            width: 52px;
-            height: 78px;
-        }
+    .ca-refresh-indicator img {
+        display: block;
+        animation: ca-spin 1s infinite linear;
+    }
 
-        .community-activity-review {
-            -webkit-line-clamp: 1;
+    @keyframes ca-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .ca-skeleton .ca-poster,
+        .ca-skeleton-line,
+        .ca-refresh-indicator img {
+            animation: none;
         }
     }
 </style>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Activity state management
-        let currentPage = 1;
-        let isLoading = false;
-        let hasMoreData = true;
-        let autoRefreshInterval = null;
-        let autoRefreshEnabled = true;
-        let allActivities = []; // Store all loaded activities
-        let activeFilter = 'all';
-        let reviewToggleId = 0;
-        
-        const activityContainer = document.getElementById('horizontal_recent_activity');
-        const loadingIndicator = document.getElementById('loading-more-activity');
-        const refreshIndicator = document.getElementById('refresh-indicator-horizontal');
-        const autoRefreshStatus = document.getElementById('auto-refresh-status');
-        const loadMoreButton = document.getElementById('load-more-activity');
-        const activityFilter = document.getElementById('community-activity-filter');
-        
-        // Initialize
-        fetchHorizontalActivity(1, true); // Initial load, replace content
+    (function() {
+        const root = document.getElementById('community-activity');
+        if (!root) return;
+
+        const IS_AUTHENTICATED = {{ user.is_authenticated|yesno:"true,false" }};
+        const FALLBACK_POSTER = "{% static 'images/frontend-logo.png' %}";
+        const PAGE_SIZE = 3;
+        const REFRESH_MS = 60000;
+        const STORAGE_KEY = 'communityActivityFilters';
+        const MINIMIZED_KEY = 'communityActivityMinimized';
+
+        const WATCHLIST_ENDPOINTS = {
+            'Movie': '/movies/watchlist/',
+            'TV Show': '/tvshows/watchlist/',
+            'Game': '/games/watchlist/',
+            'Book': '/books/watchlist/'
+        };
+        const MEDIA_TAGS = { 'Movie': 'Movie', 'TV Show': 'TV', 'Game': 'Game', 'Book': 'Book', 'Mixed': 'Mixed' };
+        const WANT_VERBS = { 'Book': 'read', 'Game': 'play' };
+        const EMPTY_MEDIA = { all: '', movies: 'movie', tvshows: 'TV', books: 'book', games: 'game' };
+        const EMPTY_KIND = { all: 'activity', reviews: 'reviews', watched: 'watched episodes', watchlist: 'watchlist adds' };
+
+        const feed = document.getElementById('ca-feed');
+        const chipScroll = document.getElementById('ca-chip-scroll');
+        const showMoreButton = document.getElementById('ca-show-more');
+        const statusField = document.getElementById('ca-status');
+        const refreshIndicator = document.getElementById('ca-refresh-indicator');
+        const autoRefreshLabel = document.getElementById('ca-auto-refresh');
+        const minimizeButton = document.getElementById('ca-minimize');
+        // Rendered element -> the activity (or bundle item) it shows, for the context menu.
+        const rowData = new WeakMap();
+
+        const state = {
+            page: 1,
+            hasMore: false,
+            media: 'all',
+            kind: 'all',
+            controller: null,
+            lastUpdated: 'Last updated: Just now',
+            statusTimer: null,
+            refreshTimer: null,
+            autoRefresh: true,
+            // Watchlist changes made in this session, keyed by content type + id.
+            viewerOverrides: new Map(),
+            pendingKeys: new Set(),
+            uid: 0
+        };
+
+        restoreFilters();
+        setMinimized(readMinimized());
+        syncChips();
+        updateChipOverflow();
+        renderSkeleton();
+        load(1, true);
         startAutoRefresh();
-        
-        if (loadMoreButton) {
-            loadMoreButton.addEventListener('click', function() {
-                disableAutoRefresh();
-                loadMoreActivity();
+
+        root.querySelectorAll('.ca-chip-group').forEach(function(group) {
+            group.addEventListener('click', function(event) {
+                const chip = event.target.closest('.ca-chip');
+                if (!chip) return;
+                const axis = group.dataset.axis;
+                const value = chip.dataset.value;
+                if (axis === 'media') {
+                    if (state.media === value) return;
+                    state.media = value;
+                } else {
+                    // Activity chips toggle: tapping the active one clears it.
+                    state.kind = state.kind === value ? 'all' : value;
+                }
+                applyFilters();
+            });
+        });
+
+        chipScroll.addEventListener('scroll', updateChipOverflow, { passive: true });
+        window.addEventListener('resize', updateChipOverflow);
+        window.addEventListener('load', updateChipOverflow);
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateChipOverflow);
+
+        showMoreButton.addEventListener('click', function() {
+            if (!state.hasMore || state.controller) return;
+            stopAutoRefresh();
+            load(state.page + 1, false);
+        });
+
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && !isMinimized() && state.autoRefresh && state.page === 1) {
+                load(1, true, { quiet: true });
+            }
+        });
+
+        minimizeButton.addEventListener('click', function() {
+            const minimized = !isMinimized();
+            setMinimized(minimized);
+            try {
+                localStorage.setItem(MINIMIZED_KEY, minimized ? '1' : '0');
+            } catch (error) {
+                /* storage unavailable: state just won't persist */
+            }
+            // Catch up on anything missed while collapsed.
+            if (!minimized && state.autoRefresh && state.page === 1) {
+                load(1, true, { quiet: true });
+            }
+        });
+
+        // ---------- Window ----------
+
+        function isMinimized() {
+            return root.classList.contains('is-minimized');
+        }
+
+        function setMinimized(minimized) {
+            root.classList.toggle('is-minimized', minimized);
+            // 98.css draws the Restore icon for aria-label="Restore".
+            minimizeButton.setAttribute('aria-label', minimized ? 'Restore' : 'Minimize');
+            minimizeButton.setAttribute('aria-expanded', String(!minimized));
+        }
+
+        function readMinimized() {
+            try {
+                return localStorage.getItem(MINIMIZED_KEY) === '1';
+            } catch (error) {
+                return false;
+            }
+        }
+
+        // ---------- Filters ----------
+
+        function applyFilters() {
+            syncChips();
+            saveFilters();
+            state.page = 1;
+            state.hasMore = false;
+            showMoreButton.hidden = true;
+            renderSkeleton();
+            startAutoRefresh();
+            load(1, true);
+        }
+
+        function syncChips() {
+            root.querySelectorAll('.ca-chip-group').forEach(function(group) {
+                const active = group.dataset.axis === 'media' ? state.media : state.kind;
+                group.querySelectorAll('.ca-chip').forEach(function(chip) {
+                    chip.setAttribute('aria-pressed', String(chip.dataset.value === active));
+                });
             });
         }
 
-        if (activityFilter) {
-            activityFilter.addEventListener('change', function() {
-                activeFilter = activityFilter.value;
-                currentPage = 1;
-                hasMoreData = true;
-                allActivities = [];
-                if (loadMoreButton) loadMoreButton.hidden = true;
-                showActivityLoadingState();
-                startAutoRefresh();
-                fetchHorizontalActivity(1, true);
-            });
+        function updateChipOverflow() {
+            const remaining = chipScroll.scrollWidth - chipScroll.clientWidth - chipScroll.scrollLeft;
+            chipScroll.classList.toggle('has-more-right', remaining > 4);
         }
-        
+
+        function restoreFilters() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+                if (saved && EMPTY_MEDIA.hasOwnProperty(saved.media)) state.media = saved.media;
+                if (saved && EMPTY_KIND.hasOwnProperty(saved.kind)) state.kind = saved.kind;
+            } catch (error) {
+                /* storage unavailable: use defaults */
+            }
+        }
+
+        function saveFilters() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ media: state.media, kind: state.kind }));
+            } catch (error) {
+                /* storage unavailable: filters just won't persist */
+            }
+        }
+
+        function isFiltered() {
+            return state.media !== 'all' || state.kind !== 'all';
+        }
+
+        // ---------- Auto-refresh ----------
+
         function startAutoRefresh() {
-            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-            autoRefreshEnabled = true;
-            if (autoRefreshStatus) {
-                autoRefreshStatus.textContent = 'Auto-refresh: ON';
-            }
-            autoRefreshInterval = setInterval(() => {
-                if (autoRefreshEnabled && currentPage === 1) {
-                    fetchHorizontalActivity(1, true); // Only refresh if on first page
+            clearInterval(state.refreshTimer);
+            state.autoRefresh = true;
+            autoRefreshLabel.textContent = 'Auto-refresh: ON';
+            state.refreshTimer = setInterval(function() {
+                if (state.autoRefresh && state.page === 1 && !document.hidden && !isMinimized()) {
+                    load(1, true, { quiet: true });
                 }
-            }, 60000); // Refresh every 60 seconds
+            }, REFRESH_MS);
         }
-        
-        function disableAutoRefresh() {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
-            }
-            autoRefreshEnabled = false;
-            if (autoRefreshStatus) {
-                autoRefreshStatus.textContent = 'Auto-refresh: OFF';
-            }
+
+        // Replacing the list would undo expanded rows and watchlist taps.
+        function stopAutoRefresh() {
+            clearInterval(state.refreshTimer);
+            state.refreshTimer = null;
+            state.autoRefresh = false;
+            autoRefreshLabel.textContent = 'Auto-refresh: OFF';
         }
-        
-        function loadMoreActivity() {
-            if (isLoading || !hasMoreData) return;
-            
-            currentPage++;
-            fetchHorizontalActivity(currentPage, false); // Append to existing content
-        }
-        
-        function fetchHorizontalActivity(page, replaceContent = false) {
-            if (isLoading) return;
-            isLoading = true;
-            activityContainer.setAttribute('aria-busy', 'true');
-            
-            // Show loading indicators
-            if (refreshIndicator && replaceContent) {
-                refreshIndicator.hidden = false;
-                refreshIndicator.classList.add('spinning');
+
+        // ---------- Loading ----------
+
+        function load(page, replace, options) {
+            const quiet = options && options.quiet;
+            if (quiet && state.controller) return;
+            if (state.controller) state.controller.abort();
+
+            const controller = new AbortController();
+            state.controller = controller;
+            feed.setAttribute('aria-busy', 'true');
+            refreshIndicator.hidden = !replace;
+            if (!replace) {
+                showMoreButton.disabled = true;
+                showMoreButton.textContent = 'Loading…';
             }
-            
-            if (loadingIndicator && !replaceContent) {
-                loadingIndicator.hidden = false;
-            }
-            if (loadMoreButton) {
-                loadMoreButton.disabled = true;
-            }
-            if (activityFilter) {
-                activityFilter.disabled = true;
-            }
-            
-            fetch(`/activity/recent/?page=${page}&limit=3&filter=${encodeURIComponent(activeFilter)}&_=${Date.now()}`, { cache: 'no-store' })
-                .then(response => {
+
+            const params = new URLSearchParams({
+                page: String(page),
+                limit: String(PAGE_SIZE),
+                media: state.media,
+                kind: state.kind,
+                _: String(Date.now())
+            });
+
+            fetch('/activity/recent/?' + params.toString(), {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                signal: controller.signal
+            })
+                .then(function(response) {
                     if (!response.ok) throw new Error('HTTP ' + response.status);
                     return response.json();
                 })
-                .then(data => {
-                    isLoading = false;
-                    
-                    // Hide loading indicators
-                    if (refreshIndicator) {
-                        refreshIndicator.hidden = true;
-                        refreshIndicator.classList.remove('spinning');
-                    }
-                    if (loadingIndicator) {
-                        loadingIndicator.hidden = true;
-                    }
-                    
-                    // Update last updated time
-                    const now = new Date();
-                    const lastUpdatedElement = document.getElementById('activity-last-updated-horizontal');
-                    if (lastUpdatedElement) {
-                        lastUpdatedElement.textContent = 'Last updated: ' + now.toLocaleTimeString();
-                    }
-                    
-                    const results = data.results || data;
-                    
-                    // Check if we have more data
-                    hasMoreData = data.pagination ? data.pagination.has_more : false;
-                    if (loadMoreButton) {
-                        loadMoreButton.hidden = !hasMoreData;
-                        loadMoreButton.disabled = false;
-                    }
-                    if (activityFilter) {
-                        activityFilter.disabled = false;
-                    }
-                    
-                    if (replaceContent) {
-                        // Replace all content (initial load or refresh)
-                        allActivities = results;
-                        activityContainer.innerHTML = '';
-                        activityContainer.setAttribute('aria-busy', 'false');
-                        currentPage = 1;
-                    } else {
-                        // Append new content (infinite scroll)
-                        allActivities = allActivities.concat(results);
-                        activityContainer.setAttribute('aria-busy', 'false');
-                    }
-                    
-                    // Render the new activities
-                    if (results.length === 0 && replaceContent) {
-                        activityContainer.innerHTML = `
-                            <div class="community-activity-item community-activity-empty">
-                                <span>No community activity yet.</span>
-                            </div>
-                        `;
-                        return;
-                    }
-                    
-                    // Render only the new activities (or all if replacing)
-                    const activitiesToRender = replaceContent ? allActivities : results;
-                    
-                    activitiesToRender.forEach(activity => {
-                        const activityCard = createActivityCard(activity);
-                        activityContainer.appendChild(activityCard);
-                    });
-                })
-                .catch(error => {
-                    console.error('Error fetching horizontal activity:', error);
-                    isLoading = false;
-                    activityContainer.setAttribute('aria-busy', 'false');
+                .then(function(data) {
+                    if (state.controller !== controller) return;
+                    finishLoading();
 
-                    if (!replaceContent) {
-                        currentPage--;
+                    const results = data.results || [];
+                    state.page = page;
+                    state.hasMore = Boolean(data.pagination && data.pagination.has_more);
+                    state.lastUpdated = 'Last updated: ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    if (!state.statusTimer) statusField.textContent = state.lastUpdated;
+
+                    if (replace) feed.textContent = '';
+
+                    if (replace && results.length === 0) {
+                        renderEmpty();
+                    } else {
+                        results.forEach(appendActivity);
                     }
-                    
-                    // Hide loading indicators
-                    if (refreshIndicator) {
-                        refreshIndicator.hidden = true;
-                        refreshIndicator.classList.remove('spinning');
-                    }
-                    if (loadingIndicator) {
-                        loadingIndicator.hidden = true;
-                    }
-                    if (loadMoreButton) {
-                        loadMoreButton.disabled = false;
-                    }
-                    if (activityFilter) {
-                        activityFilter.disabled = false;
-                    }
-                    
-                    if (replaceContent) {
-                        const errText = (error && error.message) ? String(error.message).slice(0, 80) : 'unknown error';
-                        activityContainer.innerHTML = `
-                            <div class="community-activity-item community-activity-empty">
-                                <span>Failed to load activity. [widget v3 — ${errText}]</span>
-                                <button type="button" id="activity-retry-btn" class="retro-btn" style="margin-top:8px;">Retry</button>
-                            </div>
-                        `;
-                        const retryBtn = document.getElementById('activity-retry-btn');
-                        if (retryBtn) {
-                            retryBtn.addEventListener('click', function() {
-                                retryBtn.disabled = true;
-                                retryBtn.textContent = 'Retrying...';
-                                fetchHorizontalActivity(1, true);
-                            });
-                        }
-                        // Auto-retry once after 5s in case of a transient blip
-                        setTimeout(function() {
-                            if (document.getElementById('activity-retry-btn')) {
-                                fetchHorizontalActivity(1, true);
-                            }
-                        }, 5000);
+                    showMoreButton.hidden = !state.hasMore;
+                })
+                .catch(function(error) {
+                    if (error.name === 'AbortError') return;
+                    console.error('Error fetching community activity:', error);
+                    if (state.controller !== controller) return;
+                    finishLoading();
+
+                    if (replace && !quiet) {
+                        renderError();
+                    } else if (!replace) {
+                        announce("Couldn't load more activity. Try again.");
                     }
                 });
         }
 
-        function showActivityLoadingState() {
-            activityContainer.setAttribute('aria-busy', 'true');
-            activityContainer.innerHTML = `
-                <div class="community-activity-item community-activity-loading">
-                    <div class="community-activity-poster loading-placeholder"></div>
-                    <div class="community-activity-body">
-                        <div class="loading-placeholder community-activity-loading-line"></div>
-                        <div class="loading-placeholder community-activity-loading-line community-activity-loading-line-short"></div>
-                    </div>
-                </div>
-            `;
+        function finishLoading() {
+            state.controller = null;
+            feed.setAttribute('aria-busy', 'false');
+            refreshIndicator.hidden = true;
+            showMoreButton.disabled = false;
+            showMoreButton.textContent = 'Show more';
         }
-        
-        function createActivityCard(activity) {
-            const activityCard = document.createElement('article');
-            activityCard.className = 'community-activity-item';
-            
-            // Set URL based on content type
-            let detailUrl = '#';
-            if (activity.content_type === 'Movie' && activity.tmdb_id) {
-                detailUrl = `/movies/${activity.tmdb_id}`;
-            } else if (activity.content_type === 'TV Show' && activity.tmdb_id) {
-                detailUrl = `/tvshows/${activity.tmdb_id}`;
-            } else if (activity.content_type === 'Game' && activity.media_id) {
-                detailUrl = `/games/${activity.media_id}/`;
-            } else if (activity.content_type === 'Book' && activity.media_id) {
-                detailUrl = `/books/${activity.media_id}/`;
+
+        function renderSkeleton() {
+            feed.setAttribute('aria-busy', 'true');
+            feed.textContent = '';
+            for (let i = 0; i < PAGE_SIZE; i++) {
+                const row = el('div', 'ca-row ca-skeleton');
+                row.setAttribute('aria-hidden', 'true');
+                row.appendChild(el('div', 'ca-poster'));
+                const main = el('div', 'ca-main');
+                main.appendChild(el('div', 'ca-skeleton-line is-short'));
+                main.appendChild(el('div', 'ca-skeleton-line'));
+                main.appendChild(el('div', 'ca-skeleton-line is-short'));
+                row.appendChild(main);
+                feed.appendChild(row);
             }
-            const poster = document.createElement('img');
-            poster.className = 'community-activity-poster';
-            poster.src = activity.poster_path || "{% static 'images/frontend-logo.png' %}";
-            poster.alt = `${activity.title} poster`;
-            poster.loading = 'lazy';
+        }
 
-            const posterLink = document.createElement('a');
-            posterLink.className = 'community-activity-poster-link';
-            posterLink.href = detailUrl;
-            posterLink.setAttribute('aria-label', `View ${activity.title}`);
-            posterLink.appendChild(poster);
-            activityCard.appendChild(posterLink);
-
-            const body = document.createElement('div');
-            body.className = 'community-activity-body';
-
-            const header = document.createElement('div');
-            header.className = 'community-activity-header';
-
-            const username = document.createElement('span');
-            username.className = 'community-activity-username';
-            username.textContent = activity.username;
-
-            const timestamp = document.createElement('time');
-            timestamp.className = 'community-activity-timestamp';
-            const activityDate = parseActivityTimestamp(activity.timestamp);
-            timestamp.dateTime = activityDate ? activityDate.toISOString() : '';
-            timestamp.title = activityDate ? activityDate.toLocaleString() : activity.timestamp;
-            timestamp.textContent = activityDate ? formatRelativeTime(activityDate) : activity.timestamp;
-
-            header.append(username, timestamp);
-            body.appendChild(header);
-
-            const title = document.createElement('a');
-            title.className = 'community-activity-title';
-            title.href = detailUrl;
-            title.textContent = activity.title;
-            body.appendChild(title);
-
-            const details = document.createElement('div');
-            details.className = 'community-activity-details';
-
-            const mediaType = document.createElement('span');
-            mediaType.className = 'community-activity-media';
-            mediaType.textContent = activity.content_type;
-
-            const separator = document.createElement('span');
-            separator.className = 'community-activity-detail-separator';
-            separator.textContent = '·';
-
-            const action = document.createElement('span');
-            action.className = 'community-activity-action';
-            action.textContent = activity.action === 'added to database and added to watchlist'
-                ? 'added to database & watchlist'
-                : activity.action || 'updated';
-
-            details.append(mediaType, separator, action);
-            body.appendChild(details);
-
-            if ('rating' in activity) {
-                const ratingValue = Math.round(activity.rating);
-                const rating = document.createElement('span');
-                rating.className = 'community-activity-rating';
-                rating.style.backgroundColor = ratingValue >= 7 ? '#287d38' : ratingValue >= 5 ? '#8a6900' : '#a12622';
-                rating.textContent = `${ratingValue}/10`;
-                const ratingSeparator = separator.cloneNode(true);
-                details.append(ratingSeparator, rating);
+        function renderEmpty() {
+            const box = el('div', 'ca-message');
+            box.appendChild(el('span', '', emptyMessage()));
+            if (isFiltered()) {
+                const reset = el('button', 'ca-retry', 'Show all activity');
+                reset.type = 'button';
+                reset.addEventListener('click', function() {
+                    state.media = 'all';
+                    state.kind = 'all';
+                    applyFilters();
+                });
+                box.appendChild(reset);
             }
+            feed.appendChild(box);
+        }
+
+        function emptyMessage() {
+            if (!isFiltered()) return 'No community activity yet.';
+            if (state.kind === 'watched' && state.media !== 'all' && state.media !== 'tvshows') {
+                return 'Watched activity is only tracked for TV episodes.';
+            }
+            const mediaWord = EMPTY_MEDIA[state.media];
+            return 'No ' + (mediaWord ? mediaWord + ' ' : '') + EMPTY_KIND[state.kind] + ' yet.';
+        }
+
+        function renderError() {
+            feed.textContent = '';
+            const box = el('div', 'ca-message');
+            box.appendChild(el('span', '', "Couldn't load activity."));
+            const retry = el('button', 'ca-retry', 'Retry');
+            retry.type = 'button';
+            retry.addEventListener('click', function() {
+                renderSkeleton();
+                load(1, true);
+            });
+            box.appendChild(retry);
+            feed.appendChild(box);
+        }
+
+        // ---------- Rendering ----------
+
+        function appendActivity(activity) {
+            const date = parseActivityDate(activity);
+
+            let row;
+            if (activity.kind === 'bundle') {
+                row = renderBundleRow(activity, date);
+            } else if (activity.kind === 'review') {
+                row = renderReviewRow(activity, date);
+            } else {
+                row = renderSimpleRow(activity, date);
+            }
+            if (!rowData.has(row)) rowData.set(row, { activity: activity });
+            feed.appendChild(row);
+        }
+
+        function renderReviewRow(activity, date) {
+            const row = rowShell(activity, 'ca-row--review');
+            const main = row.querySelector('.ca-main');
+
+            main.appendChild(rowHeader(activity, date));
+            // A binge merged with its season review reads as one event.
+            const verb = activity.episode_label
+                ? 'watched ' + activity.episode_label + ' and reviewed'
+                : 'reviewed';
+            main.appendChild(sentence(verb, activity));
+
+            const tags = el('div', 'ca-tags');
+            tags.appendChild(mediaTag(activity.content_type));
+            if (activity.rating !== undefined && activity.rating !== null) {
+                tags.appendChild(ratingChip(activity.rating));
+            }
+            main.appendChild(tags);
 
             if (activity.content) {
-                const review = document.createElement('p');
-                review.className = 'community-activity-review';
-                review.id = `community-review-${reviewToggleId++}`;
-                review.textContent = `“${activity.content}”`;
-                body.appendChild(review);
+                const quote = el('p', 'ca-quote', '“' + activity.content + '”');
+                quote.id = 'ca-quote-' + (state.uid++);
+                main.appendChild(quote);
 
-                const reviewToggle = document.createElement('button');
-                reviewToggle.className = 'community-activity-review-toggle';
-                reviewToggle.type = 'button';
-                reviewToggle.textContent = 'Show full review';
-                reviewToggle.setAttribute('aria-expanded', 'false');
-                reviewToggle.setAttribute('aria-controls', review.id);
-                reviewToggle.hidden = true;
-                reviewToggle.addEventListener('click', function() {
-                    const expanded = review.classList.toggle('is-expanded');
-                    reviewToggle.setAttribute('aria-expanded', String(expanded));
-                    reviewToggle.textContent = expanded ? 'Collapse review' : 'Show full review';
+                const toggle = el('button', 'ca-text-toggle', 'Read more');
+                toggle.type = 'button';
+                toggle.hidden = true;
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.setAttribute('aria-controls', quote.id);
+                toggle.addEventListener('click', function() {
+                    const expanded = quote.classList.toggle('is-expanded');
+                    toggle.setAttribute('aria-expanded', String(expanded));
+                    toggle.textContent = expanded ? 'Show less' : 'Read more';
+                    stopAutoRefresh();
                 });
-                body.appendChild(reviewToggle);
+                main.appendChild(toggle);
 
                 requestAnimationFrame(function() {
-                    reviewToggle.hidden = review.scrollHeight <= review.clientHeight;
+                    toggle.hidden = quote.scrollHeight <= quote.clientHeight + 1;
                 });
             }
 
-            activityCard.appendChild(body);
-            
-            return activityCard;
+            appendQuickAction(row, activity);
+            return row;
         }
 
-        function parseActivityTimestamp(value) {
+        function renderSimpleRow(activity, date) {
+            const row = rowShell(activity, 'ca-row--' + (activity.kind || 'other'));
+            const main = row.querySelector('.ca-main');
+            main.appendChild(rowHeader(activity, date));
+
+            const tags = el('div', 'ca-tags');
+            tags.appendChild(mediaTag(activity.content_type));
+
+            if (activity.kind === 'watchlist') {
+                const verb = activity.is_own ? 'want to ' : 'wants to ';
+                main.appendChild(sentence(verb + (WANT_VERBS[activity.content_type] || 'watch'), activity));
+            } else if (activity.kind === 'episodes') {
+                const label = activity.episode_label || pluralize(activity.episode_count, 'episode');
+                main.appendChild(sentence('watched ' + label + ' of', activity));
+                // Only when the ranges have gaps; "E1–E8" already says 8.
+                if (activity.episode_label && activity.episode_label.indexOf(',') !== -1) {
+                    tags.appendChild(el('span', 'ca-note', pluralize(activity.episode_count, 'episode')));
+                }
+            } else {
+                main.appendChild(sentence('', activity));
+                tags.appendChild(el('span', 'ca-note', activity.action || 'updated'));
+            }
+
+            main.appendChild(tags);
+            appendQuickAction(row, activity);
+            return row;
+        }
+
+        function renderBundleRow(activity, date) {
+            const row = el('article', 'ca-row ca-row--bundle');
+            const items = activity.items || [];
+
+            const stack = el('div', 'ca-stack');
+            stack.setAttribute('aria-hidden', 'true');
+            items.slice(0, 3).forEach(function(item) {
+                stack.appendChild(posterImg(item, 'ca-stack-poster'));
+            });
+            if (activity.count > 1) {
+                stack.appendChild(el('span', 'ca-stack-count', String(activity.count)));
+            }
+            row.appendChild(stack);
+
+            const main = el('div', 'ca-main');
+            main.appendChild(rowHeader(activity, date));
+            const line = el('p', 'ca-line');
+            line.appendChild(el('span', 'ca-verb', activity.action));
+            main.appendChild(line);
+
+            const titles = items.map(function(item) { return item.title; });
+            main.appendChild(el('p', 'ca-preview', titles.join(', ')));
+
+            const strip = el('div', 'ca-strip');
+            strip.id = 'ca-strip-' + (state.uid++);
+            strip.hidden = true;
+            strip.setAttribute('role', 'list');
+            items.forEach(function(item) {
+                strip.appendChild(renderStripItem(item, activity));
+            });
+
+            const toggleLabel = function(expanded) {
+                if (expanded) return 'Hide titles';
+                return activity.count > items.length
+                    ? 'See latest ' + items.length
+                    : 'See all ' + activity.count;
+            };
+            const toggle = el('button', 'ca-text-toggle ca-bundle-toggle', toggleLabel(false));
+            toggle.type = 'button';
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.setAttribute('aria-controls', strip.id);
+            const toggleBundle = function() {
+                const expanded = strip.hidden;
+                strip.hidden = !expanded;
+                row.classList.toggle('is-expanded', expanded);
+                toggle.setAttribute('aria-expanded', String(expanded));
+                toggle.textContent = toggleLabel(expanded);
+                stopAutoRefresh();
+                if (expanded) strip.scrollLeft = 0;
+            };
+            toggle.addEventListener('click', toggleBundle);
+            main.appendChild(toggle);
+            rowData.set(row, {
+                activity: activity,
+                toggleBundle: toggleBundle,
+                isExpanded: function() { return !strip.hidden; }
+            });
+
+            row.appendChild(main);
+            row.appendChild(el('span'));  // keeps the three-column grid aligned
+            row.appendChild(strip);
+            return row;
+        }
+
+        function renderStripItem(item, parent) {
+            const wrapper = el('div', 'ca-strip-item');
+            wrapper.setAttribute('role', 'listitem');
+
+            const link = el(item.detail_url ? 'a' : 'div', 'ca-strip-link');
+            if (item.detail_url) link.href = item.detail_url;
+            link.appendChild(posterImg(item));
+            link.appendChild(el('span', 'ca-strip-title', item.title));
+            if (item.episode_label) {
+                link.appendChild(el('span', 'ca-strip-note', item.episode_label));
+            }
+            wrapper.appendChild(link);
+
+            const quick = quickActionButton(item, parent.is_own);
+            if (quick) wrapper.appendChild(quick);
+            rowData.set(wrapper, { item: item, parent: parent });
+            return wrapper;
+        }
+
+        function rowShell(activity, modifier) {
+            const row = el('article', 'ca-row ' + modifier);
+            row.appendChild(posterImg(activity, 'ca-poster'));
+            row.appendChild(el('div', 'ca-main'));
+            return row;
+        }
+
+        function rowHeader(activity, date) {
+            const meta = el('div', 'ca-meta');
+            const name = activity.is_own ? 'You' : activity.username;
+            const user = el(activity.profile_url ? 'a' : 'span', 'ca-user', name);
+            if (activity.profile_url) user.href = activity.profile_url;
+            meta.appendChild(user);
+            meta.appendChild(el('span', '', '·'));
+
+            const time = el('time', '');
+            if (date) {
+                time.dateTime = date.toISOString();
+                time.title = date.toLocaleString();
+                time.textContent = formatRelativeTime(date);
+            } else {
+                time.textContent = activity.timestamp || '';
+            }
+            meta.appendChild(time);
+            return meta;
+        }
+
+        function sentence(verb, activity) {
+            const line = el('p', 'ca-line');
+            if (verb) {
+                line.appendChild(el('span', 'ca-verb', verb));
+                line.appendChild(document.createTextNode(' '));
+            }
+            const title = el(activity.detail_url ? 'a' : 'span', 'ca-title ca-stretch', activity.title);
+            if (activity.detail_url) title.href = activity.detail_url;
+            line.appendChild(title);
+            return line;
+        }
+
+        function mediaTag(contentType) {
+            return el('span', 'ca-tag', MEDIA_TAGS[contentType] || contentType || '');
+        }
+
+        function ratingChip(rating) {
+            const value = Number(rating);
+            const shown = Number.isInteger(value) ? String(value) : value.toFixed(1);
+            const tone = value >= 7 ? 'good' : value >= 5 ? 'mid' : 'bad';
+            const chip = el('span', 'ca-rating ca-rating--' + tone, '★ ' + shown + '/10');
+            chip.setAttribute('aria-label', 'Rated ' + shown + ' out of 10');
+            return chip;
+        }
+
+        function posterImg(item, className) {
+            const img = document.createElement('img');
+            if (className) img.className = className;
+            img.src = item.poster_path || FALLBACK_POSTER;
+            img.alt = '';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.width = 60;
+            img.height = 90;
+            img.addEventListener('error', function onError() {
+                img.removeEventListener('error', onError);
+                img.src = FALLBACK_POSTER;
+            });
+            return img;
+        }
+
+        // ---------- Quick watchlist action ----------
+
+        function watchKey(item) {
+            return item.content_type + ':' + item.media_id;
+        }
+
+        function currentViewerState(item) {
+            const key = watchKey(item);
+            return state.viewerOverrides.has(key) ? state.viewerOverrides.get(key) : item.viewer_state;
+        }
+
+        function appendQuickAction(row, activity) {
+            const button = quickActionButton(activity, activity.is_own);
+            row.appendChild(button || el('span'));
+        }
+
+        function canQuickAdd(item, isOwn) {
+            return Boolean(IS_AUTHENTICATED && !isOwn && item.media_id
+                && WATCHLIST_ENDPOINTS[item.content_type]
+                && currentViewerState(item) !== 'reviewed');
+        }
+
+        function quickActionButton(item, isOwn) {
+            if (!canQuickAdd(item, isOwn)) return null;
+
+            const button = el('button', 'ca-quick');
+            button.type = 'button';
+            button.dataset.watchKey = watchKey(item);
+            button.appendChild(el('span', 'ca-quick-icon'));
+            paintQuickButton(button, item.title, currentViewerState(item) === 'watchlist');
+            button.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleWatchlist(item);
+            });
+            return button;
+        }
+
+        function paintQuickButton(button, title, onList) {
+            button.setAttribute('aria-pressed', String(onList));
+            button.setAttribute('aria-label', onList
+                ? 'Remove ' + title + ' from your watchlist'
+                : 'Add ' + title + ' to your watchlist');
+            button.title = onList ? 'On your watchlist' : 'Add to watchlist';
+        }
+
+        function setViewerState(item, value) {
+            const key = watchKey(item);
+            state.viewerOverrides.set(key, value);
+            feed.querySelectorAll('.ca-quick').forEach(function(button) {
+                if (button.dataset.watchKey !== key) return;
+                if (value === 'reviewed') {
+                    button.hidden = true;
+                } else {
+                    paintQuickButton(button, item.title, value === 'watchlist');
+                }
+            });
+        }
+
+        function setQuickButtonsBusy(key, busy) {
+            feed.querySelectorAll('.ca-quick').forEach(function(button) {
+                if (button.dataset.watchKey === key) button.disabled = busy;
+            });
+        }
+
+        // Shared by the + buttons and the context menu.
+        function toggleWatchlist(item) {
+            const key = watchKey(item);
+            if (state.pendingKeys.has(key)) return;
+            state.pendingKeys.add(key);
+            stopAutoRefresh();
+
+            const previous = currentViewerState(item) || null;
+            const adding = previous !== 'watchlist';
+            setViewerState(item, adding ? 'watchlist' : null);
+            setQuickButtonsBusy(key, true);
+            const finish = function() {
+                state.pendingKeys.delete(key);
+                setQuickButtonsBusy(key, false);
+            };
+
+            fetch(WATCHLIST_ENDPOINTS[item.content_type], {
+                method: adding ? 'POST' : 'DELETE',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ id: item.media_id })
+            })
+                .then(function(response) {
+                    if (response.ok) return { ok: true };
+                    return response.json().catch(function() { return {}; }).then(function(body) {
+                        return { ok: false, status: response.status, error: String((body && (body.error || body.detail)) || '') };
+                    });
+                })
+                .then(function(result) {
+                    finish();
+                    if (result.ok
+                        || (adding && /already in watchlist/i.test(result.error))
+                        || (!adding && result.status === 404)) {
+                        announce(adding
+                            ? 'Added ' + item.title + ' to your watchlist'
+                            : 'Removed ' + item.title + ' from your watchlist');
+                        return;
+                    }
+                    if (adding && /already been reviewed/i.test(result.error)) {
+                        setViewerState(item, 'reviewed');
+                        announce("You've already reviewed " + item.title);
+                        return;
+                    }
+                    throw new Error(result.error || ('HTTP ' + result.status));
+                })
+                .catch(function(error) {
+                    console.error('Watchlist update failed:', error);
+                    finish();
+                    setViewerState(item, previous);
+                    announce("Couldn't update your watchlist. Try again.");
+                });
+        }
+
+        function announce(message) {
+            clearTimeout(state.statusTimer);
+            statusField.textContent = message;
+            state.statusTimer = setTimeout(function() {
+                state.statusTimer = null;
+                statusField.textContent = state.lastUpdated;
+            }, 3000);
+        }
+
+        function getCookie(name) {
+            const match = document.cookie.split(';').map(function(part) { return part.trim(); })
+                .find(function(part) { return part.startsWith(name + '='); });
+            return match ? decodeURIComponent(match.slice(name.length + 1)) : '';
+        }
+
+        // ---------- Context menu (right-click / long-press) ----------
+
+        const LONG_PRESS_MS = 500;
+        const menu = el('div', 'ca-menu');
+        menu.setAttribute('role', 'menu');
+        menu.setAttribute('aria-label', 'Activity actions');
+        menu.hidden = true;
+        document.body.appendChild(menu);
+
+        const menuState = { target: null, returnFocus: null, press: null, suppressClick: false };
+
+        function menuTargetFrom(node) {
+            const target = node && node.closest ? node.closest('.ca-strip-item, .ca-row') : null;
+            if (!target || !feed.contains(target) || !rowData.has(target)) return null;
+            return target;
+        }
+
+        function absoluteUrl(url) {
+            return new URL(url, window.location.origin).href;
+        }
+
+        function menuEntries(target) {
+            const data = rowData.get(target);
+            const subject = data.item || data.activity;
+            const owner = data.parent || data.activity;
+            const isBundleRow = !data.item && data.activity.kind === 'bundle';
+            const entries = [];
+
+            if (isBundleRow) {
+                entries.push({
+                    label: data.isExpanded() ? 'Hide titles' : 'Show titles',
+                    isDefault: true,
+                    run: data.toggleBundle
+                });
+            } else if (subject.detail_url) {
+                entries.push({
+                    label: 'Open',
+                    isDefault: true,
+                    run: function() { window.location.href = subject.detail_url; }
+                });
+            }
+
+            if (!isBundleRow && canQuickAdd(subject, owner.is_own)) {
+                const onList = currentViewerState(subject) === 'watchlist';
+                entries.push({
+                    label: onList ? 'Remove from watchlist' : 'Add to watchlist',
+                    run: function() { toggleWatchlist(subject); }
+                });
+            }
+
+            if (owner.profile_url && !owner.is_own) {
+                entries.push({
+                    label: 'View ' + owner.username + '’s profile',
+                    run: function() { window.location.href = owner.profile_url; }
+                });
+            }
+
+            const tail = [];
+            const shareUrl = isBundleRow ? null : subject.detail_url;
+            if (shareUrl && navigator.share) {
+                tail.push({
+                    label: 'Share…',
+                    run: function() {
+                        navigator.share({ title: subject.title, url: absoluteUrl(shareUrl) }).catch(function() {});
+                    }
+                });
+            }
+            if (shareUrl) {
+                tail.push({
+                    label: 'Copy link',
+                    run: function() { copyText(absoluteUrl(shareUrl), 'Link copied'); }
+                });
+            }
+            if (!data.item && data.activity.content) {
+                tail.push({
+                    label: 'Copy review',
+                    run: function() { copyText(data.activity.content, 'Review copied'); }
+                });
+            }
+
+            if (entries.length && tail.length) entries.push({ separator: true });
+            return entries.concat(tail);
+        }
+
+        function openMenu(target, x, y, options) {
+            if (!menu.hidden && menuState.target === target) return;
+            const entries = menuEntries(target);
+            if (!entries.length) return;
+            closeMenu(false);
+
+            menu.textContent = '';
+            entries.forEach(function(entry) {
+                if (entry.separator) {
+                    const separator = el('div', 'ca-menu-sep');
+                    separator.setAttribute('role', 'separator');
+                    menu.appendChild(separator);
+                    return;
+                }
+                const item = el('button', 'ca-menu-item' + (entry.isDefault ? ' is-default' : ''), entry.label);
+                item.type = 'button';
+                item.tabIndex = -1;
+                item.setAttribute('role', 'menuitem');
+                item.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    closeMenu(true);
+                    entry.run();
+                });
+                menu.appendChild(item);
+            });
+
+            const active = document.activeElement;
+            menuState.target = target;
+            menuState.returnFocus = active && target.contains(active) ? active : (target.querySelector('.ca-title[href], .ca-strip-link[href]') || target.querySelector('a[href], button'));
+            target.classList.add('is-menu-target');
+            stopAutoRefresh();
+
+            menu.style.left = '0px';
+            menu.style.top = '0px';
+            menu.hidden = false;
+            positionMenu(x, y, options && options.touch);
+            menu.querySelector('.ca-menu-item').focus({ preventScroll: true });
+        }
+
+        function positionMenu(x, y, touch) {
+            const pad = 8;
+            const rect = menu.getBoundingClientRect();
+            let left = x;
+            // On touch, open above the finger so the thumb doesn't cover it.
+            let top = touch ? y - rect.height - 12 : y;
+            if (touch && top < pad) top = y + 12;
+            if (left + rect.width > window.innerWidth - pad) left = window.innerWidth - pad - rect.width;
+            if (top + rect.height > window.innerHeight - pad) top = window.innerHeight - pad - rect.height;
+            menu.style.left = Math.max(pad, left) + 'px';
+            menu.style.top = Math.max(pad, top) + 'px';
+        }
+
+        function closeMenu(restoreFocus) {
+            if (menu.hidden) return;
+            menu.hidden = true;
+            if (menuState.target) menuState.target.classList.remove('is-menu-target');
+            const focusTarget = menuState.returnFocus;
+            menuState.target = null;
+            menuState.returnFocus = null;
+            if (restoreFocus && focusTarget && document.contains(focusTarget)) {
+                focusTarget.focus({ preventScroll: true });
+            }
+        }
+
+        // Swallows the click that ends the current gesture, however long the finger stays down.
+        function suppressNextClick() {
+            menuState.suppressClick = true;
+        }
+
+        function cancelPress() {
+            if (!menuState.press) return;
+            clearTimeout(menuState.press.timer);
+            menuState.press = null;
+        }
+
+        menu.addEventListener('keydown', function(event) {
+            const items = Array.from(menu.querySelectorAll('.ca-menu-item'));
+            const index = items.indexOf(document.activeElement);
+            let next = null;
+            if (event.key === 'ArrowDown') next = items[(index + 1) % items.length];
+            else if (event.key === 'ArrowUp') next = items[(index - 1 + items.length) % items.length];
+            else if (event.key === 'Home') next = items[0];
+            else if (event.key === 'End') next = items[items.length - 1];
+            else if (event.key === 'Escape' || event.key === 'Tab') {
+                event.preventDefault();
+                closeMenu(true);
+                return;
+            }
+            if (next) {
+                event.preventDefault();
+                next.focus();
+            }
+        });
+
+        feed.addEventListener('contextmenu', function(event) {
+            const target = menuTargetFrom(event.target);
+            if (!target) return;
+            event.preventDefault();
+            cancelPress();
+            const touch = event.pointerType === 'touch'
+                || Boolean(event.sourceCapabilities && event.sourceCapabilities.firesTouchEvents);
+            if (touch) suppressNextClick();
+            openMenu(target, event.clientX, event.clientY, { touch: touch });
+        });
+
+        // iOS Safari never fires contextmenu, so long-press is detected by hand.
+        feed.addEventListener('pointerdown', function(event) {
+            if (event.pointerType !== 'touch' || !event.isPrimary) return;
+            const target = menuTargetFrom(event.target);
+            if (!target) return;
+            cancelPress();
+            const press = { x: event.clientX, y: event.clientY, target: target };
+            press.timer = setTimeout(function() {
+                menuState.press = null;
+                suppressNextClick();
+                if (navigator.vibrate) navigator.vibrate(10);
+                openMenu(press.target, press.x, press.y, { touch: true });
+            }, LONG_PRESS_MS);
+            menuState.press = press;
+        });
+
+        feed.addEventListener('pointermove', function(event) {
+            const press = menuState.press;
+            if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 10) cancelPress();
+        });
+        feed.addEventListener('pointerup', cancelPress);
+        feed.addEventListener('pointercancel', cancelPress);
+
+        feed.addEventListener('keydown', function(event) {
+            if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+            const target = menuTargetFrom(document.activeElement);
+            if (!target) return;
+            event.preventDefault();
+            const rect = target.getBoundingClientRect();
+            openMenu(target, rect.left + 16, rect.top + 16, { touch: false });
+        });
+
+        // The click that ends a long-press (or taps outside an open menu) must not navigate.
+        document.addEventListener('click', function(event) {
+            if (menuState.suppressClick && !menu.contains(event.target)) {
+                event.preventDefault();
+                event.stopPropagation();
+                menuState.suppressClick = false;
+            }
+        }, true);
+
+        document.addEventListener('pointerdown', function(event) {
+            // Every new gesture starts clean; a leftover flag must not eat a later tap.
+            menuState.suppressClick = false;
+            if (menu.hidden || menu.contains(event.target)) return;
+            closeMenu(false);
+            suppressNextClick();
+        }, true);
+
+        // Only scrolls that move the target matter; other carousels on the page scroll on their own.
+        function scrollMoves(scroller, node) {
+            return Boolean(node) && (scroller === document || scroller === document.documentElement
+                || (scroller.contains && scroller.contains(node)));
+        }
+
+        document.addEventListener('scroll', function(event) {
+            if (menuState.press && scrollMoves(event.target, menuState.press.target)) cancelPress();
+            if (!menu.hidden && scrollMoves(event.target, menuState.target)) closeMenu(false);
+        }, { capture: true, passive: true });
+        window.addEventListener('resize', function() { closeMenu(false); });
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) closeMenu(false);
+        });
+
+        function copyText(text, message) {
+            const fallback = function() {
+                const area = el('textarea');
+                area.value = text;
+                area.setAttribute('readonly', '');
+                area.style.position = 'fixed';
+                area.style.opacity = '0';
+                document.body.appendChild(area);
+                area.select();
+                let copied = false;
+                try {
+                    copied = document.execCommand('copy');
+                } catch (error) {
+                    copied = false;
+                }
+                area.remove();
+                announce(copied ? message : 'Couldn’t copy to the clipboard');
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(function() { announce(message); }, fallback);
+            } else {
+                fallback();
+            }
+        }
+
+        // ---------- Helpers ----------
+
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
+
+        function pluralize(count, word) {
+            const n = Number(count) || 0;
+            return n + ' ' + word + (n === 1 ? '' : 's');
+        }
+
+        function parseActivityDate(activity) {
+            const value = activity.timestamp_iso || (activity.timestamp && activity.timestamp.replace(' ', 'T'));
             if (!value) return null;
-            const parsed = new Date(value.replace(' ', 'T'));
+            const parsed = new Date(value);
             return Number.isNaN(parsed.getTime()) ? null : parsed;
         }
 
@@ -916,27 +1817,9 @@
 
             return 'just now';
         }
-        
-        // Clean up on page unload
-        window.addEventListener('beforeunload', function() {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-            }
+
+        window.addEventListener('pagehide', function() {
+            clearInterval(state.refreshTimer);
         });
-    });
-    
-    // Add spinning animation for refresh indicator
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .spinning {
-            display: inline-block;
-            animation: spin 1s infinite linear;
-        }
-    `;
-    document.head.appendChild(style);
+    })();
 </script>
