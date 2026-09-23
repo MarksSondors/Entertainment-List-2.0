@@ -182,7 +182,7 @@ class ReviewModalController {
     }
 
     today() {
-        return new Date().toISOString().slice(0, 10);
+        return this.toLocalDate(new Date());
     }
 
     toLocalDate(value) {

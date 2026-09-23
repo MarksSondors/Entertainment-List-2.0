@@ -586,7 +586,8 @@ function openReviewModal(contentId, contentType, title) {
     
     // Reset form
     document.getElementById('reviewForm').reset();
-    document.getElementById('reviewDate').value = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    document.getElementById('reviewDate').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     document.getElementById('rating').value = 5;
     document.getElementById('ratingValue').textContent = '5.0';
     document.getElementById('reviewText').value = '';

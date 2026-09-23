@@ -1040,7 +1040,7 @@ class TVShowReviewView(APIView):
         if review_date > today:
             raise ValueError("Date cannot be in the future")
         if review_date == today:
-            return existing.date_added if existing and existing.date_added.date() == today else timezone.now()
+            return existing.date_added if existing and timezone.localdate(existing.date_added) == today else timezone.now()
         return timezone.make_aware(timezone.datetime.combine(review_date, timezone.datetime.min.time()))
 
     def _target(self, tv_show_id, season_id, episode_subgroup_id, user):
