@@ -2,14 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404
 from .models import PushSubscription, NotificationPreference
 from .serializers import PushSubscriptionSerializer, NotificationPreferenceSerializer
-
-
-def notification_test_page(request):
-    """Test page for push notifications."""
-    return render(request, 'notifications/test.html')
 
 
 class PushSubscriptionViewSet(viewsets.ModelViewSet):

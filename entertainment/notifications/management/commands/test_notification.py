@@ -57,7 +57,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.WARNING(
                     f'\n⚠️  User {user.username} has no active push subscriptions.\n'
-                    f'They need to subscribe at: /api/notifications/test-page/\n'
+                    f'They need to subscribe at: /settings/#notifications\n'
                 )
             )
             return
