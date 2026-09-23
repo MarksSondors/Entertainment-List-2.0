@@ -471,13 +471,10 @@
                 addResultItem.onclick = () => {
                     if (currentEndpoint === 'movies') {
                         if (typeof openModal === 'function') openModal(currentQuery);
-                        else window.location.href = "{% url 'home_page' %}";
                     } else if (currentEndpoint === 'tvshows') {
                         if (typeof openTVShowModal === 'function') openTVShowModal(currentQuery);
-                        else window.location.href = "{% url 'home_page' %}";
                     } else if (currentEndpoint === 'games') {
                         if (typeof openGameModal === 'function') openGameModal(currentQuery);
-                        else window.location.href = "{% url 'home_page' %}";
                     } else if (currentEndpoint === 'books') {
                         if (typeof openBookModal === 'function') openBookModal(currentQuery);
                     }

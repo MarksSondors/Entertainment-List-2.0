@@ -549,16 +549,6 @@ def logout_request(request):
         logout(request)  # Use the logout function
     return redirect('login_page')
 
-@login_required
-def home_page(request):
-    if request.user.is_authenticated:
-        context = {
-            'user': request.user,
-        }
-        return render(request, 'home_page.html', context)
-    else:
-        return redirect('login_page')
-
 
 @login_required
 def genre_detail(request, genre_id):
@@ -1011,8 +1001,8 @@ def watchlist_page(request):
             'countries': [],
             'watchlist_empty': True,
         }
-        return render(request, 'watchlist_page_old.html', context)
-    
+        return render(request, 'watchlist_page.html', context)
+
     # Group items by content type for efficient media fetching
     items_by_content_type = {}
     for item in watchlist_items:
@@ -1296,7 +1286,7 @@ def watchlist_page(request):
         'countries': countries,
     }
     
-    return render(request, 'watchlist_page_old.html', context)
+    return render(request, 'watchlist_page.html', context)
 
 def add_review_data_to_items(items, current_user):
     """Helper function to add review data to watchlist items."""
