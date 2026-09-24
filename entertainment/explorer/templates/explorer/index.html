@@ -8,7 +8,7 @@
 
 <div id="explorer-app"
      class="window explorer-window"
-     data-icons-base="{% static 'images/win98/' %}"
+     data-icons-base="{% get_static_prefix %}images/win98/"
      data-user-id="{{ request.user.pk|default_if_none:'' }}">
 
     <div class="title-bar">
