@@ -805,7 +805,6 @@
         const FALLBACK_POSTER = "{% static 'images/frontend-logo.png' %}";
         const PAGE_SIZE = 3;
         const REFRESH_MS = 60000;
-        const STORAGE_KEY = 'communityActivityFilters';
         const MINIMIZED_KEY = 'communityActivityMinimized';
 
         const WATCHLIST_ENDPOINTS = {
@@ -845,7 +844,6 @@
             uid: 0
         };
 
-        restoreFilters();
         setMinimized(readMinimized());
         syncChips();
         updateChipOverflow();
@@ -926,7 +924,6 @@
 
         function applyFilters() {
             syncChips();
-            saveFilters();
             state.page = 1;
             state.hasMore = false;
             showMoreButton.hidden = true;
@@ -947,24 +944,6 @@
         function updateChipOverflow() {
             const remaining = chipScroll.scrollWidth - chipScroll.clientWidth - chipScroll.scrollLeft;
             chipScroll.classList.toggle('has-more-right', remaining > 4);
-        }
-
-        function restoreFilters() {
-            try {
-                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-                if (saved && EMPTY_MEDIA.hasOwnProperty(saved.media)) state.media = saved.media;
-                if (saved && EMPTY_KIND.hasOwnProperty(saved.kind)) state.kind = saved.kind;
-            } catch (error) {
-                /* storage unavailable: use defaults */
-            }
-        }
-
-        function saveFilters() {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({ media: state.media, kind: state.kind }));
-            } catch (error) {
-                /* storage unavailable: filters just won't persist */
-            }
         }
 
         function isFiltered() {
