@@ -50,7 +50,11 @@ jobs:
           POSTGRES_PASSWORD: test
           DB_HOST: 127.0.0.1
           DB_PORT: 5432
-        run: python manage.py test movies
+        # hashed static storage needs a manifest to render {% static %}; this also fails the
+        # build on a broken static reference before it can 500 in production
+        run: |
+          python manage.py collectstatic --noinput
+          python manage.py test movies
 
   deploy:
     needs: test
