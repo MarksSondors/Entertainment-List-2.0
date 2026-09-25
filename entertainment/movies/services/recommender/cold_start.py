@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Optional
 
 import numpy as np
 
@@ -285,18 +285,36 @@ def blend_item_factors_with_content(
     ``interaction_counts`` must be aligned to ``item_to_idx``'s index order (e.g.
     the per-column nnz count of the training confidence matrix).
     """
+    content_by_idx = content_factors_by_idx(cold_start_head, item_to_idx, catalog)
+    return shrink_blend(ranking_item_factors, content_by_idx, interaction_counts, k_shrinkage)
+
+
+def content_factors_by_idx(
+    cold_start_head: ColdStartHead,
+    item_to_idx: dict[int, int],
+    catalog: CatalogLookups,
+) -> np.ndarray:
+    """Content-predicted factor for every item, row-aligned to ``item_to_idx`` values."""
     ids_in_key_order = list(item_to_idx.keys())
     content_factors = predict_factors(cold_start_head, ids_in_key_order, catalog)
-    # predict_factors iterates in the same order as ids_in_key_order; re-derive the
-    # row order actually used by item_to_idx's *values* (indices) to align correctly.
-    content_by_idx = np.zeros_like(ranking_item_factors)
+    content_by_idx = np.zeros((len(item_to_idx), content_factors.shape[1]), dtype=np.float32)
     for row, tmdb_id in enumerate(ids_in_key_order):
         content_by_idx[item_to_idx[tmdb_id]] = content_factors[row]
+    return content_by_idx
 
+
+def shrink_blend(
+    collab_factors: np.ndarray,
+    content_factors: np.ndarray,
+    interaction_counts: np.ndarray,
+    k_shrinkage: Optional[float],
+) -> np.ndarray:
+    """``n/(n+k) * collab + k/(n+k) * content`` per item; ``k_shrinkage`` None/0 = no blend."""
+    if not k_shrinkage:
+        return collab_factors.astype(np.float32, copy=True)
     n = np.asarray(interaction_counts, dtype=np.float32)
     shrinkage = (n / (n + k_shrinkage)).reshape(-1, 1)
-    blended = shrinkage * ranking_item_factors + (1.0 - shrinkage) * content_by_idx
-    return blended.astype(np.float32)
+    return (shrinkage * collab_factors + (1.0 - shrinkage) * content_factors).astype(np.float32)
 
 
 @dataclass
