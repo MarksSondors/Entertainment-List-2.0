@@ -5,11 +5,11 @@ overlay pickle for per-user fold-in updates. CPU-only — never imports CuPy or
 ``implicit.gpu``.
 
 Scoring:
-- ``predict_rating`` returns a 0-5 explicit score from the bias hierarchy
-  (used for UI display). Does NOT add iALS factors, which live on a different
-  scale and would distort the displayed rating.
-- ``_score_for_ranking`` returns the iALS dot-product score used to rank the
-  candidate set. Falls back to the cold-start ridge head for unseen items.
+- ``predict_rating`` / ``_predict_ratings`` return the 0-5 displayed rating from the
+  bias hierarchy plus a small learned-weight factor term (``explicit_blend_alpha``).
+- Ranking uses the iALS dot product (cold-start ridge head for unseen items), then
+  the bundle's tuned serving transform (``metadata["serving"]``: popularity penalty
+  + MMR) via ``recommender.scoring`` - the same code the offline evaluation runs.
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ import os
 import pickle
 import threading
 import time
+from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
@@ -34,7 +35,17 @@ from movies.services.recommender.cold_start import (
     predict_factors as cold_start_predict_factors,
     predict_user_factor,
 )
-from movies.services.recommender.data_loading import CatalogLookups
+from movies.services.recommender.data_loading import TMDB_GENRES, CatalogLookups
+from movies.services.recommender.ease import EaseModel
+from movies.services.recommender.features import (
+    FEATURE_NAMES,
+    FEATURE_SCHEMA_VERSION,
+    ItemFeatureTable,
+    compute_features,
+    generate_candidates,
+    user_context,
+)
+from movies.services.recommender.scoring import LEGACY_SERVING, ItemArrays, ServingParams, rank_row
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -43,15 +54,26 @@ logger = logging.getLogger(__name__)
 _OVERLAY_RELOAD_INTERVAL_SECONDS = 300  # 5 min TTL for picking up fold-in updates
 
 
+@dataclass
+class _CandidateScope:
+    """Per-item arrays for one candidate list (see ``MovieRecommender._get_scope``)."""
+    key: int
+    tmdb_ids: np.ndarray
+    item_idx: np.ndarray       # (m,) index into the trained item space, -1 for untrained items
+    factors: np.ndarray        # (m, k) ranking factors; cold-start head rows for unseen items
+    has_factor: np.ndarray     # (m,) bool
+    items: ItemArrays          # popularity / genre / language / runtime / decade for serving transforms
+    item_bias: np.ndarray      # (m,) item bias, cold estimate where untrained
+    years: list
+    languages: list
+    runtimes: list
+
+
 class MovieRecommender:
     """Loads the trained model + overlay; serves predictions and recommendations."""
 
-    # Popularity-penalty weight applied to ranking_score before sort/MMR (item 9):
-    # ranking_score -= _POPULARITY_LAMBDA * log1p(vote_count). Small on purpose —
-    # this nudges towards less-obvious picks without drowning out the learned score.
-    _POPULARITY_LAMBDA = 0.05
-
-    def __init__(self):
+    def __init__(self, bundle: Optional[dict] = None):
+        """Loads svd_model_latest.pkl, or uses ``bundle`` (an in-memory model dict) if given."""
         self._movie_content_type: Optional[ContentType] = None
         self.model_data: Optional[dict] = None
         self.known_tmdb_ids: set[int] = set()
@@ -64,13 +86,26 @@ class MovieRecommender:
         self.user_time_trend: dict = {}
         self.user_time_norm: dict = {}
         self.explicit_blend_alpha: float = 0.0
+        self.serving: ServingParams = LEGACY_SERVING
+        self._pop_stats: Optional[tuple[float, float]] = None
+        self._scopes: dict[str, "_CandidateScope"] = {}
+        self._cold_factor_cache: dict[int, Optional[np.ndarray]] = {}
+        self.ease: Optional[EaseModel] = None
+        self.positive_threshold: float = 3.5
+        self.reranker: Optional[dict] = None
+        self._feature_table: Optional[ItemFeatureTable] = None
+        self._disabled_tiers: set[str] = set()
 
         # Overlay state
         self._overlay: dict = {}
         self._overlay_mtime: float = 0.0
         self._overlay_loaded_at: float = 0.0
 
-        self._load_model()
+        if bundle is not None:
+            self.model_data = bundle
+            self._init_from_bundle()
+        else:
+            self._load_model()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -91,9 +126,13 @@ class MovieRecommender:
                     with open(p, "rb") as f:
                         self.model_data = pickle.load(f)
                     break
-            if not self.model_data:
-                return
+            if self.model_data:
+                self._init_from_bundle()
+        except Exception:
+            logger.exception("Failed to load recommender model")
 
+    def _init_from_bundle(self) -> None:
+        try:
             data = self.model_data
             ranking = data.get("ranking", {})
             biases = data.get("biases", {})
@@ -149,6 +188,12 @@ class MovieRecommender:
 
             self.known_tmdb_ids = set(data.get("known_tmdb_ids") or list(self.item_to_idx.keys()))
             self.explicit_blend_alpha = float(metadata.get("explicit_blend_alpha", 0.0))
+            # Tuned serving transform; bundles from before v5.1 get the transform they were served with.
+            self.serving = ServingParams.from_dict(metadata["serving"]) if metadata.get("serving") else LEGACY_SERVING
+            self._pop_stats = ItemArrays.log_votes_stats(self.item_to_idx.keys(), self.catalog)
+            self.positive_threshold = float(ranking.get("positive_threshold", metadata.get("positive_threshold", 3.5)))
+            self.ease = self._load_ease(data.get("ease"))
+            self.reranker = self._load_reranker(data.get("reranker"))
 
             # Cold-start head
             cold = data.get("cold_start")
@@ -186,6 +231,56 @@ class MovieRecommender:
                 )
         except Exception:
             logger.exception("Failed to load recommender model")
+
+    def _load_ease(self, section: Optional[dict]) -> Optional[EaseModel]:
+        """Re-index the bundle's EASE vocabulary (stored as TMDB ids) into this model's
+        item space. Any mismatch disables EASE and serving falls back to plain iALS."""
+        if not section or self.item_factors is None:
+            return None
+        try:
+            vocab = np.array([self.item_to_idx.get(int(t), -1) for t in section["item_ids"]], dtype=np.int64)
+            if (vocab < 0).any():
+                logger.warning("EASE vocabulary has %d items unknown to the ranking model; EASE disabled",
+                               int((vocab < 0).sum()))
+                return None
+            return EaseModel(vocab=vocab, indptr=np.asarray(section["indptr"]),
+                             indices=np.asarray(section["indices"]), data=np.asarray(section["data"]),
+                             lam=float(section.get("lambda", 0.0)), topk=section.get("topk"),
+                             n_items_total=len(self.item_to_idx))
+        except Exception:
+            logger.exception("Failed to load the EASE section; serving without it")
+            return None
+
+    @staticmethod
+    def _load_reranker(section: Optional[dict]) -> Optional[dict]:
+        """Accept the reranker only if it was trained on exactly this code's feature layout."""
+        if not section:
+            return None
+        if (section.get("format") != "lgbm_numpy_v1"
+                or section.get("feature_schema_version") != FEATURE_SCHEMA_VERSION
+                or list(section.get("feature_names") or []) != list(FEATURE_NAMES)):
+            logger.warning("Reranker feature schema mismatch; serving without the reranker")
+            return None
+        return section
+
+    def _get_feature_table(self) -> ItemFeatureTable:
+        """Reranker item features, built lazily (one pass over the trained catalog)."""
+        if self._feature_table is None:
+            from movies.services.recommender.evaluation import popularity_percentile
+
+            idx_to_item = np.empty(len(self.item_to_idx), dtype=np.int64)
+            for t, i in self.item_to_idx.items():
+                idx_to_item[i] = t
+            counts = (self.model_data.get("item_stats") or {}).get("interaction_counts")
+            if counts is None:
+                counts = np.zeros(len(idx_to_item))
+            biases = {
+                "global_mean": self.global_mean, "year_biases": self.year_biases, "item_biases": self.item_biases,
+                "user_decade_biases": self.user_decade_biases, "user_language_biases": self.user_language_biases,
+            }
+            self._feature_table = ItemFeatureTable.build(idx_to_item, self.catalog, biases,
+                                                         popularity_percentile(np.asarray(counts)), self.item_factors)
+        return self._feature_table
 
     # ------------------------------------------------------------------
     # Overlay
@@ -403,18 +498,6 @@ class MovieRecommender:
                 return None
         return None
 
-    def _score_for_ranking(
-        self, user_id_str: str, tmdb_id_int: int, user_factor_override: Optional[np.ndarray] = None,
-    ) -> float:
-        """iALS dot-product score; 0 if no factors are available."""
-        u = self._user_factor(user_id_str, override=user_factor_override)
-        if u is None:
-            return 0.0
-        v = self._item_factor(int(tmdb_id_int))
-        if v is None:
-            return 0.0
-        return float(np.dot(u, v))
-
     def _get_cold_start_user_factor(self, user_id, min_ratings: int = 1) -> Optional[np.ndarray]:
         """Symmetric user cold-start (item 2): predict an iALS-shaped factor for a
         user who isn't in ``user_to_idx``/the overlay yet, from their existing
@@ -452,58 +535,251 @@ class MovieRecommender:
             return None
 
     # ------------------------------------------------------------------
-    # Diversity re-ranking (MMR) — unchanged behaviour
+    # Vectorized candidate scoring
     # ------------------------------------------------------------------
 
-    def _rerank_mmr(self, candidates: list[dict], max_recommendations: int, diversity_alpha: float = 0.7) -> list[dict]:
-        if not candidates:
-            return []
+    def _get_scope(self, name: str, tmdb_ids: list[int], years: Optional[list] = None) -> "_CandidateScope":
+        """Per-item arrays for a candidate list, cached until the list changes (the
+        local catalog / external candidate set change rarely, per-user exclusions are
+        applied as masks on top)."""
+        key = hash((tuple(tmdb_ids), tuple(years) if years is not None else None))
+        scope = self._scopes.get(name)
+        if scope is not None and scope.key == key:
+            return scope
 
-        scores = [c.get("ranking_score", c["predicted_rating"]) for c in candidates]
-        s_max, s_min = max(scores), min(scores)
-        s_range = s_max - s_min if s_max > s_min else 1.0
+        m = len(tmdb_ids)
+        k = self.item_factors.shape[1] if self.item_factors is not None else 0
+        factors = np.zeros((m, k), dtype=np.float32)
+        has_factor = np.zeros(m, dtype=bool)
+        cold_rows: list[int] = []
+        for row, tid in enumerate(tmdb_ids):
+            idx = self.item_to_idx.get(tid)
+            if idx is not None and self.item_factors is not None:
+                factors[row] = self.item_factors[idx]
+                has_factor[row] = True
+            else:
+                cold_rows.append(row)
+        if cold_rows and self.cold_start_head is not None and self.catalog.tmdb_to_genres:
+            todo = [tmdb_ids[r] for r in cold_rows if tmdb_ids[r] not in self._cold_factor_cache]
+            if todo:
+                try:
+                    vecs = cold_start_predict_factors(self.cold_start_head, todo, self.catalog)
+                    self._cold_factor_cache.update({t: np.asarray(v, dtype=np.float32) for t, v in zip(todo, vecs)})
+                except Exception:
+                    logger.exception("Batched cold-start item factor prediction failed")
+                    self._cold_factor_cache.update({t: None for t in todo})
+            for r in cold_rows:
+                vec = self._cold_factor_cache.get(tmdb_ids[r])
+                if vec is not None:
+                    factors[r] = vec
+                    has_factor[r] = True
 
-        feats: dict[int, dict] = {}
-        for c in candidates:
-            tid = c["tmdb_id"]
-            raw = self.tmdb_to_genres.get(tid, []) or []
-            genres = set(self.genre_mapping.get(g, g) if self.genre_mapping else g for g in raw)
-            year = self.tmdb_id_to_year.get(tid)
-            feats[tid] = {
-                "genres": genres,
-                "language": self.tmdb_to_language.get(tid, "en") if self.tmdb_to_language else "en",
-                "runtime_bucket": self.tmdb_to_runtime_bucket.get(tid, "standard") if self.tmdb_to_runtime_bucket else "standard",
-                "decade": (year // 10) * 10 if year else None,
-            }
+        if years is None:
+            years = [None] * m
+        years = [y if y is not None else self.tmdb_id_to_year.get(t) for t, y in zip(tmdb_ids, years)]
+        item_bias = np.array([
+            self.item_biases[t] if t in self.item_biases else self._estimate_cold_item_bias(int(t))
+            for t in tmdb_ids
+        ], dtype=np.float64)
+        scope = _CandidateScope(
+            key=key,
+            tmdb_ids=np.asarray(tmdb_ids, dtype=np.int64),
+            item_idx=np.array([self.item_to_idx.get(t, -1) for t in tmdb_ids], dtype=np.int64),
+            factors=factors,
+            has_factor=has_factor,
+            items=ItemArrays.build(tmdb_ids, self.catalog, log_votes_stats=self._pop_stats),
+            item_bias=item_bias,
+            years=years,
+            languages=[self.tmdb_to_language.get(t, "en") if self.tmdb_to_language else "en" for t in tmdb_ids],
+            runtimes=[self.tmdb_to_runtime_bucket.get(t, "standard") if self.tmdb_to_runtime_bucket else "standard"
+                      for t in tmdb_ids],
+        )
+        self._scopes[name] = scope
+        return scope
 
-        remaining = sorted(candidates, key=lambda x: x.get("ranking_score", x["predicted_rating"]), reverse=True)
-        selected = [remaining.pop(0)] if remaining else []
+    def _user_category_bias(self, kind: str, key, user_id_str: str) -> float:
+        """Overlay-first per-user category bias, exactly as ``predict_rating`` reads it."""
+        ov = self._ov_category_bias(kind, key, user_id_str)
+        if ov is not None:
+            return float(ov)
+        return float((getattr(self, kind, None) or {}).get(key, {}).get(user_id_str, 0.0))
 
-        while len(selected) < max_recommendations and remaining:
-            best_score = -float("inf")
-            best_idx = -1
-            for i, item in enumerate(remaining):
-                i_feat = feats.get(item["tmdb_id"], {})
-                i_gens = i_feat.get("genres", set())
-                max_sim = 0.0
-                for sel in selected:
-                    s_feat = feats.get(sel["tmdb_id"], {})
-                    s_gens = s_feat.get("genres", set())
-                    genre_sim = (len(i_gens & s_gens) / len(i_gens | s_gens)) if (i_gens and s_gens) else 0.0
-                    lang_sim = 1.0 if i_feat.get("language") == s_feat.get("language") else 0.0
-                    rt_sim = 1.0 if i_feat.get("runtime_bucket") == s_feat.get("runtime_bucket") else 0.0
-                    dec_sim = 1.0 if i_feat.get("decade") and i_feat["decade"] == s_feat.get("decade") else 0.0
-                    sim = 0.50 * genre_sim + 0.20 * lang_sim + 0.15 * rt_sim + 0.15 * dec_sim
-                    if sim > max_sim:
-                        max_sim = sim
-                norm = (item.get("ranking_score", item["predicted_rating"]) - s_min) / s_range
-                mmr = diversity_alpha * norm - (1.0 - diversity_alpha) * max_sim
-                if mmr > best_score:
-                    best_score = mmr
-                    best_idx = i
-            selected.append(remaining.pop(best_idx if best_idx >= 0 else 0))
+    def _predict_ratings(self, user_id_str: str, scope: "_CandidateScope",
+                         user_factor: Optional[np.ndarray]) -> np.ndarray:
+        """Vectorized ``predict_rating`` for every item in ``scope`` (same terms, same
+        overlay precedence; see the parity test in movies/tests)."""
+        self._maybe_reload_overlay()
+        m = len(scope.tmdb_ids)
+        b_u = self._ov_user_bias(user_id_str)
+        if b_u is None:
+            b_u = self.user_biases.get(user_id_str, 0.0)
+        est = np.full(m, self.global_mean + float(b_u), dtype=np.float64) + scope.item_bias
 
-        return selected
+        # Year + decade (both zero when the year is unknown)
+        year_term: dict = {}
+        for y in set(scope.years):
+            if y is None:
+                year_term[None] = 0.0
+            else:
+                decade = (int(y) // 10) * 10
+                year_term[y] = (float(self.year_biases.get(int(y), 0.0))
+                                + self._user_category_bias("user_decade_biases", decade, user_id_str))
+        est += np.array([year_term[y] for y in scope.years], dtype=np.float64)
+
+        # Genre (multi-hot sum over the canonical TMDB genres)
+        genre_vec = np.array([self._user_category_bias("user_genre_biases", g, user_id_str) for g in TMDB_GENRES])
+        est += scope.items.genre_mat.astype(np.float64) @ genre_vec
+
+        if self.user_language_biases:
+            lang_term = {l: self._user_category_bias("user_language_biases", l, user_id_str)
+                         for l in set(scope.languages)}
+            est += np.array([lang_term[l] for l in scope.languages], dtype=np.float64)
+        if self.user_runtime_biases:
+            rt_term = {r: self._user_category_bias("user_runtime_biases", r, user_id_str)
+                       for r in set(scope.runtimes)}
+            est += np.array([rt_term[r] for r in scope.runtimes], dtype=np.float64)
+
+        bounds = self.user_time_norm.get(user_id_str)
+        slope = self.user_time_trend.get(user_id_str)
+        if bounds is not None and slope is not None:
+            t_min, t_max = bounds
+            span = (t_max - t_min) or 1.0
+            est += float(slope) * float(np.clip((time.time() - t_min) / span - 0.5, -1.0, 1.0))
+
+        if self.explicit_blend_alpha and user_factor is not None:
+            est += np.where(scope.has_factor, self.explicit_blend_alpha * (scope.factors @ user_factor), 0.0)
+        return est
+
+    def _user_positive_item_idx(self, user_id) -> np.ndarray:
+        """Trained-item indices of the user's positive reviews (EASE input), read live from
+        the DB so new ratings count immediately. Local reviews are on a 0-10 scale."""
+        rows = Review.objects.filter(
+            user_id=user_id, content_type=self.movie_content_type, rating__gte=self.positive_threshold * 2,
+        ).values_list("object_id", flat=True)
+        tmdb_ids = Movie.objects.filter(id__in=list(rows), tmdb_id__isnull=False).values_list("tmdb_id", flat=True)
+        idx = [self.item_to_idx.get(int(t)) for t in tmdb_ids]
+        return np.array([i for i in idx if i is not None], dtype=np.int64)
+
+    def _ranking_scores(self, user_id, user_factor: np.ndarray, scope: "_CandidateScope",
+                        excluded_rows: Optional[np.ndarray] = None
+                        ) -> tuple[np.ndarray, Optional[tuple[float, float]]]:
+        """Scores for ``scope`` from the best available tier: reranker -> blend -> iALS.
+
+        A tier that raises is logged once and skipped for the rest of the process.
+        ``excluded_rows`` (bool over scope rows) marks items that can't be served.
+        """
+        if self.reranker is not None and "reranker" not in self._disabled_tiers:
+            try:
+                return self._reranker_scores(user_id, user_factor, scope, excluded_rows)
+            except Exception:
+                logger.exception("Reranker scoring failed; falling back to the blend/iALS tier")
+                self._disabled_tiers.add("reranker")
+        if "blend" not in self._disabled_tiers:
+            try:
+                return self._blend_scores(user_id, user_factor, scope)
+            except Exception:
+                logger.exception("Blend scoring failed; falling back to plain iALS")
+                self._disabled_tiers.add("blend")
+        raw = np.where(scope.has_factor, scope.factors @ user_factor, -np.inf).astype(np.float32)
+        return raw, None
+
+    def _user_history(self, user_id) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """(ratings on the 0-5 scale, trained item index or -1, timestamps) of the user's reviews."""
+        rows = list(Review.objects.filter(user_id=user_id, content_type=self.movie_content_type)
+                    .values_list("object_id", "rating", "date_added"))
+        tmdb_by_movie = dict(Movie.objects.filter(id__in=[r[0] for r in rows], tmdb_id__isnull=False)
+                             .values_list("id", "tmdb_id"))
+        ratings, items, ts = [], [], []
+        for movie_id, rating, date_added in rows:
+            tid = tmdb_by_movie.get(movie_id)
+            ratings.append(float(rating) / 2.0)
+            items.append(self.item_to_idx.get(int(tid), -1) if tid is not None else -1)
+            ts.append(date_added.timestamp() if date_added else time.time())
+        return np.array(ratings), np.array(items, dtype=np.int64), np.array(ts)
+
+    def _reranker_scores(self, user_id, user_factor: np.ndarray, scope: "_CandidateScope",
+                         excluded_rows: Optional[np.ndarray]) -> tuple[np.ndarray, None]:
+        """LambdaRank scores (numpy trees) for the reranker's candidates within ``scope``;
+        everything else in scope gets -inf. Mirrors ``reranker.RerankFeatureBuilder``."""
+        from movies.services.recommender.reranker import predict_numpy_trees
+
+        user_id_str = f"loc_{user_id}"
+        table = self._get_feature_table()
+        ratings, items, ts = self._user_history(user_id)
+        b_u = self._ov_user_bias(user_id_str)
+        ctx = user_context(
+            user_factor, table, ratings=ratings, item_idx=items, timestamps=ts, query_ts=time.time(),
+            positive_threshold=self.positive_threshold,
+            bias_lookup=lambda kind, key: self._user_category_bias(kind, key, user_id_str),
+            user_bias=float(b_u if b_u is not None else self.user_biases.get(user_id_str, 0.0)),
+        )
+        ials_full = self.item_factors @ user_factor
+        ease_full = None
+        if self.ease is not None:
+            pos = items[(ratings >= self.positive_threshold) & (items >= 0)]
+            ease_full = self.ease.score_one(pos)
+
+        # Only items that are in scope, trained and servable may become candidates.
+        servable = np.zeros(len(ials_full), dtype=bool)
+        ok = scope.item_idx >= 0
+        if excluded_rows is not None:
+            ok &= ~excluded_rows
+        servable[scope.item_idx[ok]] = True
+        servable[items[items >= 0]] = False
+        counts = (self.model_data.get("item_stats") or {}).get("interaction_counts")
+        pop_scores = np.asarray(counts, dtype=np.float64) if counts is not None else np.zeros(len(ials_full))
+        k = self.reranker.get("candidate_k") or {}
+        cand, src = generate_candidates(ials_full, ease_full, pop_scores, ~servable,
+                                        k_ials=int(k.get("ials", 200)), k_ease=int(k.get("ease", 200)),
+                                        k_pop=int(k.get("pop", 50)))
+        cand_scores = np.full(len(ials_full), -np.inf, dtype=np.float32)
+        if len(cand):
+            cand_scores[cand] = predict_numpy_trees(self.reranker["trees"],
+                                                    compute_features(ctx, cand, src, table, ials_full, ease_full))
+        scores = np.full(len(scope.item_idx), -np.inf, dtype=np.float32)
+        scores[ok] = cand_scores[scope.item_idx[ok]]
+        return scores, None
+
+    def _blend_scores(self, user_id, user_factor: np.ndarray,
+                      scope: "_CandidateScope") -> tuple[np.ndarray, Optional[tuple[float, float]]]:
+        """(scores for ``scope``, their mean/std over the full trained catalog).
+
+        Plain iALS dot products, or - when the bundle ships EASE with ``ease_beta`` > 0 -
+        z(iALS) + ease_beta * z(EASE) exactly like ``evaluation.blend_scorer``. The full-
+        catalog stats are the z-scale the popularity penalty was tuned on offline
+        (a candidate subset would distort it).
+        """
+        raw = np.where(scope.has_factor, scope.factors @ user_factor, -np.inf).astype(np.float32)
+        if self.item_factors is None:
+            return raw, None
+        full = (self.item_factors @ user_factor).astype(np.float64)
+        beta = float(self.serving.ease_beta or 0.0)
+        if not beta or self.ease is None:
+            stats = (float(full.mean()), float(full.std())) if self.serving.pop_normalize else None
+            return raw, stats
+
+        m_i, s_i = float(full.mean()), float(full.std()) or 1.0
+        e_full = self.ease.score_one(self._user_positive_item_idx(user_id)).astype(np.float64)
+        in_vocab = ~np.isnan(e_full)
+        if in_vocab.any():
+            m_e, s_e = float(e_full[in_vocab].mean()), (float(e_full[in_vocab].std()) or 1.0)
+        else:
+            m_e, s_e = 0.0, 1.0
+        ez_full = np.where(in_vocab, (np.nan_to_num(e_full) - m_e) / s_e, 0.0)
+        blend_full = (full - m_i) / s_i + beta * ez_full
+
+        known = scope.item_idx >= 0
+        ez_scope = np.zeros(len(raw))
+        ez_scope[known] = ez_full[scope.item_idx[known]]
+        scores = np.where(np.isfinite(raw), (raw - m_i) / s_i + beta * ez_scope, -np.inf).astype(np.float32)
+        stats = (float(blend_full.mean()), float(blend_full.std())) if self.serving.pop_normalize else None
+        return scores, stats
+
+    def _resolve_user_factor(self, user_id) -> Optional[np.ndarray]:
+        """Overlay / base-index factor, else the symmetric cold-start head's prediction
+        from the user's reviews (brand-new users), else None."""
+        factor = self._user_factor(f"loc_{user_id}")
+        return factor if factor is not None else self._get_cold_start_user_factor(user_id)
 
     # ------------------------------------------------------------------
     # Public API
@@ -519,95 +795,78 @@ class MovieRecommender:
         )
         if not self.model_data:
             return self._get_popular_movies(max_recommendations, rated)
+        self._maybe_reload_overlay()
 
-        user_id_str = f"loc_{user_id}"
-        # User must be known in either the base index or the overlay; otherwise try the
-        # symmetric cold-start head (item 2) before giving up to a popularity fallback.
-        cold_user_factor = None
-        has_user = (user_id_str in self.user_to_idx) or (self._ov_user_factor(user_id_str) is not None)
-        if not has_user:
-            cold_user_factor = self._get_cold_start_user_factor(user_id)
-            has_user = cold_user_factor is not None
-        if not has_user:
+        # Known in the base index or the overlay, else the symmetric cold-start head;
+        # otherwise fall back to popularity.
+        user_factor = self._resolve_user_factor(user_id)
+        if user_factor is None:
             return self._get_popular_movies(max_recommendations, rated)
 
-        candidates = (
-            Movie.objects.exclude(id__in=rated)
-            .filter(tmdb_id__isnull=False)
-            .values("id", "tmdb_id", "release_date")
+        movies = list(
+            Movie.objects.filter(tmdb_id__isnull=False)
+            .order_by("id")
+            .values_list("id", "tmdb_id", "release_date")
+        )
+        if not movies:
+            return self._get_popular_movies(max_recommendations, rated)
+        movie_ids = np.array([m[0] for m in movies])
+        cand = self._get_scope(
+            "local",
+            [int(m[1]) for m in movies],
+            [m[2].year if m[2] else None for m in movies],
         )
 
-        predictions = []
-        for movie in candidates:
-            tmdb_id = int(movie["tmdb_id"])
-            year = movie["release_date"].year if movie["release_date"] else None
-            ranking_score = self._score_for_ranking(user_id_str, tmdb_id, user_factor_override=cold_user_factor)
-            est = self.predict_rating(user_id_str, tmdb_id, year=year, user_factor_override=cold_user_factor)
-            if est == 0:
-                continue
-            est = max(0.5, min(5.0, est))
-            # Popularity-aware re-ranking (item 9): nudge the sort/MMR order away from
-            # pure-popularity picks without touching the displayed predicted_rating.
-            vote_count = self.tmdb_vote_data.get(tmdb_id, (0.0, 0))[1]
-            ranking_score -= self._POPULARITY_LAMBDA * np.log1p(max(vote_count, 0))
-            predictions.append({
-                "id": movie["id"],
-                "tmdb_id": tmdb_id,
-                "predicted_rating": round(est * 2, 1),  # display in 0-10
-                "ranking_score": ranking_score,
-            })
+        rated_rows = np.isin(movie_ids, list(rated))
+        scores, stats = self._ranking_scores(user_id, user_factor, cand, excluded_rows=rated_rows)
+        scores[rated_rows] = -np.inf
+        order = rank_row(scores, cand.items, max_recommendations, self.serving, score_stats=stats)
+        if len(order) == 0:
+            return self._get_popular_movies(max_recommendations, rated)
+        est = self._predict_ratings(f"loc_{user_id}", cand, user_factor)
 
-        predictions.sort(key=lambda x: x["ranking_score"], reverse=True)
-        pool = predictions[: max_recommendations * 3]
-        top = self._rerank_mmr(pool, max_recommendations)
-
-        ids = [p["id"] for p in top]
-        movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=ids)}
+        movies_by_id = {m.id: m for m in Movie.objects.filter(id__in=[int(movie_ids[i]) for i in order])}
         out = []
-        for item in top:
-            m = movies_by_id.get(item["id"])
+        for i in order:
+            m = movies_by_id.get(int(movie_ids[i]))
             if m is not None:
-                m.predicted_rating = item["predicted_rating"]
+                m.predicted_rating = round(float(np.clip(est[i], 0.5, 5.0)) * 2, 1)  # display in 0-10
                 out.append(m)
         return out or self._get_popular_movies(max_recommendations, rated)
 
+    # Only suggest external movies the displayed rating expects the user to like.
+    _EXTERNAL_MIN_PREDICTED = 3.2
+
     def _get_external_recommendations(self, user_id, max_recommendations: int):
         if not self.model_data or not self.known_tmdb_ids:
+            return []
+        self._maybe_reload_overlay()
+
+        user_factor = self._resolve_user_factor(user_id)
+        if user_factor is None:
             return []
 
         local_tmdb_ids = set(
             Movie.objects.exclude(tmdb_id__isnull=True).values_list("tmdb_id", flat=True)
         )
-        candidates = self.known_tmdb_ids - local_tmdb_ids
-
-        user_id_str = f"loc_{user_id}"
-        cold_user_factor = None
-        has_user = (user_id_str in self.user_to_idx) or (self._ov_user_factor(user_id_str) is not None)
-        if not has_user:
-            cold_user_factor = self._get_cold_start_user_factor(user_id)
-            has_user = cold_user_factor is not None
-        if not has_user:
+        candidates = sorted(t for t in self.known_tmdb_ids - local_tmdb_ids if t in self.item_to_idx)
+        if not candidates:
             return []
+        cand = self._get_scope("external", candidates)
 
-        predictions = []
-        for tmdb_id in candidates:
-            if tmdb_id not in self.item_to_idx:
-                continue
-            ranking_score = self._score_for_ranking(user_id_str, int(tmdb_id), user_factor_override=cold_user_factor)
-            est = self.predict_rating(user_id_str, int(tmdb_id), user_factor_override=cold_user_factor)
-            est = max(0.5, min(5.0, est))
-            if est < 3.2:
-                continue
-            vote_count = self.tmdb_vote_data.get(tmdb_id, (0.0, 0))[1]
-            ranking_score -= self._POPULARITY_LAMBDA * np.log1p(max(vote_count, 0))
-            predictions.append({
-                "tmdb_id": int(tmdb_id),
-                "predicted_rating": round(est * 2, 1),
-                "ranking_score": ranking_score,
-            })
-
-        predictions.sort(key=lambda x: x["ranking_score"], reverse=True)
-        return self._rerank_mmr(predictions[: max_recommendations * 3], max_recommendations)
+        est = np.clip(self._predict_ratings(f"loc_{user_id}", cand, user_factor), 0.5, 5.0)
+        low = est < self._EXTERNAL_MIN_PREDICTED
+        scores, stats = self._ranking_scores(user_id, user_factor, cand, excluded_rows=low)
+        scores[low] = -np.inf
+        order = rank_row(scores, cand.items, max_recommendations, self.serving, score_stats=stats)
+        return [
+            {
+                "tmdb_id": int(cand.tmdb_ids[i]),
+                "predicted_rating": round(float(est[i]) * 2, 1),
+                "ranking_score": float(scores[i]),
+            }
+            for i in order
+        ]
 
     # ------------------------------------------------------------------
     # Taste-map helpers (movie network graph)

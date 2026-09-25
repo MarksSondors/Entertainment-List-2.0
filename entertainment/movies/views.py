@@ -1529,6 +1529,12 @@ def upload_model(request):
         legacy_path = os.path.join(model_dir, 'svd_model.pkl')
         shutil.copy2(versioned_path, latest_path)
         shutil.copy2(versioned_path, legacy_path)
+        # Metadata sidecars so a server-side retrain's promotion gate compares against
+        # the uploaded champion (see model_io.save_bundle).
+        from pathlib import Path
+        from movies.services.recommender.model_io import write_meta
+        write_meta(Path(versioned_path), metadata)
+        write_meta(Path(latest_path), metadata)  # -> svd_model_latest.meta.json
 
         return Response({
             'status': 'ok',
