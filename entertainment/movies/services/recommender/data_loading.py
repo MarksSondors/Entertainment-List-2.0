@@ -345,6 +345,31 @@ def _dataset_cache_key(
     return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
 
+def load_cached_dataset(key: Optional[str] = None) -> tuple[Optional[pd.DataFrame], CatalogLookups]:
+    """Load a previously cached dataset by key (or the newest one when ``key`` is
+    None / "latest") without touching the DB or the raw CSVs.
+
+    For offline experimentation (``eval_recommender --dataset-cache``) on a machine
+    where Postgres isn't reachable. The cache may be stale relative to the live DB.
+    """
+    cache_dir = _dataset_cache_dir()
+    if key in (None, "latest"):
+        candidates = sorted(cache_dir.glob("*.parquet"), key=lambda p: p.stat().st_mtime, reverse=True)
+        candidates = [p for p in candidates if (cache_dir / f"{p.stem}.catalog.pkl").exists()]
+        if not candidates:
+            return None, CatalogLookups()
+        key = candidates[0].stem
+    df_path = cache_dir / f"{key}.parquet"
+    catalog_path = cache_dir / f"{key}.catalog.pkl"
+    if not df_path.exists() or not catalog_path.exists():
+        return None, CatalogLookups()
+    logger.info("Loading cached training dataset (key=%s) without DB access", key)
+    df = pd.read_parquet(df_path)
+    with open(catalog_path, "rb") as fh:
+        catalog = pickle.load(fh)
+    return df, catalog
+
+
 def load_dataset(
     *,
     min_user_ratings: int = 10,

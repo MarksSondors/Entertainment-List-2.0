@@ -10,7 +10,7 @@ Entertainment-List-2.0 is a modern Django 5.2+ web application that provides a c
 - **Smart Discovery**: Advanced search and filtering with real-time external API integration, plus a unified cross-media explorer
 - **Personal Management**: Customizable watchlists, reading lists, and personal collections
 - **Social Features**: Community reviews, ratings, and movie-of-the-week discussions
-- **Intelligent Recommendations**: Personalized content suggestions via a hybrid SVD/content-based recommender
+- **Intelligent Recommendations**: Personalized content suggestions via an iALS + EASE + LambdaRank recommender with content-based cold start
 - **Network Graph Analysis**: Community detection (Leiden algorithm) to visualize relationships between movies, actors, and directors
 - **Notifications**: Web push notifications for background task and activity updates
 - **Stremio Integration**: Companion addon for streaming discovery
@@ -176,20 +176,23 @@ docker-compose -f docker-compose.dev.yaml up -d --build
 
 ## Recommender System Setup
 
-To enable the hybrid recommender system (SVD collaborative filtering + content-based):
+The movie recommender combines iALS matrix factorization, a sparse EASE item-item model and a LightGBM LambdaRank reranker, with a content-based cold-start head for movies nobody has rated yet. A bias hierarchy provides the displayed predicted rating.
 
 1. **Download datasets:**
    - Download the [MovieLens 32M Dataset](https://grouplens.org/datasets/movielens/32m/) (or the Small dataset for development).
    - Extract `ratings.csv` and `links.csv` to `entertainment/data/ml-32m/`.
    - Download the [TMDB Movies Dataset](https://www.kaggle.com/datasets/asaniczka/tmdb-movies-dataset-2023-930k-movies) and place `TMDB_movie_dataset_v11.csv` in `entertainment/data/`. This provides content-based enrichment (ratings, runtime, language, status, genres) used to build movie feature vectors.
 
-2. **Train the model:**
+2. **Train the model** (on a training machine; `requirements-train.txt` adds LightGBM, which the inference image doesn't need):
 ```bash
-python manage.py train_recommender
+pip install -r requirements.txt -r requirements-train.txt
+python manage.py train_recommender --optimize      # ~1 h on a 16-thread CPU
 ```
-   - This merges the external MovieLens data and TMDB catalog data with your local user reviews and trains an SVD model.
-   - The model and mapping files are saved to `entertainment/movies/ml_models/svd_model.pkl`.
-   - Run periodically (e.g., weekly) to update recommendations based on new user interactions.
+   - Each user's ratings are split by time into A / B / C. Hyperparameters, EASE and the reranker are tuned on A→B. Every stage is then reported on the held-out C split: MostPop, iALS, EASE, the blend and the reranker.
+   - EASE and the reranker only ship if they beat the simpler stage on C. The decision is recorded in the model's `metadata["gates"]`.
+   - The new model is saved as `entertainment/movies/ml_models/svd_model_<timestamp>.pkl` with a `.meta.json` sidecar. It replaces `svd_model_latest.pkl` only if its held-out NDCG@10 isn't more than 2% below the current model's; `--force-promote` overrides this check. `--dry-run` tunes and evaluates without saving.
+   - `python manage.py eval_recommender` compares stages for a saved model's configuration. `--dataset-cache latest` works offline without the DB, and `--show-user loc_<id>` prints someone's top 20.
+   - Between retrains, `update_recommender --all-stale` (scheduled) folds new reviews into each user's factor.
 
 3. **Usage:**
    - The dashboard automatically uses the model for personalized recommendations.
@@ -324,7 +327,7 @@ Entertainment-List-2.0/
 │   ├── movies/               # Movie management, recommender, network graph
 │   │   └── services/
 │   │       ├── network_graph/    # Graph builders, algorithms (Leiden), types
-│   │       └── recommender/      # Hybrid SVD/content-based recommender
+│   │       └── recommender/      # iALS + EASE + LambdaRank recommender, eval & training
 │   ├── tvshows/              # TV show management
 │   ├── books/                # Book management
 │   ├── music/                # Music management

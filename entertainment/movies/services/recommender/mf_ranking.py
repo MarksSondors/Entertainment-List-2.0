@@ -1,9 +1,8 @@
 """iALS ranking head with optional CUDA.
 
 Ranking-time scores come from a proper implicit-feedback ALS. Positive
-interactions are ratings >= ``positive_threshold``. Confidence:
-
-    C_ui = 1 + alpha * positive_strength(rating) * source_weight
+interactions are ratings >= ``positive_threshold``; their confidence is defined by
+``weights.ConfidenceRecipe`` (shared with the per-user fold-in).
 
 GPU is opt-in via ``use_gpu=True``. Factors are *always* coerced to plain numpy
 arrays before returning so the pickle is loadable on CPU-only hosts (no CuPy
@@ -19,7 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import coo_matrix, csr_matrix
 
-from .weights import confidence_from_rating
+from .weights import ConfidenceRecipe
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +77,17 @@ def gpu_diagnostics() -> dict:
     return info
 
 
+def _single_threaded_blas():
+    """implicit parallelizes over users/items itself; a multi-threaded BLAS underneath
+    oversubscribes the cores (implicit warns about this at fit time)."""
+    try:
+        from threadpoolctl import threadpool_limits
+        return threadpool_limits(1, "blas")
+    except ImportError:
+        import contextlib
+        return contextlib.nullcontext()
+
+
 def _to_numpy(arr) -> np.ndarray:
     """Coerce factors to ``np.ndarray`` regardless of the implicit backend.
 
@@ -99,44 +109,42 @@ def _to_numpy(arr) -> np.ndarray:
 def build_confidence_matrix(
     df: pd.DataFrame,
     *,
-    positive_threshold: float = 3.5,
-    alpha: float = 40.0,
-    local_user_weight: float = 3.0,
+    recipe: Optional[ConfidenceRecipe] = None,
     watchlist_df: Optional[pd.DataFrame] = None,
-    watchlist_confidence: float = 2.0,
 ) -> tuple[csr_matrix, dict[str, int], dict[int, int]]:
     """Build a (n_users, n_items) confidence-weighted CSR for iALS.
 
-    Only rows with rating >= ``positive_threshold`` are kept (implicit positives).
+    Only rows with rating >= ``recipe.positive_threshold`` are kept (implicit
+    positives); their confidence comes from ``ConfidenceRecipe.rating_confidence``.
 
     ``watchlist_df`` (columns ``user_id``, ``tmdb_id`` — see
     ``data_loading.load_watchlist_pairs``) adds extra low-confidence implicit
-    positives from users adding movies to their watchlist. Scoped to pairs whose
-    user *and* item already appear in the rating-derived vocabulary (i.e. this
-    enriches existing users/items rather than introducing brand-new indices with
-    no bias/cold-start signal elsewhere) — a watchlist-only (user, item) pair with
-    either side unknown is skipped. Where a pair is both rated-positive and
-    watchlisted, confidences add (``sum_duplicates``), giving it a modest boost.
+    positives at ``recipe.watchlist_confidence``, scoped to pairs whose user *and*
+    item already appear in the rating-derived vocabulary. Where a pair is both
+    rated-positive and watchlisted, confidences add (``sum_duplicates``).
     """
-    pos = df[df["rating"] >= positive_threshold].copy()
+    recipe = recipe or ConfidenceRecipe()
+    pos = df[df["rating"] >= recipe.positive_threshold]
     if pos.empty:
-        raise ValueError(f"No positive interactions at threshold={positive_threshold}")
+        raise ValueError(f"No positive interactions at threshold={recipe.positive_threshold}")
 
-    # .to_numpy() materializes user_id's actual string labels (df may store it as
-    # categorical dtype to save memory) so dict-keying/iteration below is unaffected.
-    user_ids = pos["user_id"].to_numpy()
-    item_ids = pos["tmdb_id"].values
+    # astype(str) materializes user_id's string labels (df may store it as categorical).
+    user_series = pos["user_id"].astype(str)
+    user_ids = user_series.to_numpy()
+    item_ids = pos["tmdb_id"].to_numpy()
 
     user_to_idx = {u: i for i, u in enumerate(pd.unique(user_ids))}
     item_to_idx = {int(t): i for i, t in enumerate(pd.unique(item_ids))}
 
-    u_idx = np.fromiter((user_to_idx[u] for u in user_ids), dtype=np.int32, count=len(user_ids))
-    i_idx = np.fromiter((item_to_idx[int(t)] for t in item_ids), dtype=np.int32, count=len(item_ids))
+    u_idx = user_series.map(user_to_idx).to_numpy(dtype=np.int32)
+    i_idx = pos["tmdb_id"].map(item_to_idx).to_numpy(dtype=np.int32)
 
-    confidence = confidence_from_rating(pos["rating"].values.astype(np.float32),
-                                        threshold=positive_threshold, alpha=alpha)
-    is_local = np.array([str(u).startswith("loc_") for u in user_ids])
-    confidence = confidence * np.where(is_local, local_user_weight, 1.0).astype(np.float32)
+    timestamps = pos["timestamp"].to_numpy() if "timestamp" in pos.columns else None
+    confidence = recipe.rating_confidence(
+        pos["rating"].to_numpy(dtype=np.float32),
+        is_local=user_series.str.startswith("loc_").to_numpy(),
+        timestamps=timestamps,
+    )
 
     n_users = len(user_to_idx)
     n_items = len(item_to_idx)
@@ -147,11 +155,9 @@ def build_confidence_matrix(
             watchlist_df["user_id"].isin(user_to_idx) & watchlist_df["tmdb_id"].isin(item_to_idx)
         ]
         if not wl.empty:
-            wl_u = np.fromiter((user_to_idx[u] for u in wl["user_id"]), dtype=np.int32, count=len(wl))
-            wl_i = np.fromiter((item_to_idx[int(t)] for t in wl["tmdb_id"]), dtype=np.int32, count=len(wl))
-            rows.append(wl_u)
-            cols.append(wl_i)
-            vals.append(np.full(len(wl), watchlist_confidence, dtype=np.float32))
+            rows.append(wl["user_id"].map(user_to_idx).to_numpy(dtype=np.int32))
+            cols.append(wl["tmdb_id"].map(item_to_idx).to_numpy(dtype=np.int32))
+            vals.append(np.full(len(wl), recipe.watchlist_confidence, dtype=np.float32))
             logger.info("Adding %d watchlist positives to the confidence matrix", len(wl))
 
     R = coo_matrix(
@@ -193,15 +199,16 @@ def train_ials(
         "Fitting iALS: factors=%d reg=%.4f iters=%d alpha=%.2f gpu=%s",
         factors, regularization, iterations, alpha, use_gpu,
     )
-    model = AlternatingLeastSquares(
-        factors=factors,
-        regularization=regularization,
-        iterations=iterations,
-        alpha=alpha,
-        use_gpu=use_gpu,
-        random_state=random_state,
-    )
-    model.fit(R_user_item, show_progress=False)
+    with _single_threaded_blas():
+        model = AlternatingLeastSquares(
+            factors=factors,
+            regularization=regularization,
+            iterations=iterations,
+            alpha=alpha,
+            use_gpu=use_gpu,
+            random_state=random_state,
+        )
+        model.fit(R_user_item, show_progress=False)
 
     user_factors = _to_numpy(model.user_factors)
     item_factors = _to_numpy(model.item_factors)
@@ -261,15 +268,16 @@ def train_bpr(
         "Fitting BPR: factors=%d reg=%.4f iters=%d lr=%.4f gpu=%s",
         factors, regularization, iterations, learning_rate, use_gpu,
     )
-    model = BayesianPersonalizedRanking(
-        factors=factors,
-        regularization=regularization,
-        iterations=iterations,
-        learning_rate=learning_rate,
-        use_gpu=use_gpu,
-        random_state=random_state,
-    )
-    model.fit(R_user_item, show_progress=False)
+    with _single_threaded_blas():
+        model = BayesianPersonalizedRanking(
+            factors=factors,
+            regularization=regularization,
+            iterations=iterations,
+            learning_rate=learning_rate,
+            use_gpu=use_gpu,
+            random_state=random_state,
+        )
+        model.fit(R_user_item, show_progress=False)
 
     user_factors = _to_numpy(model.user_factors)
     item_factors = _to_numpy(model.item_factors)
@@ -355,3 +363,32 @@ def score_users_topk(
         idx = np.take_along_axis(idx, order, axis=1)
     top_scores = np.take_along_axis(scores, idx, axis=1)
     return idx[:, :k], top_scores[:, :k]
+
+
+def fold_in_user_factor(
+    item_factors: np.ndarray,
+    item_idx: np.ndarray,
+    stored_confidence: np.ndarray,
+    recipe: ConfidenceRecipe,
+) -> Optional[np.ndarray]:
+    """Closed-form iALS user solve with the item factors held fixed:
+
+        u = (VᵀV + Σ_i (c_i - 1) v_i v_iᵀ + λI)⁻¹ Σ_i c_i v_i,   c_i = outer_alpha * stored_i
+
+    which is exactly the per-user normal equation implicit's ALS solves (implicit
+    multiplies the confidence matrix by its ``alpha`` and uses ``regularization``
+    unscaled). ``stored_confidence`` is what ``build_confidence_matrix`` would have
+    put in the user's CSR row (see ``ConfidenceRecipe.rating_confidence``); duplicate
+    item indices are summed, like ``sum_duplicates`` does in training.
+    """
+    item_idx = np.asarray(item_idx, dtype=np.int64)
+    if item_idx.size == 0:
+        return None
+    V = np.asarray(item_factors, dtype=np.float64)
+    uniq, inv = np.unique(item_idx, return_inverse=True)
+    stored = np.bincount(inv, weights=np.asarray(stored_confidence, dtype=np.float64))
+    c = recipe.outer_alpha * stored
+    Vi = V[uniq]
+    A = V.T @ V + (Vi * (c - 1.0)[:, None]).T @ Vi + recipe.regularization * np.eye(V.shape[1])
+    b = (Vi * c[:, None]).sum(axis=0)
+    return np.linalg.solve(A, b).astype(np.float32)

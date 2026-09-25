@@ -1,0 +1,7 @@
+# Training-only deps for the recommender (run on the training machine, not the
+# inference VM). The VM image is python:alpine, which has no LightGBM wheels;
+# serving evaluates the reranker's trees in numpy (recommender/reranker.py), so
+# lightgbm is never imported there.
+#
+#   pip install -r requirements.txt -r requirements-train.txt
+lightgbm>=4.3

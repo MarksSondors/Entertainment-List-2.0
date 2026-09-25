@@ -10,10 +10,12 @@ must never be persisted (asserted on save).
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import pickle
 import shutil
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -56,6 +58,10 @@ def assert_pickle_safe(bundle: dict) -> None:
     if user_cold is not None:
         _assert_numpy("user_cold_start.coef", user_cold["coef"])
         _assert_numpy("user_cold_start.intercept", user_cold["intercept"])
+    ease = bundle.get("ease")
+    if ease is not None:
+        for key in ("item_ids", "indptr", "indices", "data"):
+            _assert_numpy(f"ease.{key}", ease[key])
 
 
 def build_bundle(
@@ -66,6 +72,9 @@ def build_bundle(
     cold_start: Optional[ColdStartHead],
     metadata: dict,
     user_cold_start: Optional[UserColdStartHead] = None,
+    confidence: Optional[dict] = None,
+    item_counts: Optional[np.ndarray] = None,
+    ease: Optional[dict] = None,
 ) -> dict:
     """Assemble the v5.0 export bundle. Adds legacy-shaped keys for back-compat
     with the existing ``MovieRecommender`` until inference is updated.
@@ -86,6 +95,9 @@ def build_bundle(
             "positive_threshold": ranking.positive_threshold,
             "trained_with_gpu": ranking.trained_with_gpu,
             "model_type": ranking.model_type,
+            # Full confidence recipe (weights.ConfidenceRecipe) so the per-user fold-in
+            # solves against exactly the weighting the item factors were trained with.
+            "confidence": dict(confidence or {}),
         },
         "catalog": {
             "tmdb_to_genres": dict(catalog.tmdb_to_genres),
@@ -98,6 +110,10 @@ def build_bundle(
         },
         "known_tmdb_ids": list(ranking.item_to_idx.keys()),
     }
+    if ease is not None:
+        bundle["ease"] = ease   # EaseModel.to_bundle(): sparse item-item weights keyed by TMDB id
+    if item_counts is not None:
+        bundle["item_stats"] = {"interaction_counts": np.asarray(item_counts, dtype=np.int32)}
     if cold_start is not None:
         bundle["cold_start"] = {
             "coef": cold_start.coef,
@@ -141,23 +157,101 @@ def build_bundle(
     return bundle
 
 
-def save_bundle(bundle: dict, *, keep_versions: int = 5) -> Path:
-    """Pickle ``bundle`` as a versioned snapshot, update _latest.pkl + svd_model.pkl,
-    and prune old versioned files beyond ``keep_versions``.
+@dataclass
+class SaveResult:
+    path: Path
+    promoted: bool
+    reason: str
+
+
+# A challenger whose clean NDCG@10 is more than this fraction below the current
+# champion's (same eval protocol) is saved but not promoted to svd_model_latest.pkl.
+PROMOTION_TOLERANCE = 0.02
+
+LATEST_META = "svd_model_latest.meta.json"
+
+
+def _meta_path(pickle_path: Path) -> Path:
+    return pickle_path.with_suffix(".meta.json")
+
+
+def write_meta(pickle_path: Path, metadata: dict) -> Path:
+    """Metadata sidecar so gates/UIs can inspect a model without unpickling ~300 MB."""
+    p = _meta_path(pickle_path)
+    p.write_text(json.dumps(metadata, indent=2, default=str))
+    return p
+
+
+def read_meta(pickle_path: Path) -> Optional[dict]:
+    p = _meta_path(pickle_path)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def promotion_decision(new_meta: dict, champion_meta: Optional[dict],
+                       tolerance: float = PROMOTION_TOLERANCE) -> tuple[bool, str]:
+    """(promote?, reason). Only models evaluated under the same protocol are compared;
+    anything else (no champion, legacy/leaked champion metrics) promotes."""
+    if not champion_meta:
+        return True, "no current champion metadata"
+    new_proto = new_meta.get("eval_protocol")
+    old_proto = champion_meta.get("eval_protocol")
+    if new_proto is None or new_proto != old_proto:
+        return True, f"champion eval protocol {old_proto!r} not comparable with {new_proto!r}"
+    new_ndcg = float((new_meta.get("eval") or {}).get("ndcg_at_k", 0.0))
+    old_ndcg = float((champion_meta.get("eval") or {}).get("ndcg_at_k", 0.0))
+    if old_ndcg <= 0:
+        return True, "champion has no NDCG@10"
+    rel = (new_ndcg - old_ndcg) / old_ndcg
+    if rel < -tolerance:
+        return False, (f"NDCG@10 {new_ndcg:.4f} is {-100 * rel:.1f}% below champion {old_ndcg:.4f} "
+                       f"(tolerance {100 * tolerance:.0f}%)")
+    return True, f"NDCG@10 {new_ndcg:.4f} vs champion {old_ndcg:.4f} ({100 * rel:+.1f}%)"
+
+
+def save_bundle(bundle: dict, *, keep_versions: int = 5, force_promote: bool = False,
+                directory: Optional[Path] = None) -> SaveResult:
+    """Pickle ``bundle`` as a versioned snapshot (+ ``.meta.json`` sidecar), then promote
+    it to svd_model_latest.pkl / svd_model.pkl unless it regresses against the current
+    champion (see ``promotion_decision``), and prune old versions beyond ``keep_versions``.
     """
     assert_pickle_safe(bundle)
-    d = model_dir()
+    d = Path(directory) if directory else model_dir()
+    d.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     versioned = d / f"svd_model_{ts}.pkl"
     with open(versioned, "wb") as f:
         pickle.dump(bundle, f, protocol=pickle.HIGHEST_PROTOCOL)
-    shutil.copy2(versioned, d / "svd_model_latest.pkl")
-    shutil.copy2(versioned, d / "svd_model.pkl")  # back-compat name
+    metadata = bundle.get("metadata", {}) or {}
+    write_meta(versioned, metadata)
+
+    champion_meta = None
+    latest_meta_path = d / LATEST_META
+    if latest_meta_path.exists():
+        try:
+            champion_meta = json.loads(latest_meta_path.read_text())
+        except (OSError, ValueError):
+            champion_meta = None
+    promote, reason = promotion_decision(metadata, champion_meta)
+    if force_promote and not promote:
+        promote, reason = True, f"forced ({reason})"
+
+    if promote:
+        shutil.copy2(versioned, d / "svd_model_latest.pkl")
+        shutil.copy2(versioned, d / "svd_model.pkl")  # back-compat name
+        shutil.copy2(_meta_path(versioned), latest_meta_path)
+        logger.info("Promoted %s to svd_model_latest.pkl: %s", versioned.name, reason)
+    else:
+        logger.warning("NOT promoting %s: %s", versioned.name, reason)
     _rotate(d, keep_versions=keep_versions)
 
     size_mb = versioned.stat().st_size / 1024 / 1024
     logger.info("Saved %s (%.2f MB)", versioned.name, size_mb)
-    return versioned
+    return SaveResult(path=versioned, promoted=promote, reason=reason)
 
 
 def _rotate(d: Path, *, keep_versions: int) -> None:
@@ -165,6 +259,9 @@ def _rotate(d: Path, *, keep_versions: int) -> None:
     for old in versioned[keep_versions:]:
         try:
             old.unlink()
+            meta = _meta_path(old)
+            if meta.exists():
+                meta.unlink()
             logger.info("Rotated out: %s", old.name)
         except OSError as e:
             logger.warning("Failed to rotate %s: %s", old.name, e)

@@ -23,8 +23,8 @@ from django.utils.dateparse import parse_datetime
 from movies.services.recommender.data_loading import (
     RUNTIME_BUCKETS,
     TMDB_GENRES,
-    _runtime_bucket,
 )
+from movies.services.recommender.mf_ranking import fold_in_user_factor
 from movies.services.recommender.model_io import (
     is_overlay_compatible,
     load_bundle,
@@ -33,6 +33,7 @@ from movies.services.recommender.model_io import (
     save_overlay,
     _empty_overlay,
 )
+from movies.services.recommender.weights import ConfidenceRecipe
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ def _user_reviews_payload(user_pk: int, bundle: dict) -> list[dict]:
     cold = bundle.get("cold_start")
 
     payload = []
-    for movie_pk, rating, _date_added in rows:
+    for movie_pk, rating, date_added in rows:
         meta = movie_meta.get(movie_pk)
         if not meta:
             continue
@@ -110,8 +111,41 @@ def _user_reviews_payload(user_pk: int, bundle: dict) -> list[dict]:
             "genres": list(genres or []),
             "language": str(tmdb_to_lang.get(tid, "en")),
             "runtime_bucket": str(tmdb_to_rb.get(tid, "standard")),
+            "timestamp": float(date_added.timestamp()) if date_added else None,
         })
     return payload
+
+
+def _user_watchlist_tmdb_ids(user_pk: int) -> list[int]:
+    """TMDB ids on the user's movie Watchlist (extra low-confidence positives, as in training)."""
+    from movies.models import Movie
+    from custom_auth.models import Watchlist
+
+    movie_ct = ContentType.objects.get_for_model(Movie)
+    movie_ids = Watchlist.objects.filter(content_type=movie_ct, user_id=user_pk).values_list("object_id", flat=True)
+    return [int(t) for t in Movie.objects.filter(id__in=list(movie_ids), tmdb_id__isnull=False)
+            .values_list("tmdb_id", flat=True)]
+
+
+def bundle_confidence_recipe(bundle: dict) -> ConfidenceRecipe:
+    """The confidence recipe the bundle's item factors were trained with.
+
+    v5.1+ bundles ship it verbatim. Older bundles only record the iALS knobs; the rest
+    were constants in the trainer (conf alpha 40, local weight 3, watchlist 2.0).
+    """
+    ranking = bundle.get("ranking", {}) or {}
+    if ranking.get("confidence"):
+        return ConfidenceRecipe.from_dict(ranking["confidence"])
+    meta = bundle.get("metadata", {}) or {}
+    model_type = ranking.get("model_type", meta.get("model_type", "ials"))
+    return ConfidenceRecipe(
+        positive_threshold=float(ranking.get("positive_threshold", meta.get("positive_threshold", 3.5))),
+        conf_alpha=40.0,
+        outer_alpha=float(ranking.get("alpha", meta.get("alpha", 1.0))) if model_type == "ials" else 1.0,
+        local_user_weight=3.0,
+        watchlist_confidence=2.0,
+        regularization=float(ranking.get("regularization", meta.get("regularization", 0.05))),
+    )
 
 
 def _build_feature_row(rev: dict, decades: list[int], languages: list[str]) -> np.ndarray:
@@ -194,16 +228,14 @@ def _solve_category_biases(
 
 def _solve_user_factor(
     payload: list[dict],
+    watchlist_tmdb_ids: list[int],
     bundle: dict,
-    *,
-    alpha: float,
-    local_user_weight: float,
-    threshold: float,
-    reg: float,
+    recipe: ConfidenceRecipe,
 ) -> np.ndarray | None:
-    """Closed-form solve  u = (V^T C V + λ I)^-1 V^T C r  for one user, V fixed.
+    """Fold one user into the ranking model with the item factors fixed, using exactly
+    the confidence recipe the model was trained with (see ``fold_in_user_factor``).
 
-    Returns ``None`` if the user has no positive interactions over known items.
+    Returns ``None`` if the user has no positive or watchlisted interactions over known items.
     """
     ranking = bundle.get("ranking", {})
     item_to_idx: dict[int, int] = ranking.get("item_to_idx") or bundle.get("item_to_idx", {})
@@ -213,24 +245,23 @@ def _solve_user_factor(
     if item_factors is None or not item_to_idx:
         return None
 
-    pos = [r for r in payload if r["rating"] >= threshold and int(r["tmdb_id"]) in item_to_idx]
-    if not pos:
+    pos = [r for r in payload if r["rating"] >= recipe.positive_threshold and int(r["tmdb_id"]) in item_to_idx]
+    idx = [item_to_idx[int(r["tmdb_id"])] for r in pos]
+    conf: list[float] = []
+    if pos:
+        ts = [r.get("timestamp") for r in pos]
+        conf = recipe.rating_confidence(
+            np.array([r["rating"] for r in pos], dtype=np.float32),
+            is_local=np.ones(len(pos), dtype=bool),
+            timestamps=np.array(ts, dtype=np.float64) if all(t is not None for t in ts) else None,
+        ).tolist()
+    for tid in watchlist_tmdb_ids:
+        if int(tid) in item_to_idx:
+            idx.append(item_to_idx[int(tid)])
+            conf.append(recipe.watchlist_confidence)
+    if not idx:
         return None
-
-    span = max(5.0 - threshold, 1e-3)
-    F = item_factors.shape[1]
-    VtV = item_factors.T @ item_factors                                # (F, F)
-    delta = np.zeros((F, F), dtype=np.float32)
-    rhs = np.zeros(F, dtype=np.float32)
-    for r in pos:
-        idx = item_to_idx[int(r["tmdb_id"])]
-        v = item_factors[idx]                                           # (F,)
-        strength = max(0.0, min(1.0, (r["rating"] - threshold) / span))
-        c = (1.0 + alpha * strength) * local_user_weight
-        delta += (c - 1.0) * np.outer(v, v)
-        rhs += c * v
-    A = (VtV + delta + reg * np.eye(F, dtype=np.float32)).astype(np.float32)
-    return np.linalg.solve(A, rhs).astype(np.float32)
+    return fold_in_user_factor(item_factors, np.array(idx), np.array(conf, dtype=np.float32), recipe)
 
 
 class Command(BaseCommand):
@@ -243,7 +274,9 @@ class Command(BaseCommand):
                             help="Update every local user with reviews newer than the base model.")
         parser.add_argument("--ridge-lambda", type=float, default=10.0)
         parser.add_argument("--user-damping", type=float, default=10.0)
-        parser.add_argument("--factor-reg", type=float, default=0.05)
+        parser.add_argument("--factor-reg", type=float, default=None,
+                            help="Override the ranking regularization (default: the value the base "
+                                 "model was trained with).")
 
     def handle(self, *args, **opts):
         logging.basicConfig(level=logging.INFO,
@@ -259,12 +292,11 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR("Base bundle has no metadata.trained_at; refusing fold-in."))
             return
 
-        # Hyperparameters baked into the base model (used to keep fold-in consistent)
-        ranking_meta = bundle.get("ranking", {})
-        # Mirror the confidence multiplier the trainer applies in build_confidence_matrix.
-        alpha_conf = 40.0
-        threshold = float(ranking_meta.get("positive_threshold", meta.get("positive_threshold", 3.5)))
-        local_user_weight = 3.0  # mirror the trainer's local boost
+        # Confidence recipe baked into the base model, so fold-in factors live on the same
+        # scale as the trained ones.
+        recipe = bundle_confidence_recipe(bundle)
+        if opts["factor_reg"] is not None:
+            recipe.regularization = float(opts["factor_reg"])
 
         # Determine target users
         if opts["user_id"] is not None:
@@ -307,13 +339,7 @@ class Command(BaseCommand):
                 payload, base_resid, decades, languages,
                 ridge_lambda=float(opts["ridge_lambda"]),
             )
-            factor = _solve_user_factor(
-                payload, bundle,
-                alpha=alpha_conf,
-                local_user_weight=local_user_weight,
-                threshold=threshold,
-                reg=float(opts["factor_reg"]),
-            )
+            factor = _solve_user_factor(payload, _user_watchlist_tmdb_ids(int(user_pk)), bundle, recipe)
 
             overlay["user_biases"][user_id_str] = user_bias
             for genre, val in cat["genre"].items():
