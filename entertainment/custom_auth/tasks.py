@@ -143,6 +143,23 @@ def reconcile_person_media_counts():
     return summary
 
 
+def cleanup_orphan_people():
+    """Weekly removal of people no media refers to any more.
+
+    Runs the `cleanup_orphan_people` management command: drops credits left
+    behind by deleted movies/shows, then Person rows with no credits, books or
+    albums. Registered as a WEEKLY Django Q schedule in `custom_auth/apps.py`.
+    """
+    from django.core.management import call_command
+    from io import StringIO
+
+    out = StringIO()
+    call_command("cleanup_orphan_people", stdout=out)
+    summary = out.getvalue().strip()
+    logger.info("cleanup_orphan_people: %s", summary)
+    return summary
+
+
 def import_imdb_data(user_id, items):
     """
     Background task to import IMDb data (fetch new items + create reviews/watchlist).

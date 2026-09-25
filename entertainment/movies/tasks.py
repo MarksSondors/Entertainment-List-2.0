@@ -1,5 +1,6 @@
 import logging
 import random
+from collections import defaultdict
 from datetime import date
 
 import requests
@@ -451,6 +452,7 @@ def update_single_movie(movie_id, update_people=False):
         people_updated = 0
         media_persons_updated = 0
         media_persons_added = 0
+        media_persons_removed = 0
         
         logger.info(f"update_people={update_people}, 'credits' in data={'credits' in data}")
         
@@ -493,6 +495,17 @@ def update_single_movie(movie_id, update_people=False):
                 except Person.DoesNotExist:
                     pass
             
+            # Existing Actor rows grouped by person; rows still unclaimed after the
+            # loop are no longer in the TMDB cast (e.g. credit moved to another
+            # person record) and get removed.
+            unclaimed_actor_rows = defaultdict(list)
+            for mp in MediaPerson.objects.filter(
+                content_type=movie_content_type,
+                object_id=movie.id,
+                role="Actor"
+            ).order_by('order', 'id'):
+                unclaimed_actor_rows[mp.person_id].append(mp)
+
             # Update or add MediaPerson entries for cast
             for index, cast_member in enumerate(cast):
                 tmdb_id = cast_member.get('id')
@@ -526,20 +539,22 @@ def update_single_movie(movie_id, update_people=False):
                 if not person:
                     continue
                 
-                # Check if MediaPerson entry exists
-                media_person = MediaPerson.objects.filter(
-                    content_type=movie_content_type,
-                    object_id=movie.id,
-                    person=person,
-                    role="Actor"
-                ).first()
-                
+                # Claim an existing row for this person, preferring one with the
+                # same character (TMDB can credit one person for several characters)
+                new_order = cast_member.get('order', index)
+                new_character = cast_member.get('character')
+                candidates = unclaimed_actor_rows.get(person.id, [])
+                media_person = next(
+                    (mp for mp in candidates if mp.character_name == new_character),
+                    candidates[0] if candidates else None
+                )
+                if media_person:
+                    candidates.remove(media_person)
+
                 if media_person:
                     # Update existing entry
                     mp_updates = {}
-                    new_order = cast_member.get('order', index)
-                    new_character = cast_member.get('character')
-                    
+
                     if media_person.order != new_order:
                         mp_updates['order'] = new_order
                     if new_character and media_person.character_name != new_character:
@@ -559,8 +574,8 @@ def update_single_movie(movie_id, update_people=False):
                         object_id=movie.id,
                         person=person,
                         role="Actor",
-                        character_name=cast_member.get('character'),
-                        order=cast_member.get('order', index)
+                        character_name=new_character,
+                        order=new_order
                     )
                     logger.info(f"Created MediaPerson ID: {new_mp.id}")
                     # Ensure person has is_actor flag
@@ -570,6 +585,17 @@ def update_single_movie(movie_id, update_people=False):
                     media_persons_added += 1
                     logger.info(f"Added {person.name} as Actor in {movie.title}")
             
+            # Existing crew rows for the roles this sync manages, keyed by (person, role)
+            synced_crew_roles = ['Director', 'Original Music Composer', 'Original Story', 'Screenplay', 'Writer', 'Story', 'Novel', 'Comic Book', 'Graphic Novel', 'Book']
+            unclaimed_crew_rows = defaultdict(list)
+            for mp in MediaPerson.objects.filter(
+                content_type=movie_content_type,
+                object_id=movie.id,
+                role__in=synced_crew_roles
+            ).order_by('id'):
+                unclaimed_crew_rows[(mp.person_id, mp.role)].append(mp)
+            claimed_crew_keys = set()
+
             # Update or add MediaPerson entries for crew
             for crew_member in crew:
                 department = crew_member.get('department')
@@ -605,83 +631,81 @@ def update_single_movie(movie_id, update_people=False):
                         logger.warning(f"Could not fetch details for crew person TMDB ID: {tmdb_id}")
                         continue
                 
-                # Check if MediaPerson entry exists for this role
-                media_person = MediaPerson.objects.filter(
-                    content_type=movie_content_type,
-                    object_id=movie.id,
-                    person=person,
-                    role=job
-                ).first()
+                # Claim the existing row for this person/role. Someone picking up an
+                # extra role gets a new row rather than having their old role overwritten.
+                crew_key = (person.id, job)
+                if crew_key in claimed_crew_keys:
+                    continue
+                claimed_crew_keys.add(crew_key)
+                existing_rows = unclaimed_crew_rows.get(crew_key)
+                media_person = existing_rows.pop(0) if existing_rows else None
                 
                 if not media_person:
-                    # Check if person exists with a different crew role
-                    existing_mp = MediaPerson.objects.filter(
+                    # Create new MediaPerson entry for crew
+                    logger.info(f"Creating new MediaPerson entry for {person.name} as {job} in {movie.title}")
+                    new_mp = MediaPerson.objects.create(
                         content_type=movie_content_type,
                         object_id=movie.id,
-                        person=person
-                    ).exclude(role="Actor").first()
+                        person=person,
+                        role=job
+                    )
+                    logger.info(f"Created crew MediaPerson ID: {new_mp.id}")
+                    # Update person role flags
+                    role_flag_updated = False
+                    if job == 'Director' and not person.is_director:
+                        person.is_director = True
+                        role_flag_updated = True
+                    elif job == 'Original Music Composer' and not person.is_original_music_composer:
+                        person.is_original_music_composer = True
+                        role_flag_updated = True
+                    elif job == 'Screenplay' and not person.is_screenwriter:
+                        person.is_screenwriter = True
+                        role_flag_updated = True
+                    elif job == 'Writer' and not person.is_writer:
+                        person.is_writer = True
+                        role_flag_updated = True
+                    elif job == 'Story' and not person.is_story:
+                        person.is_story = True
+                        role_flag_updated = True
+                    elif job == 'Original Story' and not person.is_original_story:
+                        person.is_original_story = True
+                        role_flag_updated = True
+                    elif job == 'Novel' and not person.is_novelist:
+                        person.is_novelist = True
+                        role_flag_updated = True
+                    elif job == 'Comic Book' and not person.is_comic_artist:
+                        person.is_comic_artist = True
+                        role_flag_updated = True
+                    elif job == 'Graphic Novel' and not person.is_graphic_novelist:
+                        person.is_graphic_novelist = True
+                        role_flag_updated = True
+                    elif job == 'Book' and not person.is_book:
+                        person.is_book = True
+                        role_flag_updated = True
                     
-                    if existing_mp and existing_mp.role != job:
-                        # Role has changed, update it
-                        logger.info(f"Updating role for {person.name} from {existing_mp.role} to {job}")
-                        existing_mp.role = job
-                        existing_mp.save()
-                        media_persons_updated += 1
-                    elif not existing_mp:
-                        # Create new MediaPerson entry for crew
-                        logger.info(f"Creating new MediaPerson entry for {person.name} as {job} in {movie.title}")
-                        new_mp = MediaPerson.objects.create(
-                            content_type=movie_content_type,
-                            object_id=movie.id,
-                            person=person,
-                            role=job
-                        )
-                        logger.info(f"Created crew MediaPerson ID: {new_mp.id}")
-                        # Update person role flags
-                        role_flag_updated = False
-                        if job == 'Director' and not person.is_director:
-                            person.is_director = True
-                            role_flag_updated = True
-                        elif job == 'Original Music Composer' and not person.is_original_music_composer:
-                            person.is_original_music_composer = True
-                            role_flag_updated = True
-                        elif job == 'Screenplay' and not person.is_screenwriter:
-                            person.is_screenwriter = True
-                            role_flag_updated = True
-                        elif job == 'Writer' and not person.is_writer:
-                            person.is_writer = True
-                            role_flag_updated = True
-                        elif job == 'Story' and not person.is_story:
-                            person.is_story = True
-                            role_flag_updated = True
-                        elif job == 'Original Story' and not person.is_original_story:
-                            person.is_original_story = True
-                            role_flag_updated = True
-                        elif job == 'Novel' and not person.is_novelist:
-                            person.is_novelist = True
-                            role_flag_updated = True
-                        elif job == 'Comic Book' and not person.is_comic_artist:
-                            person.is_comic_artist = True
-                            role_flag_updated = True
-                        elif job == 'Graphic Novel' and not person.is_graphic_novelist:
-                            person.is_graphic_novelist = True
-                            role_flag_updated = True
-                        elif job == 'Book' and not person.is_book:
-                            person.is_book = True
-                            role_flag_updated = True
-                        
-                        if role_flag_updated:
-                            person.save()
-                        
-                        media_persons_added += 1
-                        logger.info(f"Added {person.name} as {job} in {movie.title}")
-            
-            logger.info(f"For {movie.title}: {people_updated} people scheduled for update, {media_persons_updated} entries updated, {media_persons_added} entries added")
+                    if role_flag_updated:
+                        person.save()
+                    
+                    media_persons_added += 1
+                    logger.info(f"Added {person.name} as {job} in {movie.title}")
+
+            # Remove rows TMDB no longer lists (stale people, leftover duplicates).
+            # Skipped when TMDB returns an empty list so a bad response can't wipe credits.
+            stale_ids = []
+            if cast:
+                stale_ids += [mp.id for rows in unclaimed_actor_rows.values() for mp in rows]
+            if claimed_crew_keys:
+                stale_ids += [mp.id for rows in unclaimed_crew_rows.values() for mp in rows]
+            if stale_ids:
+                media_persons_removed, _ = MediaPerson.objects.filter(id__in=stale_ids).delete()
+                logger.info(f"Removed {media_persons_removed} stale MediaPerson entries from {movie.title}")
+
+            logger.info(f"For {movie.title}: {people_updated} people scheduled for update, {media_persons_updated} entries updated, {media_persons_added} entries added, {media_persons_removed} removed")
         
         if updates:
-            return f"Updated movie {movie.title} with {len(updates)} changes. {people_updated} people scheduled, {media_persons_updated} updated, {media_persons_added} added."
+            return f"Updated movie {movie.title} with {len(updates)} changes. {people_updated} people scheduled, {media_persons_updated} updated, {media_persons_added} added, {media_persons_removed} removed."
         else:
-            return f"No movie field updates for {movie.title}. {people_updated} people scheduled, {media_persons_updated} updated, {media_persons_added} added."
+            return f"No movie field updates for {movie.title}. {people_updated} people scheduled, {media_persons_updated} updated, {media_persons_added} added, {media_persons_removed} removed."
             
     except Movie.DoesNotExist:
         logger.error(f"Movie with ID {movie_id} not found")
