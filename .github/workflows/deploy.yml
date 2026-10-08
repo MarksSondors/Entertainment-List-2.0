@@ -54,7 +54,7 @@ jobs:
         # build on a broken static reference before it can 500 in production
         run: |
           python manage.py collectstatic --noinput
-          python manage.py test movies
+          python manage.py test
 
   deploy:
     needs: test

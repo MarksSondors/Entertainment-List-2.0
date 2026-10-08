@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict
 
 from django.contrib.auth.decorators import login_required
+from entertainment.query_params import query_int
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Avg, Count
 from django.shortcuts import get_object_or_404, render
@@ -81,8 +82,8 @@ class HardcoverSearchView(APIView):
 
     def get(self, request):
         query = request.GET.get('q', '').strip()
-        page = int(request.GET.get('page', 1))
-        per_page = int(request.GET.get('per_page', 25))
+        page = query_int(request.GET, 'page', 1, minimum=1)
+        per_page = query_int(request.GET, 'per_page', 25, minimum=1, maximum=100)
 
         if not query:
             return Response({'error': 'Query parameter "q" is required.'},

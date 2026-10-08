@@ -48,26 +48,14 @@ def calculate_community_quality_metrics(community: Set, G: nx.Graph, all_communi
             'quality_score': 100.0
         }
     
-    # Create node-to-community mapping
-    node_to_comm = {}
-    for i, comm in enumerate(all_communities):
-        for node in comm:
-            node_to_comm[node] = i
-    
-    current_comm_idx = None
-    for i, comm in enumerate(all_communities):
-        if community == comm:
-            current_comm_idx = i
-            break
-    
     # Count internal and external edges
     internal_edges = 0
     external_edges = 0
     total_edges_touching = 0
     
     for node in community:
-        for neighbor in G.neighbors(node):
-            edge_weight = G.get_edge_data(node, neighbor, {}).get('weight', 1.0)
+        for neighbor, edge_data in G[node].items():
+            edge_weight = edge_data.get('weight', 1.0)
             
             if neighbor in community:
                 # Internal edge (count once per edge, not twice)
@@ -93,7 +81,7 @@ def calculate_community_quality_metrics(community: Set, G: nx.Graph, all_communi
     try:
         clustering_values = nx.clustering(subgraph, weight='weight').values()
         clustering_coefficient = sum(clustering_values) / len(clustering_values) if clustering_values else 0.0
-    except:
+    except Exception:
         clustering_coefficient = 0.0
     
     # ========== SEPARABILITY ==========
@@ -223,6 +211,7 @@ def generate_community_name(
     community_node_ids: List[Any],
     all_nodes: List[NodeDict],
     all_edges: List[EdgeDict] = None,
+    node_lookup: Optional[Dict[Any, NodeDict]] = None,
 ) -> str:
     """Generate a community name straight from its movies' own relationship metadata.
 
@@ -233,14 +222,19 @@ def generate_community_name(
     formed the community's edges in the first place - so a director's run, a
     studio's slate, a recurring cast, or a thematic cluster all get named for
     what they actually are instead of falling back to "N nodes".
+
+    Pass ``node_lookup`` (id -> node) when naming many communities so the
+    id index over ``all_nodes`` is built once instead of per call.
     """
     if not community_node_ids:
         logger.warning("generate_community_name called with empty community_node_ids")
         return "🔷 Isolated Cluster"
 
-    node_mapping = {node['id']: node for node in all_nodes}
+    node_mapping = node_lookup if node_lookup is not None else {node['id']: node for node in all_nodes}
+    # Stable order: the counters below break ties by insertion order, and set iteration
+    # order of string ids changes per process (hash randomisation), so names would flicker.
     movies = [
-        node_mapping[node_id] for node_id in community_node_ids
+        node_mapping[node_id] for node_id in sorted(community_node_ids, key=str)
         if node_id in node_mapping and node_mapping[node_id].get('type') == 'movie'
     ]
     total_nodes = len(community_node_ids)
@@ -369,9 +363,8 @@ def leiden_communities(
     Returns:
         List of sets, where each set contains node IDs belonging to one community
     """
-    # Set random seed for reproducibility
-    if random_state is not None:
-        random.seed(random_state)
+    # Local RNG so reproducibility doesn't depend on (or clobber) global random state
+    rng = random.Random(random_state)
     
     # Handle edge cases
     if len(G) == 0:
@@ -394,42 +387,40 @@ def leiden_communities(
     if total_edge_weight == 0:
         return [set(G.nodes())]
     
+    # Sum of node degrees per community, maintained incrementally on every move
+    # (re-summing member degrees for each candidate made local moving quadratic)
+    community_degree = {idx: node_degrees[node] for node, idx in node_to_community.items()}
+    
     # ========================================
     # HELPER FUNCTIONS
     # ========================================
     
-    def compute_modularity_gain(node_id, from_community, to_community):
+    def neighbor_community_weights(node_id):
+        """Total edge weight from a node to each neighbouring community (self-loops excluded)."""
+        weights = defaultdict(float)
+        for neighbor, edge_data in G[node_id].items():
+            if neighbor != node_id:
+                weights[node_to_community[neighbor]] += edge_data.get('weight', 1.0)
+        return weights
+    
+    def compute_modularity_gain(node_id, from_community, to_community, weights_to_communities):
         """Calculate how much modularity improves if we move a node between communities."""
         if from_community == to_community:
             return 0.0
         
-        # Count edges from this node to each community
-        edges_to_old_community = 0.0
-        edges_to_new_community = 0.0
-        
-        for neighbor in G.neighbors(node_id):
-            edge_weight = G.get_edge_data(node_id, neighbor, {}).get('weight', 1.0)
-            neighbor_community = node_to_community[neighbor]
-            
-            if neighbor_community == from_community and neighbor != node_id:
-                edges_to_old_community += edge_weight
-            elif neighbor_community == to_community:
-                edges_to_new_community += edge_weight
-        
-        # Calculate total degree of each community (excluding this node from old community)
-        old_community_degree = sum(
-            node_degrees[n] for n in community_to_nodes[from_community] if n != node_id
-        )
-        new_community_degree = sum(
-            node_degrees[n] for n in community_to_nodes[to_community]
-        )
+        edges_to_old_community = weights_to_communities.get(from_community, 0.0)
+        edges_to_new_community = weights_to_communities.get(to_community, 0.0)
         
         node_degree = node_degrees[node_id]
+        # Total degree of each community, excluding this node from its current one
+        old_community_degree = community_degree[from_community] - node_degree
+        new_community_degree = community_degree[to_community]
         
-        # Modularity gain formula
+        # Modularity gain formula (ΔQ/2 with W = 2m):
+        #   (k_i,new - k_i,old) / W  -  γ·k_i·(Σ_new - Σ_old\i) / W²
         edge_gain = (edges_to_new_community - edges_to_old_community) / total_edge_weight
         degree_penalty = resolution * node_degree * (
-            new_community_degree - old_community_degree + node_degree
+            new_community_degree - old_community_degree
         ) / (total_edge_weight ** 2)
         
         return edge_gain - degree_penalty
@@ -447,25 +438,23 @@ def leiden_communities(
             
             # Process nodes in random order to avoid bias
             node_list = list(G.nodes())
-            random.shuffle(node_list)
+            rng.shuffle(node_list)
             
             for node_id in node_list:
                 current_community = node_to_community[node_id]
                 
-                # Find all neighboring communities
-                candidate_communities = set()
-                for neighbor in G.neighbors(node_id):
-                    candidate_communities.add(node_to_community[neighbor])
+                # Edge weight to every neighbouring community, computed once per node
+                weights_to_communities = neighbor_community_weights(node_id)
                 
                 # Try moving to best neighboring community
                 best_community = current_community
                 best_gain = 0.0
                 
-                for candidate in candidate_communities:
+                for candidate in weights_to_communities:
                     if candidate == current_community:
                         continue
                     
-                    gain = compute_modularity_gain(node_id, current_community, candidate)
+                    gain = compute_modularity_gain(node_id, current_community, candidate, weights_to_communities)
                     
                     if gain > best_gain + tolerance:
                         best_gain = gain
@@ -475,11 +464,14 @@ def leiden_communities(
                 if best_community != current_community:
                     # Remove from old community
                     community_to_nodes[current_community].discard(node_id)
+                    community_degree[current_community] -= node_degrees[node_id]
                     if not community_to_nodes[current_community]:
                         del community_to_nodes[current_community]
+                        del community_degree[current_community]
                     
                     # Add to new community
                     community_to_nodes[best_community].add(node_id)
+                    community_degree[best_community] += node_degrees[node_id]
                     node_to_community[node_id] = best_community
                     
                     nodes_moved = True
@@ -536,8 +528,10 @@ def leiden_communities(
         # Rebuild mappings for next iteration
         community_to_nodes.clear()
         node_to_community.clear()
+        community_degree.clear()
         for idx, community in enumerate(communities):
             community_to_nodes[idx] = set(community)
+            community_degree[idx] = sum(node_degrees[node] for node in community)
             for node in community:
                 node_to_community[node] = idx
         
@@ -681,7 +675,7 @@ def detect_communities_leiden(
                             # 1. Not a movie (movies stay in their original communities)
                             # 2. Not already assigned to another community
                             if neighbor not in assigned_nodes:
-                                neighbor_type = next((n.get('type') for n in nodes if n['id'] == neighbor), None)
+                                neighbor_type = G.nodes[neighbor].get('type')
                                 if neighbor_type != 'movie':
                                     collection_community.add(neighbor)
                                     assigned_nodes.add(neighbor)
@@ -689,28 +683,37 @@ def detect_communities_leiden(
         # Assign remaining nodes to their closest community based on connections
         all_assigned_nodes = assigned_nodes.copy()  # Use the tracked assigned nodes
         
-        unassigned_nodes = set(G.nodes()) - all_assigned_nodes
+        # Graph order (not set order) so placement is reproducible across processes
+        unassigned_nodes = [n for n in G.nodes() if n not in all_assigned_nodes]
+        
+        # node -> index into initial_communities, kept current as nodes get placed below
+        node_community_index = {}
+        for i, community in enumerate(initial_communities):
+            for member in community:
+                node_community_index[member] = i
         
         for node in unassigned_nodes:
-            # Find community with strongest connection
+            # Find community with strongest connection (lowest index wins ties)
+            weight_by_community = defaultdict(float)
+            for neighbor, edge_data in G[node].items():
+                idx = node_community_index.get(neighbor)
+                if idx is not None:
+                    weight_by_community[idx] += edge_data.get('weight', 1.0)
+            
             best_community = None
             best_weight = 0
-            
-            for i, community in enumerate(initial_communities):
-                total_weight = 0
-                for neighbor in G.neighbors(node):
-                    if neighbor in community:
-                        total_weight += G[node][neighbor].get('weight', 1.0)
-                
-                if total_weight > best_weight:
-                    best_weight = total_weight
+            for i in sorted(weight_by_community):
+                if weight_by_community[i] > best_weight:
+                    best_weight = weight_by_community[i]
                     best_community = i
             
             if best_community is not None:
                 initial_communities[best_community].add(node)
+                node_community_index[node] = best_community
             else:
                 # Create singleton community
                 initial_communities.append({node})
+                node_community_index[node] = len(initial_communities) - 1
         
         # Keep ALL communities (including single-node ones) for valid partition
         # We'll filter for display purposes later
@@ -808,6 +811,8 @@ def detect_communities_leiden(
         # (single-node communities exist for partition validity but aren't meaningful clusters)
         community_dict = {}
         display_index = 0  # Separate index for displayed communities
+        weighted_degree = dict(G.degree(weight='weight'))
+        node_lookup = {node['id']: node for node in nodes}
         
         for i, community in enumerate(communities):
             # Skip empty or single-member communities for display
@@ -819,12 +824,12 @@ def detect_communities_leiden(
             community_nodes = list(community)
             
             # Generate meaningful name
-            community_name = generate_community_name(community_nodes, nodes, edges)
+            community_name = generate_community_name(community_nodes, nodes, edges, node_lookup=node_lookup)
             
             # Calculate community metrics
             subgraph = G.subgraph(community)
             internal_edges = subgraph.number_of_edges()
-            total_degree = sum(dict(G.degree(weight='weight')).get(node, 0) for node in community)
+            total_degree = sum(weighted_degree.get(node, 0) for node in community)
             
             # Calculate quality metrics
             quality_metrics = calculate_community_quality_metrics(community, G, communities)
@@ -925,10 +930,11 @@ def detect_communities(nodes: List[NodeDict], edges: List[EdgeDict]) -> Communit
         overall_modularity = nx.algorithms.community.modularity(G, communities, weight='weight') if communities else 0.0
 
         community_dict = {}
+        node_lookup = {node['id']: node for node in nodes}
         for i, community in enumerate(communities):
             community_id = f"community_{i}"
             community_nodes = list(community)
-            community_name = generate_community_name(community_nodes, nodes, edges)
+            community_name = generate_community_name(community_nodes, nodes, edges, node_lookup=node_lookup)
             
             community_dict[community_id] = {
                 'nodes': community_nodes,

@@ -33,6 +33,9 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=lambda v: v.split(','))
 
+# Public domain (shared with Traefik via .env); shown as the site brand in templates.
+SITE_DOMAIN = config('DOMAIN', default='Entertainment List')
+
 # Application definition
 if DEBUG != True:
     SESSION_COOKIE_SECURE = True
@@ -41,6 +44,8 @@ if DEBUG != True:
     # X-Forwarded-Proto, so Django can trust it to detect real https requests.
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
+    # Container healthchecks hit gunicorn directly over plain http.
+    SECURE_REDIRECT_EXEMPT = [r'^healthz$']
     # HSTS Settings
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_PRELOAD = True
@@ -178,6 +183,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'entertainment.context_processors.site',
             ],
         },
     },
@@ -197,6 +203,10 @@ DATABASES = {
         'PASSWORD': config('POSTGRES_PASSWORD', default=''),
         'HOST': config('DB_HOST', default=''),
         'PORT': config('DB_PORT', default=''),
+        # Reuse connections across requests instead of reconnecting every time;
+        # health checks drop connections that went stale while idle.
+        'CONN_MAX_AGE': config('DB_CONN_MAX_AGE', default=60, cast=int),
+        'CONN_HEALTH_CHECKS': True,
     }
 }
 

@@ -1,8 +1,7 @@
-"""robots.txt and sitemap.xml for example.com.
+"""robots.txt and sitemap.xml.
 
-robots.txt is a plain static file served from /static/ (whitenoise collects it);
-the redirect to /static/robots.txt is wired in entertainment/urls.py so the
-canonical /robots.txt path works.
+robots.txt is rendered by ``robots_txt`` in entertainment/urls.py so its
+Sitemap line uses the requesting host instead of a hardcoded domain.
 
 The sitemap lists public, non-personal pages: the login page and each media
 detail page. Personal pages (watchlists, profiles) are deliberately excluded.

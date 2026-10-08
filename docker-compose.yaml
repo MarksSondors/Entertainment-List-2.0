@@ -3,6 +3,8 @@ services:
     build:
       context: ./entertainment
       dockerfile: Dockerfile
+    image: entertainment-list-app
+    command: ["web"]
     volumes:
       - ./entertainment:/app
       - static_volume:/app/staticfiles
@@ -10,13 +12,44 @@ services:
     env_file:
       - .env
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - webnet
     restart: unless-stopped
     expose:
       - "8000"
+    healthcheck:
+      test: ["CMD", "python", "healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # migrate + collectstatic run before gunicorn starts
+      start_period: 120s
+
+  # Django Q2 cluster in its own container so a crash restarts it instead of
+  # dying silently behind a healthy-looking web process.
+  worker:
+    build:
+      context: ./entertainment
+      dockerfile: Dockerfile
+    image: entertainment-list-app
+    command: ["worker"]
+    volumes:
+      - ./entertainment:/app
+      - media_volume:/app/media
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - webnet
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
@@ -64,6 +97,11 @@ services:
     networks:
       - webnet
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   traefik:
     image: "traefik:v3.7.6"
@@ -90,7 +128,7 @@ services:
       - webnet
     restart: unless-stopped
     environment:
-      - DOMAIN=yourdomain.com # Replace with your actual domain
+      - DOMAIN=${DOMAIN:?DOMAIN must be set in .env}
 
 networks:
   webnet:

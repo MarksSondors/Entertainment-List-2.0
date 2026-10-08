@@ -1,8 +1,0 @@
-User-agent: *
-Disallow: /admin/
-Disallow: /api/
-Disallow: /watchlist/
-Disallow: /profile/
-Disallow: /accounts/
-
-Sitemap: https://example.com/sitemap.xml

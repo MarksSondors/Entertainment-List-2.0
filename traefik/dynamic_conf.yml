@@ -1,12 +1,9 @@
 http:
   routers:
     entertainment:
-      # DOMAIN VALUE IS INTENTIONALLY NOT IN THIS PUBLIC REPO.
-      # /etc/traefik/dynamic_conf.yml is bind-mounted from the live tree; the deploy
-      # script (gha-deploy.sh) restores the real host rules from a root-only file
-      # (/root/traefik/dynamic_conf.local.yml) after every `git reset --hard`.
-      # Keep this file's placeholder in sync with that local file's STRUCTURE.
-      rule: "Host(`example.com`)"
+      # The domain comes from DOMAIN in .env, passed to the traefik container by
+      # docker-compose.yaml; the file provider renders these Go templates on load.
+      rule: "Host(`{{ env "DOMAIN" }}`)"
       service: entertainment
       entryPoints:
         - websecure
@@ -18,7 +15,7 @@ http:
         - large-upload
 
     entertainment-http:
-      rule: "Host(`example.com`)"
+      rule: "Host(`{{ env "DOMAIN" }}`)"
       service: entertainment
       entryPoints:
         - web
@@ -26,7 +23,7 @@ http:
         - redirect-to-https
 
     www-redirect-https:
-      rule: "Host(`www.REPLACED-BY-DEPLOY-SCRIPT.example.com`)"
+      rule: "Host(`www.{{ env "DOMAIN" }}`)"
       service: noop@internal
       entryPoints:
         - websecure
@@ -36,7 +33,7 @@ http:
         certResolver: myresolver
 
     www-redirect-http:
-      rule: "Host(`www.REPLACED-BY-DEPLOY-SCRIPT.example.com`)"
+      rule: "Host(`www.{{ env "DOMAIN" }}`)"
       service: noop@internal
       entryPoints:
         - web
@@ -44,7 +41,7 @@ http:
         - www-to-apex
 
     api:
-      rule: "Host(`example.com`) && PathPrefix(`/dashboard`)"
+      rule: "Host(`{{ env "DOMAIN" }}`) && PathPrefix(`/dashboard`)"
       service: "api@internal"
       entrypoints:
         - websecure
@@ -81,7 +78,7 @@ http:
     www-to-apex:
       redirectRegex:
         regex: "^https?://www\\.[a-z0-9.-]+(.*)"
-        replacement: "https://REPLACED-BY-DEPLOY-SCRIPT.example.com${1}"
+        replacement: "https://{{ env "DOMAIN" }}${1}"
         permanent: true
 
     auth:
