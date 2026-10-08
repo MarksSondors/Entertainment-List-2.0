@@ -3,7 +3,7 @@ http:
     entertainment:
       # The domain comes from DOMAIN in .env, passed to the traefik container by
       # docker-compose.yaml; the file provider renders these Go templates on load.
-      rule: "Host(`{{ env "DOMAIN" }}`)"
+      rule: "Host(`{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`)"
       service: entertainment
       entryPoints:
         - websecure
@@ -15,7 +15,7 @@ http:
         - large-upload
 
     entertainment-http:
-      rule: "Host(`{{ env "DOMAIN" }}`)"
+      rule: "Host(`{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`)"
       service: entertainment
       entryPoints:
         - web
@@ -23,7 +23,7 @@ http:
         - redirect-to-https
 
     www-redirect-https:
-      rule: "Host(`www.{{ env "DOMAIN" }}`)"
+      rule: "Host(`www.{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`)"
       service: noop@internal
       entryPoints:
         - websecure
@@ -33,7 +33,7 @@ http:
         certResolver: myresolver
 
     www-redirect-http:
-      rule: "Host(`www.{{ env "DOMAIN" }}`)"
+      rule: "Host(`www.{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`)"
       service: noop@internal
       entryPoints:
         - web
@@ -41,7 +41,7 @@ http:
         - www-to-apex
 
     api:
-      rule: "Host(`{{ env "DOMAIN" }}`) && PathPrefix(`/dashboard`)"
+      rule: "Host(`{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`) && PathPrefix(`/dashboard`)"
       service: "api@internal"
       entrypoints:
         - websecure
@@ -78,7 +78,7 @@ http:
     www-to-apex:
       redirectRegex:
         regex: "^https?://www\\.[a-z0-9.-]+(.*)"
-        replacement: "https://{{ env "DOMAIN" }}${1}"
+        replacement: "https://{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}${1}"
         permanent: true
 
     auth:
