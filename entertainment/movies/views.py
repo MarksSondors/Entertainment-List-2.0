@@ -1,4 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.db import IntegrityError
+from entertainment.query_params import query_float, query_int
 from api.services.movies import MoviesService
 from django.http import JsonResponse, Http404
 from rest_framework.views import APIView
@@ -60,11 +62,20 @@ def movie_page(request, movie_id):
         ).get(tmdb_id=movie_id)
     except Movie.DoesNotExist:        
         # Create movie with basic information immediately
-        movie_db = create_movie_fast(
-            movie_id=movie_id,
-            user_id=request.user.id,
-            add_to_watchlist=False
-        )
+        try:
+            movie_db = create_movie_fast(
+                movie_id=movie_id,
+                user_id=request.user.id,
+                add_to_watchlist=False
+            )
+        except IntegrityError:
+            # A concurrent request created this movie first (tmdb_id is unique)
+            movie_db = Movie.objects.prefetch_related(
+                'genres',
+                'countries',
+                'keywords',
+                'production_companies'
+            ).get(tmdb_id=movie_id)
         
         if not movie_db:
             # TMDB has no such movie (stale id / removed entry) — serve the
@@ -209,7 +220,7 @@ class ExternalRecommendationsView(APIView):
     )
     def get(self, request):
         # Default to 25
-        target_limit = int(request.GET.get('limit', 25))
+        target_limit = query_int(request.GET, 'limit', 25, minimum=1, maximum=100)
         
         # Request 3x the candidates to handle dead links or TMDB lookup failures
         candidate_limit = target_limit * 3
@@ -728,7 +739,7 @@ def collection_detail(request, collection_id):
 @permission_classes([IsAuthenticated])
 def movie_recommendations(request):
     """Get personalized movie recommendations for the current user"""
-    limit = int(request.GET.get('limit', 10))
+    limit = query_int(request.GET, 'limit', 10, minimum=1, maximum=50)
     recommender = MovieRecommender()
     recommendations = recommender.get_recommendations_for_user(request.user.id, limit)
     
@@ -1192,7 +1203,7 @@ def movie_search(request):
     movies = Movie.objects.filter(
         Q(title__icontains=query) | 
         Q(original_title__icontains=query)
-    ).order_by('-rating', '-release_date')[:20]
+    ).prefetch_related('genres').order_by('-rating', '-release_date')[:20]
     
     results = []
     for movie in movies:
@@ -1204,7 +1215,7 @@ def movie_search(request):
             'poster_path': movie.poster,
             'rating': movie.rating,
             'runtime': movie.runtime,
-            'genres': [genre.name for genre in movie.genres.all()[:3]]
+            'genres': [genre.name for genre in list(movie.genres.all())[:3]]
         })
     
     return JsonResponse({'results': results})
@@ -1350,18 +1361,14 @@ def network_graph_data(request):
             return default
         return val.lower() in ['1', 'true', 'yes', 'on']
 
-    rating_threshold = float(request.GET.get('rating_threshold', 0.0))
-    movie_limit = max(0, int(request.GET.get('movie_limit', 0)))
-    max_nodes = int(request.GET.get('max_nodes', 20000))
+    rating_threshold = query_float(request.GET, 'rating_threshold', 0.0, minimum=0.0, maximum=10.0)
+    movie_limit = query_int(request.GET, 'movie_limit', 0, minimum=0, maximum=20000)
+    max_nodes = query_int(request.GET, 'max_nodes', 20000, minimum=1, maximum=20000)
     show_people = _get_flag('people', False)
     include_social_layer = _get_flag('social', False)
-    min_reviews = int(request.GET.get('min_reviews', 2))
+    min_reviews = query_int(request.GET, 'min_reviews', 2, minimum=0, maximum=1000)
     show_predictions = _get_flag('predictions', True)
-    try:
-        predictions_limit = int(request.GET.get('predictions_limit', 10))
-    except ValueError:
-        predictions_limit = 10
-    predictions_limit = max(0, min(100, predictions_limit))
+    predictions_limit = query_int(request.GET, 'predictions_limit', 10, minimum=0, maximum=100)
 
     data = build_network_graph(
         request.user if request.user.is_authenticated else None,

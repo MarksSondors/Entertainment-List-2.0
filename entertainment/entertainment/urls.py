@@ -46,7 +46,35 @@ def well_known_handler(request, path):
     # Return empty JSON for other .well-known requests to avoid 404s
     return JsonResponse({}, status=204)
 
+@require_http_methods(["GET"])
+def healthz(request):
+    """Liveness/readiness probe for container healthchecks: verifies DB and cache are reachable."""
+    from django.core.cache import cache
+    from django.db import connection
+
+    try:
+        connection.ensure_connection()
+        cache.get('healthz')
+    except Exception:
+        return JsonResponse({'status': 'unavailable'}, status=503)
+    return JsonResponse({'status': 'ok'})
+
+ROBOTS_DISALLOW = ['/admin/', '/api/', '/watchlist/', '/profile/', '/accounts/']
+
+
+@require_http_methods(["GET"])
+def robots_txt(request):
+    """robots.txt with a Sitemap URL built from the request host (no hardcoded domain)."""
+    from django.http import HttpResponse
+    from django.urls import reverse
+
+    lines = ['User-agent: *']
+    lines += [f'Disallow: {path}' for path in ROBOTS_DISALLOW]
+    lines += ['', f"Sitemap: {request.build_absolute_uri(reverse('django.contrib.sitemaps.views.sitemap'))}", '']
+    return HttpResponse('\n'.join(lines), content_type='text/plain')
+
 urlpatterns = [
+    path('healthz', healthz, name='healthz'),
     path('admin/', admin.site.urls),
     
     # Custom auth appv
@@ -67,8 +95,8 @@ urlpatterns = [
     path('.well-known/appspecific/com.chrome.devtools.json', chrome_devtools_manifest, name='chrome-devtools-manifest'),
     path('.well-known/<path:path>', well_known_handler, name='well-known-handler'),
 
-    # SEO: robots.txt (static file, redirected) and sitemap.xml
-    path('robots.txt', RedirectView.as_view(url=staticfiles_storage.url('robots.txt'), permanent=True)),
+    # SEO: robots.txt and sitemap.xml
+    path('robots.txt', robots_txt, name='robots_txt'),
     path('sitemap.xml', sitemap, {'sitemaps': sitemap_registry}, name='django.contrib.sitemaps.views.sitemap'),
 
 ]

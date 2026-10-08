@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from entertainment.query_params import query_int
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.contrib import messages
@@ -107,8 +108,8 @@ class RAWGSearchView(APIView):
     )
     def get(self, request):
         query = request.GET.get('query')
-        page = int(request.GET.get('page', 1))
-        page_size = int(request.GET.get('page_size', 20))
+        page = query_int(request.GET, 'page', 1, minimum=1)
+        page_size = query_int(request.GET, 'page_size', 20, minimum=1, maximum=40)
 
         if not query:
             return Response({"error": "Query parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -859,7 +860,7 @@ def collection_detail(request, pk):
 @permission_classes([IsAuthenticated])
 def game_recommendations(request):
     """Get personalized game recommendations for the current user"""
-    limit = int(request.GET.get('limit', 10))
+    limit = query_int(request.GET, 'limit', 10, minimum=1, maximum=50)
     recommender = GameRecommender()
     recommendations = recommender.get_recommendations_for_user(request.user.id, limit)
     

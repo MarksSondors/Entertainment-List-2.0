@@ -1,0 +1,95 @@
+{% extends "components/base.html" %}
+
+{% block title %}Importing TV Show | Entertainment List{% endblock %}
+
+{% block extra_head %}
+{% if not stalled %}<meta http-equiv="refresh" content="2">{% endif %}
+{% endblock %}
+
+{% block content %}
+<style>
+    .imp-container {
+        max-width: 480px;
+        margin: 60px auto;
+        font-family: 'Pixelated MS Sans Serif', Arial, sans-serif;
+    }
+    .imp-window {
+        border: 2px outset #c0c0c0;
+        background: #c0c0c0;
+        box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    @media (prefers-color-scheme: dark) {
+        .imp-window {
+            background: #383838;
+            border-color: #585858;
+        }
+        .imp-body { color: #e0e0e0; }
+        .imp-btn {
+            background: #484848 !important;
+            color: #e0e0e0 !important;
+            border: 2px outset #585858 !important;
+        }
+    }
+    .imp-titlebar {
+        background: linear-gradient(90deg, #000080, #1084d0);
+        color: #fff;
+        padding: 3px 5px;
+        font-weight: bold;
+    }
+    .imp-body {
+        padding: 18px 16px;
+        text-align: center;
+        color: #000;
+    }
+    .imp-body p { margin: 10px 0; }
+    .imp-progress {
+        height: 18px;
+        border: 2px inset #dfdfdf;
+        background: #fff;
+        overflow: hidden;
+        margin: 14px 0 6px;
+    }
+    .imp-progress span {
+        display: block;
+        height: 100%;
+        width: 40%;
+        background: repeating-linear-gradient(90deg, #000080 0 10px, transparent 10px 12px);
+        animation: imp-slide 1.6s linear infinite;
+    }
+    @keyframes imp-slide {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(250%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .imp-progress span { animation: none; width: 100%; }
+    }
+    .imp-btn {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 4px 18px;
+        background: #c0c0c0;
+        border: 2px outset #dfdfdf;
+        color: #000;
+        text-decoration: none;
+        font-size: 13px;
+    }
+    .imp-btn:active { border-style: inset; }
+</style>
+
+<div class="imp-container">
+    <div class="imp-window" role="status" aria-live="polite">
+        <div class="imp-titlebar">Importing TV Show</div>
+        <div class="imp-body">
+            {% if stalled %}
+                <p><strong>This is taking longer than usual.</strong></p>
+                <p>The show is still being imported in the background. Try again in a minute.</p>
+                <a href="{{ request.path }}" class="imp-btn">Retry</a>
+            {% else %}
+                <p><strong>Fetching this show from TMDB&hellip;</strong></p>
+                <p>Seasons and episodes are being imported. This page will open automatically.</p>
+                <div class="imp-progress"><span></span></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

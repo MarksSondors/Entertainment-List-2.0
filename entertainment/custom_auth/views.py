@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from entertainment.query_params import query_int
 from django.contrib.auth import authenticate, login, logout  # Import the logout function
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -830,45 +831,30 @@ def profile_page(request, username=None):
             game.poster = get_low_res_poster_url(game.poster)
             favorite_games.append(game)
     
-    # Get user's favorite TV shows - only fetch what we need
-    tv_show_reviews = Review.objects.filter(
-        user=user,
-        content_type=tv_show_content_type
-    ).only('object_id', 'rating').order_by('-rating')
+    # Get user's favorite TV shows: a user can review a show, its seasons and its
+    # episode groups, so average per show in SQL and keep only the top 20.
+    tv_show_stats = list(
+        Review.objects.filter(
+            user=user,
+            content_type=tv_show_content_type,
+            object_id__in=TVShow.objects.values('id'),
+        )
+        .values('object_id')
+        .annotate(avg_rating=Avg('rating'), review_count=Count('id'))
+        .order_by('-avg_rating', '-review_count', 'object_id')[:20]
+    )
     
-    # Prefetch all TV shows in a single query with only necessary fields
-    tv_show_ids = set(review.object_id for review in tv_show_reviews)
     tv_shows_dict = {tv.id: tv for tv in TVShow.objects.filter(
-        id__in=tv_show_ids
+        id__in=[row['object_id'] for row in tv_show_stats]
     ).only('id', 'title', 'poster', 'tmdb_id', 'first_air_date')}
     
-    # Group reviews by TV show to handle multiple reviews per show
-    tv_show_ratings = {}
-    for review in tv_show_reviews:
-        tv_show = tv_shows_dict.get(review.object_id)
-        if not tv_show:
-            continue
-            
-        if tv_show.id not in tv_show_ratings:
-            tv_show_ratings[tv_show.id] = {
-                'tv_show': tv_show,
-                'reviews': [],
-                'total_rating': 0,
-                'count': 0
-            }
-        
-        tv_show_ratings[tv_show.id]['reviews'].append(review)
-        tv_show_ratings[tv_show.id]['total_rating'] += review.rating
-        tv_show_ratings[tv_show.id]['count'] += 1
-    
-    # Create a list of favorite TV shows with average ratings
     favorite_shows = []
-    for show_data in sorted(tv_show_ratings.values(), 
-                           key=lambda x: x['total_rating']/x['count'] if x['count'] > 0 else 0, 
-                           reverse=True)[:20]:
-        show = show_data['tv_show']
-        show.user_rating = round(show_data['total_rating'] / show_data['count'], 1) if show_data['count'] > 0 else 0
-        show.review_count = show_data['count']  # Add the count of reviews for this show
+    for row in tv_show_stats:
+        show = tv_shows_dict.get(row['object_id'])
+        if not show:
+            continue
+        show.user_rating = round(row['avg_rating'], 1)
+        show.review_count = row['review_count']
         show.poster = get_low_res_poster_url(show.poster)  # Use lower resolution poster
         favorite_shows.append(show)
     
@@ -2412,8 +2398,14 @@ def recent_reviews(request):
     """
     Returns recent reviews across all content types as JSON
     """
-    # Fetch 10 most recent reviews
-    reviews = Review.objects.all().order_by('-date_added')[:10]
+    # Fetch 10 most recent reviews; prefetch the generic `media` relation so each
+    # review doesn't trigger its own lookup (one query per content type instead).
+    reviews = (
+        Review.objects
+        .select_related('user', 'content_type', 'season', 'episode_subgroup')
+        .prefetch_related('media')
+        .order_by('-date_added')[:10]
+    )
     
     # Format data for frontend
     review_data = []
@@ -2429,7 +2421,7 @@ def recent_reviews(request):
             content_type = "TV Show"
             title = content_object.title
             if review.season:
-                title += f" - {review.season}"
+                title += f" - Season {review.season.season_number}"
             elif review.episode_subgroup:
                 title += f" - {review.episode_subgroup.name}"
         else:
@@ -3610,8 +3602,8 @@ def api_people_by_category(request):
     from django.core.cache import cache
     
     category = request.GET.get('category', 'directors')
-    page = int(request.GET.get('page', 1))
-    per_page = int(request.GET.get('per_page', 30))
+    page = query_int(request.GET, 'page', 1, minimum=1)
+    per_page = query_int(request.GET, 'per_page', 30, minimum=1, maximum=100)
     search_query = request.GET.get('search', '').strip().lower()
     sort_by = request.GET.get('sort', 'rating-desc')
     
@@ -3958,8 +3950,8 @@ def release_calendar(request):
     """
     # Get the year and month from query params, default to current month
     today = date.today()
-    year = int(request.GET.get('year', today.year))
-    month = int(request.GET.get('month', today.month))
+    year = query_int(request.GET, 'year', today.year, minimum=1900, maximum=2200)
+    month = query_int(request.GET, 'month', today.month, minimum=1, maximum=12)
     
     # Create date objects for the first and last day of the month
     first_day = date(year, month, 1)
@@ -4200,7 +4192,7 @@ def production_company_detail(request, company_id):
 @permission_classes([IsAuthenticated])
 def combined_recommendations(request):
     """Get combined recommendations across all media types"""
-    limit = int(request.GET.get('limit', 20))
+    limit = query_int(request.GET, 'limit', 20, minimum=1, maximum=100)
     recommender = CrossMediaRecommender()
     
     # Get discovery feed which mixes all content types

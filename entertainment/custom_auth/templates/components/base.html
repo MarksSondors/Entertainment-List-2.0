@@ -7,6 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>{% block title %}Entertainment List{% endblock %}</title>
+    {% block extra_head %}{% endblock %}
     
     <!-- Web App Manifest -->
     <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}">
@@ -267,7 +268,7 @@
     <div id="page-loader">
         <div class="win98-loader-logo">
             <img src="{% static 'favicon/web-app-manifest-512x512.png' %}" alt="Entertainment List">
-            <span class="win98-loader-title">example.com</span>
+            <span class="win98-loader-title">{{ site_domain }}</span>
         </div>
         <div class="win98-loader-text">Loading...</div>
         <div class="win98-progress-container">

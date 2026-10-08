@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404
+from entertainment.query_params import query_int
 from api.services.tvshows import TVShowsService
 from django.http import JsonResponse, Http404
 from rest_framework.views import APIView
@@ -28,67 +29,66 @@ from .services.recommendation import TVShowRecommender
 
 # Create your views here.
 
+TV_IMPORT_LOCK_TTL = 300  # seconds an in-flight import blocks re-queueing the same show
+TV_IMPORT_STALL_AFTER = 120  # seconds before the importing page stops auto-refreshing
+
+
+def _tv_show_detail_queryset():
+    return TVShow.objects.prefetch_related(
+        'genres',
+        'countries',
+        'keywords',
+        'seasons',
+        'seasons__episodes',
+        'production_companies',
+        Prefetch(
+            'episode_groups__sub_groups',
+            queryset=EpisodeSubGroup.objects.prefetch_related(
+                Prefetch(
+                    'episodes',
+                    queryset=Episode.objects.order_by('air_date')
+                )
+            )
+        )
+    )
+
+
+def _tv_show_import_response(request, show_id):
+    """Queue a background import for a show we don't have yet (at most one per show)
+    and render a self-refreshing "importing" page instead of blocking the request.
+    """
+    from django.core.cache import cache
+    from django.shortcuts import redirect
+    from django_q.models import Task
+
+    lock_key = f'tvshow_import:{show_id}'
+    now = timezone.now().timestamp()
+
+    if cache.add(lock_key, {'task_id': None, 'queued_at': now}, TV_IMPORT_LOCK_TTL):
+        task_id = create_tvshow_async(show_id, user_id=request.user.id, add_to_watchlist=False)
+        cache.set(lock_key, {'task_id': task_id, 'queued_at': now}, TV_IMPORT_LOCK_TTL)
+        return render(request, 'tv_show_importing.html', {'stalled': False})
+
+    state = cache.get(lock_key) or {}
+    task_id = state.get('task_id')
+    task = Task.objects.filter(id=task_id).only('success').first() if task_id else None
+    if task is not None and task.success is not None:
+        cache.delete(lock_key)
+        if TVShow.objects.filter(tmdb_id=show_id).exists():
+            return redirect(request.path)
+        # Finished without creating the show: stale/invalid TMDB id or a failed import
+        return render(request, 'tmdb_404.html', status=404)
+
+    stalled = now - state.get('queued_at', now) > TV_IMPORT_STALL_AFTER
+    return render(request, 'tv_show_importing.html', {'stalled': stalled})
+
+
 @login_required
 def tv_show_page(request, show_id):
     try:
-        # Initial fetch with all needed relationships prefetched in one query
-        tv_show_db = TVShow.objects.prefetch_related(
-            'genres', 
-            'countries', 
-            'keywords',
-            'seasons',
-            'seasons__episodes',
-            'production_companies',
-            Prefetch(
-                'episode_groups__sub_groups',
-                queryset=EpisodeSubGroup.objects.prefetch_related(
-                    Prefetch(
-                        'episodes',
-                        queryset=Episode.objects.order_by('air_date')
-                    )
-                )
-            )
-        ).get(tmdb_id=show_id)
+        tv_show_db = _tv_show_detail_queryset().get(tmdb_id=show_id)
     except TVShow.DoesNotExist:
-        # Existing task creation code remains unchanged
-        task_id = create_tvshow_async(
-            show_id,
-            user_id=request.user.id,
-            add_to_watchlist=False
-        )
-        # Wait for task completion code remains unchanged
-        from django_q.models import Task
-        from time import sleep
-        max_attempts = 30
-        for _ in range(max_attempts):
-            try:
-                task = Task.objects.get(id=task_id)
-                if task.success is not None:  # Task has completed (success or failure)
-                    break
-            except Task.DoesNotExist:
-                pass
-            sleep(1)
-            
-        # Try to fetch the TV show again - same prefetch pattern as above
-        try:
-            tv_show_db = TVShow.objects.prefetch_related(
-                'genres', 
-                'countries', 
-                'keywords',
-                'seasons',
-                'seasons__episodes',
-                Prefetch(
-                    'episode_groups__sub_groups',
-                    queryset=EpisodeSubGroup.objects.prefetch_related(
-                        Prefetch(
-                            'episodes',
-                            queryset=Episode.objects.order_by('air_date')
-                        )
-                    )
-                )
-            ).get(tmdb_id=show_id)
-        except TVShow.DoesNotExist:
-            raise Http404(f"TV Show with ID {show_id} could not be created")
+        return _tv_show_import_response(request, show_id)
     
     # Get content type once to reuse
     tv_show_content_type = ContentType.objects.get_for_model(TVShow)
@@ -910,7 +910,8 @@ class EpisodeWatchedView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, episode_id):
-        episode = get_object_or_404(Episode, id=episode_id)
+        episode = get_object_or_404(Episode.objects.select_related('season__show'), id=episode_id)
+        show = episode.season.show
         watched = request.data.get('watched', True)
         season_number = request.data.get('season_number')
         episode_number = request.data.get('episode_number')
@@ -928,21 +929,19 @@ class EpisodeWatchedView(APIView):
             
             # If mark_previous is True and not a special (season 0), mark all previous episodes as watched
             if mark_previous and season_number != 0:
-                # Get all previous episodes in the same season
-                season = episode.season
-                previous_episodes = Episode.objects.filter(
-                    season=season,
+                previous_ids = list(Episode.objects.filter(
+                    season=episode.season,
                     episode_number__lt=episode_number
-                ).order_by('episode_number')
-                
-                # Mark each previous episode as watched
-                for prev_episode in previous_episodes:
-                    _, created = WatchedEpisode.objects.get_or_create(
-                        user=request.user,
-                        episode=prev_episode
-                    )
-                    if created:
-                        marked_episodes.append(prev_episode.id)
+                ).order_by('episode_number').values_list('id', flat=True))
+                already_watched = set(WatchedEpisode.objects.filter(
+                    user=request.user,
+                    episode_id__in=previous_ids
+                ).values_list('episode_id', flat=True))
+                marked_episodes = [ep_id for ep_id in previous_ids if ep_id not in already_watched]
+                WatchedEpisode.objects.bulk_create(
+                    [WatchedEpisode(user=request.user, episode_id=ep_id) for ep_id in marked_episodes],
+                    ignore_conflicts=True,
+                )
         else:
             # Remove the episode from watched episodes
             WatchedEpisode.objects.filter(
@@ -950,50 +949,50 @@ class EpisodeWatchedView(APIView):
                 episode=episode
             ).delete()
         
-        # Calculate season progress
+        # Per-season totals and watched counts in two grouped queries
+        totals_by_season = dict(
+            Episode.objects.filter(season__show=show)
+            .values('season_id').annotate(n=Count('id')).values_list('season_id', 'n')
+        )
+        watched_by_season = dict(
+            WatchedEpisode.objects.filter(user=request.user, episode__season__show=show)
+            .values('episode__season_id').annotate(n=Count('id')).values_list('episode__season_id', 'n')
+        )
+        
         season_progress = {}
-        for user_season in episode.season.show.seasons.all():
-            total_episodes = user_season.episodes.count()
-            watched_episodes = WatchedEpisode.objects.filter(
-                user=request.user,
-                episode__season=user_season
-            ).count()
-            
-            percentage = 0
-            if total_episodes > 0:
-                percentage = (watched_episodes / total_episodes) * 100
-                
-            season_progress[user_season.id] = {
+        for season_id in show.seasons.values_list('id', flat=True):
+            total_episodes = totals_by_season.get(season_id, 0)
+            watched_episodes = watched_by_season.get(season_id, 0)
+            season_progress[season_id] = {
                 'total': total_episodes,
                 'watched': watched_episodes,
-                'percentage': percentage
+                'percentage': (watched_episodes / total_episodes) * 100 if total_episodes > 0 else 0
             }
         
-        # Calculate subgroup progress for any subgroups this episode belongs to
+        # Calculate subgroup progress for any subgroups this episode belongs to.
+        # Filter by id (not by `episodes=`) so the counts span every episode in the subgroup.
         subgroup_progress = {}
-        subgroups = episode.sub_groups.all()
+        subgroups = EpisodeSubGroup.objects.filter(
+            id__in=episode.sub_groups.values('id')
+        ).annotate(
+            total=Count('episodes', distinct=True),
+            watched=Count(
+                'episodes__watched_by',
+                filter=Q(episodes__watched_by__user=request.user),
+                distinct=True,
+            ),
+        )
         for subgroup in subgroups:
-            total_sg_episodes = subgroup.episodes.count()
-            if total_sg_episodes > 0:
-                watched_sg_episodes = WatchedEpisode.objects.filter(
-                    user=request.user,
-                    episode__in=subgroup.episodes.all()
-                ).count()
-                
-                percentage = (watched_sg_episodes / total_sg_episodes) * 100
-                
+            if subgroup.total > 0:
                 subgroup_progress[subgroup.id] = {
-                    'total': total_sg_episodes,
-                    'watched': watched_sg_episodes,
-                    'percentage': percentage
+                    'total': subgroup.total,
+                    'watched': subgroup.watched,
+                    'percentage': (subgroup.watched / subgroup.total) * 100
                 }
         
         # Calculate overall show progress
-        total_episodes = episode.season.show.episodes_count
-        watched_episodes = WatchedEpisode.objects.filter(
-            user=request.user,
-            episode__season__show=episode.season.show
-        ).count()
+        total_episodes = sum(totals_by_season.values())
+        watched_episodes = sum(watched_by_season.values())
         
         show_percentage = 0
         if total_episodes > 0:
@@ -1177,7 +1176,7 @@ class TVShowReviewView(APIView):
 @permission_classes([IsAuthenticated])
 def tv_show_recommendations(request):
     """Get personalized TV show recommendations for the current user"""
-    limit = int(request.GET.get('limit', 10))
+    limit = query_int(request.GET, 'limit', 10, minimum=1, maximum=50)
     recommender = TVShowRecommender()
     recommendations = recommender.get_recommendations_for_user(request.user.id, limit)
     
