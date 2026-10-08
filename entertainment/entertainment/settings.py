@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 from decouple import config
 import os
+import re
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,7 +35,8 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=lambda v: v.split(','))
 
 # Public domain (shared with Traefik via .env); shown as the site brand in templates.
-SITE_DOMAIN = config('DOMAIN', default='Entertainment List')
+# Tolerates DOMAIN being written as a URL (https://example.com/).
+SITE_DOMAIN = re.sub(r'^https?://', '', config('DOMAIN', default='Entertainment List')).rstrip('/')
 
 # Application definition
 if DEBUG != True:
