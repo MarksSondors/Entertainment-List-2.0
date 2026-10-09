@@ -41,12 +41,15 @@ http:
         - www-to-apex
 
     api:
-      rule: "Host(`{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`) && PathPrefix(`/dashboard`)"
+      # Traefik dashboard (/traefik/dashboard/) plus the /traefik/api/ data it loads;
+      # see --api.basePath in docker-compose.yaml. The old /dashboard URL redirects here.
+      rule: "Host(`{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`) && (PathPrefix(`/traefik`) || PathPrefix(`/dashboard`))"
       service: "api@internal"
       entrypoints:
         - websecure
       middlewares:
         - auth
+        - dashboard-redirect
       tls:
         certResolver: myresolver
 
@@ -57,6 +60,13 @@ http:
           - url: "http://nginx:80"  # Now points to nginx instead of web
 
   middlewares:
+    # /traefik, /traefik/dashboard (no trailing slash) and the old /dashboard URLs
+    # all land on the dashboard; Traefik only serves it at .../dashboard/
+    dashboard-redirect:
+      redirectRegex:
+        regex: "^(https?://[^/]+)/(?:traefik/?|traefik/dashboard|dashboard.*)$"
+        replacement: "${1}/traefik/dashboard/"
+
     redirect-to-https:
       redirectScheme:
         scheme: "https"
