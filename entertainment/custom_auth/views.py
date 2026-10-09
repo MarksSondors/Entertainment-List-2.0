@@ -2595,6 +2595,10 @@ _MOVIE_NEW_ONLY_FIELDS = (
 _TVSHOW_ONLY_FIELDS = (
     'id', 'title', 'original_title', 'poster', 'tmdb_id', 'first_air_date',
 )
+_TVSHOW_NEW_ONLY_FIELDS = (
+    'id', 'title', 'original_title', 'poster', 'tmdb_id', 'date_added',
+    'added_by__username',
+)
 _GAME_NEW_ONLY_FIELDS = (
     'id', 'title', 'original_title', 'poster', 'rawg_id', 'date_added',
     'added_by__username',
@@ -2618,12 +2622,15 @@ def _fetch_activities_efficiently(fetch_limit, content_types, media='all', kind=
     """
     Fetch only the activity streams relevant to the requested media/kind filters.
 
-    "Added to database" rows are left out of the community feed: they are
-    bookkeeping, not something people did, and they almost always coincide
-    with a watchlist add or review that already shows up.
+    "Added to database" rows include titles imported automatically (added_by is
+    empty, shown as "System"). When a person adds a title and also watchlists or
+    reviews it, grouping folds the add into that entry so it isn't shown twice.
     """
     from custom_auth.models import Review, Watchlist
-    from tvshows.models import WatchedEpisode
+    from movies.models import Movie
+    from tvshows.models import TVShow, WatchedEpisode
+    from games.models import Game
+    from books.models import Book
 
     reviews = Review.objects.select_related(
         'user', 'content_type', 'season', 'episode_subgroup'
@@ -2636,6 +2643,14 @@ def _fetch_activities_efficiently(fetch_limit, content_types, media='all', kind=
     watched_episodes = WatchedEpisode.objects.select_related(
         'user', 'episode__season__show'
     ).only(*_WATCHED_EPISODE_ONLY_FIELDS).order_by('-watched_date')
+
+    new_content = {
+        'movie': Movie.objects.select_related('added_by').only(*_MOVIE_NEW_ONLY_FIELDS),
+        'tvshow': TVShow.objects.select_related('added_by').only(*_TVSHOW_NEW_ONLY_FIELDS),
+        'game': Game.objects.select_related('added_by').only(*_GAME_NEW_ONLY_FIELDS),
+        'book': Book.objects.select_related('added_by').only(*_BOOK_NEW_ONLY_FIELDS),
+    }
+    new_content = {key: qs.order_by('-date_added') for key, qs in new_content.items()}
 
     media_keys = {
         'movies': 'movie',
@@ -2650,7 +2665,13 @@ def _fetch_activities_efficiently(fetch_limit, content_types, media='all', kind=
         watchlist_items = watchlist_items.filter(content_type_id=content_type.id)
         if media_key != 'tvshow':
             watched_episodes = watched_episodes.none()
+        new_content = {
+            key: (qs if key == media_key else qs.none()) for key, qs in new_content.items()
+        }
 
+    if kind != 'all':
+        # The kind filters (reviews / watched / watchlist) never include additions
+        new_content = {key: qs.none() for key, qs in new_content.items()}
     if kind == 'reviews':
         watchlist_items = watchlist_items.none()
         watched_episodes = watched_episodes.none()
@@ -2664,9 +2685,10 @@ def _fetch_activities_efficiently(fetch_limit, content_types, media='all', kind=
     return {
         'reviews': reviews[:fetch_limit],
         'watchlist_items': watchlist_items[:fetch_limit],
-        'movies': [],
-        'games': [],
-        'books': [],
+        'movies': new_content['movie'][:fetch_limit],
+        'tvshows': new_content['tvshow'][:fetch_limit],
+        'games': new_content['game'][:fetch_limit],
+        'books': new_content['book'][:fetch_limit],
         'watched_episodes': watched_episodes[:fetch_limit * 2]
     }
 
@@ -2678,7 +2700,7 @@ def _fetch_user_activities(fetch_limit, content_types, user):
     """
     from custom_auth.models import Review, Watchlist
     from movies.models import Movie
-    from tvshows.models import WatchedEpisode
+    from tvshows.models import TVShow, WatchedEpisode
     from games.models import Game
     from books.models import Book
 
@@ -2692,6 +2714,10 @@ def _fetch_user_activities(fetch_limit, content_types, user):
 
     movies = Movie.objects.filter(added_by=user).select_related('added_by').only(
         *_MOVIE_NEW_ONLY_FIELDS
+    ).order_by('-date_added')[:fetch_limit]
+
+    tvshows = TVShow.objects.filter(added_by=user).select_related('added_by').only(
+        *_TVSHOW_NEW_ONLY_FIELDS
     ).order_by('-date_added')[:fetch_limit]
 
     games = Game.objects.filter(added_by=user).select_related('added_by').only(
@@ -2710,6 +2736,7 @@ def _fetch_user_activities(fetch_limit, content_types, user):
         'reviews': reviews,
         'watchlist_items': watchlist_items,
         'movies': movies,
+        'tvshows': tvshows,
         'games': games,
         'books': books,
         'watched_episodes': watched_episodes
@@ -2863,6 +2890,9 @@ def _process_and_group_activities(activities_data, content_types):
     # Process new movies
     movie_activities = _process_new_movies(activities_data['movies'])
     all_activities.extend(movie_activities)
+    
+    # Process new TV shows
+    all_activities.extend(_process_new_tvshows(activities_data.get('tvshows', [])))
     
     # Process new games
     game_activities = _process_new_games(activities_data['games'])
@@ -3096,82 +3126,56 @@ def _process_watchlist_items(watchlist_items, movies_by_id, tvshows_by_id, games
     return activities
 
 
+def _new_content_activity(media_object, content_type, poster, tmdb_id=None, rawg_id=None):
+    """One "added to database" activity. Titles imported automatically have no
+    added_by and are attributed to "System"."""
+    local_timestamp = timezone.localtime(media_object.date_added)
+    timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
+    added_by = media_object.added_by
+    return {
+        'type': 'new_content',
+        'username': added_by.username if added_by else 'System',
+        'is_system': added_by is None,
+        'title': _format_title(media_object),
+        'content_type': content_type,
+        'date': media_object.date_added,
+        'timestamp': timestamp_key,
+        'timestamp_key': timestamp_key,
+        'media_id': media_object.id,
+        'action': 'added to database',
+        'poster_path': poster,
+        'tmdb_id': tmdb_id,
+        'rawg_id': rawg_id,
+    }
+
+
 def _process_new_books(books):
     """Process new book activities efficiently."""
-    activities = []
-    
-    for book in books:
-        local_timestamp = timezone.localtime(book.date_added)
-        timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
-        
-        activities.append({
-            'type': 'new_content',
-            'username': book.added_by.username if book.added_by else 'System',
-            'title': _format_title(book),
-            'content_type': 'Book',
-            'date': book.date_added,
-            'timestamp': timestamp_key,
-            'timestamp_key': timestamp_key,
-            'media_id': book.id,
-            'action': 'added to database',
-            'poster_path': book.image_url,
-            'tmdb_id': None,
-            'rawg_id': None
-        })
-    
-    return activities
+    return [_new_content_activity(book, 'Book', book.image_url) for book in books]
 
 
 def _process_new_movies(movies):
     """Process new movie activities efficiently."""
-    activities = []
-    
-    for movie in movies:
-        local_timestamp = timezone.localtime(movie.date_added)
-        timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
-        
-        activities.append({
-            'type': 'new_content',
-            'username': movie.added_by.username if movie.added_by else 'System',
-            'title': _format_title(movie),
-            'content_type': 'Movie',
-            'date': movie.date_added,
-            'timestamp': timestamp_key,
-            'timestamp_key': timestamp_key,
-            'media_id': movie.id,
-            'action': 'added to database',
-            'poster_path': movie.poster,
-            'tmdb_id': movie.tmdb_id,
-            'rawg_id': None
-        })
-    
-    return activities
+    return [
+        _new_content_activity(movie, 'Movie', movie.poster, tmdb_id=movie.tmdb_id)
+        for movie in movies
+    ]
+
+
+def _process_new_tvshows(tvshows):
+    """Process new TV show activities efficiently."""
+    return [
+        _new_content_activity(show, 'TV Show', show.poster, tmdb_id=show.tmdb_id)
+        for show in tvshows
+    ]
 
 
 def _process_new_games(games):
     """Process new game activities efficiently."""
-    activities = []
-    
-    for game in games:
-        local_timestamp = timezone.localtime(game.date_added)
-        timestamp_key = local_timestamp.strftime('%Y-%m-%d %H:%M')
-        
-        activities.append({
-            'type': 'new_content',
-            'username': game.added_by.username if game.added_by else 'System',
-            'title': _format_title(game),
-            'content_type': 'Game',
-            'date': game.date_added,
-            'timestamp': timestamp_key,
-            'timestamp_key': timestamp_key,
-            'media_id': game.id,
-            'action': 'added to database',
-            'poster_path': game.poster,
-            'tmdb_id': None,
-            'rawg_id': game.rawg_id
-        })
-    
-    return activities
+    return [
+        _new_content_activity(game, 'Game', game.poster, rawg_id=game.rawg_id)
+        for game in games
+    ]
 
 
 def _group_activities_by_timestamp_and_media(activities):
@@ -3185,7 +3189,7 @@ def _group_activities_by_timestamp_and_media(activities):
     user_media_groups = {}
     
     for activity in activities:
-        user_media_key = (activity['username'], activity['media_id'])
+        user_media_key = (activity['username'], activity['content_type'], activity['media_id'])
         if user_media_key not in user_media_groups:
             user_media_groups[user_media_key] = []
         user_media_groups[user_media_key].append(activity)
@@ -3194,7 +3198,7 @@ def _group_activities_by_timestamp_and_media(activities):
     grouped_activities = {}
     TIME_WINDOW = timedelta(minutes=5)  # Group activities within 5 minutes
     
-    for (username, media_id), user_activities in user_media_groups.items():
+    for user_activities in user_media_groups.values():
         # Sort activities by date for this user-media combination
         user_activities.sort(key=lambda x: x['date'])
         
@@ -3228,13 +3232,14 @@ def _group_activities_by_timestamp_and_media(activities):
             latest_activity = max(group, key=lambda x: x['date'])
             
             # Create unique key for this group
-            group_key = (latest_activity['timestamp_key'], latest_activity['title'], latest_activity['media_id'], latest_activity['username'])
+            group_key = (latest_activity['timestamp_key'], latest_activity['title'], latest_activity['content_type'], latest_activity['media_id'], latest_activity['username'])
             
             grouped_activities[group_key] = {
                 'title': latest_activity['title'],
                 'content_type': latest_activity['content_type'],
                 'timestamp': latest_activity['timestamp'],
                 'username': latest_activity['username'],
+                'is_system': latest_activity.get('is_system', False),
                 'poster_path': latest_activity['poster_path'],
                 'tmdb_id': latest_activity.get('tmdb_id'),
                 'rawg_id': latest_activity.get('rawg_id'),
@@ -3279,6 +3284,10 @@ def _group_activities_by_timestamp_and_media(activities):
     for activity_data in grouped_activities.values():
         # Format actions into readable string
         actions = activity_data['actions']
+        # Adding a title is implied when the same person also watchlisted or
+        # reviewed it, so only show "added to database" on its own.
+        if len(actions) > 1 and 'added to database' in actions:
+            actions = [action for action in actions if action != 'added to database']
         if len(actions) == 1:
             activity_data['action'] = actions[0]
         elif len(actions) == 2:
@@ -3312,6 +3321,8 @@ def _activity_kind(activity):
     action = activity.get('action', '')
     if action == 'added to watchlist':
         return 'watchlist'
+    if action == 'added to database':
+        return 'added'
     if 'episode_count' in activity and action.startswith('watched') and ' and ' not in action:
         return 'episodes'
     return 'other'
@@ -3363,10 +3374,10 @@ def _merge_episode_reviews(activities):
 
 def _collapse_activity_bursts(activities):
     """
-    Collapse runs of low-signal activity (watchlist adds, watched episodes) by
-    the same user within _BURST_GAP of each other into a single bundle entry,
-    placed where the newest member was. Reviews never collapse.
-    Expects `activities` sorted newest first.
+    Collapse runs of low-signal activity (watchlist adds, watched episodes,
+    titles added to the database) by the same user within _BURST_GAP of each
+    other into a single bundle entry, placed where the newest member was.
+    Reviews never collapse. Expects `activities` sorted newest first.
     """
     slots = []
     open_bundles = {}  # (username, kind) -> (slot index, oldest member date)
@@ -3374,7 +3385,7 @@ def _collapse_activity_bursts(activities):
     for activity in activities:
         kind = _activity_kind(activity)
         activity['kind'] = kind
-        if kind not in ('watchlist', 'episodes'):
+        if kind not in ('watchlist', 'episodes', 'added'):
             slots.append([activity])
             continue
 
@@ -3422,6 +3433,9 @@ def _build_activity_bundle(members):
     if kind == 'watchlist':
         noun = _BUNDLE_NOUNS.get(content_type, 'titles')
         action = f"added {count} {noun} to watchlist"
+    elif kind == 'added':
+        noun = _BUNDLE_NOUNS.get(content_type, 'titles')
+        action = f"added {count} {noun} to database"
     else:
         episode_total = sum(member.get('episode_count', 0) for member in members)
         action = f"watched {episode_total} episodes across {count} shows"
@@ -3430,6 +3444,7 @@ def _build_activity_bundle(members):
         'kind': 'bundle',
         'bundle_of': kind,
         'username': head['username'],
+        'is_system': head.get('is_system', False),
         'timestamp': head['timestamp'],
         '_date': head['_date'],
         'title': items[0]['title'],
@@ -3470,11 +3485,14 @@ def _annotate_activities_for_viewer(activities, user, content_types):
         activity.setdefault('kind', _activity_kind(activity))
         activity['detail_url'] = _activity_detail_url(activity)
         username = activity.get('username')
+        is_system = activity.get('is_system', False)
         try:
-            activity['profile_url'] = reverse('profile_with_username', args=[username]) if username else None
+            activity['profile_url'] = (
+                reverse('profile_with_username', args=[username]) if username and not is_system else None
+            )
         except NoReverseMatch:
             activity['profile_url'] = None
-        activity['is_own'] = bool(user.is_authenticated and username == user.username)
+        activity['is_own'] = bool(user.is_authenticated and not is_system and username == user.username)
         activity['viewer_state'] = None
         if activity['kind'] != 'bundle':
             targets.append(activity)
