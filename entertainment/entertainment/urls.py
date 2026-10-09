@@ -48,7 +48,11 @@ def well_known_handler(request, path):
 
 @require_http_methods(["GET"])
 def healthz(request):
-    """Liveness/readiness probe for container healthchecks: verifies DB and cache are reachable."""
+    """Liveness/readiness probe for container healthchecks: verifies DB and cache are reachable.
+
+    Also reports how many Django Q clusters are alive (informational only, so a dead
+    worker shows up here without failing the web container's healthcheck).
+    """
     from django.core.cache import cache
     from django.db import connection
 
@@ -57,7 +61,14 @@ def healthz(request):
         cache.get('healthz')
     except Exception:
         return JsonResponse({'status': 'unavailable'}, status=503)
-    return JsonResponse({'status': 'ok'})
+
+    try:
+        from django_q.conf import Conf
+        from django_q.status import Stat
+        task_clusters = sum(1 for stat in Stat.get_all() if stat.status != Conf.STOPPED)
+    except Exception:
+        task_clusters = None
+    return JsonResponse({'status': 'ok', 'task_clusters': task_clusters})
 
 ROBOTS_DISALLOW = ['/admin/', '/api/', '/watchlist/', '/profile/', '/accounts/']
 

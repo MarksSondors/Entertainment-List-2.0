@@ -125,6 +125,12 @@ class TVShowImportPageTests(TestCase):
         self.assertTemplateUsed(response, 'tmdb_404.html')
         self.assertIsNone(cache.get('tvshow_import:555'))
 
+    def test_task_status_reports_queued_task_as_pending(self):
+        # Django Q has no Task row until the task finishes; polling must not 404 meanwhile
+        response = self.client.get(reverse('task-status'), {'task_id': 'still-queued'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'complete': False, 'success': None})
+
     @mock.patch('tvshows.views.create_tvshow_async', return_value='task-ok')
     def test_finished_import_redirects_to_show(self, _create_async):
         from django_q.models import Task

@@ -809,7 +809,8 @@ class MovieTaskStatusView(APIView):
             return Response(response_data)
             
         except Task.DoesNotExist:
-            return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
+            # Django Q only stores a Task row once it finishes; until then it's still queued/running
+            return Response({"complete": False, "success": None})
 
 @login_required
 def random_unwatched_movie(request):
