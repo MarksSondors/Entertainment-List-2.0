@@ -50,7 +50,8 @@ class HealthzTests(TestCase):
     def test_healthz_reports_ok(self):
         response = self.client.get(reverse('healthz'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'status': 'ok'})
+        self.assertEqual(response.json()['status'], 'ok')
+        self.assertIn('task_clusters', response.json())
 
     @override_settings(SECURE_SSL_REDIRECT=True, SECURE_REDIRECT_EXEMPT=[r'^healthz$'])
     def test_healthz_is_not_redirected_to_https(self):

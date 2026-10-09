@@ -903,7 +903,8 @@ class TaskStatusView(APIView):
             return Response(response_data)
             
         except Task.DoesNotExist:
-            return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
+            # Django Q only stores a Task row once it finishes; until then it's still queued/running
+            return Response({"complete": False, "success": None})
 
 class EpisodeWatchedView(APIView):
     authentication_classes = [SessionAuthentication]

@@ -183,3 +183,6 @@ entertainment/media
 
 # Traefik ACME store: holds TLS certificate private keys, never commit it.
 traefik/acme.json
+
+# gunicorn control socket (created in /app at runtime)
+gunicorn.ctl
