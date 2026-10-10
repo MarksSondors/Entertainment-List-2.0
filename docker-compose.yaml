@@ -101,6 +101,9 @@ services:
       # doesn't collide with the Django app's own /api/ routes
       - "--api.basePath=/traefik"
       - "--log.level=INFO"
+      # One line per request to the site (method, path, status, response time,
+      # router); read with `docker compose logs traefik`
+      - "--accesslog=true"
     ports:
       - "80:80"
       - "443:443"  # HTTPS
@@ -111,6 +114,12 @@ services:
     networks:
       - webnet
     restart: unless-stopped
+    # Rotate container logs so the access log can't fill the disk
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     environment:
       - DOMAIN=${DOMAIN:?DOMAIN must be set in .env}
 

@@ -58,6 +58,14 @@ http:
       loadBalancer:
         servers:
           - url: "http://nginx:80"  # Now points to nginx instead of web
+        # Shows the backend as UP/DOWN in the dashboard. A failing check takes the
+        # server out of rotation (503) until /healthz (DB + cache) passes again.
+        healthCheck:
+          path: /healthz
+          # Django only accepts its own domain in the Host header
+          hostname: "{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}"
+          interval: 15s
+          timeout: 5s
 
   middlewares:
     # /traefik, /traefik/dashboard (no trailing slash) and the old /dashboard URLs
