@@ -4,11 +4,36 @@ from django.urls import reverse
 from django.utils.html import format_html, mark_safe
 
 # Register your models here.
-from .models import CustomUser, Genre, Keyword, Country, Watchlist, Review, Person, MediaPerson, ProductionCompany
+from .models import CustomUser, Genre, Keyword, Country, Watchlist, Review, Person, MediaPerson, ProductionCompany, SlowRequest
 from movies.models import Movie
 
 admin.site.register(CustomUser)
 admin.site.register(Genre)
+
+
+@admin.register(SlowRequest)
+class SlowRequestAdmin(admin.ModelAdmin):
+    """Read-only list of requests over SLOW_REQUEST_MS, slowest first."""
+    list_display = (
+        'duration_ms', 'db_time_ms', 'query_count', 'repeated_query_count',
+        'view_name', 'path', 'username', 'status_code', 'created_at',
+    )
+    list_filter = ('view_name', 'status_code', 'created_at')
+    search_fields = ('path', 'view_name', 'username')
+    ordering = ('-duration_ms',)
+    date_hierarchy = 'created_at'
+    fields = (
+        'created_at', 'method', 'path', 'view_name', 'username', 'status_code',
+        'duration_ms', 'db_time_ms', 'query_count',
+        'repeated_query_count', 'repeated_query', 'slowest_queries',
+    )
+    readonly_fields = fields
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 @admin.register(Keyword)
 class KeywordAdmin(admin.ModelAdmin):

@@ -13,6 +13,77 @@ http:
         - redirect-to-https
         - security-headers
         - large-upload
+        - compress
+
+    # Background polling (activity feed refresh, import progress) and health
+    # checks: same as the main site route, but kept out of the access log so
+    # the stats show what people actually do.
+    entertainment-quiet:
+      rule: "Host(`{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`) && (Path(`/activity/recent/`) || Path(`/movies/task-status/`) || Path(`/tvshows/task-status/`) || Path(`/healthz`))"
+      priority: 900
+      service: entertainment
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: myresolver
+      middlewares:
+        - redirect-to-https
+        - security-headers
+        - large-upload
+        - compress
+      observability:
+        accessLogs: false
+
+    # Vulnerability scanners probing for PHP/WordPress/dotfiles: rejected with
+    # 403 before reaching Django, and not logged. No real page matches these.
+    block-scanners:
+      rule: "PathRegexp(`(?i)(\\.(php\\d?|asp|aspx|jsp|cgi|env|ini|bak|old|sql|swp|git)$|^/(wp-|wordpress|xmlrpc|phpmyadmin|pma/|cgi-bin|vendor/|\\.git|\\.env|\\.aws|\\.ssh|\\.svn|\\.hg|\\.ds_store|boaform|actuator|hnap1|owa/|autodiscover))`)"
+      priority: 3000
+      service: noop@internal
+      entryPoints:
+        - websecure
+      tls: {}
+      middlewares:
+        - deny-all
+      observability:
+        accessLogs: false
+
+    block-scanners-http:
+      rule: "PathRegexp(`(?i)(\\.(php\\d?|asp|aspx|jsp|cgi|env|ini|bak|old|sql|swp|git)$|^/(wp-|wordpress|xmlrpc|phpmyadmin|pma/|cgi-bin|vendor/|\\.git|\\.env|\\.aws|\\.ssh|\\.svn|\\.hg|\\.ds_store|boaform|actuator|hnap1|owa/|autodiscover))`)"
+      priority: 3000
+      service: noop@internal
+      entryPoints:
+        - web
+      middlewares:
+        - deny-all
+      observability:
+        accessLogs: false
+
+    # Anything not addressed to the site's domain (scanners hitting the bare IP,
+    # random Host headers): rejected and not logged. Lowest priority, so every
+    # real route wins.
+    unknown-host:
+      rule: "PathPrefix(`/`)"
+      priority: 1
+      service: noop@internal
+      entryPoints:
+        - websecure
+      tls: {}
+      middlewares:
+        - deny-all
+      observability:
+        accessLogs: false
+
+    unknown-host-http:
+      rule: "PathPrefix(`/`)"
+      priority: 1
+      service: noop@internal
+      entryPoints:
+        - web
+      middlewares:
+        - deny-all
+      observability:
+        accessLogs: false
 
     entertainment-http:
       rule: "Host(`{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`)"
@@ -146,6 +217,28 @@ http:
     large-upload:
       buffering:
         maxRequestBodyBytes: 524288000  # 500 MB
+
+    # gzip/brotli/zstd for text responses from Django; images, video and
+    # downloads are already compressed so they're left alone.
+    compress:
+      compress:
+        includedContentTypes:
+          - text/html
+          - text/css
+          - text/plain
+          - text/javascript
+          - application/javascript
+          - application/json
+          - application/manifest+json
+          - application/xml
+          - text/xml
+          - image/svg+xml
+
+    # Rejects every client (403); used for the scanner and unknown-host routers.
+    deny-all:
+      ipAllowList:
+        sourceRange:
+          - "127.0.0.1/32"
 
 entryPoints:
   web:
