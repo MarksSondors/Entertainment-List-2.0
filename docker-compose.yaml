@@ -33,6 +33,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - goaccess_report:/srv/goaccess:ro
     depends_on:
       - web
     networks:
@@ -102,8 +103,10 @@ services:
       - "--api.basePath=/traefik"
       - "--log.level=INFO"
       # One line per request to the site (method, path, status, response time,
-      # router); read with `docker compose logs traefik`
+      # router), written to a file GoAccess reads; view the raw log with
+      # `docker compose exec goaccess tail -f /var/log/traefik/access.log`
       - "--accesslog=true"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
     ports:
       - "80:80"
       - "443:443"  # HTTPS
@@ -111,6 +114,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - ./traefik/acme.json:/acme.json
       - ./traefik/dynamic_conf.yml:/etc/traefik/dynamic_conf.yml
+      - traefik_logs:/var/log/traefik
     networks:
       - webnet
     restart: unless-stopped
@@ -123,6 +127,26 @@ services:
     environment:
       - DOMAIN=${DOMAIN:?DOMAIN must be set in .env}
 
+  # Live traffic dashboard at /traefik/stats/ built from Traefik's access log
+  goaccess:
+    image: allinurl/goaccess:1.12
+    entrypoint: ["/bin/sh", "/goaccess.sh"]
+    volumes:
+      - ./traefik/goaccess.sh:/goaccess.sh:ro
+      - traefik_logs:/var/log/traefik
+      - goaccess_data:/data
+      - goaccess_report:/report
+    networks:
+      - webnet
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    environment:
+      - DOMAIN=${DOMAIN:?DOMAIN must be set in .env}
+
 networks:
   webnet:
     driver: bridge
@@ -132,3 +156,6 @@ volumes:
   postgres_data:
   static_volume:
   media_volume:
+  traefik_logs:
+  goaccess_data:
+  goaccess_report:
