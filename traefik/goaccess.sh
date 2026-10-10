@@ -86,6 +86,7 @@ fi
 exec goaccess "$LOG" \
   --log-format='{"ClientHost":"%h","time":"%x","RequestMethod":"%m","RequestPath":"%U","RequestProtocol":"%H","DownstreamStatus":"%s","DownstreamContentSize":"%b","Duration":"%n","request_User-Agent":"%u","request_Referer":"%R","downstream_X-Entlist-View":"%v","downstream_X-Entlist-User":"%e"}' \
   --datetime-format='%Y-%m-%dT%H:%M:%SZ' \
+  --tz="${STATS_TZ:-Europe/Riga}" \
   --num-tests=0 \
   "$@" \
   --sort-panel=VIRTUAL_HOSTS,BY_CUMTS,DESC \

@@ -93,6 +93,8 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      # HTTP/3 (QUIC) over UDP 443; browsers fall back to HTTP/2 if UDP is blocked
+      - "--entrypoints.websecure.http3=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.myresolver.acme.email=your-actual-email@example.com"
@@ -117,6 +119,7 @@ services:
     ports:
       - "80:80"
       - "443:443"  # HTTPS
+      - "443:443/udp"  # HTTP/3
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - ./traefik/acme.json:/acme.json

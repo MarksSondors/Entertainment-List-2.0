@@ -151,6 +151,8 @@ SPECTACULAR_SETTINGS = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Early so its timing covers the rest of the stack
+    'custom_auth.middleware.SlowRequestMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -375,3 +377,8 @@ TRUSTED_PROXY_COUNT = config('TRUSTED_PROXY_COUNT', default=0 if DEBUG else 2, c
 
 # Shared secret for uploading trained SVD model from local → production
 MODEL_UPLOAD_KEY = config('MODEL_UPLOAD_KEY', default='')
+
+# Requests slower than this are saved with their DB cost (admin: "Slow requests").
+# 0 disables recording.
+SLOW_REQUEST_MS = config('SLOW_REQUEST_MS', default=1000, cast=int)
+SLOW_REQUEST_RETENTION_DAYS = config('SLOW_REQUEST_RETENTION_DAYS', default=30, cast=int)

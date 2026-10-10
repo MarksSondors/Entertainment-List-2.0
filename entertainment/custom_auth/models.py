@@ -497,3 +497,31 @@ class Meme(models.Model):
 
     def __str__(self):
         return f"Meme by {self.user.username} ({self.video_id})"
+
+
+class SlowRequest(models.Model):
+    """A request slower than settings.SLOW_REQUEST_MS, with its database cost.
+
+    Recorded by SlowRequestMiddleware and browsed in the Django admin to find
+    out *why* a page is slow (many queries, one slow query, or not the DB).
+    """
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    method = models.CharField(max_length=10)
+    path = models.CharField(max_length=500)
+    view_name = models.CharField(max_length=200, blank=True)
+    username = models.CharField(max_length=150, blank=True)
+    status_code = models.PositiveSmallIntegerField()
+    duration_ms = models.PositiveIntegerField(db_index=True)
+    db_time_ms = models.PositiveIntegerField()
+    query_count = models.PositiveIntegerField()
+    # The SQL run most often in this request; a high count usually means an N+1
+    repeated_query = models.TextField(blank=True)
+    repeated_query_count = models.PositiveIntegerField(default=0)
+    # The five slowest queries, one per block: "<ms> ms\n<SQL>"
+    slowest_queries = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.method} {self.path} ({self.duration_ms} ms)"
