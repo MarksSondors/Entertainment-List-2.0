@@ -1,6 +1,41 @@
 from django.utils import timezone
 
 
+class AccessLogTagsMiddleware:
+    """
+    Tag every response with the signed-in username and the URL route that
+    handled it, so Traefik's access log (and the GoAccess dashboard at
+    /traefik/stats/) can break traffic and response times down per user and
+    per page type, not just per raw URL.
+
+    The values are only the requester's own username and an internal route
+    name; Traefik records them from these response headers.
+    """
+
+    USER_HEADER = 'X-Entlist-User'
+    VIEW_HEADER = 'X-Entlist-View'
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+
+        user = getattr(request, 'user', None)
+        if user is not None and user.is_authenticated:
+            response[self.USER_HEADER] = user.get_username()
+        else:
+            stremio_user = getattr(request, 'stremio_user', None)
+            if stremio_user is not None:
+                response[self.USER_HEADER] = stremio_user.get_username()
+
+        match = getattr(request, 'resolver_match', None)
+        if match is not None and match.view_name:
+            response[self.VIEW_HEADER] = match.view_name
+
+        return response
+
+
 class UpdateLastActiveMiddleware:
     """
     Middleware that updates the user's last_active timestamp on each request.

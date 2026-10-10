@@ -102,11 +102,18 @@ services:
       # doesn't collide with the Django app's own /api/ routes
       - "--api.basePath=/traefik"
       - "--log.level=INFO"
-      # One line per request to the site (method, path, status, response time,
-      # router), written to a file GoAccess reads; view the raw log with
+      # One JSON line per request to the site, written to a file GoAccess reads
+      # (/traefik/stats/). Django tags responses with the signed-in user and the
+      # route that handled them (X-Entlist-User / X-Entlist-View). Raw log:
       # `docker compose exec goaccess tail -f /var/log/traefik/access.log`
       - "--accesslog=true"
       - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--accesslog.format=json"
+      - "--accesslog.fields.headers.defaultmode=drop"
+      - "--accesslog.fields.headers.names.User-Agent=keep"
+      - "--accesslog.fields.headers.names.Referer=keep"
+      - "--accesslog.fields.headers.names.X-Entlist-User=keep"
+      - "--accesslog.fields.headers.names.X-Entlist-View=keep"
     ports:
       - "80:80"
       - "443:443"  # HTTPS
@@ -133,6 +140,7 @@ services:
     entrypoint: ["/bin/sh", "/goaccess.sh"]
     volumes:
       - ./traefik/goaccess.sh:/goaccess.sh:ro
+      - ./traefik/goaccess-labels.js:/goaccess-labels.js:ro
       - traefik_logs:/var/log/traefik
       - goaccess_data:/data
       - goaccess_report:/report

@@ -159,6 +159,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'custom_auth.middleware.UpdateLastActiveMiddleware',
+    'custom_auth.middleware.AccessLogTagsMiddleware',
     'axes.middleware.AxesMiddleware',  # keep last
 ]
 
