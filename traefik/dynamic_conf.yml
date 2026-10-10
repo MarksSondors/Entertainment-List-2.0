@@ -53,6 +53,32 @@ http:
       tls:
         certResolver: myresolver
 
+    # GoAccess traffic report (served by nginx) and its live-update WebSocket.
+    # Explicit priorities: the dashboard rule above also matches /traefik/... and,
+    # being longer, would otherwise win.
+    stats:
+      rule: "Host(`{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`) && PathPrefix(`/traefik/stats`)"
+      priority: 1000
+      service: entertainment
+      entrypoints:
+        - websecure
+      middlewares:
+        - auth
+        - stats-slash
+      tls:
+        certResolver: myresolver
+
+    stats-ws:
+      rule: "Host(`{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}`) && Path(`/traefik/stats/ws`)"
+      priority: 1100
+      service: goaccess
+      entrypoints:
+        - websecure
+      middlewares:
+        - auth
+      tls:
+        certResolver: myresolver
+
   services:
     entertainment:
       loadBalancer:
@@ -67,6 +93,11 @@ http:
           interval: 15s
           timeout: 5s
 
+    goaccess:
+      loadBalancer:
+        servers:
+          - url: "http://goaccess:7890"
+
   middlewares:
     # /traefik, /traefik/dashboard (no trailing slash) and the old /dashboard URLs
     # all land on the dashboard; Traefik only serves it at .../dashboard/
@@ -74,6 +105,12 @@ http:
       redirectRegex:
         regex: "^(https?://[^/]+)/(?:traefik/?|traefik/dashboard|dashboard.*)$"
         replacement: "${1}/traefik/dashboard/"
+
+    # /traefik/stats -> /traefik/stats/ (nginx only serves the report with the slash)
+    stats-slash:
+      redirectRegex:
+        regex: "^(https?://[^/]+/traefik/stats)$"
+        replacement: "${1}/"
 
     redirect-to-https:
       redirectScheme:
