@@ -926,7 +926,7 @@ iframe[src*="tiktok.com"] {
                                 id: review.id, 
                                 user: review.user, 
                                 rating: review.rating, 
-                                review_text: sanitizedReviewText, 
+                                review_text: review.review_text || '', 
                                 date_added: review.date_added
                             }, isAuthor, contentType);
                         };
