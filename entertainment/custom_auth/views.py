@@ -3605,193 +3605,47 @@ def _convert_to_low_quality_tmdb_url(poster_path):
 @login_required
 def browse_by_people(request):
     """
-    View for displaying the people explorer page. Uses lazy loading for better performance.
-    The actual people data is loaded via AJAX using the api_people_by_category endpoint.
+    People Explorer page shell. Results, tab counts and paging are fetched from
+    ``api_people_by_category``; filters are mirrored in the query string.
     """
-    return render(request, 'browse_by_people.html')
+    tabs = [
+        ('directors', 'Directors', 'images/win98/camera_vid.png'),
+        ('actors', 'Actors', 'images/win98/user_card.png'),
+        ('writers', 'Writers', 'images/win98/notepad_file.png'),
+        ('composers', 'Composers', 'images/win98/paint_file.png'),
+        ('tv_creators', 'TV Creators', 'images/win98/network_television.png'),
+        ('authors', 'Authors', 'images/win98/document.png'),
+        ('musicians', 'Musicians', 'images/win98/cd_audio.png'),
+        ('all', 'Everyone', 'images/win98/users.png'),
+    ]
+    categories = [{'key': key, 'label': label, 'icon': icon} for key, label, icon in tabs]
+    return render(request, 'browse_by_people.html', {'categories': categories})
 
 
 @login_required
 def api_people_by_category(request):
     """
-    API endpoint for fetching people by category with pagination and search.
-    Supports lazy loading for better performance.
-    """
-    from django.core.cache import cache
-    
-    category = request.GET.get('category', 'directors')
-    page = query_int(request.GET, 'page', 1, minimum=1)
-    per_page = query_int(request.GET, 'per_page', 30, minimum=1, maximum=100)
-    search_query = request.GET.get('search', '').strip().lower()
-    sort_by = request.GET.get('sort', 'rating-desc')
-    
-    cache_key_prefix = "people_browser_v2_"
-    cache_timeout = 3600  # 1 hour cache timeout
-    
-    # Map category to role filter
-    category_filters = {
-        'directors': Q(is_director=True),
-        'writers': Q(is_screenwriter=True) | Q(is_writer=True) | Q(is_story=True),
-        'actors': Q(is_actor=True),
-        'tv_creators': Q(is_tv_creator=True),
-        'musicians': Q(is_musician=True) | Q(is_original_music_composer=True),
-        'other_creators': Q(is_comic_artist=True) | Q(is_graphic_novelist=True) | Q(is_book=True) | Q(is_novelist=True) | Q(is_original_story=True),
-    }
-    
-    role_filter = category_filters.get(category, category_filters['directors'])
-    cache_key = f"{cache_key_prefix}{category}"
-    
-    # Try to get cached result first
-    people_with_ratings = cache.get(cache_key)
-    
-    if not people_with_ratings:
-        people_with_ratings = _fetch_people_by_role(role_filter)
-        cache.set(cache_key, people_with_ratings, cache_timeout)
-    
-    # Apply search filter
-    if search_query:
-        people_with_ratings = [
-            p for p in people_with_ratings 
-            if search_query in p['name'].lower()
-        ]
-    
-    # Apply sorting
-    if sort_by == 'name-asc':
-        people_with_ratings = sorted(people_with_ratings, key=lambda x: x['name'].lower())
-    elif sort_by == 'name-desc':
-        people_with_ratings = sorted(people_with_ratings, key=lambda x: x['name'].lower(), reverse=True)
-    elif sort_by == 'rating-asc':
-        people_with_ratings = sorted(people_with_ratings, key=lambda x: (x['avg_rating'] or 0))
-    else:  # rating-desc (default)
-        people_with_ratings = sorted(people_with_ratings, key=lambda x: (x['avg_rating'] or 0), reverse=True)
-    
-    # Paginate
-    total_count = len(people_with_ratings)
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    paginated_people = people_with_ratings[start_idx:end_idx]
-    
-    return JsonResponse({
-        'success': True,
-        'people': paginated_people,
-        'pagination': {
-            'page': page,
-            'per_page': per_page,
-            'total': total_count,
-            'total_pages': (total_count + per_page - 1) // per_page,
-            'has_more': end_idx < total_count
-        },
-        'category': category,
-    })
+    JSON feed for the People Explorer.
 
+    Query params: ``category`` (all, directors, actors, writers, composers,
+    tv_creators, authors, musicians), ``scope`` (all | mine | watchlist),
+    ``search``, ``sort``, ``min_works``, ``page``, ``per_page``.
+    See ``custom_auth.services.people_explorer`` for the aggregation rules.
+    """
+    from .services.people_explorer import build_listing
 
-def _fetch_people_by_role(role_filter):
-    """
-    Helper function to fetch and process people by role.
-    Returns serialized list of people with their ratings.
-    """
-    # First, identify media that has reviews
-    reviewed_media = Review.objects.values('content_type_id', 'object_id').distinct()
-    
-    # Then get all MediaPerson entries that match those reviewed media
-    reviewed_media_persons = MediaPerson.objects.filter(
-        content_type_id__in=[item['content_type_id'] for item in reviewed_media],
-        object_id__in=[item['object_id'] for item in reviewed_media]
-    ).values('person_id').distinct()
-    
-    # Get people matching the role filter AND who have been in reviewed works
-    people = Person.objects.filter(
-        role_filter,
-        profile_picture__isnull=False,
-        id__in=reviewed_media_persons
-    ).distinct()[:200]
-    
-    if not people:
-        return []
-    
-    # Prefetch all media relations in a single query
-    person_ids = [p.id for p in people]
-    
-    # Get all media relations for these people in one query
-    media_relations = MediaPerson.objects.filter(
-        person_id__in=person_ids
-    ).values('person_id', 'content_type_id', 'object_id')
-    
-    # Group media relations by person
-    person_media = {}
-    for relation in media_relations:
-        person_id = relation['person_id']
-        if person_id not in person_media:
-            person_media[person_id] = set()
-        person_media[person_id].add(
-            (relation['content_type_id'], relation['object_id'])
-        )
-    # Batch collect all content types and object IDs for reviews
-    all_media_identifiers = set()
-    for relations in person_media.values():
-        all_media_identifiers.update(relations)
-    
-    # Build a map of all media ratings at once
-    media_ratings = {}
-    if all_media_identifiers:
-        q_objects = Q()
-        for ct_id, obj_id in all_media_identifiers:
-            q_objects |= Q(content_type_id=ct_id, object_id=obj_id)
-            
-        # Get aggregated review data in one query
-        review_data = Review.objects.filter(q_objects).values(
-            'content_type_id', 'object_id'
-        ).annotate(
-            avg_rating=Avg('rating'),
-            count=models.Count('id')
-        )
-        
-        # Create a map for fast lookups
-        for data in review_data:
-            key = (data['content_type_id'], data['object_id'])
-            media_ratings[key] = {
-                'avg_rating': data['avg_rating'],
-                'count': data['count']
-            }
-    
-    # Serialize people with ratings
-    people_with_ratings = []
-    for person in people:
-        # Get this person's media
-        person_media_list = person_media.get(person.id, [])
-        
-        if not person_media_list:
-            continue  # Skip people with no media
-                  
-        # Calculate average rating across all media
-        total_rating = 0
-        total_count = 0
-        num_works = 0
-        
-        for media_key in person_media_list:
-            num_works += 1
-            if media_key in media_ratings:
-                rating_data = media_ratings[media_key]
-                # Weighted average: Rating * Count
-                total_rating += rating_data['avg_rating'] * rating_data['count']
-                total_count += rating_data['count']
-        
-        avg_rating = None
-        if total_count > 0:
-            avg_rating = round(total_rating / total_count, 1)
-        
-        # Serialize person data for JSON response
-        people_with_ratings.append({
-            'id': person.id,
-            'name': person.name,
-            'profile_picture': person.profile_picture or None,
-            'birth_year': person.date_of_birth.year if person.date_of_birth else None,
-            'avg_rating': avg_rating,
-            'rating_count': total_count,
-            'num_works': num_works,
-        })
-    
-    return people_with_ratings
+    data = build_listing(
+        request.user,
+        category=request.GET.get('category'),
+        scope=request.GET.get('scope'),
+        search=request.GET.get('search', '').strip()[:100],
+        sort=request.GET.get('sort'),
+        min_works=query_int(request.GET, 'min_works', 1, minimum=1, maximum=50),
+        page=query_int(request.GET, 'page', 1, minimum=1),
+        per_page=query_int(request.GET, 'per_page', 30, minimum=1, maximum=100),
+    )
+    return JsonResponse(data)
+
 
 @login_required
 def statistics_page(request):
@@ -3801,7 +3655,7 @@ def statistics_page(request):
 
     context = {
         'page_title': 'Statistics',
-        'stats_json': json.dumps(stats_data),
+        'stats_data': stats_data,
     }
     return render(request, 'statistics_page.html', context)
 

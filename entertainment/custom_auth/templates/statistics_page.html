@@ -67,6 +67,8 @@
     display: flex;
     gap: 0;
     margin-bottom: 10px;
+    overflow-x: auto;
+    padding: 2px;
 }
 
 .stats-tab {
@@ -81,6 +83,7 @@
     font-size: 13px;
     cursor: pointer;
     margin-right: 2px;
+    flex-shrink: 0;
 }
 
 .stats-tab:hover {
@@ -140,6 +143,29 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
+}
+.stats-grid > .window { min-width: 0; }
+.stats-container { font-variant-numeric: tabular-nums; padding-bottom: 90px; }
+.stats-container button:focus-visible, .stats-container a:focus-visible,
+.stats-container select:focus-visible { outline: 2px solid #008080; outline-offset: 3px; }
+.stats-note { color: var(--text-muted); font-size: 12px; line-height: 1.6; max-width: 80ch; }
+.stats-summary { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important; }
+.stats-error { padding: 12px; border: 2px inset var(--bg-color); margin-bottom: 12px; }
+.stats-error[hidden] { display: none; }
+.director-name { overflow-wrap: anywhere; }
+.chart-container { min-width: 0; }
+@media (max-width: 600px) {
+    .stats-container { padding: 6px 6px 90px; }
+    .stats-container > .window > .window-body { padding: 8px; }
+    .summary-card { padding: 10px; gap: 8px; }
+    .summary-card .win98-icon { width: 24px; height: 24px; }
+    .stats-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 6px; }
+    .stats-grid { gap: 10px; }
+    .stats-status-bar { flex-wrap: wrap; gap: 4px; }
+}
+@media (prefers-color-scheme: dark) {
+    .top-directors-list .director-rating { color: #70d5ce; }
+    .stats-container select { color: var(--text-color); background-color: var(--window-bg); }
 }
 
 @media (max-width: 768px) {
@@ -410,14 +436,13 @@
         <div class="title-bar">
             <div class="title-bar-text">Statistics - {{ request.user.username }}</div>
             <div class="title-bar-controls">
-                <button aria-label="Minimize"></button>
-                <button aria-label="Maximize"></button>
-                <button aria-label="Close"></button>
+                <button aria-label="Close" onclick="window.location.href='{% url 'profile_page' %}'"></button>
             </div>
         </div>
         <div class="window-body">
             <!-- Tab strip -->
-            <div class="stats-tabs">
+            <p class="stats-note">Your ratings, habits and watch history across your library. Each title has equal weight; TV season and subgroup ratings are averaged per show.</p>
+            <div class="stats-tabs" aria-label="Media type">
                 <button class="stats-tab active" data-media="movies" onclick="switchTab('movies', this)">
                     <img src="{% static 'images/win98/camera_vid.png' %}" alt="" class="win98-icon"> Movies
                 </button>
@@ -427,6 +452,12 @@
                 <button class="stats-tab" data-media="games" onclick="switchTab('games', this)">
                     <img src="{% static 'images/win98/solitaire.png' %}" alt="" class="win98-icon"> Games
                 </button>
+                <button class="stats-tab" data-media="books" onclick="switchTab('books', this)">
+                    <img src="{% static 'images/win98/document.png' %}" alt="" class="win98-icon"> Books
+                </button>
+                <button class="stats-tab" data-media="music" onclick="switchTab('music', this)">
+                    <img src="{% static 'images/win98/cd_audio.png' %}" alt="" class="win98-icon"> Music
+                </button>
             </div>
 
             <!-- Controls row -->
@@ -434,11 +465,14 @@
                 <span class="stats-total" id="total-reviews"></span>
                 <div class="year-filter">
                     <img src="{% static 'images/win98/calendar.png' %}" alt="" class="win98-icon">
+                    <label for="year-select">Activity year</label>
                     <select id="year-select" onchange="onYearChange()">
                         <option value="all">All Time</option>
                     </select>
                 </div>
             </div>
+            <p class="stats-note" id="period-note"></p>
+            <div class="stats-error" id="stats-error" role="alert" hidden>Charts couldn't load. Your summary is still available. <button type="button" onclick="location.reload()">Reload page</button></div>
 
             <!-- Summary cards -->
             <div class="stats-summary" id="stats-summary">
@@ -453,7 +487,21 @@
                     <img src="{% static 'images/win98/clock.png' %}" alt="" class="win98-icon">
                     <div class="summary-info">
                         <span class="summary-value" id="summary-hours">0</span>
-                        <span class="summary-label">Hours</span>
+                        <span class="summary-label" id="summary-hours-label">Runtime hours</span>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <img src="{% static 'images/win98/calendar.png' %}" alt="" class="win98-icon">
+                    <div class="summary-info">
+                        <span class="summary-value" id="summary-days">0</span>
+                        <span class="summary-label">Days with ratings</span>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <img src="{% static 'images/win98/directory_open.png' %}" alt="" class="win98-icon">
+                    <div class="summary-info">
+                        <span class="summary-value" id="summary-watchlist">0</span>
+                        <span class="summary-label">On watchlist now</span>
                     </div>
                 </div>
                 <div class="summary-card">
@@ -464,9 +512,14 @@
                     </div>
                 </div>
             </div>
+            <p class="stats-note" id="runtime-note"></p>
 
             <!-- Chart panels grid -->
             <div class="stats-grid" id="stats-grid">
+                <section class="window full-width">
+                    <div class="title-bar"><div class="title-bar-text">Rating activity by month</div></div>
+                    <div class="window-body"><div id="chart-activity" class="chart-container" role="img" aria-label="Monthly rating activity"></div></div>
+                </section>
                 <!-- Rating Distribution -->
                 <div class="window">
                     <div class="title-bar">
@@ -576,7 +629,7 @@
                     <div class="title-bar">
                         <div class="title-bar-text">
                             <img src="{% static 'images/win98/clock.png' %}" alt="" class="win98-icon">
-                            Watch Time & Watchlist Size by Month
+                            Runtime &amp; watchlist activity by month
                         </div>
                     </div>
                     <div class="window-body">
@@ -615,7 +668,7 @@
                     <div class="title-bar">
                         <div class="title-bar-text">
                             <img src="{% static 'images/win98/users.png' %}" alt="" class="win98-icon">
-                            Top Actors (Most Films)
+                            <span id="people-count-title">Top actors (most titles)</span>
                         </div>
                     </div>
                     <div class="window-body">
@@ -628,7 +681,7 @@
                     <div class="title-bar">
                         <div class="title-bar-text">
                             <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="" class="win98-icon">
-                            Top Actors (By Rating)
+                            <span id="people-rating-title">Top actors (by rating, minimum 2 titles)</span>
                         </div>
                     </div>
                     <div class="window-body">
@@ -658,7 +711,7 @@
             </div>
             <div class="window-body">
                 <img src="{% static 'images/win98/msg_error.png' %}" alt="" class="win98-icon-large">
-                <p>No ratings yet for this category.<br>Start rating to see your stats!</p>
+                <p>No activity for this media type and period.<br>Rate a title or choose another activity year.</p>
             </div>
             <div class="dialog-buttons">
                 <button onclick="window.location.href='{% url 'profile_page' %}'">OK</button>
@@ -669,13 +722,35 @@
 
 <!-- ApexCharts CDN -->
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+{{ stats_data|json_script:"statistics-data" }}
 
 <script>
 (function() {
     'use strict';
 
     // ── Data from Django ──
-    const statsData = {{ stats_json|safe }};
+    const statsData = JSON.parse(document.getElementById('statistics-data').textContent);
+    const mediaLabels = { movies: 'Movies', tvshows: 'TV shows', games: 'Games', books: 'Books', music: 'Albums' };
+    const format = value => Number(value).toLocaleString();
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[char]);
+
+    function continuousMonths(months) {
+        const sorted = [...new Set(months)].sort();
+        const selectedYear = document.getElementById('year-select').value;
+        if (!sorted.length && selectedYear === 'all') return [];
+        const first = selectedYear === 'all' ? sorted[0] : `${selectedYear}-01`;
+        const last = selectedYear === 'all' ? sorted.at(-1) : `${selectedYear}-12`;
+        const result = [];
+        let [year, month] = first.split('-').map(Number);
+        while (`${year}-${String(month).padStart(2, '0')}` <= last) {
+            result.push(`${year}-${String(month).padStart(2, '0')}`);
+            month += 1;
+            if (month === 13) { month = 1; year += 1; }
+        }
+        return result;
+    }
 
     // ── Theme detection ──
     const isDark = window.matchMedia('(prefers-color-scheme: dark)');
@@ -688,8 +763,8 @@
             gridLine:   dark ? '#505050' : '#c0c0c0',
             background: 'transparent',
             // Win98 palette for series
-            palette: ['#008080', '#000080', '#808000', '#800080', '#008000', '#800000', '#4682B4', '#CD853F', '#708090', '#2E8B57'],
-            primary:    '#008080',
+            palette: dark ? ['#70d5ce', '#8db6e8', '#ccc484', '#c8a1cf'] : ['#008080', '#000080', '#808000', '#800080'],
+            primary: dark ? '#70d5ce' : '#008080',
         };
     }
 
@@ -720,6 +795,7 @@
                 theme: isDark.matches ? 'dark' : 'light',
             },
             dataLabels: { enabled: false },
+            noData: { text: 'No data for this period', style: { color: c.muted } },
             states: {
                 hover: { filter: { type: 'darken', value: 0.85 } },
                 active: { filter: { type: 'darken', value: 0.8 } },
@@ -730,9 +806,16 @@
     // ── Chart instances (destroyed on re-render) ──
     let charts = {};
 
+    function renderChart(chart) {
+        chart.render().catch(error => {
+            console.error('Statistics chart failed:', error);
+            document.getElementById('stats-error').hidden = false;
+        });
+    }
+
     function destroyCharts() {
         Object.values(charts).forEach(chart => {
-            try { chart.destroy(); } catch(e) {}
+            chart.destroy();
         });
         charts = {};
     }
@@ -740,26 +823,10 @@
     // ── Get data for current tab + year ──
     function getData(mediaType, year) {
         const media = statsData[mediaType];
-        if (!media || media.total_reviews === 0) return null;
+        if (!media) return null;
 
         if (year === 'all') {
-            return {
-                summary:              media.summary,
-                rating_distribution:  media.rating_distribution,
-                ratings_over_time:    media.ratings_over_time,
-                release_year_distribution: media.release_year_distribution,
-                avg_rating_by_release_year: media.avg_rating_by_release_year,
-                decade_distribution:  media.decade_distribution,
-                count_by_genre:       media.count_by_genre,
-                avg_rating_by_genre:  media.avg_rating_by_genre,
-                count_by_country:     media.count_by_country,
-                watch_time_by_month:  media.watch_time_by_month,
-                watchlist_by_month:   media.watchlist_by_month,
-                top_directors:        media.top_directors,
-                top_directors_by_rating: media.top_directors_by_rating,
-                top_actors:           media.top_actors,
-                top_actors_by_rating: media.top_actors_by_rating,
-            };
+            return media;
         }
 
         const yearData = media.yearly[String(year)];
@@ -795,13 +862,23 @@
     // ── Update summary cards ──
     function updateSummary(data, mediaType) {
         const summary = data ? data.summary : null;
-        document.getElementById('summary-total').textContent = summary ? summary.total_rated : 0;
-        document.getElementById('summary-hours').textContent = summary ? summary.total_hours : 0;
-        document.getElementById('summary-avg').textContent = summary ? summary.avg_rating : 0;
+        document.getElementById('summary-total').textContent = format(summary?.total_rated || 0);
+        document.getElementById('summary-hours').textContent = format(summary?.total_hours || 0);
+        const avg = document.getElementById('summary-avg');
+        avg.textContent = summary?.total_rated ? summary.avg_rating.toFixed(2) : '—';
+        avg.title = summary?.total_rated ? `Median: ${summary.median_rating}` : 'No ratings';
+        document.getElementById('summary-days').textContent = format(summary?.active_days || 0);
+        document.getElementById('summary-watchlist').textContent = format(statsData[mediaType].watchlist_count);
 
         // Hide hours card for games (no runtime)
         const hoursCard = document.getElementById('summary-hours-card');
-        hoursCard.style.display = mediaType === 'games' ? 'none' : '';
+        hoursCard.style.display = ['movies', 'tvshows', 'music'].includes(mediaType) ? '' : 'none';
+        document.getElementById('summary-hours-label').textContent = mediaType === 'tvshows' ? 'Logged episode hours' : 'Runtime hours';
+        document.getElementById('runtime-note').textContent = mediaType === 'tvshows'
+            ? 'TV time uses logged episodes in this period, including shows you have not rated. Episodes without a runtime are excluded.'
+            : ['movies', 'music'].includes(mediaType)
+                ? `Runtime estimate: one viewing/listen per rated title, not tracked consumption. Known runtimes: ${summary?.runtime_known || 0} of ${summary?.total_rated || 0} titles.`
+                : 'No reliable reading or play-time data is tracked for this media type.';
     }
 
     // ── Render all charts ──
@@ -809,17 +886,18 @@
         destroyCharts();
 
         const data = getData(mediaType, year);
-        const total = statsData[mediaType] ? statsData[mediaType].total_reviews : 0;
+        const total = data?.summary.total_rated || 0;
 
         // Update total badge + status bar
-        const label = { movies: 'Movies', tvshows: 'TV Shows', games: 'Games' }[mediaType];
-        document.getElementById('total-reviews').textContent = total + ' ' + label + ' Rated';
+        const label = mediaLabels[mediaType];
+        document.getElementById('total-reviews').textContent = `${format(total)} titles · ${format(data?.summary.review_count || 0)} review entries`;
         document.getElementById('status-bar-info').textContent = label + ' Statistics';
         document.getElementById('status-bar-count').textContent = total + ' items';
 
         // Show/hide watch time panel
         const watchTimeWindow = document.getElementById('watch-time-window');
-        watchTimeWindow.style.display = mediaType === 'games' ? 'none' : '';
+        watchTimeWindow.style.display = '';
+        document.getElementById('period-note').textContent = `${year === 'all' ? 'All activity years' : `Activity in ${year}`} · Release charts describe titles rated in this period, not titles released in it. Watchlist history shows recorded net changes; older removals may be missing.`;
 
         // Update summary cards
         updateSummary(data, mediaType);
@@ -831,23 +909,45 @@
 
         // Check if this particular year slice is empty
         const hasData = Object.values(data.rating_distribution || {}).some(v => v > 0);
-        if (!hasData && (!data.ratings_over_time || data.ratings_over_time.length === 0)) {
+        if (!hasData && !data.watch_time_by_month.length && !data.watchlist_by_month.length) {
             showEmptyState();
             return;
         }
 
         hideEmptyState();
+        if (typeof ApexCharts === 'undefined') {
+            document.getElementById('stats-error').hidden = false;
+            return;
+        }
 
         // Show/hide people panels based on media type (after hideEmptyState which resets display)
         const directorPanels = document.querySelectorAll('.directors-panel');
         const actorPanels = document.querySelectorAll('.actors-panel');
         directorPanels.forEach(p => p.style.display = mediaType === 'movies' ? '' : 'none');
         actorPanels.forEach(p => p.style.display = mediaType === 'games' ? 'none' : '');
+        const peopleLabel = mediaType === 'books' ? 'authors' : mediaType === 'music' ? 'artists' : 'actors';
+        document.getElementById('people-count-title').textContent = `Top ${peopleLabel} (most titles)`;
+        document.getElementById('people-rating-title').textContent = `Top ${peopleLabel} (by rating, minimum 2 titles)`;
 
         const c = getColors();
+        const activity = data.activity_by_month;
+        const activityMonths = continuousMonths(activity.map(row => row.month));
+        const activityMap = Object.fromEntries(activity.map(row => [row.month, row]));
+        charts.activity = new ApexCharts(document.getElementById('chart-activity'), baseOptions({
+            chart: { type: 'bar', height: 240, toolbar: { show: false } },
+            series: [
+                { name: 'Distinct titles rated', data: activityMonths.map(month => activityMap[month]?.titles || 0) },
+                { name: 'Review entries', data: activityMonths.map(month => activityMap[month]?.reviews || 0) },
+            ],
+            xaxis: { categories: activityMonths },
+            colors: c.palette,
+            legend: { show: true, labels: { colors: c.text } },
+        }));
+        renderChart(charts.activity);
 
         // 1. Rating Distribution — bar chart
-        const distLabels = Object.keys(data.rating_distribution);
+        const distLabels = Object.keys(data.rating_distribution).map(value =>
+            Number(value) === 10 ? '10' : `${value}–<${Number(value) + 1}`);
         const distValues = Object.values(data.rating_distribution);
         charts.ratingDist = new ApexCharts(
             document.querySelector('#chart-rating-dist'),
@@ -868,7 +968,7 @@
                 plotOptions: { bar: { borderRadius: 0, columnWidth: '70%' } },
             })
         );
-        charts.ratingDist.render();
+        renderChart(charts.ratingDist);
 
         // 2. Ratings Over Time — scatter
         const timeData = (data.ratings_over_time || []).map(d => ({ x: new Date(d.date).getTime(), y: d.rating }));
@@ -891,7 +991,7 @@
                 markers: { size: 4, strokeWidth: 0 },
             })
         );
-        charts.ratingsTime.render();
+        renderChart(charts.ratingsTime);
 
         // 3. Release Years — bar chart
         const releaseLabels = Object.keys(data.release_year_distribution);
@@ -911,11 +1011,11 @@
                     title: { text: 'Count', style: { color: c.text, fontSize: '10px' } },
                     labels: { style: { colors: c.text, fontSize: '10px' } },
                 },
-                colors: ['#000080'],
+                colors: [c.palette[1]],
                 plotOptions: { bar: { borderRadius: 0, columnWidth: '70%' } },
             })
         );
-        charts.releaseYears.render();
+        renderChart(charts.releaseYears);
 
         // 3b. Release Decades — bar chart
         const decadeLabels = Object.keys(data.decade_distribution || {});
@@ -935,11 +1035,11 @@
                     title: { text: 'Count', style: { color: c.text, fontSize: '10px' } },
                     labels: { style: { colors: c.text, fontSize: '10px' } },
                 },
-                colors: ['#000080'],
+                colors: [c.palette[1]],
                 plotOptions: { bar: { borderRadius: 0, columnWidth: '70%' } },
             })
         );
-        charts.decades.render();
+        renderChart(charts.decades);
 
         // 3c. Production Countries — horizontal bar, top 10 (movies/tv only)
         const countryPanel = document.getElementById('panel-countries');
@@ -967,7 +1067,7 @@
                     legend: { show: false },
                 })
             );
-            charts.countries.render();
+            renderChart(charts.countries);
         } else {
             countryPanel.style.display = 'none';
         }
@@ -996,7 +1096,7 @@
                 markers: { size: 4, strokeWidth: 0 },
             })
         );
-        charts.avgYear.render();
+        renderChart(charts.avgYear);
 
         // 5. Rated per Genre — horizontal bar, bars deep-link to the explorer
         const genreCountLabels = Object.keys(data.count_by_genre);
@@ -1006,7 +1106,20 @@
         charts.genreCount = new ApexCharts(
             document.querySelector('#chart-genre-count'),
             baseOptions({
-                chart: { type: 'bar', height: genreCountHeight, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false } },
+                chart: {
+                    type: 'bar', height: genreCountHeight,
+                    fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif",
+                    background: c.background, toolbar: { show: false },
+                    events: {
+                        dataPointSelection: (_event, _chart, config) => {
+                            const genre = genreCountLabels[config.dataPointIndex];
+                            const gid = genreCountIds[genre];
+                            if (gid && mediaType !== 'music') {
+                                window.location.href = `/explorer/#/${mediaType}/genres/${gid}`;
+                            }
+                        },
+                    },
+                },
                 series: [{ name: 'Count', data: genreCountValues }],
                 xaxis: {
                     categories: genreCountLabels,
@@ -1022,15 +1135,7 @@
                 legend: { show: false },
             })
         );
-        charts.genreCount.render();
-        // Clicking a genre bar opens the explorer pre-filtered to that genre.
-        document.querySelector('#chart-genre-count').addEventListener('dataPointSelection', (e) => {
-            const genre = genreCountLabels[e.dataPointIndex];
-            const gid = genreCountIds[genre];
-            if (gid) {
-                window.location.href = `/explorer/#/${currentMedia}/genres/${gid}`;
-            }
-        });
+        renderChart(charts.genreCount);
 
         // 6. Avg Rating per Genre — horizontal bar
         const genreAvgLabels = Object.keys(data.avg_rating_by_genre);
@@ -1056,13 +1161,13 @@
                 legend: { show: false },
             })
         );
-        charts.genreAvg.render();
+        renderChart(charts.genreAvg);
 
         // 7. Watch Time & Watchlist Size — mixed chart (Movies & TV only)
-        if (mediaType !== 'games') {
+        {
             const wtData = data.watch_time_by_month || [];
             const wlData = data.watchlist_by_month || [];
-            const allMonths = [...new Set([...wtData.map(d => d.month), ...wlData.map(d => d.month)])].sort();
+            const allMonths = continuousMonths([...wtData.map(d => d.month), ...wlData.map(d => d.month)]);
             if (allMonths.length > 0) {
                 const wtMap = Object.fromEntries(wtData.map(d => [d.month, d.hours]));
                 const wlMap = Object.fromEntries(wlData.map(d => [d.month, d]));
@@ -1070,7 +1175,7 @@
                 // Watchlist size per month: adds backfilled from existing rows,
                 // removes only recorded since the event log shipped, so the
                 // running net is exact from that point onward.
-                let running = 0;
+                let running = data.watchlist_opening_balance || 0;
                 const wlRunning = allMonths.map(m => { running += (wlMap[m] ? wlMap[m].net : 0); return running; });
                 const wlAdds = allMonths.map(m => (wlMap[m] ? wlMap[m].adds : 0));
                 const wlRemoves = allMonths.map(m => (wlMap[m] ? -(wlMap[m].removes) : 0));
@@ -1079,8 +1184,8 @@
                     baseOptions({
                         chart: { type: 'line', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false }, stacked: false },
                         series: [
-                            { name: 'Hours Watched', data: wtValues, type: 'area' },
-                            { name: 'Watchlist Size', data: wlRunning, type: 'line' },
+                            { name: 'Runtime hours', data: wtValues, type: 'area' },
+                            { name: 'Recorded watchlist net', data: wlRunning, type: 'line' },
                             { name: 'Added', data: wlAdds, type: 'column' },
                             { name: 'Removed', data: wlRemoves, type: 'column' },
                         ],
@@ -1092,18 +1197,19 @@
                         },
                         yaxis: [
                             {
+                                seriesName: 'Runtime hours',
                                 title: { text: 'Hours', style: { color: '#008080', fontSize: '10px' } },
                                 labels: { style: { colors: '#008080', fontSize: '10px' } },
                                 min: 0,
                             },
                             {
+                                seriesName: ['Recorded watchlist net', 'Added', 'Removed'],
                                 opposite: true,
-                                title: { text: 'Watchlist Items', style: { color: '#e040fb', fontSize: '10px' } },
-                                labels: { style: { colors: '#e040fb', fontSize: '10px' }, formatter: (v) => Math.round(v) },
-                                min: 0,
+                                title: { text: 'Watchlist changes', style: { color: c.text, fontSize: '10px' } },
+                                labels: { style: { colors: c.text, fontSize: '10px' }, formatter: (v) => Math.round(v) },
                             },
                         ],
-                        colors: ['#008080', '#e040fb', '#1084d0', '#d04040'],
+                        colors: [c.primary, c.palette[1], c.palette[2], c.palette[3]],
                         stroke: { width: [2, 2, 0, 0], curve: ['smooth', 'smooth', 'straight', 'straight'] },
                         fill: {
                             type: ['gradient', 'solid', 'solid', 'solid'],
@@ -1118,7 +1224,7 @@
                         legend: { show: true, position: 'top', labels: { colors: c.text } },
                     })
                 );
-                charts.watchTime.render();
+                renderChart(charts.watchTime);
             } else {
                 document.querySelector('#chart-watch-time').innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:40px;">No watch time data available</div>';
             }
@@ -1132,9 +1238,10 @@
 
         // 9. Top Actors (Movies & TV)
         if (mediaType !== 'games') {
-            const itemLabel = mediaType === 'movies' ? 'film' : 'show';
-            renderPeopleList('top-actors-container', data.top_actors, 'No actor data', itemLabel);
-            renderPeopleList('top-actors-rating-container', data.top_actors_by_rating, 'Not enough data (min 2 titles per actor)', itemLabel);
+            const creators = ['books', 'music'].includes(mediaType);
+            const itemLabel = { movies: 'film', tvshows: 'show', books: 'book', music: 'album' }[mediaType];
+            renderPeopleList('top-actors-container', creators ? data.top_creators : data.top_actors, 'No credited people for these titles', itemLabel);
+            renderPeopleList('top-actors-rating-container', creators ? data.top_creators_by_rating : data.top_actors_by_rating, 'Not enough data (minimum 2 titles per person)', itemLabel);
         }
     }
 
@@ -1146,13 +1253,13 @@
             list.forEach((d, i) => {
                 const plural = d.count !== 1 ? (itemLabel + 's') : itemLabel;
                 const nameHtml = d.person_id
-                    ? `<a href="/people/${d.person_id}/" class="director-name" style="color:inherit;text-decoration:underline;">${d.name}</a>`
-                    : `<span class="director-name">${d.name}</span>`;
+                    ? `<a href="/people/${Number(d.person_id)}/" class="director-name">${escapeHtml(d.name)}</a>`
+                    : `<span class="director-name">${escapeHtml(d.name)}</span>`;
                 html += `<div class="director-row">
                     <span class="director-rank">${i + 1}</span>
                     ${nameHtml}
                     <span class="director-count">${d.count} ${plural}</span>
-                    <span class="director-rating">★ ${d.avg_rating}</span>
+                    <span class="director-rating">★ ${Number(d.avg_rating).toFixed(1)}</span>
                 </div>`;
             });
             html += '</div>';
@@ -1165,12 +1272,26 @@
     // ── Tab switching ──
     let currentMedia = 'movies';
 
+    function writeUrl() {
+        const url = new URL(location.href);
+        url.searchParams.set('media', currentMedia);
+        const year = document.getElementById('year-select').value;
+        if (year === 'all') url.searchParams.delete('year');
+        else url.searchParams.set('year', year);
+        history.replaceState(null, '', url);
+    }
+
     window.switchTab = function(mediaType, btn) {
         currentMedia = mediaType;
 
         // Update tab styling
-        document.querySelectorAll('.stats-tab').forEach(t => t.classList.remove('active'));
+        const selectedYear = document.getElementById('year-select').value;
+        document.querySelectorAll('.stats-tab').forEach(t => {
+            t.classList.remove('active');
+            t.setAttribute('aria-pressed', 'false');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
 
         // Rebuild year dropdown for this media type
         const yearSelect = document.getElementById('year-select');
@@ -1182,13 +1303,15 @@
             opt.textContent = y;
             yearSelect.appendChild(opt);
         });
-
-        renderCharts(mediaType, 'all');
+        if (years.map(String).includes(selectedYear)) yearSelect.value = selectedYear;
+        writeUrl();
+        renderCharts(mediaType, yearSelect.value);
     };
 
     // ── Year change ──
     window.onYearChange = function() {
         const year = document.getElementById('year-select').value;
+        writeUrl();
         renderCharts(currentMedia, year);
     };
 
@@ -1200,17 +1323,24 @@
 
     // ── Initial render ──
     document.addEventListener('DOMContentLoaded', function() {
-        // Populate initial year dropdown
+        const params = new URLSearchParams(location.search);
+        currentMedia = Object.hasOwn(statsData, params.get('media'))
+            ? params.get('media') : 'movies';
+        document.querySelectorAll('.stats-tab').forEach(tab => {
+            const selected = tab.dataset.media === currentMedia;
+            tab.classList.toggle('active', selected);
+            tab.setAttribute('aria-pressed', String(selected));
+        });
         const yearSelect = document.getElementById('year-select');
-        const years = statsData.movies ? statsData.movies.years : [];
+        const years = statsData[currentMedia].years;
         years.forEach(y => {
             const opt = document.createElement('option');
             opt.value = y;
             opt.textContent = y;
             yearSelect.appendChild(opt);
         });
-
-        renderCharts('movies', 'all');
+        if (years.map(String).includes(params.get('year'))) yearSelect.value = params.get('year');
+        renderCharts(currentMedia, yearSelect.value);
     });
 
 })();

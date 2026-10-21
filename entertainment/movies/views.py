@@ -28,6 +28,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .services.recommendation import MovieRecommender
+from .services import quick_picks
 from .tasks import create_movie_async, create_movie_fast
 from datetime import timedelta
 from django.contrib import messages
@@ -814,77 +815,36 @@ class MovieTaskStatusView(APIView):
 
 @login_required
 def random_unwatched_movie(request):
-    """Redirects to a random movie that no one has watched yet"""
-    # Get content type for Movie model
-    movie_content_type = ContentType.objects.get_for_model(Movie)
-    
-    # Find movies that have no reviews ((unwatched by anyone))
-    reviewed_movie_ids = Review.objects.filter(
-        content_type=movie_content_type,
-        
-    ).values_list('object_id', flat=True)
-    
-    unwatched_movies = Movie.objects.exclude(id__in=reviewed_movie_ids, status='Released')
-    
-    # If there are no completely unwatched movies, get movies with fewest reviews
-    if not unwatched_movies.exists():
-        # Count reviews per movie and get those with minimum reviews
-        movie_review_counts = Review.objects.filter(
-            content_type=movie_content_type
-        ).values('object_id').annotate(count=Count('id')).order_by('count')
-        
-        if movie_review_counts:
-            min_count = movie_review_counts[0]['count']
-            least_watched_ids = [
-                item['object_id'] for item in movie_review_counts 
-                if item['count'] == min_count
-            ]
-            unwatched_movies = Movie.objects.filter(id__in=least_watched_ids)
-    
-    if unwatched_movies.exists():
-        # Get a random movie from the unwatched/least watched movies
-        random_movie = random.choice(list(unwatched_movies))
-        return redirect('movie_page', movie_id=random_movie.tmdb_id)
-    else:
-        # Fallback to a completely random movie if something went wrong
-        random_movie = random.choice(list(Movie.objects.all()))
-        return redirect('movie_page', movie_id=random_movie.tmdb_id)
+    """No-JS fallback for "Random Movie": redirect to the pick from quick_picks."""
+    pick = quick_picks.pick_random_movie(request.user)
+    if pick is None:
+        return redirect('discover_page')
+    return redirect('movie_page', movie_id=pick.movie.tmdb_id)
 
 @login_required
 def shortest_watchlist_movie(request):
-    """Redirects to one of the three shortest movies in the user's watchlist, selected randomly.
-    If watchlist is empty, selects from the three shortest movies in the database."""
-    
-    # Get content type for Movie model
-    movie_content_type = ContentType.objects.get_for_model(Movie)
-    
-    # Get user's watchlist items
-    watchlist_movie_ids = Watchlist.objects.filter(
-        user=request.user,
-        content_type=movie_content_type
-    ).values_list('object_id', flat=True)
-    
-    # Find the three shortest movies in watchlist by runtime
-    shortest_movies = list(Movie.objects.filter(
-        id__in=watchlist_movie_ids,
-        runtime__isnull=False,  # Ensure runtime is not null
-        status='Released'  # Ensure the movie is released
-    ).order_by('runtime')[:3])
-    
-    # If no movies in watchlist, get the three shortest movies in the database
-    if not shortest_movies:
-        shortest_movies = list(Movie.objects.filter(
-            runtime__isnull=False,
-            status='Released'
-        ).order_by('runtime')[:3])
-    
-    if shortest_movies:
-        # Randomly select one of the three shortest movies
-        selected_movie = random.choice(shortest_movies)
-        return redirect('movie_page', movie_id=selected_movie.tmdb_id)
-    else:
-        # If no movies with runtime found at all, redirect to watchlist page
+    """No-JS fallback for "Quickest Watch": redirect to the shortest unwatched watchlist movie."""
+    pick = quick_picks.pick_quickest_movie(request.user)
+    if pick is None:
         return redirect('watchlist_page')
+    return redirect('movie_page', movie_id=pick.movie.tmdb_id)
+
+@login_required
+def quick_pick(request):
+    """JSON for the Discover preview dialog.
+
+    Query params: ``mode`` (``quickest`` | ``random``) and ``exclude`` — comma
+    separated movie ids already shown this session, so "Roll again" /
+    "Next shortest" never repeat until the pool is exhausted.
+    """
+    mode = request.GET.get('mode', '')
+    if mode not in quick_picks.MODES:
+        return JsonResponse({'error': 'mode must be "quickest" or "random"'}, status=400)
+    exclude_ids = quick_picks.parse_exclude_ids(request.GET.get('exclude'))
+    pick = quick_picks.pick_movie(mode, request.user, exclude_ids)
+    if pick is None:
+        return JsonResponse({'mode': mode, 'movie': None, 'reason': 'No released movies to pick from yet.'})
+    return JsonResponse(quick_picks.serialize_pick(pick, request.user))
 
 def community_page(request):
     """Main community page with Movie of the Week feature"""

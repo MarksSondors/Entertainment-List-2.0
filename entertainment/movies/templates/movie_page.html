@@ -1189,6 +1189,19 @@ iframe[src*="tiktok.com"] {
                 loadReviews(contentId, 'movie');
             }, 50);
         }
+
+        // Discover's "Mark Watched" links here with ?review=1 — open the review form once reviews have
+        // loaded so an existing review opens in edit mode instead of creating a duplicate.
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('review') === '1') {
+            params.delete('review');
+            const query = params.toString();
+            history.replaceState(null, '', window.location.pathname + (query ? '?' + query : '') + window.location.hash);
+            setTimeout(() => {
+                const reviewButton = document.querySelector('button[onclick*="openReviewModal"]');
+                if (reviewButton) reviewButton.click();
+            }, 800);
+        }
     });
       window.addEventListener('resize', checkViewport);
     

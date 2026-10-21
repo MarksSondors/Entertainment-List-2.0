@@ -1,5 +1,7 @@
 from django.db import models
 from django.db.models import Q
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
 from django.utils import timezone
 
 from custom_auth.models import *
@@ -297,3 +299,11 @@ class WatchedEpisode(models.Model):
         
     def __str__(self):
         return f"{self.user.username} watched {self.episode}"
+
+
+@receiver(post_save, sender=WatchedEpisode)
+@receiver(post_delete, sender=WatchedEpisode)
+def invalidate_stats_on_episode_watch(sender, instance, **kwargs):
+    """Keep statistics current when episode watch history changes."""
+    from custom_auth.services.statistics import invalidate_stats_cache
+    invalidate_stats_cache(instance.user_id)

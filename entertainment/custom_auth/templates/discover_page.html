@@ -123,14 +123,14 @@
         <!-- Quick Action Buttons -->
         <div class="discover-section quick-actions-section">
             <div class="quick-actions-grid">
-                <button type="button" class="quick-action-btn" onclick="window.location.href='{% url 'shortest_watchlist_movie' %}'">
+                <a href="{% url 'shortest_watchlist_movie' %}" class="quick-action-btn" data-quick-pick="quickest" aria-haspopup="dialog">
                     <img src="{% static 'images/icons/clock_0.png' %}" alt="" class="quick-action-icon">
                     <span class="quick-action-label">Quickest Watch</span>
-                </button>
-                <button type="button" class="quick-action-btn" onclick="window.location.href='{% url 'random_unwatched_movie' %}'">
+                </a>
+                <a href="{% url 'random_unwatched_movie' %}" class="quick-action-btn" data-quick-pick="random" aria-haspopup="dialog">
                     <img src="{% static 'images/icons/media_player_0.png' %}" alt="" class="quick-action-icon">
                     <span class="quick-action-label">Random Movie</span>
-                </button>
+                </a>
                 <button type="button" class="quick-action-btn" onclick="window.location.href='{% url 'browse_by_country' %}'">
                     <img src="{% static 'images/icons/globe_map_0.png' %}" alt="" class="quick-action-icon">
                     <span class="quick-action-label">Browse by Country</span>
@@ -145,7 +145,460 @@
                 </button>
             </div>
         </div>
-    </div><style>
+    </div>
+
+    <!-- Quick pick preview (Quickest Watch / Random Movie) -->
+    <div class="qp-backdrop" id="quickPickDialog" hidden>
+        <div class="window qp-window" role="dialog" aria-modal="true" aria-labelledby="qpTitle" aria-describedby="qpReason">
+            <div class="title-bar">
+                <div class="title-bar-text qp-title-text">
+                    <img src="" alt="" class="qp-title-icon" id="qpTitleIcon">
+                    <span id="qpTitle">Quick Pick</span>
+                </div>
+                <div class="title-bar-controls">
+                    <button type="button" aria-label="Close" data-qp-close></button>
+                </div>
+            </div>
+            <div class="window-body qp-body">
+                {% csrf_token %}
+                <div class="qp-state qp-loading" id="qpLoading" role="status">
+                    <img src="{% static 'images/win98/hourglass.png' %}" alt="" class="qp-hourglass" onerror="this.remove()">
+                    <span id="qpLoadingText">Picking a movie…</span>
+                </div>
+                <div class="qp-state qp-error" id="qpError" hidden role="alert">
+                    <p id="qpErrorText">Couldn't load a pick.</p>
+                    <div class="qp-actions">
+                        <button type="button" class="qp-btn" id="qpRetry">Try Again</button>
+                        <a href="#" class="qp-btn" id="qpFallback">Open Directly</a>
+                    </div>
+                </div>
+                <div class="qp-state qp-empty" id="qpEmpty" hidden>
+                    <p id="qpEmptyText">Nothing to pick from yet.</p>
+                    <div class="qp-actions">
+                        <a href="{% url 'watchlist_page' %}" class="qp-btn">Open Watchlist</a>
+                    </div>
+                </div>
+                <div class="qp-result" id="qpResult" hidden>
+                    <div class="qp-layout">
+                        <a class="qp-poster-link" id="qpPosterLink" href="#" tabindex="-1" aria-hidden="true">
+                            <span class="qp-poster-frame">
+                                <img id="qpPoster" alt="" width="150" height="225" decoding="async">
+                                <span class="qp-runtime-badge" id="qpRuntimeBadge"></span>
+                            </span>
+                        </a>
+                        <div class="qp-info">
+                            <h3 class="qp-name" id="qpName"></h3>
+                            <p class="qp-meta" id="qpMeta"></p>
+                            <p class="qp-score" id="qpScore"></p>
+                            <ul class="qp-chips" id="qpChips" aria-label="Genres and countries"></ul>
+                            <p class="qp-desc" id="qpDesc"></p>
+                            <p class="qp-state-line" id="qpStateLine"></p>
+                        </div>
+                    </div>
+                    <div class="qp-actions">
+                        <a href="#" class="qp-btn qp-btn-primary" id="qpOpen">Full Movie Page ↗</a>
+                        <button type="button" class="qp-btn" id="qpWatchlist" aria-pressed="false">+ Watchlist</button>
+                        <a href="#" class="qp-btn" id="qpWatched">Mark Watched</a>
+                        <button type="button" class="qp-btn" id="qpAgain">Roll Again</button>
+                        <button type="button" class="qp-btn" data-qp-close>Close</button>
+                    </div>
+                </div>
+            </div>
+            <div class="status-bar">
+                <p class="status-bar-field qp-status" id="qpReason" aria-live="polite">Ready</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        const dialog = document.getElementById('quickPickDialog');
+        if (!dialog) return;
+        const endpoint = "{% url 'movie_quick_pick' %}";
+        const icons = {
+            quickest: "{% static 'images/icons/clock_0.png' %}",
+            random: "{% static 'images/icons/media_player_0.png' %}",
+        };
+        const labels = {
+            quickest: { title: 'Quickest Watch', again: 'Next Shortest', loading: 'Finding your shortest watch…' },
+            random: { title: 'Random Movie', again: 'Roll Again', loading: 'Spinning the reel…' },
+        };
+        const $ = (id) => document.getElementById(id);
+        const els = {
+            loading: $('qpLoading'), loadingText: $('qpLoadingText'), error: $('qpError'), errorText: $('qpErrorText'),
+            empty: $('qpEmpty'), emptyText: $('qpEmptyText'), result: $('qpResult'), title: $('qpTitle'),
+            titleIcon: $('qpTitleIcon'), poster: $('qpPoster'), posterLink: $('qpPosterLink'), badge: $('qpRuntimeBadge'),
+            name: $('qpName'), meta: $('qpMeta'), score: $('qpScore'), chips: $('qpChips'), desc: $('qpDesc'),
+            stateLine: $('qpStateLine'), open: $('qpOpen'), watchlist: $('qpWatchlist'), watched: $('qpWatched'),
+            again: $('qpAgain'), retry: $('qpRetry'), fallback: $('qpFallback'), reason: $('qpReason'),
+        };
+        const csrfToken = dialog.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
+        const state = { mode: null, seen: [], current: null, trigger: null, request: 0, busy: false };
+
+        function show(which) {
+            ['loading', 'error', 'empty', 'result'].forEach((key) => { els[key].hidden = key !== which; });
+        }
+
+        function setStatus(text) { els.reason.textContent = text; }
+
+        function paintWatchlist() {
+            const movie = state.current;
+            if (!movie) return;
+            const disabled = movie.watched;
+            els.watchlist.disabled = disabled || state.busy;
+            els.watchlist.setAttribute('aria-pressed', movie.on_watchlist ? 'true' : 'false');
+            els.watchlist.textContent = movie.on_watchlist ? '✓ On Watchlist' : '+ Watchlist';
+            els.stateLine.textContent = movie.watched
+                ? 'You have already reviewed this one.'
+                : (movie.on_watchlist ? 'On your watchlist · not watched yet' : 'Not on your watchlist · not watched yet');
+        }
+
+        function render(data) {
+            const movie = data.movie;
+            state.current = movie;
+            if (!state.seen.includes(movie.id)) state.seen.push(movie.id);
+
+            els.poster.src = movie.poster || "{% static 'favicon/favicon-96x96.png' %}";
+            els.poster.alt = movie.title + ' poster';
+            els.poster.classList.toggle('qp-poster-missing', !movie.poster);
+            els.posterLink.href = movie.url;
+            els.badge.textContent = movie.runtime_display || '';
+            els.badge.hidden = !movie.runtime_display;
+            els.name.textContent = movie.title;
+            els.meta.textContent = ['Movie', movie.year, movie.runtime_display].filter(Boolean).join(' · ');
+            els.score.textContent = movie.rating != null ? '★ ' + movie.rating.toFixed(1) + ' TMDB' : '';
+            els.chips.replaceChildren(...movie.genres.concat(movie.countries).map((name) => {
+                const li = document.createElement('li');
+                li.textContent = name;
+                return li;
+            }));
+            els.desc.textContent = movie.description || '';
+            els.desc.hidden = !movie.description;
+            els.open.href = movie.url;
+            els.watched.href = movie.url + '?review=1';
+            paintWatchlist();
+
+            let status = data.reason;
+            if (data.wrapped) status = 'Seen them all — starting over. ' + status;
+            setStatus(status);
+            show('result');
+            els.open.focus({ preventScroll: true });
+        }
+
+        async function load() {
+            const requestId = ++state.request;
+            const label = labels[state.mode];
+            els.loadingText.textContent = label.loading;
+            setStatus(label.loading);
+            show('loading');
+            els.again.disabled = true;
+            const params = new URLSearchParams({ mode: state.mode });
+            if (state.seen.length) params.set('exclude', state.seen.join(','));
+            try {
+                const response = await fetch(endpoint + '?' + params.toString(), {
+                    headers: { 'Accept': 'application/json' },
+                    credentials: 'same-origin',
+                });
+                const type = response.headers.get('content-type') || '';
+                if (!response.ok || !type.includes('application/json')) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                if (requestId !== state.request) return;
+                if (!data.movie) {
+                    els.emptyText.textContent = data.reason || 'Nothing to pick from yet.';
+                    setStatus('No movies available');
+                    show('empty');
+                    return;
+                }
+                render(data);
+            } catch (err) {
+                if (requestId !== state.request) return;
+                els.errorText.textContent = "Couldn't load a pick right now. Check your connection and try again.";
+                setStatus('Error');
+                show('error');
+                els.retry.focus({ preventScroll: true });
+            } finally {
+                if (requestId === state.request) els.again.disabled = false;
+            }
+        }
+
+        function open(mode, trigger) {
+            if (state.mode !== mode) state.seen = [];
+            state.mode = mode;
+            state.trigger = trigger;
+            const label = labels[mode];
+            els.title.textContent = label.title;
+            els.titleIcon.src = icons[mode];
+            els.again.textContent = label.again;
+            els.fallback.href = trigger.href;
+            dialog.hidden = false;
+            document.body.classList.add('qp-open');
+            load();
+        }
+
+        function close() {
+            if (dialog.hidden) return;
+            dialog.hidden = true;
+            state.request++;
+            document.body.classList.remove('qp-open');
+            if (state.trigger) state.trigger.focus({ preventScroll: true });
+        }
+
+        async function toggleWatchlist() {
+            const movie = state.current;
+            if (!movie || movie.watched || state.busy) return;
+            const adding = !movie.on_watchlist;
+            state.busy = true;
+            movie.on_watchlist = adding;
+            paintWatchlist();
+            try {
+                const response = await fetch('/movies/watchlist/', {
+                    method: adding ? 'POST' : 'DELETE',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ id: movie.id }),
+                });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                setStatus(adding ? 'Added to your watchlist.' : 'Removed from your watchlist.');
+            } catch (err) {
+                movie.on_watchlist = !adding;
+                setStatus("Couldn't update your watchlist. Please try again.");
+            } finally {
+                state.busy = false;
+                paintWatchlist();
+            }
+        }
+
+        document.querySelectorAll('[data-quick-pick]').forEach((trigger) => {
+            trigger.addEventListener('click', (event) => {
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                event.preventDefault();
+                open(trigger.dataset.quickPick, trigger);
+            });
+        });
+        dialog.querySelectorAll('[data-qp-close]').forEach((btn) => btn.addEventListener('click', close));
+        dialog.addEventListener('click', (event) => { if (event.target === dialog) close(); });
+        els.again.addEventListener('click', load);
+        els.retry.addEventListener('click', load);
+        els.watchlist.addEventListener('click', toggleWatchlist);
+        els.poster.addEventListener('error', () => {
+            if (els.poster.classList.contains('qp-poster-missing')) return;
+            els.poster.classList.add('qp-poster-missing');
+            els.poster.src = "{% static 'favicon/favicon-96x96.png' %}";
+        });
+        document.addEventListener('keydown', (event) => {
+            if (dialog.hidden) return;
+            if (event.key === 'Escape') { close(); return; }
+            if (event.key === 'Tab') {
+                const focusable = [...dialog.querySelectorAll('a[href], button:not([disabled])')]
+                    .filter((el) => el.offsetParent !== null && el.tabIndex !== -1);
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+            }
+        });
+    })();
+    </script>
+    <style>
+        /* Quick pick preview dialog */
+        body.qp-open { overflow: hidden; }
+
+        .qp-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 10000; /* above the fixed win98 navbar (9999) */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.55);
+        }
+
+        .qp-backdrop[hidden] { display: none; }
+
+        .qp-window {
+            width: min(560px, 100%);
+            max-height: calc(100dvh - 32px);
+            display: flex;
+            flex-direction: column;
+            box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff, 0 12px 32px rgba(0, 0, 0, 0.5);
+            animation: qp-pop 140ms ease-out;
+        }
+
+        @keyframes qp-pop {
+            from { transform: translateY(6px) scale(0.98); opacity: 0; }
+            to { transform: none; opacity: 1; }
+        }
+
+        .qp-title-text { display: flex; align-items: center; gap: 4px; }
+        .qp-title-icon { width: 16px; height: 16px; image-rendering: pixelated; border: none !important; box-shadow: none !important; }
+
+        .qp-body {
+            padding: 12px;
+            margin: 0;
+            overflow-y: auto;
+            font-size: 12px;
+            color: var(--text-color);
+            min-height: 180px;
+        }
+
+        .qp-state {
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            text-align: center;
+        }
+
+        .qp-state[hidden], .qp-result[hidden] { display: none; }
+        .qp-state p { margin: 0; }
+        .qp-hourglass { width: 32px; height: 32px; image-rendering: pixelated; border: none !important; box-shadow: none !important; }
+
+        .qp-layout { display: flex; gap: 14px; align-items: flex-start; }
+
+        .qp-poster-link { flex: 0 0 auto; display: block; }
+
+        .qp-poster-frame {
+            position: relative;
+            display: block;
+            width: 150px;
+            aspect-ratio: 2 / 3;
+            background: var(--progress-bg);
+            box-shadow: inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+            padding: 2px;
+        }
+
+        .qp-poster-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .qp-poster-frame img.qp-poster-missing { object-fit: none; image-rendering: pixelated; }
+
+        .qp-runtime-badge {
+            position: absolute;
+            right: 4px;
+            bottom: 4px;
+            padding: 1px 5px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #fff;
+            background: #000080;
+            border: 1px solid #fff;
+        }
+
+        .qp-runtime-badge[hidden] { display: none; }
+
+        .qp-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+
+        .qp-name { margin: 0; font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; }
+        .qp-meta, .qp-state-line { margin: 0; color: var(--text-muted); }
+        .qp-score { margin: 0; font-weight: bold; }
+        .qp-score:empty { display: none; }
+
+        .qp-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+        .qp-chips:empty { display: none; }
+        .qp-chips li {
+            padding: 1px 6px;
+            font-size: 11px;
+            background: var(--button-bg);
+            color: var(--button-text);
+            box-shadow: inset -1px -1px #808080, inset 1px 1px #fff;
+        }
+
+        .qp-desc {
+            margin: 0;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .qp-desc[hidden] { display: none; }
+
+        .qp-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+        .qp-state .qp-actions { justify-content: center; margin-top: 0; }
+
+        .qp-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 32px;
+            min-width: 0;
+            padding: 0 12px;
+            font-family: inherit;
+            font-size: 12px;
+            color: var(--button-text);
+            text-decoration: none;
+            background: var(--button-bg);
+            border: none;
+            box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+            cursor: pointer;
+            touch-action: manipulation;
+            white-space: nowrap;
+        }
+
+        .qp-btn:hover { background: var(--button-hover); }
+        .qp-btn:active:not(:disabled) { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080; }
+        .qp-btn:focus-visible { outline: 1px dotted var(--text-color); outline-offset: -4px; }
+        .qp-btn:disabled { color: #808080; text-shadow: 1px 1px #fff; cursor: default; }
+        .qp-btn-primary { font-weight: bold; outline: 1px solid #0a0a0a; outline-offset: -1px; }
+        .qp-btn[aria-pressed="true"] { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080; }
+
+        .qp-status { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        @media (prefers-color-scheme: dark) {
+            .qp-window {
+                background: var(--window-bg);
+                color: var(--text-color);
+                box-shadow: inset -1px -1px #1a1a1a, inset 1px 1px #6a6a6a, inset -2px -2px #2a2a2a, inset 2px 2px var(--border-light), 0 12px 32px rgba(0, 0, 0, 0.7);
+            }
+            .qp-btn, .qp-chips li { box-shadow: inset -1px -1px #1a1a1a, inset 1px 1px #6a6a6a, inset -2px -2px #2a2a2a, inset 2px 2px var(--border-light); }
+            .qp-btn:active:not(:disabled), .qp-btn[aria-pressed="true"] { box-shadow: inset -1px -1px #6a6a6a, inset 1px 1px #1a1a1a, inset -2px -2px var(--border-light), inset 2px 2px #2a2a2a; }
+            .qp-btn:disabled { color: #8a8a8a; text-shadow: none; }
+            .qp-btn-primary { outline-color: #e0e0e0; }
+            .qp-poster-frame { box-shadow: inset -1px -1px #6a6a6a, inset 1px 1px #1a1a1a; }
+            .qp-runtime-badge { background: #00a0a0; border-color: #1a1a1a; color: #000; }
+        }
+
+        /* Phones: bottom sheet with a compact poster */
+        @media (max-width: 560px) {
+            .qp-backdrop { align-items: flex-end; padding: 0; }
+            .qp-window {
+                width: 100%;
+                max-height: 92dvh;
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+                animation-name: qp-sheet;
+            }
+            .qp-poster-frame { width: 104px; }
+            .qp-name { font-size: 16px; }
+            .qp-desc { -webkit-line-clamp: 3; line-clamp: 3; }
+            .qp-actions { display: grid; grid-template-columns: 1fr 1fr; }
+            .qp-actions .qp-btn { min-height: 40px; white-space: normal; text-align: center; }
+            .qp-actions .qp-btn-primary { grid-column: 1 / -1; }
+            .qp-state .qp-actions { display: flex; }
+        }
+
+        @keyframes qp-sheet {
+            from { transform: translateY(24px); opacity: 0; }
+            to { transform: none; opacity: 1; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .qp-window { animation: none; }
+        }
+    </style>
+    <style>
         /* Theme-adaptive CSS variables for discover page */
         :root {
             --bg-color: #c0c0c0;
@@ -380,6 +833,7 @@
             box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
             cursor: pointer;
             text-align: center;
+            text-decoration: none;
             transition: background-color 0.1s ease;
         }
 
