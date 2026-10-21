@@ -13,8 +13,10 @@ from movies.services import quick_picks
 
 User = get_user_model()
 
+LOCMEM_CACHE = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 
-@override_settings(SECURE_SSL_REDIRECT=False)
+
+@override_settings(CACHES=LOCMEM_CACHE, SECURE_SSL_REDIRECT=False)
 class QuickPickTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='picker', email='picker@example.com', password='pw')

@@ -1,7 +1,7 @@
 """Tests for the People Explorer service and its JSON endpoint."""
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from books.models import Book
@@ -11,6 +11,10 @@ from movies.models import Movie
 from music.models import Album
 
 
+LOCMEM_CACHE = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
+
+
+@override_settings(CACHES=LOCMEM_CACHE, SECURE_SSL_REDIRECT=False)
 class PeopleExplorerTests(TestCase):
     def setUp(self):
         cache.clear()
