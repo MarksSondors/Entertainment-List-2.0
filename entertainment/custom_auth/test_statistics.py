@@ -4,7 +4,7 @@ from datetime import timezone as dt_timezone
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from books.models import Book
@@ -15,6 +15,10 @@ from music.models import Album
 from tvshows.models import Episode, Season, TVShow, WatchedEpisode
 
 
+LOCMEM_CACHE = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
+
+
+@override_settings(CACHES=LOCMEM_CACHE, SECURE_SSL_REDIRECT=False)
 class StatisticsTests(TestCase):
     def setUp(self):
         cache.clear()
