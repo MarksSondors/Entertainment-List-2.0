@@ -367,6 +367,14 @@ class UserSettings(models.Model):
         return f"{self.user.username}'s settings"
 
 
+@receiver(post_save, sender=Genre)
+def build_genre_thumbnail(sender, instance, **kwargs):
+    """Pre-render the card thumbnail so the first discover visit isn't slowed down."""
+    if instance.background_image:
+        from .services.genre_images import ensure_thumbnail
+        ensure_thumbnail(instance)
+
+
 # Signal to create settings when a user is created
 @receiver(post_save, sender=CustomUser)
 def create_user_settings(sender, instance, created, **kwargs):

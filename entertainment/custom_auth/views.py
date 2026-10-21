@@ -42,6 +42,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .services.cross_media_recommendation import CrossMediaRecommender
+from .services import genre_images
 
 logger = logging.getLogger(__name__)
 
@@ -493,14 +494,16 @@ def discover_genres(request):
     random.shuffle(all_genres)  # Randomize the order
     genres = all_genres[:10]  # Take first 10 after shuffle
     
-    genres_data = []
-    for genre in genres:
-        genre_data = {
+    # Card-sized WebP thumbnails instead of the multi-MiB originals; None when
+    # the source file is missing so the card falls back to its plain style.
+    genres_data = [
+        {
             'id': genre.id,
             'name': genre.name,
-            'background_image': genre.background_image.url if genre.background_image else None,
+            'background_image': genre_images.thumbnail_url(genre),
         }
-        genres_data.append(genre_data)
+        for genre in genres
+    ]
     
     return JsonResponse({'genres': genres_data})
 
