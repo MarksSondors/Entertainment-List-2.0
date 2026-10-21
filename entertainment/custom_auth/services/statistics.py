@@ -1,21 +1,25 @@
 """Statistics service for aggregating user review data across media types.
 
-Architecture: all reviews and model data are fetched once per media type
-(~5 DB queries each), then every stat is computed purely in-memory.
-Per-year breakdowns reuse the same prefetched data with in-memory filtering.
+Reviews and metadata are fetched in bulk for movies, shows, games, books and
+albums. Year slices reuse that data. Ratings follow local review dates; TV
+runtime follows episode watch dates, independently of whether a show is rated.
 """
 
 import logging
 from collections import defaultdict
+from statistics import median
 from django.core.cache import cache
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Sum
 from django.db.models.functions import ExtractYear, TruncMonth
+from django.utils import timezone
 
 from custom_auth.models import Review, MediaPerson, Watchlist, WatchlistEvent
 from movies.models import Movie
 from tvshows.models import TVShow, WatchedEpisode
 from games.models import Game
+from books.models import Book
+from music.models import Album
 
 logger = logging.getLogger(__name__)
 
@@ -24,22 +28,24 @@ STATS_CACHE_TIMEOUT = 60 * 60 * 24  # 24 hours
 
 def _stats_cache_key(user_id):
     """Generate cache key for a user's statistics."""
-    return f'stats_user_{user_id}'
+    return f'stats_v2_user_{user_id}'
 
 
 def invalidate_stats_cache(user_id):
-    """Delete cached statistics for a user. Called on review create/update/delete."""
+    """Delete cached statistics after reviews, watchlists or episode watches change."""
     key = _stats_cache_key(user_id)
     cache.delete(key)
     logger.debug(f'Invalidated stats cache for user {user_id}')
 
 
 def _get_content_types():
-    """Return a dict of content types for movies, TV shows, and games."""
+    """Return content types for all supported reviewable media."""
     return {
         'movies': ContentType.objects.get_for_model(Movie),
         'tvshows': ContentType.objects.get_for_model(TVShow),
         'games': ContentType.objects.get_for_model(Game),
+        'books': ContentType.objects.get_for_model(Book),
+        'music': ContentType.objects.get_for_model(Album),
     }
 
 
@@ -47,10 +53,13 @@ def _get_content_types():
 
 def _fetch_all_reviews(user, content_type):
     """Single DB query: all review rows for a user + content_type."""
-    return list(
+    rows = list(
         Review.objects.filter(user=user, content_type=content_type)
         .values('object_id', 'rating', 'date_added')
     )
+    for row in rows:
+        row['date_added'] = timezone.localtime(row['date_added'])
+    return rows
 
 
 def _build_review_context(all_reviews, year=None):
@@ -93,17 +102,26 @@ def _fetch_media_data(content_type, object_ids, user):
         'genre_map': {},            # {item_id: [genre_name, ...]}
         'genre_ids': {},            # {item_id: [genre_id, ...]} for explorer links
         'release_years': {},        # {item_id: year}
-        'runtimes': {},             # {item_id: minutes}  (movies only)
-        'tv_minutes_by_show': {},   # {show_id: total_minutes}
+        'runtimes': {},             # {item_id: minutes} (movies and albums)
         'tv_watch_monthly': [],     # [{'month': datetime, 'total_mins': int}, ...]
         'people': [],               # [(object_id, role, person_name, person_id), ...]
         'country_map': {},          # {item_id: [country_name, ...]} (movies/tv)
     }
+    if model_class == TVShow:
+        data['tv_watch_monthly'] = list(
+            WatchedEpisode.objects.filter(user=user, episode__runtime__isnull=False)
+            .annotate(month=TruncMonth('watched_date'))
+            .values('month')
+            .annotate(total_mins=Sum('episode__runtime'))
+            .order_by('month')
+        )
     if not object_ids:
         return data
 
     # Single query for items: genres (prefetch) + release year (annotation)
-    date_field = 'first_air_date' if model_class == TVShow else 'release_date'
+    date_field = {
+        TVShow: 'first_air_date', Book: 'published_date',
+    }.get(model_class, 'release_date')
     has_countries = model_class in (Movie, TVShow)
     items = (
         model_class.objects
@@ -117,48 +135,36 @@ def _fetch_media_data(content_type, object_ids, user):
             data['genre_ids'][item.id] = [g.id for g in item.genres.all()]
         if item.release_year is not None:
             data['release_years'][item.id] = item.release_year
-        if model_class == Movie:
+        if model_class in (Movie, Album):
             data['runtimes'][item.id] = item.runtime
         if has_countries:
             data['country_map'][item.id] = [c.name for c in item.countries.all()]
 
-    # TV-specific: per-show watched minutes + monthly watch time
-    if model_class == TVShow:
-        watched_by_show = (
-            WatchedEpisode.objects.filter(
-                user=user,
-                episode__season__show_id__in=object_ids,
-                episode__runtime__isnull=False,
-            )
-            .values('episode__season__show_id')
-            .annotate(total=Sum('episode__runtime'))
-        )
-        data['tv_minutes_by_show'] = {
-            row['episode__season__show_id']: row['total']
-            for row in watched_by_show
-        }
-        data['tv_watch_monthly'] = list(
-            WatchedEpisode.objects.filter(
-                user=user,
-                episode__runtime__isnull=False,
-            )
-            .annotate(month=TruncMonth('watched_date'))
-            .values('month')
-            .annotate(total_mins=Sum('episode__runtime'))
-            .order_by('month')
-        )
-
-    # People: actors + directors (movies and TV only)
-    if model_class != Game:
+    if model_class in (Movie, TVShow, Book):
         data['people'] = list(
-            MediaPerson.objects.filter(
+            MediaPerson.objects.order_by().filter(
                 content_type=content_type,
                 object_id__in=object_ids,
-                role__in=['Actor', 'Director'],
+                role__in=['Actor', 'Director', 'Author'],
             )
             .select_related('person')
             .values_list('object_id', 'role', 'person__name', 'person_id')
         )
+        if model_class == Book:
+            data['people'].extend(
+                (book.pk, 'Author', author.name, author.pk)
+                for book in Book.objects.filter(pk__in=object_ids).prefetch_related('authors')
+                for author in book.authors.all()
+            )
+    elif model_class == Album:
+        albums = Album.objects.filter(id__in=object_ids).select_related(
+            'primary_artist',
+        ).prefetch_related('featured_artists')
+        data['people'] = [
+            (album.id, 'Artist', person.name, person.id)
+            for album in albums
+            for person in [album.primary_artist, *album.featured_artists.all()]
+        ]
 
     return data
 
@@ -166,7 +172,7 @@ def _fetch_media_data(content_type, object_ids, user):
 # ── Pure in-memory stat computations ──
 
 def _compute_rating_distribution(ctx, is_tvshow):
-    """Count of items grouped by integer rating (0-10)."""
+    """Count titles in [n, n+1) rating bins, with an exact-10 final bin."""
     distribution = {str(i): 0 for i in range(11)}
     if is_tvshow:
         for agg in _aggregate_tvshow_reviews(ctx):
@@ -175,7 +181,7 @@ def _compute_rating_distribution(ctx, is_tvshow):
                 distribution[key] += 1
     else:
         for ratings in ctx['rating_map'].values():
-            key = str(int(ratings[0]))
+            key = str(int(sum(ratings) / len(ratings)))
             if key in distribution:
                 distribution[key] += 1
     return distribution
@@ -278,8 +284,8 @@ def _compute_avg_rating_by_genre(ctx, media_data):
     return dict(sorted(result.items(), key=lambda x: x[1], reverse=True))
 
 
-def _compute_summary(ctx, media_data, model_class, is_tvshow):
-    """Summary: total rated, total hours, avg rating."""
+def _compute_summary(ctx, media_data, model_class, is_tvshow, year=None):
+    """One vote per title; TV time follows actual episode watch dates."""
     if is_tvshow:
         aggregated = _aggregate_tvshow_reviews(ctx)
         total_rated = len(aggregated)
@@ -288,14 +294,14 @@ def _compute_summary(ctx, media_data, model_class, is_tvshow):
             if aggregated else 0
         )
         total_minutes = sum(
-            media_data['tv_minutes_by_show'].get(a['object_id'], 0)
-            for a in aggregated
+            row['total_mins'] for row in media_data['tv_watch_monthly']
+            if row['month'] and (year is None or row['month'].year == year)
         )
     else:
         total_rated = len(ctx['object_ids'])
-        all_ratings = [r for ratings in ctx['rating_map'].values() for r in ratings]
+        all_ratings = [sum(ratings) / len(ratings) for ratings in ctx['rating_map'].values()]
         avg_rating = round(sum(all_ratings) / len(all_ratings), 2) if all_ratings else 0
-        if model_class == Movie:
+        if model_class in (Movie, Album):
             total_minutes = sum(
                 media_data['runtimes'].get(oid) or 0 for oid in ctx['object_ids']
             )
@@ -307,15 +313,18 @@ def _compute_summary(ctx, media_data, model_class, is_tvshow):
         'total_rated': total_rated,
         'total_hours': total_hours,
         'avg_rating': avg_rating,
+        'review_count': len(ctx['reviews']),
+        'active_days': len({r['date_added'].date() for r in ctx['reviews']}),
+        'median_rating': round(median([
+            sum(ratings) / len(ratings) for ratings in ctx['rating_map'].values()
+        ]), 2) if ctx['rating_map'] else None,
+        'runtime_known': sum(bool(media_data['runtimes'].get(oid)) for oid in ctx['object_ids']),
     }
 
 
 def _compute_watch_time_by_month(ctx, media_data, model_class, year=None):
     """Total runtime (hours) grouped by month."""
-    if model_class == Game:
-        return {}
-
-    if model_class == Movie:
+    if model_class in (Movie, Album):
         month_minutes = defaultdict(int)
         for r in ctx['reviews']:
             key = r['date_added'].strftime('%Y-%m')
@@ -334,7 +343,7 @@ def _compute_watch_time_by_month(ctx, media_data, model_class, year=None):
             for row in monthly if row['month']
         ]
 
-    return {}
+    return []
 
 
 def _compute_top_people(ctx, media_data, role, sort_by='count', limit=10, min_count=1):
@@ -345,21 +354,28 @@ def _compute_top_people(ctx, media_data, role, sort_by='count', limit=10, min_co
         if r == role and oid in oid_set
     ]
 
-    person_data = defaultdict(lambda: {'count': 0, 'ratings': [], 'person_id': None})
+    person_data = defaultdict(lambda: {'count': 0, 'ratings': [], 'person_id': None, 'name': ''})
+    seen = set()
     for oid, name, pid in entries:
-        person_data[name]['count'] += 1
-        person_data[name]['person_id'] = pid
+        if (pid, oid) in seen:
+            continue
+        seen.add((pid, oid))
+        person_data[pid]['count'] += 1
+        person_data[pid]['person_id'] = pid
+        person_data[pid]['name'] = name
         ratings = ctx['rating_map'].get(oid, [])
         if ratings:
-            person_data[name]['ratings'].append(sum(ratings) / len(ratings))
+            person_data[pid]['ratings'].append(sum(ratings) / len(ratings))
+
+    people = sorted(person_data.items(), key=lambda entry: (entry[1]['name'].casefold(), entry[0]))
 
     if sort_by == 'count':
         sorted_people = sorted(
-            person_data.items(), key=lambda x: x[1]['count'], reverse=True
+            people, key=lambda x: x[1]['count'], reverse=True
         )[:limit]
     else:
         qualified = [
-            (name, info) for name, info in person_data.items()
+            (pid, info) for pid, info in people
             if info['count'] >= min_count and info['ratings']
         ]
         sorted_people = sorted(
@@ -370,12 +386,12 @@ def _compute_top_people(ctx, media_data, role, sort_by='count', limit=10, min_co
 
     return [
         {
-            'name': name,
+            'name': info['name'],
             'count': info['count'],
             'avg_rating': round(sum(info['ratings']) / len(info['ratings']), 2) if info['ratings'] else 0,
             'person_id': info['person_id'],
         }
-        for name, info in sorted_people
+        for _, info in sorted_people
     ]
 
 
@@ -388,7 +404,8 @@ def _compute_all_for_slice(ctx, media_data, content_type, year=None):
     is_game = model_class == Game
 
     return {
-        'summary': _compute_summary(ctx, media_data, model_class, is_tvshow),
+        'summary': _compute_summary(ctx, media_data, model_class, is_tvshow, year),
+        'activity_by_month': _compute_activity(ctx),
         'rating_distribution': _compute_rating_distribution(ctx, is_tvshow),
         'ratings_over_time': _compute_ratings_over_time(ctx, is_tvshow),
         'release_year_distribution': _compute_release_year_distribution(ctx, media_data),
@@ -417,7 +434,27 @@ def _compute_all_for_slice(ctx, media_data, content_type, year=None):
             _compute_top_people(ctx, media_data, 'Actor', sort_by='rating', min_count=2)
             if not is_game else []
         ),
+        'top_creators': _compute_top_people(
+            ctx, media_data, 'Author' if model_class == Book else 'Artist',
+        ) if model_class in (Book, Album) else [],
+        'top_creators_by_rating': _compute_top_people(
+            ctx, media_data, 'Author' if model_class == Book else 'Artist',
+            sort_by='rating', min_count=2,
+        ) if model_class in (Book, Album) else [],
     }
+
+
+def _compute_activity(ctx):
+    """Monthly review activity, distinguishing review entries from distinct titles."""
+    monthly = defaultdict(lambda: {'reviews': 0, 'titles': set()})
+    for review in ctx['reviews']:
+        month = review['date_added'].strftime('%Y-%m')
+        monthly[month]['reviews'] += 1
+        monthly[month]['titles'].add(review['object_id'])
+    return [
+        {'month': month, 'reviews': values['reviews'], 'titles': len(values['titles'])}
+        for month, values in sorted(monthly.items())
+    ]
 
 
 def _fetch_watchlist_monthly(user, content_type):
@@ -443,7 +480,7 @@ def _fetch_watchlist_monthly(user, content_type):
             monthly[key]['adds'] += row['total']
         else:
             monthly[key]['removes'] += row['total']
-    return [
+    result = [
         {
             'month': m,
             'adds': v['adds'],
@@ -453,6 +490,13 @@ def _fetch_watchlist_monthly(user, content_type):
         }
         for m, v in sorted(monthly.items())
     ]
+    # Carry the opening balance into year-filtered charts. History before the
+    # event log is incomplete, so this is a recorded net, not an exact size.
+    running = 0
+    for row in result:
+        running += row['net']
+        row['balance'] = running
+    return result
 
 
 def get_all_stats(user):
@@ -470,27 +514,33 @@ def get_all_stats(user):
     for media_key, ct in content_types.items():
         # 1. Fetch all reviews once (1 DB query)
         all_reviews = _fetch_all_reviews(user, ct)
+        existing_ids = set(ct.model_class().objects.filter(
+            id__in={r['object_id'] for r in all_reviews},
+        ).values_list('id', flat=True))
+        all_reviews = [r for r in all_reviews if r['object_id'] in existing_ids]
 
         # 2. Build all-time context (in-memory)
         ctx = _build_review_context(all_reviews)
-
-        # 3. Available years from in-memory data
-        available_years = sorted(
-            {r['date_added'].year for r in all_reviews},
-            reverse=True,
-        )
 
         # 4. Fetch model-level data once (~2-5 DB queries)
         media_data = _fetch_media_data(ct, ctx['object_ids'], user)
 
         # 5. Compute all-time stats (pure in-memory)
         stats = _compute_all_for_slice(ctx, media_data, ct)
-        stats['years'] = available_years
         stats['total_reviews'] = len(ctx['object_ids'])
 
         # 6. Fetch watchlist monthly data for this content type (1 DB query)
         all_watchlist_monthly = _fetch_watchlist_monthly(user, ct)
         stats['watchlist_by_month'] = list(all_watchlist_monthly)
+        stats['watchlist_opening_balance'] = 0
+        stats['watchlist_count'] = Watchlist.objects.filter(user=user, content_type=ct).count()
+        available_years = sorted(
+            {r['date_added'].year for r in all_reviews}
+            | {r['_year'] for r in all_watchlist_monthly}
+            | {r['month'].year for r in media_data['tv_watch_monthly'] if r['month']},
+            reverse=True,
+        )
+        stats['years'] = available_years
 
         # 7. Compute per-year stats by filtering in-memory
         yearly_data = {}
@@ -500,6 +550,9 @@ def get_all_stats(user):
             year_slice['watchlist_by_month'] = [
                 r for r in all_watchlist_monthly if r['_year'] == y
             ]
+            year_slice['watchlist_opening_balance'] = sum(
+                r['net'] for r in all_watchlist_monthly if r['_year'] < y
+            )
             yearly_data[str(y)] = year_slice
         stats['yearly'] = yearly_data
 

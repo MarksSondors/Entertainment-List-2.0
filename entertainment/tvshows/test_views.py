@@ -61,6 +61,15 @@ class EpisodeWatchedViewTests(TestCase):
         self.assertFalse(WatchedEpisode.objects.filter(user=self.user, episode=self.ep3).exists())
         self.assertEqual(data['show_progress']['watched'], 0)
 
+    def test_mark_previous_invalidates_statistics_when_selected_episode_is_already_watched(self):
+        from custom_auth.services.statistics import _stats_cache_key
+
+        WatchedEpisode.objects.create(user=self.user, episode=self.ep3)
+        key = _stats_cache_key(self.user.pk)
+        cache.set(key, {'stale': True})
+        self._toggle(self.ep3, mark_previous=True)
+        self.assertIsNone(cache.get(key))
+
     def test_subgroup_progress_counts_whole_subgroup(self):
         group = EpisodeGroup.objects.create(name='Arcs', show=self.show)
         arc = EpisodeSubGroup.objects.create(name='Arc 1', parent_group=group)

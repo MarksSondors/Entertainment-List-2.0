@@ -19,148 +19,132 @@
         </div>
         <div class="window-body">
             <!-- Toolbar -->
-            <div class="toolbar">
-                <div class="toolbar-left">
+            <form class="toolbar" id="people-filters" role="search" onsubmit="return false;">
+                <div class="toolbar-row">
                     <img src="{% static 'images/win98/magnifying_glass.png' %}" alt="" class="toolbar-icon">
                     <div class="search-box">
-                        <input type="text" id="search-people" placeholder="Search people..." aria-label="Search people">
+                        <input type="search" id="search-people" placeholder="Search people (accents optional)…"
+                               aria-label="Search people" autocomplete="off" maxlength="100">
+                        <button type="button" id="clear-search" class="clear-btn" aria-label="Clear search" hidden>×</button>
                     </div>
                 </div>
-                <div class="toolbar-right">
-                    <img src="{% static 'images/win98/directory_closed.png' %}" alt="" class="toolbar-icon">
-                    <select id="sort-by" aria-label="Sort by">
-                        <option value="rating-desc">Rating (High-Low)</option>
-                        <option value="rating-asc">Rating (Low-High)</option>
-                        <option value="name-asc">Name (A-Z)</option>
-                        <option value="name-desc">Name (Z-A)</option>
-                    </select>
+                <div class="toolbar-row toolbar-selects">
+                    <label class="select-field">
+                        <span>Sort</span>
+                        <select id="sort-by" aria-label="Sort by">
+                            <option value="score">Best rated (weighted)</option>
+                            <option value="rating">Average rating</option>
+                            <option value="rating-asc">Lowest rated</option>
+                            <option value="works">Most works rated</option>
+                            <option value="reviews">Most reviews</option>
+                            {% if user.is_authenticated %}
+                            <option value="my-rating">My rating</option>
+                            <option value="seen">Most seen by me</option>
+                            <option value="affinity">I rate higher than others</option>
+                            <option value="watchlist">Most on my watchlist</option>
+                            {% endif %}
+                            <option value="name">Name (A–Z)</option>
+                            <option value="name-desc">Name (Z–A)</option>
+                        </select>
+                    </label>
+                    <label class="select-field">
+                        <span>Min. works</span>
+                        <select id="min-works" aria-label="Minimum number of works">
+                            <option value="1">1+</option>
+                            <option value="2">2+</option>
+                            <option value="3">3+</option>
+                            <option value="5">5+</option>
+                            <option value="10">10+</option>
+                        </select>
+                    </label>
                 </div>
-            </div>
-            
-            <!-- Category Tabs - Mobile First -->
-            <div class="category-tabs">
-                <button class="tab-btn active" data-category="directors">
-                    <img src="{% static 'images/win98/camera_vid.png' %}" alt="" class="tab-icon-img">
-                    <span class="tab-label">Directors</span>
-                    <span class="tab-count" id="count-directors">-</span>
-                </button>
-                <button class="tab-btn" data-category="actors">
-                    <img src="{% static 'images/win98/user_card.png' %}" alt="" class="tab-icon-img">
-                    <span class="tab-label">Actors</span>
-                    <span class="tab-count" id="count-actors">-</span>
-                </button>
-                <button class="tab-btn" data-category="writers">
-                    <img src="{% static 'images/win98/notepad_file.png' %}" alt="" class="tab-icon-img">
-                    <span class="tab-label">Writers</span>
-                    <span class="tab-count" id="count-writers">-</span>
-                </button>
-                <button class="tab-btn" data-category="tv_creators">
-                    <img src="{% static 'images/win98/network_television.png' %}" alt="" class="tab-icon-img">
-                    <span class="tab-label">TV</span>
-                    <span class="tab-count" id="count-tv_creators">-</span>
-                </button>
-                <button class="tab-btn" data-category="musicians">
-                    <img src="{% static 'images/win98/cd_audio.png' %}" alt="" class="tab-icon-img">
-                    <span class="tab-label">Music</span>
-                    <span class="tab-count" id="count-musicians">-</span>
-                </button>
-                <button class="tab-btn" data-category="other_creators">
-                    <img src="{% static 'images/win98/paint_file.png' %}" alt="" class="tab-icon-img">
-                    <span class="tab-label">Other</span>
-                    <span class="tab-count" id="count-other_creators">-</span>
-                </button>
-            </div>
-            
-            <!-- Content Area -->
-            <div class="sunken-panel content-panel">
-                <div id="people-grid" class="people-grid">
-                    <!-- People cards loaded via JavaScript -->
+                {% if user.is_authenticated %}
+                <div class="toolbar-row scope-row" role="radiogroup" aria-label="Whose works">
+                    <button type="button" class="scope-btn active" data-scope="all" role="radio" aria-checked="true">Everyone's ratings</button>
+                    <button type="button" class="scope-btn" data-scope="mine" role="radio" aria-checked="false">Rated by me</button>
+                    <button type="button" class="scope-btn" data-scope="watchlist" role="radio" aria-checked="false">On my watchlist</button>
                 </div>
-                
-                <!-- Loading State -->
-                <div id="loading-indicator" class="loading-indicator">
+                {% endif %}
+            </form>
+
+            <!-- Category tabs -->
+            <div class="category-tabs" role="tablist" aria-label="Role">
+                {% for cat in categories %}
+                <button type="button" class="tab-btn{% if forloop.first %} active{% endif %}" role="tab"
+                        aria-selected="{% if forloop.first %}true{% else %}false{% endif %}" data-category="{{ cat.key }}">
+                    <img src="{% static cat.icon %}" alt="" class="tab-icon-img">
+                    <span class="tab-label">{{ cat.label }}</span>
+                    <span class="tab-count" id="count-{{ cat.key }}">–</span>
+                </button>
+                {% endfor %}
+            </div>
+
+            <!-- Content -->
+            <div class="sunken-panel content-panel" aria-live="polite">
+                <div id="people-grid" class="people-grid"></div>
+
+                <div id="loading-indicator" class="loading-indicator" hidden>
                     <img src="{% static 'images/win98/hourglass.png' %}" alt="" class="loading-icon">
-                    <span>Loading...</span>
+                    <span>Loading…</span>
                 </div>
-                
-                <!-- Empty State -->
-                <div id="empty-state" class="empty-state" style="display: none;">
+
+                <div id="empty-state" class="empty-state" hidden>
                     <img src="{% static 'images/win98/users.png' %}" alt="" class="empty-icon-img">
                     <div class="empty-text">No people found</div>
-                    <div class="empty-subtext">Try adjusting your search or filters</div>
+                    <div class="empty-subtext" id="empty-subtext">Try a different search, role or minimum.</div>
                 </div>
-                
-                <!-- Load More Button -->
-                <div id="load-more-container" class="load-more-container" style="display: none;">
-                    <button id="load-more-btn" class="load-more-btn">
+
+                <div id="error-state" class="empty-state" hidden>
+                    <img src="{% static 'images/win98/msg_error.png' %}" alt="" class="empty-icon-img">
+                    <div class="empty-text">Couldn't load people</div>
+                    <button type="button" class="retro-btn" id="retry-btn">Try again</button>
+                </div>
+
+                <div id="scroll-sentinel" aria-hidden="true"></div>
+                <div id="load-more-container" class="load-more-container" hidden>
+                    <button type="button" id="load-more-btn" class="retro-btn">
                         <img src="{% static 'images/win98/directory_open.png' %}" alt="" class="btn-icon">
-                        Load More
+                        Load more
                     </button>
                 </div>
             </div>
-            
+
             <!-- Status bar -->
             <div class="status-bar">
-                <div class="status-bar-field" id="status-count">
-                    <img src="{% static 'images/win98/users.png' %}" alt="" class="status-icon">
-                    <span>0 people</span>
-                </div>
-                <div class="status-bar-field" id="status-category">
-                    <img src="{% static 'images/win98/directory_closed.png' %}" alt="" class="status-icon">
-                    <span>Directors</span>
-                </div>
-                <div class="status-bar-field">
-                    <button class="retro-btn" onclick="window.history.back()">
-                        <img src="{% static 'images/win98/directory_closed.png' %}" alt="" class="btn-icon">
-                        Back
-                    </button>
-                </div>
+                <p class="status-bar-field" id="status-count">–</p>
+                <p class="status-bar-field" id="status-category">Directors</p>
+                <p class="status-bar-field status-hint" title="Weighted score = average of each work's rating, pulled towards the site mean (2 virtual works) so a single 10/10 doesn't top the list.">ⓘ Weighted score</p>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Back to top button -->
-<button id="back-to-top" class="back-to-top" title="Back to top" aria-label="Back to top">
+<button id="back-to-top" class="back-to-top" type="button" title="Back to top" aria-label="Back to top" hidden>
     <img src="{% static 'images/win98/directory_open.png' %}" alt="" class="top-icon">
 </button>
 
 <style>
-    /* ======================================
-       MOBILE-FIRST CSS APPROACH
-       Base styles are for mobile (smallest)
-       Media queries add complexity for larger screens
-       ====================================== */
-
-    /* Theme-adaptive CSS variables */
     :root {
         --bg-color: #c0c0c0;
         --text-color: #000;
-        --text-muted: #666;
+        --text-muted: #555;
         --border-dark: #808080;
         --border-light: #dfdfdf;
         --window-bg: #c0c0c0;
         --button-bg: #c0c0c0;
-        --button-text: #000;
         --button-hover: #e0e0e0;
-        --progress-bg: #fff;
-        --progress-bar: #008080;
         --shadow-color: rgba(0,0,0,0.25);
-        --poster-border: #a0a0a0;
         --explorer-bg: #ffffff;
-        --folder-hover: #d0d1d5;
-        --folder-active: #000080;
-        --folder-active-text: #ffffff;
         --input-bg: #ffffff;
-        --alert-bg: #e1e1e1;
         --card-bg: #ffffff;
-        --card-hover: #f5f5f5;
-        --rating-gold: #ffc107;
-        /* Win98 theme colors - match bottom_navbar */
-        --win98-gray: #c0c0c0;
-        --win98-light: #ffffff;
-        --win98-dark: #808080;
-        --win98-black: #000000;
+        --card-hover: #f2f2f2;
+        --accent: #000080;
+        --accent-text: #ffffff;
+        --score-bg: #008080;
+        --good: #006400;
+        --bad: #a00000;
+        --chip-bg: #e8e8e8;
+        --poster-bg: #d0d0d0;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -168,1077 +152,528 @@
             --bg-color: #383838;
             --text-color: #ffffff;
             --text-muted: #b0b0b0;
-            --border-dark: #2a2a2a;
-            --border-light: #505050;
+            --border-dark: #1f1f1f;
+            --border-light: #5a5a5a;
             --window-bg: #404040;
             --button-bg: #505050;
-            --button-text: #ffffff;
             --button-hover: #606060;
-            --progress-bg: #2a2a2a;
-            --progress-bar: #00a0a0;
             --shadow-color: rgba(0,0,0,0.5);
-            --poster-border: #606060;
             --explorer-bg: #2a2a2a;
-            --folder-hover: #404040;
-            --folder-active: #0060ff;
-            --folder-active-text: #ffffff;
             --input-bg: #2a2a2a;
-            --alert-bg: #404040;
             --card-bg: #353535;
             --card-hover: #454545;
-            --rating-gold: #ffc107;
-            /* Win98 dark theme colors - match bottom_navbar */
-            --win98-gray: #303030;
-            --win98-light: #606060;
-            --win98-dark: #151515;
-            --win98-black: #000000;
+            --accent: #0060ff;
+            --accent-text: #ffffff;
+            --score-bg: #00a0a0;
+            --good: #6ee36e;
+            --bad: #ff8080;
+            --chip-bg: #4a4a4a;
+            --poster-bg: #2a2a2a;
         }
+        .title-bar { background: linear-gradient(90deg, #151515, #606060); }
     }
 
-    /* ======================================
-       BASE MOBILE STYLES (320px+)
-       ====================================== */
-
-    /* Page container - mobile first */
-    .people-page-container {
-        width: 100%;
-        max-width: 100%;
-        margin: 0;
-        padding: 4px;
-    }
-
-    /* Window styling */
+    .people-page-container { width: 100%; padding: 4px; box-sizing: border-box; }
     .window {
-        border: 2px outset var(--bg-color);
         background-color: var(--bg-color);
         font-family: 'MS Sans Serif', Arial, sans-serif;
         box-shadow: 2px 2px 4px var(--shadow-color);
     }
+    .title-bar-text { display: flex; align-items: center; gap: 4px; }
+    .title-icon { width: 16px; height: 16px; }
+    .window-body { background-color: var(--window-bg); color: var(--text-color); padding: 6px; margin: 0; }
 
-    /* Title bar - use default 98.css in light mode, override only for dark mode */
-    .title-bar {
-        padding: 2px 4px;
-        font-size: 11px;
-        font-weight: bold;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 6px;
-    }
-
-    @media (prefers-color-scheme: dark) {
-        .title-bar {
-            background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
-        }
-    }
-
-    .title-bar-text {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .title-icon {
-        width: 16px;
-        height: 16px;
-        flex-shrink: 0;
-    }
-
-    .title-bar-controls {
-        display: flex;
-        flex-shrink: 0;
-    }
-
-    .title-bar-controls button {
-        width: 16px;
-        height: 14px;
-        border: 1px outset var(--button-bg);
-        background: var(--button-bg);
-        margin-left: 2px;
-        font-size: 8px;
-        cursor: pointer;
-        padding: 0;
-    }
-
-    .title-bar-controls button:active {
-        border: 1px inset var(--button-bg);
-    }
-
-    .window-body {
-        background-color: var(--window-bg);
-        color: var(--text-color);
-        padding: 6px;
-    }
-
-    /* ======================================
-       TOOLBAR - Mobile First
-       ====================================== */
+    /* Toolbar */
     .toolbar {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        margin-bottom: 8px;
-        padding: 6px;
+        display: flex; flex-direction: column; gap: 6px;
+        margin-bottom: 8px; padding: 6px;
         background: var(--explorer-bg);
         border: 2px inset var(--bg-color);
     }
-
-    .toolbar-left, .toolbar-right {
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        width: 100%;
-    }
-
-    .toolbar-icon {
-        width: 16px;
-        height: 16px;
-        flex-shrink: 0;
-    }
-
-    .search-box {
-        flex: 1;
-        min-width: 0; /* Allow shrinking */
-    }
-
+    .toolbar-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .toolbar-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .search-box { flex: 1; min-width: 0; position: relative; }
     .search-box input {
-        width: 100%;
-        padding: 5px 8px;
-        border: 1px solid var(--border-dark);
-        border-right-color: var(--border-light);
-        border-bottom-color: var(--border-light);
-        background: var(--input-bg);
-        color: var(--text-color);
-        font-family: 'MS Sans Serif', Arial, sans-serif;
+        width: 100%; box-sizing: border-box; height: 26px;
+        padding: 3px 26px 3px 6px;
+        background: var(--input-bg); color: var(--text-color);
         font-size: 12px;
-        box-sizing: border-box;
+    }
+    .search-box input::-webkit-search-cancel-button { display: none; }
+    .clear-btn {
+        position: absolute; right: 3px; top: 3px;
+        min-width: 0; width: 20px; height: 20px; padding: 0;
+        line-height: 1; font-size: 14px;
+    }
+    .select-field { display: flex; align-items: center; gap: 4px; font-size: 11px; flex: 1; min-width: 140px; }
+    .select-field select {
+        flex: 1; min-width: 0; height: 22px;
+        background-color: var(--input-bg); color: var(--text-color);
+    }
+    .scope-row { gap: 0; }
+    .scope-btn {
+        flex: 1; min-width: 0; padding: 4px 6px; font-size: 11px;
+        background: var(--button-bg); color: var(--text-color);
+    }
+    .scope-btn.active {
+        background: var(--accent); color: var(--accent-text);
+        box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
     }
 
-    .toolbar-right select {
-        flex: 1;
-        padding: 4px 6px;
-        border: 1px solid var(--border-dark);
-        border-right-color: var(--border-light);
-        border-bottom-color: var(--border-light);
-        background: var(--input-bg);
-        color: var(--text-color);
-        font-family: 'MS Sans Serif', Arial, sans-serif;
-        font-size: 11px;
-        cursor: pointer;
+    /* Tabs */
+    .category-tabs {
+        display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin;
+        padding-bottom: 2px; margin-bottom: -2px; position: relative; z-index: 1;
+    }
+    .tab-btn {
+        display: inline-flex; align-items: center; gap: 4px;
+        flex: 0 0 auto; min-width: 0; padding: 4px 8px;
+        font-size: 11px; white-space: nowrap;
+        background: var(--button-bg); color: var(--text-color);
+    }
+    .tab-btn:hover { background: var(--button-hover); }
+    .tab-btn.active { background: var(--explorer-bg); font-weight: bold; }
+    .tab-icon-img { width: 16px; height: 16px; }
+    .tab-count {
+        font-size: 10px; padding: 0 4px; min-width: 14px; text-align: center;
+        background: var(--chip-bg); border: 1px solid var(--border-dark);
+    }
+    .tab-btn.empty { opacity: .6; }
+
+    /* Content */
+    .content-panel {
+        background: var(--explorer-bg); padding: 8px;
+        min-height: 320px; height: auto; overflow: visible;
+    }
+    .people-grid {
+        display: grid; gap: 8px;
+        grid-template-columns: 1fr;
+    }
+    @media (min-width: 600px) { .people-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1000px) { .people-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (min-width: 1500px) { .people-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 768px) { .people-page-container { padding: 12px; } }
+
+    .person-card {
+        position: relative; display: flex; flex-direction: column; gap: 6px;
+        padding: 8px; background: var(--card-bg); color: var(--text-color);
+        border: 2px outset var(--bg-color);
         min-width: 0;
     }
-
-    /* ======================================
-       CATEGORY TABS - Mobile First (Compact)
-       ====================================== */
-    .category-tabs {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 3px;
-        margin-bottom: 8px;
-        padding: 3px;
-        background: var(--bg-color);
-        border: 1px solid var(--border-dark);
+    .person-card:hover { background: var(--card-hover); }
+    .person-card:focus-within { outline: 1px dotted var(--text-color); outline-offset: -4px; }
+    .card-head { display: flex; gap: 8px; align-items: flex-start; }
+    .avatar {
+        width: 56px; height: 72px; flex-shrink: 0; object-fit: cover;
+        border: 2px inset var(--bg-color); background: var(--poster-bg);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: bold; font-size: 18px; color: var(--text-muted);
     }
-
-    .tab-btn {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 2px;
-        padding: 4px 2px;
-        border: 2px outset var(--button-bg);
-        background: var(--button-bg);
-        color: var(--button-text);
-        font-family: 'MS Sans Serif', Arial, sans-serif;
-        font-size: 9px;
-        cursor: pointer;
-        transition: all 0.1s;
-        min-height: 44px; /* Touch target */
-    }
-
-    .tab-btn:hover {
-        background: var(--button-hover);
-    }
-
-    .tab-btn.active {
-        border: 2px inset var(--button-bg);
-        background: var(--explorer-bg);
-    }
-
-    .tab-icon-img {
-        width: 20px;
-        height: 20px;
-    }
-
-    .tab-label {
-        font-size: 9px;
-        line-height: 1.1;
-        text-align: center;
-    }
-
-    .tab-count {
-        background: var(--progress-bar);
-        color: white;
-        padding: 1px 4px;
-        border-radius: 8px;
-        font-size: 8px;
-        font-weight: bold;
-        min-width: 16px;
-        text-align: center;
-    }
-
-    /* ======================================
-       CONTENT PANEL
-       ====================================== */
-    .content-panel {
-        min-height: 300px;
-        background: var(--explorer-bg);
-        border: 2px inset var(--bg-color);
-        padding: 8px;
-        position: relative;
-    }
-
-    /* ======================================
-       PEOPLE GRID - Mobile First (2 columns)
-       ====================================== */
-    .people-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
-    }
-
-    /* Person Card - Mobile First */
-    .person-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 8px 4px;
-        background: var(--card-bg);
-        border: 1px solid var(--border-dark);
-        border-radius: 3px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        text-decoration: none;
-        color: var(--text-color);
-        min-height: 100px;
-    }
-
-    .person-card:hover {
-        background: var(--card-hover);
-        transform: translateY(-1px);
-        box-shadow: 0 2px 6px var(--shadow-color);
-    }
-
-    .person-card:active {
-        transform: translateY(0);
-        background: var(--folder-active);
-        color: var(--folder-active-text);
-    }
-
-    .person-img-wrapper {
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        overflow: hidden;
-        border: 2px solid var(--poster-border);
-        margin-bottom: 6px;
-        background: var(--bg-color);
-        flex-shrink: 0;
-    }
-
-    .person-img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        transition: transform 0.2s;
-    }
-
-    .person-card:hover .person-img {
-        transform: scale(1.05);
-    }
-
+    .card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .person-name {
-        font-size: 10px;
-        font-weight: bold;
-        text-align: center;
-        margin-bottom: 3px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 100%;
-        padding: 0 2px;
-        line-height: 1.2;
+        font-weight: bold; font-size: 13px; color: inherit; text-decoration: none;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-
-    .person-rating {
-        display: flex;
-        align-items: center;
-        gap: 3px;
-        font-size: 9px;
+    /* Stretch the name link over the card, posters stay clickable above it. */
+    .person-name::after { content: ""; position: absolute; inset: 0; }
+    .person-name:hover { text-decoration: underline; }
+    .person-meta { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+    .chip {
+        font-size: 10px; padding: 1px 4px; white-space: nowrap;
+        background: var(--chip-bg); border: 1px solid var(--border-dark);
     }
-
-    .rating-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 2px;
-        background: var(--progress-bar);
-        color: white;
-        padding: 1px 4px;
-        border-radius: 2px;
-        font-weight: bold;
-        font-size: 9px;
+    .chip.good { color: var(--good); font-weight: bold; }
+    .chip.bad { color: var(--bad); font-weight: bold; }
+    .score-box {
+        flex-shrink: 0; text-align: center; min-width: 46px;
+        border: 2px inset var(--bg-color); background: var(--score-bg); color: #fff; padding: 2px 4px;
     }
+    .score-box .score { font-size: 16px; font-weight: bold; line-height: 1.1; }
+    .score-box .score-sub { font-size: 9px; opacity: .9; }
+    .score-box.none { background: var(--chip-bg); color: var(--text-muted); }
 
-    .rating-star-icon {
-        width: 10px;
-        height: 10px;
+    .known-for { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .kf-item {
+        position: relative; z-index: 1; display: block; color: inherit; text-decoration: none; min-width: 0;
     }
-
-    .rating-count {
-        color: var(--text-muted);
-        font-size: 8px;
+    .kf-poster {
+        width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block;
+        background: var(--poster-bg); border: 1px solid var(--border-dark);
     }
-
-    .person-meta {
-        font-size: 8px;
-        color: var(--text-muted);
-        margin-top: 2px;
+    .kf-fallback {
+        display: flex; align-items: center; justify-content: center; text-align: center;
+        font-size: 9px; padding: 2px; box-sizing: border-box; overflow: hidden; color: var(--text-muted);
     }
-
-    /* ======================================
-       LOADING STATE
-       ====================================== */
-    .loading-indicator {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        padding: 30px;
-        color: var(--text-muted);
+    .kf-badge {
+        position: absolute; left: 1px; bottom: 1px; font-size: 9px; padding: 0 3px;
+        background: rgba(0,0,0,.75); color: #fff;
     }
+    .kf-badge.mine { background: var(--accent); }
+    .kf-wl { position: absolute; right: 1px; top: 1px; font-size: 10px; padding: 0 2px; background: rgba(0,0,0,.75); color: #fff; }
+    .kf-item:hover .kf-poster, .kf-item:focus .kf-poster { outline: 2px solid var(--accent); }
 
-    .loading-icon {
-        width: 32px;
-        height: 32px;
-        animation: pulse 1s ease-in-out infinite;
+    .loading-indicator, .empty-state {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 8px; padding: 32px 8px; font-size: 12px; text-align: center;
     }
+    .loading-indicator[hidden], .empty-state[hidden], .load-more-container[hidden] { display: none; }
+    .loading-icon, .empty-icon-img { width: 32px; height: 32px; }
+    .loading-icon { animation: spin 1.2s steps(8) infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-text { font-weight: bold; }
+    .empty-subtext { color: var(--text-muted); font-size: 11px; }
+    .load-more-container { display: flex; justify-content: center; padding: 12px; }
+    .retro-btn { display: inline-flex; align-items: center; gap: 4px; color: var(--text-color); background: var(--button-bg); }
+    .btn-icon { width: 16px; height: 16px; }
+    #scroll-sentinel { height: 1px; }
 
-    @keyframes pulse {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.7; transform: scale(1.05); }
+    .skeleton { pointer-events: none; }
+    .skeleton .avatar, .skeleton .sk-line, .skeleton .kf-poster {
+        background: linear-gradient(90deg, var(--poster-bg) 25%, var(--card-hover) 50%, var(--poster-bg) 75%);
+        background-size: 200% 100%; animation: shimmer 1.2s infinite linear;
     }
+    .sk-line { height: 10px; margin: 3px 0; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
 
-    /* ======================================
-       EMPTY STATE
-       ====================================== */
-    .empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 40px 16px;
-        text-align: center;
-    }
+    .status-bar { margin-top: 6px; display: flex; gap: 2px; }
+    .status-bar-field { margin: 0; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status-hint { cursor: help; flex: 0 0 auto; }
 
-    .empty-icon-img {
-        width: 48px;
-        height: 48px;
-        margin-bottom: 12px;
-        opacity: 0.6;
-    }
-
-    .empty-text {
-        font-size: 12px;
-        font-weight: bold;
-        margin-bottom: 6px;
-        color: var(--text-color);
-    }
-
-    .empty-subtext {
-        font-size: 11px;
-        color: var(--text-muted);
-    }
-
-    /* ======================================
-       LOAD MORE
-       ====================================== */
-    .load-more-container {
-        display: flex;
-        justify-content: center;
-        padding: 16px 8px;
-    }
-
-    .load-more-btn {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px 16px;
-        border: 2px outset var(--button-bg);
-        background: var(--button-bg);
-        color: var(--button-text);
-        font-family: 'MS Sans Serif', Arial, sans-serif;
-        font-size: 11px;
-        cursor: pointer;
-        min-height: 36px;
-    }
-
-    .load-more-btn:hover {
-        background: var(--button-hover);
-    }
-
-    .load-more-btn:active {
-        border: 2px inset var(--button-bg);
-    }
-
-    .load-more-btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-    }
-
-    .btn-icon {
-        width: 16px;
-        height: 16px;
-    }
-
-    /* ======================================
-       STATUS BAR - Mobile First
-       ====================================== */
-    .status-bar {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        border-top: 1px solid var(--border-dark);
-        background-color: var(--bg-color);
-        padding: 4px;
-        margin-top: 8px;
-    }
-
-    .status-bar-field {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 10px;
-        color: var(--text-color);
-        padding: 2px 4px;
-        border: 1px inset var(--bg-color);
-        justify-content: center;
-    }
-
-    .status-icon {
-        width: 14px;
-        height: 14px;
-    }
-
-    /* Retro Button */
-    .retro-btn {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        border: 2px outset var(--button-bg);
-        background: var(--button-bg);
-        color: var(--button-text);
-        padding: 3px 8px;
-        font-family: 'MS Sans Serif', Arial, sans-serif;
-        font-size: 10px;
-        cursor: pointer;
-        min-height: 24px;
-    }
-
-    .retro-btn:hover {
-        background: var(--button-hover);
-    }
-
-    .retro-btn:active {
-        border: 2px inset var(--button-bg);
-    }
-
-    /* ======================================
-       BACK TO TOP BUTTON
-       ====================================== */
     .back-to-top {
-        position: fixed;
-        bottom: 70px;
-        right: 12px;
-        width: 40px;
-        height: 40px;
-        border: 2px outset var(--button-bg);
-        background: var(--button-bg);
-        color: var(--button-text);
-        cursor: pointer;
-        z-index: 100;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 2px 2px 4px var(--shadow-color);
-        padding: 0;
+        position: fixed; right: 16px; bottom: 80px; z-index: 50;
+        min-width: 0; width: 40px; height: 40px; padding: 0;
+        display: flex; align-items: center; justify-content: center;
     }
+    .back-to-top[hidden] { display: none; }
+    .top-icon { width: 24px; height: 24px; }
 
-    .back-to-top:hover {
-        background: var(--button-hover);
-    }
-
-    .back-to-top.visible {
-        display: flex;
-    }
-
-    .top-icon {
-        width: 20px;
-        height: 20px;
-        transform: rotate(-90deg);
-    }
-
-    /* ======================================
-       TABLET BREAKPOINT (480px+)
-       ====================================== */
-    @media (min-width: 480px) {
-        .people-page-container {
-            padding: 8px;
-        }
-
-        .window-body {
-            padding: 8px;
-        }
-
-        .category-tabs {
-            grid-template-columns: repeat(6, 1fr);
-        }
-
-        .tab-btn {
-            flex-direction: row;
-            padding: 6px 8px;
-            font-size: 10px;
-            gap: 4px;
-            min-height: 36px;
-        }
-
-        .tab-label {
-            font-size: 10px;
-        }
-
-        .people-grid {
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-        }
-
-        .person-img-wrapper {
-            width: 64px;
-            height: 64px;
-        }
-
-        .person-name {
-            font-size: 11px;
-        }
-
-        .status-bar {
-            flex-direction: row;
-            justify-content: space-between;
-        }
-
-        .status-bar-field {
-            justify-content: flex-start;
-        }
-    }
-
-    /* ======================================
-       SMALL DESKTOP BREAKPOINT (640px+)
-       ====================================== */
-    @media (min-width: 640px) {
-        .people-page-container {
-            padding: 12px;
-        }
-
-        .toolbar {
-            flex-direction: row;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .toolbar-left {
-            flex: 1;
-            max-width: 300px;
-        }
-
-        .toolbar-right {
-            width: auto;
-            flex: none;
-        }
-
-        .toolbar-right select {
-            width: auto;
-            min-width: 150px;
-        }
-
-        .tab-btn {
-            padding: 8px 12px;
-        }
-
-        .tab-icon-img {
-            width: 16px;
-            height: 16px;
-        }
-
-        .people-grid {
-            grid-template-columns: repeat(4, 1fr);
-        }
-
-        .person-img-wrapper {
-            width: 72px;
-            height: 72px;
-        }
-
-        .content-panel {
-            padding: 12px;
-        }
-    }
-
-    /* ======================================
-       DESKTOP BREAKPOINT (768px+)
-       ====================================== */
-    @media (min-width: 768px) {
-        .people-page-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 16px;
-        }
-
-        .window-body {
-            padding: 12px;
-        }
-
-        .title-bar {
-            padding: 3px 6px;
-            font-size: 12px;
-        }
-
-        .people-grid {
-            grid-template-columns: repeat(5, 1fr);
-            gap: 12px;
-        }
-
-        .person-img-wrapper {
-            width: 80px;
-            height: 80px;
-        }
-
-        .person-name {
-            font-size: 12px;
-        }
-
-        .person-rating {
-            font-size: 10px;
-        }
-
-        .rating-badge {
-            font-size: 10px;
-        }
-
-        .rating-count {
-            font-size: 9px;
-        }
-
-        .status-bar-field {
-            font-size: 11px;
-        }
-
-        .back-to-top {
-            width: 44px;
-            height: 44px;
-            bottom: 80px;
-            right: 20px;
-        }
-    }
-
-    /* ======================================
-       LARGE DESKTOP BREAKPOINT (1024px+)
-       ====================================== */
-    @media (min-width: 1024px) {
-        .people-page-container {
-            padding: 20px;
-        }
-
-        .people-grid {
-            grid-template-columns: repeat(6, 1fr);
-        }
-
-        .content-panel {
-            min-height: 500px;
-        }
-    }
-
-    /* ======================================
-       DARK MODE BUTTON ENHANCEMENTS
-       ====================================== */
-    @media (prefers-color-scheme: dark) {
-        .retro-btn, .tab-btn, .load-more-btn, .back-to-top {
-            border-color: var(--border-light);
-            box-shadow: 1px 1px 1px rgba(0,0,0,0.3);
-        }
-
-        .retro-btn:hover, .tab-btn:hover, .load-more-btn:hover, .back-to-top:hover {
-            box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
-        }
-
-        /* Invert icons for better visibility in dark mode */
-        .title-icon,
-        .toolbar-icon,
-        .tab-icon-img,
-        .btn-icon,
-        .status-icon,
-        .top-icon,
-        .loading-icon,
-        .empty-icon-img {
-            filter: brightness(1.2);
-        }
-    }
-
-    /* ======================================
-       TOUCH-FRIENDLY ENHANCEMENTS
-       ====================================== */
-    @media (hover: none) and (pointer: coarse) {
-        /* Larger touch targets for mobile */
-        .tab-btn {
-            min-height: 48px;
-        }
-
-        .person-card {
-            min-height: 110px;
-        }
-
-        .load-more-btn {
-            min-height: 44px;
-            padding: 10px 20px;
-        }
-
-        .retro-btn {
-            min-height: 32px;
-            padding: 6px 12px;
-        }
+    @media (prefers-reduced-motion: reduce) {
+        .loading-icon, .skeleton * { animation: none !important; }
     }
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // State
-    let currentCategory = 'directors';
-    let currentPage = 1;
-    let currentSearch = '';
-    let currentSort = 'rating-desc';
-    let isLoading = false;
-    let hasMore = true;
-    let searchTimeout = null;
-    const categoryCounts = {};
+(() => {
+    "use strict";
 
-    // Static icon paths (using Django template tags)
-    const ICONS = {
-        users: "{% static 'images/win98/users.png' %}",
-        star: "{% static 'images/win98/star-in-win-98 style.png' %}",
-        hourglass: "{% static 'images/win98/hourglass.png' %}",
-        directoryOpen: "{% static 'images/win98/directory_open.png' %}",
-        directoryClosed: "{% static 'images/win98/directory_closed.png' %}",
-        msgError: "{% static 'images/win98/msg_error.png' %}",
-        cameraVid: "{% static 'images/win98/camera_vid.png' %}",
-        userCard: "{% static 'images/win98/user_card.png' %}",
-        notepad: "{% static 'images/win98/notepad_file.png' %}",
-        tv: "{% static 'images/win98/network_television.png' %}",
-        cdAudio: "{% static 'images/win98/cd_audio.png' %}",
-        paintFile: "{% static 'images/win98/paint_file.png' %}"
+    const PER_PAGE = 30;
+    const API_URL = "{% url 'api_people_by_category' %}";
+    const IS_AUTH = {{ user.is_authenticated|yesno:"true,false" }};
+    const DEFAULTS = { category: "directors", scope: "all", sort: "score", min_works: "1", search: "" };
+    const VALID = {
+        category: new Set([...document.querySelectorAll(".tab-btn")].map(b => b.dataset.category)),
+        scope: new Set(["all", "mine", "watchlist"]),
+        sort: new Set([...document.querySelectorAll("#sort-by option")].map(o => o.value)),
+        min_works: new Set([...document.querySelectorAll("#min-works option")].map(o => o.value)),
+    };
+    const LEGACY = { other_creators: "authors", "rating-desc": "score", "name-asc": "name" };
+    const SCOPE_LABEL = { all: "everyone's ratings", mine: "rated by me", watchlist: "on my watchlist" };
+
+    const $ = id => document.getElementById(id);
+    const els = {
+        grid: $("people-grid"), search: $("search-people"), clear: $("clear-search"),
+        sort: $("sort-by"), minWorks: $("min-works"),
+        loading: $("loading-indicator"), empty: $("empty-state"), emptySub: $("empty-subtext"),
+        error: $("error-state"), retry: $("retry-btn"),
+        sentinel: $("scroll-sentinel"), more: $("load-more-container"), moreBtn: $("load-more-btn"),
+        statusCount: $("status-count"), statusCategory: $("status-category"), top: $("back-to-top"),
     };
 
-    // Elements
-    const peopleGrid = document.getElementById('people-grid');
-    const loadingIndicator = document.getElementById('loading-indicator');
-    const emptyState = document.getElementById('empty-state');
-    const loadMoreContainer = document.getElementById('load-more-container');
-    const loadMoreBtn = document.getElementById('load-more-btn');
-    const searchInput = document.getElementById('search-people');
-    const sortSelect = document.getElementById('sort-by');
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    const backToTopBtn = document.getElementById('back-to-top');
-    const statusCount = document.getElementById('status-count');
-    const statusCategory = document.getElementById('status-category');
+    const state = { ...DEFAULTS, page: 1, hasMore: false, loading: false };
+    let controller = null;
 
-    // Category display names and icons
-    const categoryInfo = {
-        'directors': { name: 'Directors', icon: ICONS.cameraVid },
-        'actors': { name: 'Actors', icon: ICONS.userCard },
-        'writers': { name: 'Writers', icon: ICONS.notepad },
-        'tv_creators': { name: 'TV Creators', icon: ICONS.tv },
-        'musicians': { name: 'Musicians', icon: ICONS.cdAudio },
-        'other_creators': { name: 'Other Creators', icon: ICONS.paintFile }
-    };
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, ch => (
+            { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
+        ));
+    }
 
-    // Initialize
-    loadPeople(true);
-    
-    // Preload counts for all categories
-    preloadCategoryCounts();
+    const fmt = n => Number(n).toLocaleString();
+    const fmtRating = v => (v == null ? "–" : Number(v).toFixed(1));
+    const plural = (n, one, many) => `${fmt(n)} ${n === 1 ? one : (many || one + "s")}`;
 
-    // Event Listeners
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const category = btn.dataset.category;
-            if (category !== currentCategory) {
-                currentCategory = category;
-                currentPage = 1;
-                updateActiveTab();
-                loadPeople(true);
+    function initials(name) {
+        return name.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+    }
+
+    // ---------- URL state ----------
+    function readUrl() {
+        const params = new URLSearchParams(location.search);
+        for (const key of Object.keys(DEFAULTS)) {
+            let value = params.get(key);
+            if (value == null) continue;
+            value = LEGACY[value] || value;
+            if (key === "search") state.search = value.slice(0, 100);
+            else if (VALID[key].has(value)) state[key] = value;
+        }
+        if (!IS_AUTH) state.scope = "all";
+    }
+
+    function writeUrl() {
+        const params = new URLSearchParams();
+        for (const [key, def] of Object.entries(DEFAULTS)) {
+            if (state[key] && state[key] !== def) params.set(key, state[key]);
+        }
+        const query = params.toString();
+        history.replaceState(null, "", query ? `?${query}` : location.pathname);
+    }
+
+    function syncControls() {
+        els.search.value = state.search;
+        els.clear.hidden = !state.search;
+        els.sort.value = state.sort;
+        els.minWorks.value = state.min_works;
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            const active = btn.dataset.category === state.category;
+            btn.classList.toggle("active", active);
+            btn.setAttribute("aria-selected", active);
+            if (active) {
+                els.statusCategory.textContent = btn.querySelector(".tab-label").textContent;
+                btn.scrollIntoView({ block: "nearest", inline: "nearest" });
             }
         });
-    });
+        document.querySelectorAll(".scope-btn").forEach(btn => {
+            const active = btn.dataset.scope === state.scope;
+            btn.classList.toggle("active", active);
+            btn.setAttribute("aria-checked", active);
+        });
+    }
 
-    searchInput.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            currentSearch = searchInput.value.trim();
-            currentPage = 1;
-            loadPeople(true);
-        }, 300);
-    });
+    // ---------- Rendering ----------
+    function renderKnownFor(items) {
+        if (!items.length) return "";
+        const cells = items.map(item => {
+            const label = `${item.title}${item.year ? ` (${item.year})` : ""} · ${item.type}`;
+            const poster = item.poster
+                ? `<img class="kf-poster" src="${escapeHtml(item.poster)}" alt="" loading="lazy" decoding="async">`
+                : `<span class="kf-poster kf-fallback">${escapeHtml(item.title)}</span>`;
+            const badge = item.my_rating != null
+                ? `<span class="kf-badge mine" title="Your rating">${fmtRating(item.my_rating)}</span>`
+                : item.avg_rating != null
+                    ? `<span class="kf-badge" title="Average rating">${fmtRating(item.avg_rating)}</span>`
+                    : "";
+            const wl = item.on_watchlist ? `<span class="kf-wl" title="On your watchlist">★</span>` : "";
+            const inner = `${poster}${badge}${wl}`;
+            return item.url
+                ? `<a class="kf-item" href="${escapeHtml(item.url)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${inner}</a>`
+                : `<span class="kf-item" title="${escapeHtml(label)}" role="img" aria-label="${escapeHtml(label)}">${inner}</span>`;
+        }).join("");
+        return `<div class="known-for">${cells}</div>`;
+    }
 
-    sortSelect.addEventListener('change', () => {
-        currentSort = sortSelect.value;
-        currentPage = 1;
-        loadPeople(true);
-    });
+    function renderCard(p) {
+        const years = p.birth_year
+            ? (p.death_year ? `${p.birth_year}–${p.death_year} †` : `b. ${p.birth_year}`)
+            : (p.death_year ? `† ${p.death_year}` : "");
+        const meta = [p.roles.join(" · "), years].filter(Boolean).join(" — ");
+        const avatar = p.profile_picture
+            ? `<img class="avatar" src="${escapeHtml(p.profile_picture)}" alt="" loading="lazy" decoding="async">`
+            : `<div class="avatar" aria-hidden="true">${escapeHtml(initials(p.name))}</div>`;
 
-    loadMoreBtn.addEventListener('click', () => {
-        if (!isLoading && hasMore) {
-            currentPage++;
-            loadPeople(false);
+        const scoreBox = p.score != null
+            ? `<div class="score-box" title="Weighted score ${p.score} · plain average ${fmtRating(p.avg_rating)}">
+                   <div class="score">${fmtRating(p.score)}</div>
+                   <div class="score-sub">avg ${fmtRating(p.avg_rating)}</div>
+               </div>`
+            : `<div class="score-box none" title="No ratings yet"><div class="score">–</div><div class="score-sub">unrated</div></div>`;
+
+        const chips = [];
+        if (p.works_rated) {
+            chips.push(`<span class="chip" title="Works with at least one review / reviews">${plural(p.works_rated, "work")} · ${plural(p.rating_count, "review")}</span>`);
+        } else if (p.num_works) {
+            chips.push(`<span class="chip">${plural(p.num_works, "credit")}</span>`);
         }
-    });
-
-    // Back to top functionality
-    window.addEventListener('scroll', () => {
-        if (window.pageYOffset > 300) {
-            backToTopBtn.classList.add('visible');
-        } else {
-            backToTopBtn.classList.remove('visible');
+        if (p.my_count) {
+            chips.push(`<span class="chip" title="Your average over ${plural(p.my_count, "work")}">You: ${fmtRating(p.my_avg)} (${fmt(p.my_count)})</span>`);
         }
-    });
+        if (p.affinity != null && Math.abs(p.affinity) >= 0.3) {
+            const up = p.affinity > 0;
+            chips.push(`<span class="chip ${up ? "good" : "bad"}" title="You rate their work ${Math.abs(p.affinity).toFixed(1)} ${up ? "higher" : "lower"} than everyone else">${up ? "▲" : "▼"} ${up ? "+" : "−"}${Math.abs(p.affinity).toFixed(1)} vs others</span>`);
+        }
+        if (p.watchlist_count) {
+            chips.push(`<span class="chip" title="Works on your watchlist">★ ${fmt(p.watchlist_count)} on watchlist</span>`);
+        }
 
-    backToTopBtn.addEventListener('click', () => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+        return `<article class="person-card">
+            <div class="card-head">
+                ${avatar}
+                <div class="card-main">
+                    <a class="person-name" href="/people/${Number(p.id)}/" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</a>
+                    <div class="person-meta" title="${escapeHtml(meta)}">${escapeHtml(meta)}</div>
+                    <div class="chips">${chips.join("")}</div>
+                </div>
+                ${scoreBox}
+            </div>
+            ${renderKnownFor(p.known_for || [])}
+        </article>`;
+    }
 
-    // Infinite scroll
-    let scrollTimeout = null;
-    window.addEventListener('scroll', () => {
-        if (isLoading || !hasMore) return;
-        
-        // Debounce scroll events
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-            const scrollPosition = window.innerHeight + window.pageYOffset;
-            const threshold = document.body.offsetHeight - 500;
-            
-            if (scrollPosition >= threshold) {
-                currentPage++;
-                loadPeople(false);
-            }
-        }, 100);
-    });
+    function renderSkeletons(count = 6) {
+        const card = `<div class="person-card skeleton" aria-hidden="true">
+            <div class="card-head"><div class="avatar"></div>
+                <div class="card-main"><div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:45%"></div><div class="sk-line" style="width:60%"></div></div>
+            </div>
+            <div class="known-for">${'<div class="kf-poster"></div>'.repeat(4)}</div>
+        </div>`;
+        els.grid.innerHTML = card.repeat(count);
+    }
 
-    // Functions
-    async function loadPeople(reset = false) {
-        if (isLoading) return;
-        
-        isLoading = true;
-        showLoading(reset);
-
-        try {
-            const params = new URLSearchParams({
-                category: currentCategory,
-                page: currentPage,
-                per_page: 30,
-                search: currentSearch,
-                sort: currentSort
-            });
-
-            const response = await fetch(`/api/people/?${params}`);
-            const data = await response.json();
-
-            if (data.success) {
-                renderPeople(data.people, reset);
-                hasMore = data.pagination.has_more;
-                
-                // Update counts
-                categoryCounts[currentCategory] = data.pagination.total;
-                updateCategoryCount(currentCategory, data.pagination.total);
-                
-                // Update status bar
-                updateStatusBar(data.pagination.total);
-                
-                // Show/hide load more button
-                loadMoreContainer.style.display = hasMore ? 'flex' : 'none';
-            }
-        } catch (error) {
-            console.error('Error loading people:', error);
-            showError();
-        } finally {
-            isLoading = false;
-            hideLoading();
+    function updateCounts(counts) {
+        for (const [key, value] of Object.entries(counts || {})) {
+            const el = $(`count-${key}`);
+            if (!el) continue;
+            el.textContent = fmt(value);
+            el.closest(".tab-btn").classList.toggle("empty", value === 0);
         }
     }
 
-    async function preloadCategoryCounts() {
-        const categories = ['directors', 'actors', 'writers', 'tv_creators', 'musicians', 'other_creators'];
-        
-        for (const category of categories) {
-            if (category === currentCategory) continue;
-            
-            try {
-                const params = new URLSearchParams({
-                    category: category,
-                    page: 1,
-                    per_page: 1
-                });
-                
-                const response = await fetch(`/api/people/?${params}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    categoryCounts[category] = data.pagination.total;
-                    updateCategoryCount(category, data.pagination.total);
-                }
-            } catch (error) {
-                console.error(`Error loading count for ${category}:`, error);
-            }
-        }
+    function updateStatus(total) {
+        const scope = state.scope !== "all" ? `, ${SCOPE_LABEL[state.scope]}` : "";
+        const search = state.search ? ` matching “${state.search}”` : "";
+        els.statusCount.textContent = `${plural(total, "person", "people")}${search}${scope}`;
     }
 
-    function renderPeople(people, reset = false) {
+    function emptyMessage() {
+        if (state.search) return "Nobody matches that search in this role. Try another tab or clear the search.";
+        if (state.scope === "mine") return "You haven't rated any work by people in this role yet.";
+        if (state.scope === "watchlist") return "Nothing on your watchlist involves people in this role.";
+        if (state.min_works !== "1") return "Try lowering the minimum number of works.";
+        return "No rated works in this role yet.";
+    }
+
+    // ---------- Data ----------
+    async function load({ reset }) {
         if (reset) {
-            peopleGrid.innerHTML = '';
-        }
-
-        if (people.length === 0 && reset) {
-            showEmpty();
+            state.page = 1;
+            state.hasMore = false;
+            controller?.abort();
+            renderSkeletons();
+            window.scrollTo({ top: Math.min(window.scrollY, els.grid.offsetTop - 120) });
+        } else if (state.loading || !state.hasMore) {
             return;
         }
+        controller = new AbortController();
+        const { signal } = controller;
+        state.loading = true;
+        els.empty.hidden = true;
+        els.error.hidden = true;
+        els.more.hidden = true;
+        els.loading.hidden = reset;
 
-        emptyState.style.display = 'none';
-
-        people.forEach(person => {
-            const card = createPersonCard(person);
-            peopleGrid.appendChild(card);
+        const params = new URLSearchParams({
+            category: state.category, scope: state.scope, sort: state.sort,
+            min_works: state.min_works, page: state.page, per_page: PER_PAGE,
         });
-    }
+        if (state.search) params.set("search", state.search);
 
-    function createPersonCard(person) {
-        const card = document.createElement('a');
-        card.href = `/people/${person.id}/`;
-        card.className = 'person-card';
-        card.title = person.name;
+        try {
+            const response = await fetch(`${API_URL}?${params}`, {
+                signal, headers: { "Accept": "application/json" },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (signal.aborted) return;
+            if (!data.success) throw new Error(data.error || "Request failed");
 
-        const imgUrl = person.profile_picture || 'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg';
+            const html = data.people.map(renderCard).join("");
+            if (reset) els.grid.innerHTML = html;
+            else els.grid.insertAdjacentHTML("beforeend", html);
 
-        let ratingHtml = '';
-        if (person.avg_rating) {
-            ratingHtml = `
-                <div class="person-rating">
-                    <span class="rating-badge">
-                        <img src="${ICONS.star}" alt="" class="rating-star-icon">
-                        ${person.avg_rating}
-                    </span>
-                    <span class="rating-count">(${person.rating_count})</span>
-                </div>
-            `;
-        } else {
-            ratingHtml = '<div class="person-rating"><span class="rating-count">No ratings</span></div>';
+            updateCounts(data.counts);
+            updateStatus(data.pagination.total);
+            state.hasMore = data.pagination.has_more;
+            if (state.hasMore) state.page += 1;
+
+            if (reset && data.people.length === 0) {
+                els.emptySub.textContent = emptyMessage();
+                els.empty.hidden = false;
+            }
+            els.more.hidden = !state.hasMore;
+        } catch (err) {
+            if (err.name === "AbortError") return;
+            console.error("People Explorer:", err);
+            if (reset) els.grid.innerHTML = "";
+            els.error.hidden = false;
+        } finally {
+            if (controller?.signal === signal) {
+                state.loading = false;
+                els.loading.hidden = true;
+                controller = null;
+            }
         }
-
-        let metaHtml = '';
-        if (person.num_works) {
-            metaHtml = `<div class="person-meta">${person.num_works} work${person.num_works > 1 ? 's' : ''}</div>`;
-        }
-
-        card.innerHTML = `
-            <div class="person-img-wrapper">
-                <img src="${imgUrl}" 
-                     alt="${person.name}" 
-                     class="person-img" 
-                     loading="lazy"
-                     onerror="this.src='https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-4-user-grey-d8fe957375e70239d6abdd549fd7568c89281b2179b5f4470e2e12895792dfa5.svg';">
-            </div>
-            <div class="person-name">${person.name}</div>
-            ${ratingHtml}
-            ${metaHtml}
-        `;
-
-        return card;
-    }
-
-    function updateActiveTab() {
-        tabButtons.forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.category === currentCategory);
-        });
-        const info = categoryInfo[currentCategory];
-        statusCategory.innerHTML = `
-            <img src="${info.icon}" alt="" class="status-icon">
-            <span>${info.name}</span>
-        `;
-    }
-
-    function updateCategoryCount(category, count) {
-        const countEl = document.getElementById(`count-${category}`);
-        if (countEl) {
-            countEl.textContent = count;
+        // Fill the viewport when the first page is short of it.
+        if (state.hasMore && !signal.aborted && els.sentinel.getBoundingClientRect().top < window.innerHeight + 400) {
+            load({ reset: false });
         }
     }
 
-    function updateStatusBar(total) {
-        statusCount.innerHTML = `
-            <img src="${ICONS.users}" alt="" class="status-icon">
-            <span>${total} ${total === 1 ? 'person' : 'people'}</span>
-        `;
+    function update(changes) {
+        Object.assign(state, changes);
+        syncControls();
+        writeUrl();
+        load({ reset: true });
     }
 
-    function showLoading(fullScreen = false) {
-        if (fullScreen) {
-            loadingIndicator.style.display = 'flex';
-            peopleGrid.style.display = 'none';
-            emptyState.style.display = 'none';
-            loadMoreContainer.style.display = 'none';
-        } else {
-            loadMoreBtn.disabled = true;
-            loadMoreBtn.innerHTML = `
-                <img src="${ICONS.hourglass}" alt="" class="btn-icon">
-                Loading...
-            `;
+    // ---------- Events ----------
+    let searchTimer;
+    els.search.addEventListener("input", () => {
+        els.clear.hidden = !els.search.value;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            const value = els.search.value.trim();
+            if (value !== state.search) update({ search: value });
+        }, 300);
+    });
+    els.search.addEventListener("keydown", e => {
+        if (e.key === "Escape" && els.search.value) {
+            e.preventDefault();
+            els.clear.click();
+        } else if (e.key === "Enter") {
+            clearTimeout(searchTimer);
+            const value = els.search.value.trim();
+            if (value !== state.search) update({ search: value });
         }
+    });
+    els.clear.addEventListener("click", () => {
+        clearTimeout(searchTimer);
+        els.search.value = "";
+        els.search.focus();
+        if (state.search) update({ search: "" });
+        else els.clear.hidden = true;
+    });
+    els.sort.addEventListener("change", () => update({ sort: els.sort.value }));
+    els.minWorks.addEventListener("change", () => update({ min_works: els.minWorks.value }));
+
+    document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", () => {
+        if (btn.dataset.category !== state.category) update({ category: btn.dataset.category });
+    }));
+    document.querySelectorAll(".scope-btn").forEach(btn => btn.addEventListener("click", () => {
+        if (btn.dataset.scope === state.scope) return;
+        const changes = { scope: btn.dataset.scope };
+        // Personal scopes read best ordered by the user's own data.
+        if (btn.dataset.scope === "mine" && state.sort === "score") changes.sort = "my-rating";
+        if (btn.dataset.scope !== "mine" && state.sort === "my-rating" && state.scope === "mine") changes.sort = "score";
+        update(changes);
+    }));
+
+    els.moreBtn.addEventListener("click", () => load({ reset: false }));
+    els.retry.addEventListener("click", () => load({ reset: state.page === 1 }));
+
+    if ("IntersectionObserver" in window) {
+        new IntersectionObserver(entries => {
+            if (entries.some(e => e.isIntersecting)) load({ reset: false });
+        }, { rootMargin: "400px 0px" }).observe(els.sentinel);
     }
 
-    function hideLoading() {
-        loadingIndicator.style.display = 'none';
-        peopleGrid.style.display = 'grid';
-        loadMoreBtn.disabled = false;
-        loadMoreBtn.innerHTML = `
-            <img src="${ICONS.directoryOpen}" alt="" class="btn-icon">
-            Load More
-        `;
-    }
+    window.addEventListener("scroll", () => {
+        els.top.hidden = window.scrollY < 600;
+    }, { passive: true });
+    els.top.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
 
-    function showEmpty() {
-        emptyState.style.display = 'flex';
-        peopleGrid.style.display = 'none';
-        loadMoreContainer.style.display = 'none';
-    }
-
-    function showError() {
-        const emptyIconImg = emptyState.querySelector('.empty-icon-img');
-        if (emptyIconImg) {
-            emptyIconImg.src = ICONS.msgError;
-        }
-        emptyState.querySelector('.empty-text').textContent = 'Error loading people';
-        emptyState.querySelector('.empty-subtext').textContent = 'Please try again later';
-        showEmpty();
-    }
-});
+    readUrl();
+    syncControls();
+    load({ reset: true });
+})();
 </script>
 {% endblock %}

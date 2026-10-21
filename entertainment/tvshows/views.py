@@ -943,6 +943,9 @@ class EpisodeWatchedView(APIView):
                     [WatchedEpisode(user=request.user, episode_id=ep_id) for ep_id in marked_episodes],
                     ignore_conflicts=True,
                 )
+                if marked_episodes:
+                    from custom_auth.services.statistics import invalidate_stats_cache
+                    invalidate_stats_cache(request.user.pk)
         else:
             # Remove the episode from watched episodes
             WatchedEpisode.objects.filter(
