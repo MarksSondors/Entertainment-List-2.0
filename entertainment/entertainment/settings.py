@@ -143,10 +143,13 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Enterainment API',
+    'TITLE': 'Entertainment API',
     'DESCRIPTION': 'API for all things entertainment',
     'VERSION': '0.0.2',
     'SERVE_INCLUDE_SCHEMA': False,
+    # Schema, Swagger and Redoc were public: they handed the full endpoint map
+    # to anonymous visitors. Logged-in users still get them.
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAuthenticated'],
 }
 
 MIDDLEWARE = [
