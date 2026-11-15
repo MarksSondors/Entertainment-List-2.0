@@ -66,14 +66,20 @@ def process_review_notification(review_id):
     
     # Create title and body based on whether there's review text
     if review.season:
-        title = f"⭐ New Review: {media_title} - {review.season}"
-        context = f"{review.season}"
+        season_label = f"Season {review.season.season_number}"
+        title = f"⭐ New Review: {media_title} - {season_label}"
+        context = season_label
     elif review.episode_subgroup:
         title = f"⭐ New Review: {media_title} - {review.episode_subgroup}"
         context = f"{review.episode_subgroup}"
     else:
         title = f"⭐ New Review: {media_title}"
         context = media_title
+
+    # NotificationLog/QueuedNotification.title are max_length=100; an overflow is
+    # swallowed per-user and the notification silently never arrives.
+    if len(title) > 100:
+        title = title[:99] + "…"
     
     if review.review_text and len(review.review_text.strip()) > 0:
         # Truncate review text for notification (first 100 chars)
