@@ -208,3 +208,99 @@ class StremioEndpointTests(TestCase):
         self.assertIsNone(cache.get(auth_cache_key(old_key)))
         response = self.client.get(self.url('catalog/movie/watchlist-movies.json'))
         self.assertEqual(response.status_code, 401)
+
+
+@override_settings(CACHES=LOCMEM_CACHE, SECURE_SSL_REDIRECT=False)
+class PosterContentVersionTests(TestCase):
+    """Posters are keyed by what's drawn on them: re-render on change, never on a timer."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = CustomUser.objects.create_user(username='poster', email='poster@example.test', password='x')
+        self.user.generate_api_key()
+        self.other = CustomUser.objects.create_user(username='rater', email='rater@example.test', password='x')
+        self.config = encode_config({'api_key': self.user.api_key})
+        self.movie = Movie.objects.create(
+            title='Nathan For You', original_title='Nathan For You', tmdb_id=9101, imdb_id='tt2297757',
+            runtime=100, rating=7.0, description='x', poster='/abc.jpg', release_date=date(2013, 2, 28))
+        self.show = TVShow.objects.create(
+            title='The Rehearsal', original_title='The Rehearsal', tmdb_id=9102, imdb_id='tt10802170',
+            description='x', poster='/reh.jpg')
+        season = Season.objects.create(show=self.show, season_number=1, title='Season 1')
+        self.eps = [Episode.objects.create(season=season, episode_number=n, title=f'E{n}',
+                                           air_date=date(2022, 7, n)) for n in (1, 2)]
+        enqueue = mock.patch('django_q.tasks.async_task')
+        self.enqueue = enqueue.start()
+        self.addCleanup(enqueue.stop)
+
+    def version(self, media, media_type, ctx=None):
+        from .poster import content_version
+        return content_version(media, media_type, self.user, ctx)
+
+    def review(self, rating):
+        return Review.objects.create(
+            user=self.other, rating=rating, review_text='ok',
+            content_type=ContentType.objects.get_for_model(Movie), object_id=self.movie.id)
+
+    def test_version_stable_until_content_changes(self):
+        first = self.version(self.movie, 'movie')
+        self.assertEqual(first, self.version(self.movie, 'movie'))
+        self.review(8)
+        self.assertNotEqual(first, self.version(self.movie, 'movie'))
+
+    def test_progress_changes_cw_version_only_for_that_user(self):
+        before = self.version(self.show, 'series', 'cw')
+        WatchedEpisode.objects.create(user=self.user, episode=self.eps[0])
+        self.assertNotEqual(before, self.version(self.show, 'series', 'cw'))
+        from .poster import content_version
+        self.assertEqual(content_version(self.show, 'series', self.other, 'cw'),
+                         content_version(self.show, 'series', self.other, 'cw'))
+
+    def test_rendered_poster_reused_until_rating_changes(self):
+        from . import poster
+        with mock.patch.object(poster, 'render_catalog_poster', return_value=b'img') as render:
+            poster.get_cached_poster(self.movie, 'movie', self.user, None)
+            poster.get_cached_poster(self.movie, 'movie', self.user, None)
+            self.assertEqual(render.call_count, 1)
+            self.review(9)
+            poster.get_cached_poster(self.movie, 'movie', self.user, None)
+            self.assertEqual(render.call_count, 2)
+
+    def test_catalog_url_carries_content_version(self):
+        Watchlist.objects.create(user=self.user, content_type=ContentType.objects.get_for_model(Movie),
+                                 object_id=self.movie.id)
+        metas = self.client.get(f'/stremio/{self.config}/catalog/movie/watchlist-movies.json').json()['metas']
+        self.assertTrue(metas[0]['poster'].endswith(f"v={self.version(self.movie, 'movie')}"))
+
+    def test_poster_response_immutable_only_for_current_version(self):
+        from . import poster
+        url = f'/stremio/{self.config}/poster/movie/{self.movie.imdb_id}.png'
+        with mock.patch.object(poster, 'render_catalog_poster', return_value=b'img'):
+            current = self.client.get(url, {'v': self.version(self.movie, 'movie')})
+            stale = self.client.get(url, {'v': 'deadbeef00'})
+        self.assertIn('immutable', current['Cache-Control'])
+        self.assertNotIn('immutable', stale['Cache-Control'])
+
+    def test_review_queues_render_for_watchlist_addon_users(self):
+        Watchlist.objects.create(user=self.user, content_type=ContentType.objects.get_for_model(Movie),
+                                 object_id=self.movie.id)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.review(7)
+        warm = [c.args for c in self.enqueue.call_args_list if c.args[0] == 'stremio.tasks.warm_poster']
+        self.assertEqual(warm, [('stremio.tasks.warm_poster', 'movie', self.movie.imdb_id, self.user.id, None)])
+
+    def test_watching_episode_queues_render_for_that_user(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            WatchedEpisode.objects.create(user=self.user, episode=self.eps[0])
+        warm = {c.args[1:] for c in self.enqueue.call_args_list if c.args[0] == 'stremio.tasks.warm_poster'}
+        self.assertEqual(warm, {('series', self.show.imdb_id, self.user.id, 'cw'),
+                                ('series', self.show.imdb_id, self.user.id, None)})
+
+    def test_no_timer_schedule_for_posters(self):
+        from django.apps import apps
+        from django_q.models import Schedule
+
+        from .apps import _setup_stremio_schedules
+        Schedule.objects.create(func='stremio.tasks.warm_all_posters', schedule_type=Schedule.MINUTES, minutes=20)
+        _setup_stremio_schedules(apps.get_app_config('stremio'))
+        self.assertFalse(Schedule.objects.filter(func='stremio.tasks.warm_all_posters').exists())

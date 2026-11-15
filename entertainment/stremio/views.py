@@ -15,7 +15,7 @@ from django.db.models import Avg, Case, Count, F, IntegerField, Max, Q, When
 
 from .authentication import decode_config, get_user_from_config, is_rate_limited, require_stremio_auth
 from .formatters import FINISHED_TVSHOW_STATUSES, to_stremio_meta, to_stremio_catalog_item, get_poster_url
-from .poster import get_cached_poster, poster_version
+from .poster import content_version, get_cached_poster
 
 from movies.models import Movie, MovieOfWeekPick
 from tvshows.models import TVShow
@@ -283,8 +283,8 @@ def catalog(request, config: str, media_type: str, catalog_id: str, extra: str =
         ('movie', 'discover-external'): lambda: get_discover_external(user, skip),
         ('movie', 'top-rated'): lambda: get_top_rated(user, poster_base, skip, genre),
         ('series', 'top-rated'): lambda: get_top_rated_series(user, poster_base, skip, genre),
-        ('movie', 'search-movies'): lambda: search_local(Movie, 'movie', search, poster_base),
-        ('series', 'search-series'): lambda: search_local(TVShow, 'series', search, poster_base),
+        ('movie', 'search-movies'): lambda: search_local(Movie, 'movie', search, poster_base, user),
+        ('series', 'search-series'): lambda: search_local(TVShow, 'series', search, poster_base, user),
     }
 
     handler = catalog_handlers.get((media_type, catalog_id))
@@ -319,8 +319,9 @@ def _warm_catalog_posters(metas: list[dict], media_type: str, user_id: int) -> N
             continue
         poster = item.get('poster') or ''
         ctx = poster.split('ctx=', 1)[1].split('&', 1)[0] if 'ctx=' in poster else None
-        # every catalog cache miss would otherwise re-queue the same renders; skip recently queued ones
-        if not cache.add(f"stremio:warmq:{media_type}:{imdb_id}:{user_id}:{ctx or ''}", 1, WARM_DEDUPE_TTL):
+        version = poster.split('v=', 1)[1].split('&', 1)[0] if 'v=' in poster else ''
+        # only queue a render when this exact content version hasn't been queued yet
+        if not cache.add(f"stremio:warmq:{media_type}:{imdb_id}:{user_id}:{ctx or ''}:{version}", 1, WARM_DEDUPE_TTL):
             continue
         async_task('stremio.tasks.warm_poster', media_type, imdb_id, user_id, ctx)
 
@@ -354,7 +355,7 @@ def get_watchlist_movies(user, poster_base: str, skip: int = 0, genre: str = Non
         
         metas = []
         for movie in paginated_movies:
-            item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id, v=poster_version(movie)))
+            item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id, v=content_version(movie, 'movie', user, None)))
             if item:
                 metas.append(item)
         return metas
@@ -378,7 +379,7 @@ def get_watchlist_movies(user, poster_base: str, skip: int = 0, genre: str = Non
         metas = []
         for movie_id in movie_ids:
             if movie_id in movie_dict:
-                item = to_stremio_catalog_item(movie_dict[movie_id], 'movie', poster_url=_poster_url(poster_base, 'movie', movie_dict[movie_id].imdb_id, v=poster_version(movie_dict[movie_id])))
+                item = to_stremio_catalog_item(movie_dict[movie_id], 'movie', poster_url=_poster_url(poster_base, 'movie', movie_dict[movie_id].imdb_id, v=content_version(movie_dict[movie_id], 'movie', user, None)))
                 if item:
                     metas.append(item)
         
@@ -450,7 +451,7 @@ def get_continue_watching(user, poster_base: str, skip: int = 0) -> list[dict]:
         tvshow = tvshow_dict[tvshow_id]
         item = to_stremio_catalog_item(
             tvshow, 'series',
-            poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, ctx='cw', v=poster_version(tvshow))
+            poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, ctx='cw', v=content_version(tvshow, 'series', user, 'cw'))
         )
         if item:
             metas.append(item)
@@ -493,7 +494,7 @@ def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = Non
                 skipped += 1
                 continue
             
-            item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, v=poster_version(tvshow)))
+            item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, v=content_version(tvshow, 'series', user, None)))
             if item:
                 metas.append(item)
                 if len(metas) >= PAGE_SIZE:
@@ -536,7 +537,7 @@ def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = Non
                 skipped += 1
                 continue
             
-            item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, v=poster_version(tvshow)))
+            item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, v=content_version(tvshow, 'series', user, None)))
             if item:
                 metas.append(item)
                 if len(metas) >= PAGE_SIZE:
@@ -575,7 +576,7 @@ def get_waiting_for_new_episodes(user, poster_base: str, skip: int = 0, genre: s
 
     metas = []
     for tvshow in caught_up[skip:skip + PAGE_SIZE]:
-        item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, v=poster_version(tvshow)))
+        item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, v=content_version(tvshow, 'series', user, None)))
         if item:
             metas.append(item)
 
@@ -615,7 +616,7 @@ def get_community_picks(user, poster_base: str, skip: int = 0) -> list[dict]:
             skipped += 1
             continue
 
-        item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id, v=poster_version(movie)))
+        item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id, v=content_version(movie, 'movie', user, None)))
         if item:
             metas.append(item)
             if len(metas) >= PAGE_SIZE:
@@ -654,7 +655,7 @@ def get_recommendations(user, poster_base: str) -> list[dict]:
     for movie_id in movie_ids:
         movie = movies_by_id.get(movie_id)
         if movie and movie.imdb_id:
-            item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id, v=poster_version(movie)))
+            item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id, v=content_version(movie, 'movie', user, None)))
             if item:
                 metas.append(item)
 
@@ -762,7 +763,7 @@ def _top_rated(model, media_type: str, user, poster_base: str, skip: int, genre:
     for media_id in ids:
         media = by_id.get(media_id)
         if media:
-            item = to_stremio_catalog_item(media, media_type, poster_url=_poster_url(poster_base, media_type, media.imdb_id, v=poster_version(media)))
+            item = to_stremio_catalog_item(media, media_type, poster_url=_poster_url(poster_base, media_type, media.imdb_id, v=content_version(media, media_type, user, None)))
             if item:
                 metas.append(item)
     return metas
@@ -778,7 +779,7 @@ def get_top_rated_series(user, poster_base: str, skip: int = 0, genre: str = Non
     return _top_rated(TVShow, 'series', user, poster_base, skip, genre)
 
 
-def search_local(model, media_type: str, query: str | None, poster_base: str) -> list[dict]:
+def search_local(model, media_type: str, query: str | None, poster_base: str, user=None) -> list[dict]:
     """Title search over the local DB: exact matches, then prefix matches, then best rated."""
     if not query:
         return []
@@ -797,7 +798,7 @@ def search_local(model, media_type: str, query: str | None, poster_base: str) ->
 
     metas = []
     for media in results:
-        item = to_stremio_catalog_item(media, media_type, poster_url=_poster_url(poster_base, media_type, media.imdb_id, v=poster_version(media)))
+        item = to_stremio_catalog_item(media, media_type, poster_url=_poster_url(poster_base, media_type, media.imdb_id, v=content_version(media, media_type, user, None)))
         if item:
             metas.append(item)
     return metas
@@ -832,8 +833,13 @@ def poster_image(request, config: str, media_type: str, imdb_id: str):
         return HttpResponseNotFound()
 
     response = HttpResponse(image_bytes, content_type='image/jpeg')
-    # per-user overlay (watch progress), so shared caches must not store it
-    response['Cache-Control'] = 'private, max-age=3600'
+    # per-user overlay (watch progress), so shared caches must not store it. A URL whose ?v=
+    # matches the current content is immutable: any change produces a different URL.
+    requested = request.GET.get('v')
+    if requested and requested == content_version(media, media_type, user, ctx):
+        response['Cache-Control'] = 'private, max-age=31536000, immutable'
+    else:
+        response['Cache-Control'] = 'private, max-age=300'
     return response
 
 

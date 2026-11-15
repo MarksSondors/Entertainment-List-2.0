@@ -10,6 +10,9 @@ class StremioConfig(AppConfig):
         from django.db.models.signals import post_migrate
         post_migrate.connect(_setup_stremio_schedules, sender=self)
 
+        from . import signals
+        signals.connect()
+
 
 def _setup_stremio_schedules(sender, **kwargs):
     """
@@ -20,16 +23,9 @@ def _setup_stremio_schedules(sender, **kwargs):
     from django.db.utils import OperationalError, ProgrammingError
 
     try:
-        # Keep poster overlays warm so they're already cached before a user opens Stremio
-        Schedule.objects.get_or_create(
-            func='stremio.tasks.warm_all_posters',
-            defaults={
-                'name': 'Warm Stremio Poster Cache',
-                'schedule_type': Schedule.MINUTES,
-                'minutes': 20,
-                'repeats': -1,  # Run indefinitely
-            }
-        )
+        # Posters are content-hashed and re-rendered on change (stremio.signals), so the
+        # old "re-render every watchlist poster every 20 min" schedule is retired.
+        Schedule.objects.filter(func='stremio.tasks.warm_all_posters').delete()
         # Refresh the (1h TTL) Discover cache before it expires, so it's never built on-demand
         Schedule.objects.get_or_create(
             func='stremio.tasks.warm_all_discover_external',
