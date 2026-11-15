@@ -4,8 +4,12 @@ Poster cache keys are content hashes (see poster.content_version), so nothing he
 invalidates anything: these handlers only get the new image rendered before Stremio
 asks for it. If one is missed, the catalog request queues the render anyway.
 """
+import logging
+
 from django.core.cache import cache
 from django.db import transaction
+
+logger = logging.getLogger(__name__)
 
 EVENT_DEDUPE_TTL = 30  # collapse bursts (e.g. "mark season watched") into one render
 
@@ -13,11 +17,20 @@ EVENT_DEDUPE_TTL = 30  # collapse bursts (e.g. "mark season watched") into one r
 def _queue(media_type: str, imdb_id: str, user_id: int, ctx: str | None) -> None:
     if not imdb_id:
         return
-    if not cache.add(f"stremio:evtq:{media_type}:{imdb_id}:{user_id}:{ctx or ''}", 1, EVENT_DEDUPE_TTL):
-        return
-    from django_q.tasks import async_task
-    # after commit, so the task sees the new rating/progress rather than the old state
-    transaction.on_commit(lambda: async_task('stremio.tasks.warm_poster', media_type, imdb_id, user_id, ctx))
+
+    def enqueue():
+        # Deduping and enqueueing touch Redis; never let a cache outage break the save itself.
+        try:
+            if not cache.add(f"stremio:evtq:{media_type}:{imdb_id}:{user_id}:{ctx or ''}", 1, EVENT_DEDUPE_TTL):
+                return
+            from django_q.tasks import async_task
+            async_task('stremio.tasks.warm_poster', media_type, imdb_id, user_id, ctx)
+        except Exception:
+            logger.warning("poster pre-render not queued for %s %s", media_type, imdb_id, exc_info=True)
+
+    # after commit, so the task sees the new rating/progress, and nothing runs inside the
+    # caller's transaction (a slow Redis must not hold a DB transaction open)
+    transaction.on_commit(enqueue)
 
 
 def _addon_users_watching(media):
@@ -35,7 +48,10 @@ def _addon_users_watching(media):
 
 def review_changed(sender, instance, **kwargs):
     """A rating moved the community average: re-render this title for everyone watching it."""
-    media = instance.media
+    try:
+        media = instance.media
+    except Exception:
+        return
     if media is None or not getattr(media, 'imdb_id', None):
         return
     media_type = 'series' if media.__class__.__name__ == 'TVShow' else 'movie'
@@ -47,7 +63,10 @@ def review_changed(sender, instance, **kwargs):
 
 def watched_episode_changed(sender, instance, **kwargs):
     """Progress moved: re-render this user's show poster (progress chip and next-episode chip)."""
-    show = instance.episode.season.show
+    try:
+        show = instance.episode.season.show
+    except Exception:  # unsaved/partial instance (or episode already gone on cascade delete)
+        return
     if not show.imdb_id:
         return
     _queue('series', show.imdb_id, instance.user_id, 'cw')
