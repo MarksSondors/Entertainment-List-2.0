@@ -18,7 +18,10 @@ from custom_auth.models import Review
 from .formatters import get_poster_url
 
 SOURCE_IMAGE_CACHE_TTL = 7 * 24 * 3600  # TMDB posters rarely change, cache long
-RENDERED_POSTER_CACHE_TTL = 3600  # matches agreed staleness tolerance for ratings/next-episode
+# Rendered posters are keyed by a hash of everything drawn on them (content_version), so a
+# cached image can never be stale: a new rating or episode yields a new key. Long TTL is safe;
+# superseded keys just age out (Redis runs volatile-lru with a maxmemory cap).
+RENDERED_POSTER_CACHE_TTL = 30 * 24 * 3600
 
 
 def poster_version(media) -> str:
@@ -34,6 +37,31 @@ def poster_version(media) -> str:
 def poster_url_version(poster: str) -> str:
     """poster_version() for callers that only have the stored poster URL, not the model."""
     return hashlib.sha1(poster.encode()).hexdigest()[:8]
+
+
+def poster_state(media, media_type: str, user, ctx: str | None) -> dict:
+    """Everything that ends up drawn on the poster: a few cheap queries, no image work."""
+    return {
+        'rating': _rating_badge(media),
+        'banner': _movie_banner(media) if media_type == 'movie' else _series_banner(media, user, ctx),
+    }
+
+
+def content_version(media, media_type: str, user, ctx: str | None, state: dict | None = None) -> str:
+    """Hash of art + overlay content. Changes exactly when the rendered image would change.
+
+    Used both as the render-cache key and as the ?v= in catalog poster URLs, so Stremio
+    can cache each URL forever and still pick up a new rating/progress immediately.
+    """
+    if state is None:
+        state = poster_state(media, media_type, user, ctx)
+    banner = state['banner'] or {}
+    raw = '|'.join([
+        str(get_poster_url(media) or ''),
+        state['rating'] or '',
+        banner.get('icon', ''), banner.get('text', ''), str(banner.get('progress', '')),
+    ])
+    return hashlib.sha1(raw.encode()).hexdigest()[:10]
 
 
 FETCH_TIMEOUT = 4
@@ -95,13 +123,15 @@ def _encode_output(image: Image.Image) -> bytes:
 
 def get_cached_poster(media, media_type: str, user, ctx: str | None) -> bytes | None:
     """Get-or-render the final per-user poster; shared by the live view and background warm tasks."""
-    cache_key = f"stremio:posterimg:{media_type}:{media.id}:{user.id}:{ctx or ''}:{poster_version(media)}"
+    state = poster_state(media, media_type, user, ctx)
+    version = content_version(media, media_type, user, ctx, state)
+    cache_key = f"stremio:posterimg:{media_type}:{media.id}:{user.id}:{ctx or ''}:{version}"
     image_bytes = cache.get(cache_key)
     if image_bytes is not None:
         return image_bytes
 
     try:
-        image_bytes = render_catalog_poster(media, media_type, user, ctx)
+        image_bytes = render_catalog_poster(media, media_type, user, ctx, state)
     except Exception:
         image_bytes = None
     if image_bytes:
@@ -109,14 +139,15 @@ def get_cached_poster(media, media_type: str, user, ctx: str | None) -> bytes | 
     return image_bytes
 
 
-def render_catalog_poster(media, media_type: str, user, ctx: str | None) -> bytes | None:
+def render_catalog_poster(media, media_type: str, user, ctx: str | None, state: dict | None = None) -> bytes | None:
     """Build the composited poster JPEG, or None if there's nothing to draw / source is unavailable."""
     poster_url = get_poster_url(media)
     if not poster_url:
         return None
 
-    rating_text = _rating_badge(media)
-    banner = _movie_banner(media) if media_type == 'movie' else _series_banner(media, user, ctx)
+    if state is None:
+        state = poster_state(media, media_type, user, ctx)
+    rating_text, banner = state['rating'], state['banner']
 
     if not rating_text and not banner:
         # nothing to draw at all: skip Pillow entirely and hand back the original bytes
@@ -155,7 +186,8 @@ def render_catalog_poster(media, media_type: str, user, ctx: str | None) -> byte
 
 def _render_rating_base(media, media_type: str, source_bytes: bytes, rating_text: str) -> bytes | None:
     """Poster + rating chip only, cached per media item (not per user) so the blur runs once."""
-    cache_key = f"stremio:posterbase:{media_type}:{media.id}:{poster_version(media)}"
+    # rating text is in the key: a new review re-renders the shared base once, not on a timer
+    cache_key = f"stremio:posterbase:{media_type}:{media.id}:{poster_version(media)}:{rating_text}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
