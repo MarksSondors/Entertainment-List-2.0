@@ -29,6 +29,11 @@ services:
 
   nginx:
     image: nginx:alpine
+    # nginx.conf is a single-file bind mount: git replaces the file, so a running
+    # nginx keeps the old copy. gha-deploy only recreates services whose compose
+    # config changed -- bump this label whenever nginx.conf changes.
+    labels:
+      - "entlist.nginx-conf-rev=2026-11-15"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - static_volume:/app/staticfiles
@@ -75,7 +80,10 @@ services:
     image: "redis:alpine"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    # Cap memory: the Django cache (db1) holds multi-MB Stremio poster blobs and grew
+    # without bound. volatile-lru only evicts keys with a TTL (every cache key has one),
+    # so django-q's queue in db0 (no TTL) is never evicted.
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
     networks:
       - webnet
     restart: unless-stopped
