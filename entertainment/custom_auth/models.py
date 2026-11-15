@@ -420,8 +420,12 @@ class WatchlistEvent(models.Model):
 def send_review_notification(sender, instance, created, **kwargs):
     """Send notification when a new review is created"""
     if created:
+        from django.db import transaction
         from django_q.tasks import async_task
-        async_task('custom_auth.tasks.process_review_notification', instance.id)
+        # enqueue after commit: the task must see the saved review, and a slow broker
+        # must not hold the review's DB transaction open
+        review_id = instance.id
+        transaction.on_commit(lambda: async_task('custom_auth.tasks.process_review_notification', review_id))
 
 
 @receiver(post_save, sender=Review)
