@@ -66,3 +66,24 @@ class ReviewNotificationTitleTests(TestCase):
         self.assertTrue(titles, 'no notification was sent')
         for title in titles:
             self.assertLessEqual(len(title), 100)
+
+
+@override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}})
+class ReviewNotificationSignalTests(ReviewNotificationTitleTests):
+    """Saving a review must enqueue the notification task (the receiver was once dropped)."""
+
+    def test_new_review_enqueues_notification(self):
+        with patch('django_q.tasks.async_task') as enqueue:
+            review = self._review(season=self.season)
+        calls = [c for c in enqueue.call_args_list
+                 if c.args and c.args[0] == 'custom_auth.tasks.process_review_notification']
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0].args[1], review.id)
+
+    def test_editing_a_review_does_not_notify_again(self):
+        review = self._review(season=self.season)
+        with patch('django_q.tasks.async_task') as enqueue:
+            review.rating = 9.0
+            review.save()
+        self.assertFalse([c for c in enqueue.call_args_list
+                          if c.args and c.args[0] == 'custom_auth.tasks.process_review_notification'])
