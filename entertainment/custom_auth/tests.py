@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from custom_auth.models import Review
 from custom_auth.tasks import process_review_notification
@@ -12,6 +12,8 @@ from datetime import date
 from tvshows.models import Episode, Season, TVShow, WatchedEpisode
 
 
+# CI has no Redis service; keep the cache in-process.
+@override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}})
 class ReviewNotificationTitleTests(TestCase):
     """Titles must fit NotificationLog/QueuedNotification.title (max_length=100)."""
 
