@@ -416,6 +416,7 @@ class WatchlistEvent(models.Model):
         return f"{self.user.username} {self.action} {self.content_type}#{self.object_id}"
 
 
+@receiver(post_save, sender=Review)
 def send_review_notification(sender, instance, created, **kwargs):
     """Send notification when a new review is created"""
     if created:
