@@ -60,3 +60,22 @@ class HealthzTests(TestCase):
         other = self.client.get('/some-other-path/')
         self.assertEqual(other.status_code, 301)
         self.assertTrue(other['Location'].startswith('https://'))
+
+
+@override_settings(CACHES=LOCMEM_CACHE, SECURE_SSL_REDIRECT=False)
+class ApiSchemaAccessTests(TestCase):
+    """The OpenAPI schema and its viewers must not be served to anonymous visitors."""
+
+    def test_anonymous_gets_no_schema(self):
+        for url in ('/api/schema/', '/api/schema/swagger-ui/', '/api/schema/redoc/'):
+            response = self.client.get(url)
+            self.assertIn(response.status_code, (401, 403), url)
+
+    def test_logged_in_user_gets_schema(self):
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.create_user(
+            username='schemauser', email='schema@example.test', password='x')
+        self.client.force_login(user)
+        response = self.client.get('/api/schema/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Entertainment API', response.content)
