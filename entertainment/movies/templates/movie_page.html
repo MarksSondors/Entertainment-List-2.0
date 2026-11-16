@@ -651,8 +651,10 @@ iframe[src*="tiktok.com"] {
             
             <!-- Action buttons -->
             <div style="margin-top: 15px;" class="button-container" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="retro-btn" onclick="openTrailerModal()">Watch Trailer</button>
-                {% include "components/trailer_modal.html" with trailer_url=movie.trailer %}
+                {% if movie.trailer %}
+                    <button class="retro-btn" onclick="openTrailerModal()">Watch Trailer</button>
+                    {% include "components/trailer_modal.html" with trailer_url=movie.trailer %}
+                {% endif %}
 
                 {% if user_watchlist %}
                     <button class="retro-btn" onclick="removeFromWatchlist()">Remove from Watchlist</button>

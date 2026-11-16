@@ -442,6 +442,24 @@ def invalidate_stats_on_review_delete(sender, instance, **kwargs):
     invalidate_stats_cache(instance.user_id)
 
 
+@receiver(post_save, sender=Review)
+def invalidate_recommendations_on_review_save(sender, instance, **kwargs):
+    """Invalidate the recommendation cache when a review is created or updated.
+
+    The cached lists are personalised, so a new or changed rating has to
+    invalidate them or the user keeps seeing the old picks.
+    """
+    from custom_auth.services.recommendation_cache import invalidate_user
+    invalidate_user(instance.user_id)
+
+
+@receiver(post_delete, sender=Review)
+def invalidate_recommendations_on_review_delete(sender, instance, **kwargs):
+    """Invalidate the recommendation cache when a review is deleted."""
+    from custom_auth.services.recommendation_cache import invalidate_user
+    invalidate_user(instance.user_id)
+
+
 @receiver(post_save, sender=Watchlist)
 def invalidate_stats_on_watchlist_save(sender, instance, created, **kwargs):
     """Log an add event + invalidate statistics cache when a watchlist item is added."""

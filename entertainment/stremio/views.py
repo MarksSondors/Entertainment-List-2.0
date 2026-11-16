@@ -20,6 +20,7 @@ from .poster import content_version, get_cached_poster
 from movies.models import Movie, MovieOfWeekPick
 from tvshows.models import TVShow
 from custom_auth.models import Watchlist, Review, Genre
+from custom_auth.services.recommendation_cache import SCOPE_STREMIO, get_cached, set_cached
 from movies.services.recommendation import MovieRecommender
 from api.services.movies import MoviesService
 
@@ -31,9 +32,13 @@ PAGE_SIZE = 100
 MAX_SKIP = 10_000
 SEARCH_LIMIT = 50
 RECOMMENDATIONS_SIZE = 60
-RECOMMENDATIONS_CACHE_TTL = 3600
+# The warm task refreshes these every 50 minutes, so the life has to be longer
+# than that interval: with a 1 hour life the cache expired for ten minutes
+# every hour, and the next addon request then paid the full model load
+# (~7 s, measured up to 19 s in production).
+RECOMMENDATIONS_CACHE_TTL = 7200
 DISCOVER_EXTERNAL_CANDIDATE_COUNT = 60
-DISCOVER_EXTERNAL_CACHE_TTL = 3600
+DISCOVER_EXTERNAL_CACHE_TTL = 7200
 CATALOG_CACHE_TTL = 120  # short TTL for DB-backed catalogs, since Stremio polls catalogs often
 MANIFEST_GENRES_CACHE_TTL = 3600
 WARM_DEDUPE_TTL = 900  # don't re-queue the same poster render more often than this
@@ -640,13 +645,13 @@ def _build_recommendation_movie_ids(user) -> list[int]:
         if movie and movie.imdb_id:
             movie_ids.append(movie.id)
 
-    cache.set(f"stremio_recommendations_{user.id}", movie_ids, RECOMMENDATIONS_CACHE_TTL)
+    set_cached(SCOPE_STREMIO, user.id, RECOMMENDATIONS_SIZE, movie_ids, ttl=RECOMMENDATIONS_CACHE_TTL)
     return movie_ids
 
 
 def get_recommendations(user, poster_base: str) -> list[dict]:
     """Get personalized movie recommendations (cached per user; poster URLs built fresh per request)."""
-    movie_ids = cache.get(f"stremio_recommendations_{user.id}")
+    movie_ids = get_cached(SCOPE_STREMIO, user.id, RECOMMENDATIONS_SIZE)
     if movie_ids is None:
         movie_ids = _build_recommendation_movie_ids(user)
 

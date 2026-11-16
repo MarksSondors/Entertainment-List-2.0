@@ -213,6 +213,36 @@ def promotion_decision(new_meta: dict, champion_meta: Optional[dict],
     return True, f"NDCG@10 {new_ndcg:.4f} vs champion {old_ndcg:.4f} ({100 * rel:+.1f}%)"
 
 
+def _publish_bundle(src: Path, dst: Path) -> None:
+    """Point ``dst`` at ``src`` without copying the bytes and without a torn read.
+
+    The champion bundle is ~400 MB. ``shutil.copy2`` wrote a second full copy
+    of it (``svd_model_latest.pkl`` and ``svd_model.pkl`` were each a copy of
+    the versioned file, so one champion cost ~1.2 GB) and, worse, truncated the
+    destination in place - a reader could pick up a half-written pickle.
+
+    A hard link shares the inode instead: the three names are one file, and
+    ``os.replace`` swaps the name atomically, so a reader sees either the old
+    bundle or the new one and never a partial one. Filesystems without hard
+    links fall back to a copy through a temporary file, which keeps the
+    atomic swap.
+    """
+    tmp = dst.with_name(dst.name + ".publish-tmp")
+    try:
+        if tmp.exists():
+            tmp.unlink()
+        try:
+            os.link(src, tmp)
+        except OSError:
+            # No hard link support (or a cross-device move): copy instead.
+            shutil.copy2(src, tmp)
+        os.replace(tmp, dst)
+    except OSError:
+        if tmp.exists():
+            tmp.unlink()
+        raise
+
+
 def save_bundle(bundle: dict, *, keep_versions: int = 5, force_promote: bool = False,
                 directory: Optional[Path] = None) -> SaveResult:
     """Pickle ``bundle`` as a versioned snapshot (+ ``.meta.json`` sidecar), then promote
@@ -241,8 +271,8 @@ def save_bundle(bundle: dict, *, keep_versions: int = 5, force_promote: bool = F
         promote, reason = True, f"forced ({reason})"
 
     if promote:
-        shutil.copy2(versioned, d / "svd_model_latest.pkl")
-        shutil.copy2(versioned, d / "svd_model.pkl")  # back-compat name
+        _publish_bundle(versioned, d / "svd_model_latest.pkl")
+        _publish_bundle(versioned, d / "svd_model.pkl")  # back-compat name
         shutil.copy2(_meta_path(versioned), latest_meta_path)
         logger.info("Promoted %s to svd_model_latest.pkl: %s", versioned.name, reason)
     else:

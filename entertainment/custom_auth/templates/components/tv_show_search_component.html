@@ -207,7 +207,8 @@
     </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- jQuery comes from base.html (3.7.1, pinned with SRI); loading it again here
+     used to fetch a second, older copy and overwrite the global one. -->
 <script>
     let allTVResults = [];
     let tvCurrentPage = 1;

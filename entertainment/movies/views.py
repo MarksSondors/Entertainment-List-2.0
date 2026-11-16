@@ -29,6 +29,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .services.recommendation import MovieRecommender
 from .services import quick_picks
+from custom_auth.services.recommendation_cache import (
+    EXTERNAL_RECOMMENDATION_CACHE_TTL,
+    SCOPE_EXTERNAL,
+    SCOPE_MOVIES,
+    get_cached,
+    set_cached,
+)
 from .tasks import create_movie_async, create_movie_fast
 from datetime import timedelta
 from django.contrib import messages
@@ -222,16 +229,25 @@ class ExternalRecommendationsView(APIView):
     def get(self, request):
         # Default to 25
         target_limit = query_int(request.GET, 'limit', 25, minimum=1, maximum=100)
-        
+
         # Request 3x the candidates to handle dead links or TMDB lookup failures
         candidate_limit = target_limit * 3
-        
+
+        # Same story as /movies/recommendations/: building the recommender costs
+        # ~7 s, so the finished list is cached per user for a quarter of an hour.
+        # TMDB metadata changes slowly, so a short life is enough.
+        cached = get_cached(SCOPE_EXTERNAL, request.user.id, target_limit)
+        if cached is not None:
+            return Response(cached, status=status.HTTP_200_OK)
+
         recommender = MovieRecommender()
         
         # Get raw ID recommendations (tmdb_id, predicted_rating)
         recommendations = recommender.get_recommendations_for_user(request.user.id, candidate_limit, scope='external')
         
         if not recommendations:
+            set_cached(SCOPE_EXTERNAL, request.user.id, target_limit, [],
+                       ttl=EXTERNAL_RECOMMENDATION_CACHE_TTL)
             return Response([], status=status.HTTP_200_OK)
 
         movies_service = MoviesService()
@@ -268,10 +284,12 @@ class ExternalRecommendationsView(APIView):
         
         # Sort by predicted rating (high to low)
         results.sort(key=lambda x: x.get('predicted_rating', 0), reverse=True)
-        
+
         # Return exactly the target limit
         final_results = results[:target_limit]
-        
+
+        set_cached(SCOPE_EXTERNAL, request.user.id, target_limit, final_results,
+                   ttl=EXTERNAL_RECOMMENDATION_CACHE_TTL)
         return Response(final_results, status=status.HTTP_200_OK)
 
 
@@ -741,9 +759,17 @@ def collection_detail(request, collection_id):
 def movie_recommendations(request):
     """Get personalized movie recommendations for the current user"""
     limit = query_int(request.GET, 'limit', 10, minimum=1, maximum=50)
+
+    # The recommender is a 397 MB pickle (~7 s to unpickle, ~2.1 GB resident),
+    # so the result is cached per user instead of rebuilding the model on
+    # every request. The cache is busted when the user rates something.
+    cached = get_cached(SCOPE_MOVIES, request.user.id, limit)
+    if cached is not None:
+        return Response(cached)
+
     recommender = MovieRecommender()
     recommendations = recommender.get_recommendations_for_user(request.user.id, limit)
-    
+
     # Format the response data
     data = []
     for movie in recommendations:
@@ -757,8 +783,8 @@ def movie_recommendations(request):
             'predicted_rating': getattr(movie, 'predicted_rating', None),
             'collection': movie.collection.name if movie.collection else None
         })
-    
-    return Response(data)
+
+    return Response(set_cached(SCOPE_MOVIES, request.user.id, limit, data))
 
 # Add this new view to check task status
 
@@ -1424,7 +1450,6 @@ def upload_model(request):
         python manage.py upload_model --url https://yoursite.com/movies/upload-model/
     """
     from django.conf import settings as django_settings
-    import shutil
     import pickle
     import logging
     from datetime import datetime
@@ -1492,14 +1517,18 @@ def upload_model(request):
         # Free memory before copying
         del data
 
-        # Copy to latest + legacy
+        # Point latest + legacy at the uploaded file. _publish_bundle hard links
+        # it instead of copying ~400 MB twice, and swaps the name atomically so
+        # a request can never read a half-written pickle.
+        from pathlib import Path
+
+        from movies.services.recommender.model_io import _publish_bundle
         latest_path = os.path.join(model_dir, 'svd_model_latest.pkl')
         legacy_path = os.path.join(model_dir, 'svd_model.pkl')
-        shutil.copy2(versioned_path, latest_path)
-        shutil.copy2(versioned_path, legacy_path)
+        _publish_bundle(Path(versioned_path), Path(latest_path))
+        _publish_bundle(Path(versioned_path), Path(legacy_path))
         # Metadata sidecars so a server-side retrain's promotion gate compares against
         # the uploaded champion (see model_io.save_bundle).
-        from pathlib import Path
         from movies.services.recommender.model_io import write_meta
         write_meta(Path(versioned_path), metadata)
         write_meta(Path(latest_path), metadata)  # -> svd_model_latest.meta.json
