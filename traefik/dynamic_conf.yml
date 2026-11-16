@@ -211,12 +211,12 @@ http:
           object-src 'none';
           frame-ancestors 'none';
           form-action 'self';
-          img-src 'self' data: blob: https://assets.hardcover.app https://cdn2.steamgriddb.com https://image.tmdb.org https://images.igdb.com https://upload.wikimedia.org https://www.themoviedb.org;
-          script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com;
-          style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com;
-          font-src 'self' data: https://unpkg.com;
-          connect-src 'self';
-          frame-src 'self' https://www.youtube.com
+          img-src 'self' data: blob: https://assets.hardcover.app https://cdn2.steamgriddb.com https://image.tmdb.org https://images.igdb.com https://upload.wikimedia.org https://www.themoviedb.org https://www.crwflags.com https://*.tiktokcdn.com https://*.ttwstatic.com;
+          script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://www.tiktok.com https://*.ttwstatic.com;
+          style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://*.ttwstatic.com;
+          font-src 'self' data: https://unpkg.com https://*.ttwstatic.com;
+          connect-src 'self' https://www.tiktok.com https://*.tiktokcdn.com https://*.ttwstatic.com;
+          frame-src 'self' https://www.youtube.com https://www.tiktok.com https://*.tiktokcdn.com
         permissionsPolicy: >-
           accelerometer=(), autoplay=(), camera=(), display-capture=(),
           geolocation=(), gyroscope=(), magnetometer=(), microphone=(),
