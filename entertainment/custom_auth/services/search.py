@@ -49,10 +49,24 @@ def text_search(
     vector = SearchVector(*fields, config=config)
     query = SearchQuery(term, config=config)
 
+    # The match has to be the `@@` operator, not the rank. Django's
+    # `SearchRank(...) > 0` filter compiles to a function call the planner has
+    # to evaluate row by row, so the full-text tier seq-scanned the whole
+    # table - 73k people rows and ~290 ms per search - even with a GIN index
+    # present. Matching the vector against the query compiles to `@@`, which is
+    # the only form a GIN index over the tsvector can serve.
+    #
+    # `alias` rather than `annotate`: the tsvector is only needed in the WHERE
+    # clause, and an annotation would add it to every selected row.
     fts_qs = (
-        queryset.annotate(rank=SearchRank(vector, query))
-        .filter(rank__gt=0)
-        .order_by("-rank")
+        queryset.alias(search_vector=vector)
+        .alias(rank=SearchRank(vector, query))
+        .filter(search_vector=query)
+        # "pk" breaks ties between equally ranked rows. Without it the order
+        # depends on the plan (seq scan vs index scan), so the same query can
+        # return the same rows in a different order - and paginated results
+        # then repeat or drop rows.
+        .order_by("-rank", "pk")
     )
     if fts_qs.exists():
         return fts_qs
@@ -65,7 +79,10 @@ def text_search(
     trigram_qs = (
         queryset.annotate(similarity=similarity)
         .filter(similarity__gt=trigram_threshold)
-        .order_by("-similarity")
+        # "pk" breaks ties between equally similar rows, so the same query
+        # returns the same rows in the same order (paginated results then do
+        # not repeat or drop rows).
+        .order_by("-similarity", "pk")
     )
     if trigram_qs.exists():
         return trigram_qs
@@ -73,4 +90,4 @@ def text_search(
     icontains_q = Q()
     for field in fields:
         icontains_q |= Q(**{f"{field}__icontains": term})
-    return queryset.filter(icontains_q)
+    return queryset.filter(icontains_q).order_by("pk")

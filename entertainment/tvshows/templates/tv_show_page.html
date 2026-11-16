@@ -802,8 +802,10 @@
             
             <!-- Action buttons -->
             <div style="margin-top: 15px;" class="button-container" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="retro-btn" onclick="openTrailerModal()">Watch Trailer</button>
-                {% include "components/trailer_modal.html" with trailer_url=tv_show.trailer %}
+                {% if tv_show.trailer %}
+                    <button class="retro-btn" onclick="openTrailerModal()">Watch Trailer</button>
+                    {% include "components/trailer_modal.html" with trailer_url=tv_show.trailer %}
+                {% endif %}
 
                 {% if user_watchlist %}
                     <button class="retro-btn" onclick="removeFromWatchlist()" data-tvshow-id="{{ tv_show.id }}">Remove from Watchlist</button>

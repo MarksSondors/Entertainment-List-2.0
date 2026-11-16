@@ -720,8 +720,11 @@
     </div>
 </template>
 
-<!-- ApexCharts CDN -->
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<!-- ApexCharts CDN - pinned: the unpinned URL served whatever was latest, so any
+     upstream release could break the statistics page without a deploy. -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@8.8.2/dist/apexcharts.min.js"
+        integrity="sha384-vlBhRJ2UidShUXkzmPFTFSJwyJmqeUD8bfFEVs/LfvyJl2tt7kl8/3FOmSB4myeZ"
+        crossorigin="anonymous"></script>
 {{ stats_data|json_script:"statistics-data" }}
 
 <script>

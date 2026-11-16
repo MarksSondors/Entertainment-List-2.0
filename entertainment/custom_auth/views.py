@@ -42,6 +42,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .services.cross_media_recommendation import CrossMediaRecommender
+from .services.recommendation_cache import SCOPE_COMBINED, get_cached, set_cached
 from .services import genre_images
 
 logger = logging.getLogger(__name__)
@@ -4068,17 +4069,25 @@ def production_company_detail(request, company_id):
 def combined_recommendations(request):
     """Get combined recommendations across all media types"""
     limit = query_int(request.GET, 'limit', 20, minimum=1, maximum=100)
+
+    # CrossMediaRecommender builds a movie recommender (a 397 MB pickle, ~7 s
+    # to unpickle) plus the TV/game recommenders on every call, so the feed is
+    # cached per user. The cache is busted when the user rates something.
+    cached = get_cached(SCOPE_COMBINED, request.user.id, limit)
+    if cached is not None:
+        return Response(cached)
+
     recommender = CrossMediaRecommender()
-    
+
     # Get discovery feed which mixes all content types
     feed_items = recommender.get_discovery_feed(
-        request.user, 
+        request.user,
         total_items=limit,
         media_types=['movies', 'tvshows', 'games']
     )
-    
+
     # The feed items are already normalized by the service
-    return Response(feed_items)
+    return Response(set_cached(SCOPE_COMBINED, request.user.id, limit, feed_items))
 
 from .forms import MemeForm
 from django.contrib import messages

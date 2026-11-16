@@ -191,15 +191,40 @@ http:
     security-headers:
       headers:
         frameDeny: true
-        browserXssFilter: true
+        # The legacy X-XSS-Protection filter is ignored by current browsers and
+        # has caused vulnerabilities of its own; the modern guidance is to send
+        # "0", which is set in customResponseHeaders below.
+        browserXssFilter: false
         contentTypeNosniff: true
         forceSTSHeader: true
         stsIncludeSubdomains: true
         stsPreload: true
         stsSeconds: 31536000  # 1 year
+        # Content Security Policy. The pages use inline scripts, inline styles
+        # and inline event handlers, so 'unsafe-inline' is needed for both
+        # script-src and style-src - without nonces the policy cannot be
+        # stricter than that. It still pins down which external origins may
+        # serve code and images, and blocks object/base URI injection.
+        contentSecurityPolicy: >-
+          default-src 'self';
+          base-uri 'self';
+          object-src 'none';
+          frame-ancestors 'none';
+          form-action 'self';
+          img-src 'self' data: blob: https://assets.hardcover.app https://cdn2.steamgriddb.com https://image.tmdb.org https://images.igdb.com https://upload.wikimedia.org https://www.themoviedb.org;
+          script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com;
+          style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com;
+          font-src 'self' data: https://unpkg.com;
+          connect-src 'self';
+          frame-src 'self' https://www.youtube.com
+        permissionsPolicy: >-
+          accelerometer=(), autoplay=(), camera=(), display-capture=(),
+          geolocation=(), gyroscope=(), magnetometer=(), microphone=(),
+          midi=(), payment=(), usb=()
         customResponseHeaders:
           X-Content-Type-Options: "nosniff"
           Referrer-Policy: "strict-origin-when-cross-origin"
+          X-XSS-Protection: "0"
 
     www-to-apex:
       redirectRegex:
