@@ -144,7 +144,7 @@
                     <span class="quick-action-label">Release Calendar</span>
                 </button>
                 <button type="button" class="quick-action-btn" data-watch-together aria-haspopup="dialog">
-                    <img src="{% static 'images/win98/users.png' %}" alt="" class="quick-action-icon">
+                    <img src="{% static 'images/win98/network_television.png' %}" alt="" class="quick-action-icon">
                     <span class="quick-action-label">Watch Together</span>
                 </button>
             </div>
@@ -219,7 +219,7 @@
         <div class="window qp-window" role="dialog" aria-modal="true" aria-labelledby="wtTitle">
             <div class="title-bar">
                 <div class="title-bar-text qp-title-text">
-                    <img src="{% static 'images/win98/users.png' %}" alt="" class="qp-title-icon">
+                    <img src="{% static 'images/win98/network_television.png' %}" alt="" class="qp-title-icon">
                     <span id="wtTitle">Watch Together</span>
                 </div>
                 <div class="title-bar-controls">
@@ -310,9 +310,10 @@
             link.setAttribute('aria-hidden', 'true');
             const img = document.createElement('img');
             img.alt = '';
-            img.loading = 'lazy';
             img.width = 46;
             img.height = 69;
+            // Eager on purpose: the rows are inserted while the results pane is
+            // still hidden, and a lazy image in this dialog never starts loading.
             img.src = pick.poster || "{% static 'favicon/favicon-96x96.png' %}";
             posterFallback(img);
             link.appendChild(img);
@@ -508,9 +509,15 @@
 
         .wt-actions-body { padding-top: 0; min-height: 0; }
 
-        /* The quick-pick block below is later in the document, so it wins any
-           single-class tie — hence the compound selector. */
-        .qp-body.wt-actions-body { padding-top: 0; min-height: 0; overflow: visible; }
+        /* The results pane is the only row allowed to flex; the action strip
+           keeps its natural height, so the status bar can never clip it. */
+        #wtDialog .qp-window > .qp-body { flex: 1 1 auto; min-height: 0; }
+        #wtDialog .qp-window > .qp-body.wt-actions-body {
+            flex: 0 0 auto;
+            min-height: 0;
+            padding-top: 0;
+            overflow: visible;
+        }
 
         .wt-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 
