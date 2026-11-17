@@ -77,6 +77,7 @@ def discover_page(request):
     popular_tv_shows
     """
     from movies.views import get_current_community_pick_data
+    from movies.services import group_pick
     from notifications.models import PushSubscription
     
     # Get the current community movie pick data
@@ -93,6 +94,8 @@ def discover_page(request):
     context = {
         'community_pick': community_pick_data,
         'has_push_subscription': has_push_subscription,
+        # Only people who have rated something can move a group pick.
+        'group_members': group_pick.eligible_members(),
     }
     
     return render(request, 'discover_page.html', context)
