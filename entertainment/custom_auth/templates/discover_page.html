@@ -1161,9 +1161,16 @@
 
         .quick-actions-grid {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
+            grid-template-columns: repeat(6, minmax(0, 1fr));
             gap: 12px;
             width: 100%;
+        }
+
+        /* Mid widths: six buttons of 1/6th would be too narrow — go 3 across. */
+        @media (max-width: 1100px) {
+            .quick-actions-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
         }
 
         .quick-action-btn {
