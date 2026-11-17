@@ -29,6 +29,7 @@ urlpatterns = [
     path('random-unwatched/', views.random_unwatched_movie, name='random_unwatched_movie'),
     path('shortest-watchlist/', views.shortest_watchlist_movie, name='shortest_watchlist_movie'),
     path('quick-pick/', views.quick_pick, name='movie_quick_pick'),
+    path('watch-together/', views.watch_together, name='watch_together'),
 
     path('movies/review-current-movie/', views.review_current_movie, name='review_current_movie'),
     path('community/current-pick/', views.current_community_pick, name='current_community_pick'),

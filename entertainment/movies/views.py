@@ -28,7 +28,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .services.recommendation import MovieRecommender
-from .services import quick_picks
+from .services import group_pick, quick_picks
 from custom_auth.services.recommendation_cache import (
     EXTERNAL_RECOMMENDATION_CACHE_TTL,
     SCOPE_EXTERNAL,
@@ -871,6 +871,25 @@ def quick_pick(request):
     if pick is None:
         return JsonResponse({'mode': mode, 'movie': None, 'reason': 'No released movies to pick from yet.'})
     return JsonResponse(quick_picks.serialize_pick(pick, request.user))
+
+@login_required
+def watch_together(request):
+    """JSON for the Discover page's "What should we watch tonight?" dialog.
+
+    Query params: ``members`` — comma separated user ids of everyone in the room
+    — and ``exclude`` — movie ids already shown, so "show more" keeps advancing.
+    """
+    member_ids = group_pick.parse_member_ids(request.GET.get('members'))
+    if not member_ids:
+        return JsonResponse({'error': 'Pick at least one person.'}, status=400)
+    exclude_ids = quick_picks.parse_exclude_ids(request.GET.get('exclude'))
+    limit = query_int(request.GET, 'limit', group_pick.DEFAULT_LIMIT, 1, group_pick.MAX_LIMIT)
+    picks, meta = group_pick.pick_for_group(member_ids, exclude_ids, limit)
+    payload = group_pick.serialize(picks, meta)
+    if not picks:
+        payload['reason'] = group_pick.empty_reason(meta)
+    return JsonResponse(payload)
+
 
 def community_page(request):
     """Main community page with Movie of the Week feature"""
