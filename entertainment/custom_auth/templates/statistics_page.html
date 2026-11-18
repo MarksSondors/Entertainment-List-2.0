@@ -387,11 +387,6 @@
     color: var(--text-color);
 }
 
-.stat-detail { box-sizing: border-box; width: min(36rem, calc(100% - 2rem)); max-height: 80vh; overflow: auto; }
-.stat-detail::backdrop { background: rgba(0, 0, 0, .6); }
-.stat-detail li { margin-block: .5rem; overflow-wrap: anywhere; }
-.stat-drill-control { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
-
 /* ── ApexCharts Theme Overrides ── */
 .apexcharts-tooltip {
     border: 2px outset var(--bg-color) !important;
@@ -535,7 +530,6 @@
                     </div>
                     <div class="window-body">
                         <div id="chart-rating-dist" class="chart-container"></div>
-                        <label class="stat-drill-control">See titles by score <select id="stat-score-detail"></select></label>
                     </div>
                 </div>
 
@@ -544,13 +538,11 @@
                     <div class="title-bar">
                         <div class="title-bar-text">
                             <img src="{% static 'images/win98/notepad_file.png' %}" alt="" class="win98-icon">
-                            Monthly Median Rating
+                            Ratings Over Time
                         </div>
                     </div>
                     <div class="window-body">
-                        <p class="stats-note" id="stat-month-note">Typical score by month. Select a bar to see its titles.</p>
                         <div id="chart-ratings-time" class="chart-container"></div>
-                        <label class="stat-drill-control">See titles by month <select id="stat-month-detail"></select></label>
                     </div>
                 </div>
 
@@ -616,7 +608,6 @@
                     </div>
                     <div class="window-body">
                         <div id="chart-genre-count" class="chart-container"></div>
-                        <label class="stat-drill-control">See titles by genre <select id="stat-genre-detail"></select></label>
                     </div>
                 </div>
 
@@ -734,14 +725,6 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts@8.8.2/dist/apexcharts.min.js"
         integrity="sha384-vlBhRJ2UidShUXkzmPFTFSJwyJmqeUD8bfFEVs/LfvyJl2tt7kl8/3FOmSB4myeZ"
         crossorigin="anonymous"></script>
-<dialog id="stat-detail-dialog" class="window stat-detail" aria-labelledby="stat-detail-title">
-    <div class="title-bar"><div class="title-bar-text" id="stat-detail-title">Rated titles</div></div>
-    <div class="window-body">
-        <p id="stat-detail-count"></p>
-        <ul id="stat-detail-list"></ul>
-        <form method="dialog"><button autofocus>Close</button></form>
-    </div>
-</dialog>
 {{ stats_data|json_script:"statistics-data" }}
 
 <script>
@@ -901,39 +884,6 @@
                 : 'No reliable reading or play-time data is tracked for this media type.';
     }
 
-    function bindStatDetails(field, labels, groups, titles) {
-        const select = document.getElementById(`stat-${field}-detail`);
-        select.replaceChildren(new Option('Choose…', ''));
-        labels.forEach((label, index) => {
-            if (groups[index].length) select.add(new Option(`${label} (${groups[index].length})`, index));
-        });
-        select.disabled = select.options.length === 1;
-        function open(index) {
-            const rows = groups[index];
-            if (!rows?.length) return;
-            const dialog = document.getElementById('stat-detail-dialog');
-            const items = rows.map(({id, rating, date}) => {
-                const {title, url} = titles[id];
-                const item = document.createElement('li');
-                const name = document.createElement(url ? 'a' : 'span');
-                name.textContent = title;
-                if (url) name.href = url;
-                item.append(name, ` — ${Number(rating.toFixed(2))}/10${date ? ` · ${date}` : ''}`);
-                return item;
-            });
-            document.getElementById('stat-detail-title').textContent = labels[index];
-            document.getElementById('stat-detail-count').textContent = `${rows.length} ${rows.length === 1 ? 'rating' : 'ratings'}`;
-            document.getElementById('stat-detail-list').replaceChildren(...items);
-            if (!dialog.open) dialog.showModal();
-        }
-        select.onchange = () => {
-            const value = select.value;
-            select.selectedIndex = 0;
-            if (value !== '') open(Number(value));
-        };
-        return (_event, _chart, {dataPointIndex}) => open(dataPointIndex);
-    }
-
     // ── Render all charts ──
     function renderCharts(mediaType, year) {
         destroyCharts();
@@ -968,32 +918,6 @@
         }
 
         hideEmptyState();
-        const titleScores = data.title_scores.map(([id, rating]) => ({id, rating}));
-        const titles = statsData[mediaType].detail_titles;
-        const distLabels = Object.keys(data.rating_distribution).map(value =>
-            Number(value) === 10 ? '10' : `${value}–<${Number(value) + 1}`);
-        const scoreGroups = distLabels.map((_, score) => titleScores.filter(row => Math.trunc(row.rating) === score));
-        const onScore = bindStatDetails('score', distLabels, scoreGroups, titles);
-        const genreCountLabels = Object.keys(data.count_by_genre);
-        const genreGroups = genreCountLabels.map(label => {
-            const genreId = data.count_by_genre[label][1];
-            return titleScores.filter(row => titles[row.id].genres.includes(genreId));
-        });
-        const onGenre = bindStatDetails('genre', genreCountLabels, genreGroups, titles);
-        const byMonth = new Map();
-        for (const row of data.ratings_over_time) {
-            const month = row.date.slice(0, 7);
-            if (!byMonth.has(month)) byMonth.set(month, []);
-            byMonth.get(month).push({id: row.object_id, rating: row.rating, date: row.date});
-        }
-        const months = continuousMonths([...byMonth.keys()]);
-        const monthLabel = new Intl.DateTimeFormat(undefined, {month: 'short', year: 'numeric', timeZone: 'UTC'});
-        const monthLabels = months.map(month => monthLabel.format(new Date(`${month}-01T00:00:00Z`)));
-        const monthGroups = months.map(month => byMonth.get(month) || []);
-        const onMonth = bindStatDetails('month', monthLabels, monthGroups, titles);
-        document.getElementById('stat-month-note').textContent = mediaType === 'tvshows'
-            ? 'One average per show in the selected period, shown in the month of its latest review.'
-            : 'Typical score by month. Select a bar to see its titles.';
         if (typeof ApexCharts === 'undefined') {
             document.getElementById('stats-error').hidden = false;
             return;
@@ -1025,11 +949,13 @@
         renderChart(charts.activity);
 
         // 1. Rating Distribution — bar chart
+        const distLabels = Object.keys(data.rating_distribution).map(value =>
+            Number(value) === 10 ? '10' : `${value}–<${Number(value) + 1}`);
         const distValues = Object.values(data.rating_distribution);
         charts.ratingDist = new ApexCharts(
             document.querySelector('#chart-rating-dist'),
             baseOptions({
-                chart: { type: 'bar', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false }, animations: { enabled: false }, events: { dataPointSelection: onScore } },
+                chart: { type: 'bar', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false } },
                 series: [{ name: 'Count', data: distValues }],
                 xaxis: {
                     categories: distLabels,
@@ -1047,33 +973,27 @@
         );
         renderChart(charts.ratingDist);
 
-        // 2. Monthly median, with empty months kept as gaps.
-        const timeData = monthGroups.map(rows => {
-            const scores = rows.map(row => row.rating).sort((a, b) => a - b);
-            const mid = Math.floor(scores.length / 2);
-            if (!scores.length) return null;
-            return scores.length % 2 ? scores[mid] : (scores[mid - 1] + scores[mid]) / 2;
-        });
-        charts.ratingsTime = new ApexCharts(document.getElementById('chart-ratings-time'), baseOptions({
-            chart: { type: 'bar', height: 280, background: c.background, toolbar: { show: false }, animations: { enabled: false }, events: { dataPointSelection: onMonth } },
-            series: [{ name: 'Median rating', data: timeData }],
-            xaxis: {
-                categories: monthLabels,
-                labels: {
-                    rotate: 0,
-                    style: { colors: c.text, fontSize: '10px' },
-                    formatter: value => monthLabels.indexOf(value) % Math.max(1, Math.ceil(months.length / 5)) === 0 ? value : '',
+        // 2. Ratings Over Time — scatter
+        const timeData = (data.ratings_over_time || []).map(d => ({ x: new Date(d.date).getTime(), y: d.rating }));
+        charts.ratingsTime = new ApexCharts(
+            document.querySelector('#chart-ratings-time'),
+            baseOptions({
+                chart: { type: 'scatter', height: 280, fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif", background: c.background, toolbar: { show: false }, zoom: { enabled: false } },
+                series: [{ name: 'Rating', data: timeData }],
+                xaxis: {
+                    type: 'datetime',
+                    labels: { style: { colors: c.text, fontSize: '10px' }, datetimeUTC: false },
+                    axisBorder: { color: c.gridLine }, axisTicks: { color: c.gridLine },
                 },
-            },
-            yaxis: { min: 0, max: 10, tickAmount: 5, labels: { style: { colors: c.text } } },
-            colors: [c.primary],
-            plotOptions: { bar: { columnWidth: '70%' } },
-            tooltip: {
-                x: { formatter: (_, {dataPointIndex}) => monthLabels[dataPointIndex] },
-                y: { formatter: (value, {dataPointIndex}) => value == null ? '' : `${Number(value.toFixed(2))}/10 · ${monthGroups[dataPointIndex].length} ratings` },
-            },
-            noData: { text: 'No ratings in this period' },
-        }));
+                yaxis: {
+                    min: 0, max: 10,
+                    title: { text: 'Rating', style: { color: c.text, fontSize: '10px' } },
+                    labels: { style: { colors: c.text, fontSize: '10px' } },
+                },
+                colors: [c.primary],
+                markers: { size: 4, strokeWidth: 0 },
+            })
+        );
         renderChart(charts.ratingsTime);
 
         // 3. Release Years — bar chart
@@ -1181,8 +1101,10 @@
         );
         renderChart(charts.avgYear);
 
-        // 5. Rated per Genre — horizontal bar with exact titles
+        // 5. Rated per Genre — horizontal bar, bars deep-link to the explorer
+        const genreCountLabels = Object.keys(data.count_by_genre);
         const genreCountValues = genreCountLabels.map(g => data.count_by_genre[g][0]);
+        const genreCountIds = Object.fromEntries(genreCountLabels.map(g => [g, data.count_by_genre[g][1]]));
         const genreCountHeight = Math.max(280, genreCountLabels.length * 28);
         charts.genreCount = new ApexCharts(
             document.querySelector('#chart-genre-count'),
@@ -1191,7 +1113,15 @@
                     type: 'bar', height: genreCountHeight,
                     fontFamily: "'Pixelated MS Sans Serif', 'MS Sans Serif', Arial, sans-serif",
                     background: c.background, toolbar: { show: false },
-                    animations: { enabled: false }, events: { dataPointSelection: onGenre },
+                    events: {
+                        dataPointSelection: (_event, _chart, config) => {
+                            const genre = genreCountLabels[config.dataPointIndex];
+                            const gid = genreCountIds[genre];
+                            if (gid && mediaType !== 'music') {
+                                window.location.href = `/explorer/#/${mediaType}/genres/${gid}`;
+                            }
+                        },
+                    },
                 },
                 series: [{ name: 'Count', data: genreCountValues }],
                 xaxis: {
