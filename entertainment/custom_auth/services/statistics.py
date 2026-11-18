@@ -12,6 +12,7 @@ from django.core.cache import cache
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Sum
 from django.db.models.functions import ExtractYear, TruncMonth
+from django.urls import reverse
 from django.utils import timezone
 
 from custom_auth.models import Review, MediaPerson, Watchlist, WatchlistEvent
@@ -28,7 +29,7 @@ STATS_CACHE_TIMEOUT = 60 * 60 * 24  # 24 hours
 
 def _stats_cache_key(user_id):
     """Generate cache key for a user's statistics."""
-    return f'stats_v2_user_{user_id}'
+    return f'stats_v3_user_{user_id}'
 
 
 def invalidate_stats_cache(user_id):
@@ -100,6 +101,7 @@ def _fetch_media_data(content_type, object_ids, user):
     model_class = content_type.model_class()
     data = {
         'genre_map': {},            # {item_id: [genre_name, ...]}
+        'detail_titles': {},
         'genre_ids': {},            # {item_id: [genre_id, ...]} for explorer links
         'release_years': {},        # {item_id: year}
         'runtimes': {},             # {item_id: minutes} (movies and albums)
@@ -130,6 +132,16 @@ def _fetch_media_data(content_type, object_ids, user):
         .annotate(release_year=ExtractYear(date_field))
     )
     for item in items:
+        if isinstance(item, Book):
+            url = reverse('books:book_page', args=[item.pk])
+        elif isinstance(item, (Movie, TVShow, Game)):
+            url = item.get_absolute_url()
+        else:
+            url = None  # Albums have no title detail route.
+        data['detail_titles'][str(item.pk)] = {
+            'title': item.title, 'url': url,
+            'genres': [g.pk for g in item.genres.all()],
+        }
         data['genre_map'][item.id] = [g.name for g in item.genres.all()]
         if item.genres.all():
             data['genre_ids'][item.id] = [g.id for g in item.genres.all()]
@@ -193,14 +205,14 @@ def _compute_ratings_over_time(ctx, is_tvshow):
         aggregated = _aggregate_tvshow_reviews(ctx)
         return sorted(
             [
-                {'date': a['date_added'].date().isoformat(), 'rating': round(a['rating'], 1)}
+                {'object_id': a['object_id'], 'date': a['date_added'].date().isoformat(), 'rating': a['rating']}
                 for a in aggregated
             ],
             key=lambda x: x['date'],
         )
     return sorted(
         [
-            {'date': r['date_added'].date().isoformat(), 'rating': float(r['rating'])}
+            {'object_id': r['object_id'], 'date': r['date_added'].date().isoformat(), 'rating': float(r['rating'])}
             for r in ctx['reviews']
         ],
         key=lambda x: x['date'],
@@ -404,6 +416,7 @@ def _compute_all_for_slice(ctx, media_data, content_type, year=None):
     is_game = model_class == Game
 
     return {
+        'title_scores': [[oid, sum(ratings) / len(ratings)] for oid, ratings in ctx['rating_map'].items()],
         'summary': _compute_summary(ctx, media_data, model_class, is_tvshow, year),
         'activity_by_month': _compute_activity(ctx),
         'rating_distribution': _compute_rating_distribution(ctx, is_tvshow),
@@ -514,19 +527,17 @@ def get_all_stats(user):
     for media_key, ct in content_types.items():
         # 1. Fetch all reviews once (1 DB query)
         all_reviews = _fetch_all_reviews(user, ct)
-        existing_ids = set(ct.model_class().objects.filter(
-            id__in={r['object_id'] for r in all_reviews},
-        ).values_list('id', flat=True))
-        all_reviews = [r for r in all_reviews if r['object_id'] in existing_ids]
+        media_data = _fetch_media_data(ct, {r['object_id'] for r in all_reviews}, user)
+        # Use the very same title snapshot as the chart details. A concurrent
+        # deletion must not leave a chart row without an associated title.
+        all_reviews = [r for r in all_reviews if str(r['object_id']) in media_data['detail_titles']]
 
         # 2. Build all-time context (in-memory)
         ctx = _build_review_context(all_reviews)
 
-        # 4. Fetch model-level data once (~2-5 DB queries)
-        media_data = _fetch_media_data(ct, ctx['object_ids'], user)
-
         # 5. Compute all-time stats (pure in-memory)
         stats = _compute_all_for_slice(ctx, media_data, ct)
+        stats['detail_titles'] = media_data['detail_titles']
         stats['total_reviews'] = len(ctx['object_ids'])
 
         # 6. Fetch watchlist monthly data for this content type (1 DB query)

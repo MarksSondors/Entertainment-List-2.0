@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from books.models import Book
-from custom_auth.models import CustomUser, MediaPerson, Person, Review, WatchlistEvent
+from custom_auth.models import CustomUser, Genre, MediaPerson, Person, Review, WatchlistEvent
 from custom_auth.services import statistics as stats
 from movies.models import Movie
 from music.models import Album
@@ -27,7 +27,7 @@ class StatisticsTests(TestCase):
             title='Film', original_title='Film', tmdb_id=9001, runtime=120, rating=8,
         )
 
-    def review(self, obj, rating=8, year=2025):
+    def review(self, obj, rating: float = 8, year=2025):
         review = Review.objects.create(
             user=self.user, content_type=ContentType.objects.get_for_model(obj),
             object_id=obj.pk, rating=rating,
@@ -165,7 +165,11 @@ class StatisticsTests(TestCase):
     def test_deleted_media_reviews_do_not_inflate_totals(self):
         self.review(self.movie)
         self.movie.delete()
-        self.assertEqual(stats.get_all_stats(self.user)['movies']['summary']['total_rated'], 0)
+        movies = stats.get_all_stats(self.user)['movies']
+        self.assertEqual(movies['summary']['total_rated'], 0)
+        self.assertEqual(movies['title_scores'], [])
+        self.assertEqual(movies['ratings_over_time'], [])
+        self.assertEqual(movies['detail_titles'], {})
 
     def test_page_uses_safe_json_and_has_all_media_tabs(self):
         person = Person.objects.create(name='</script><script>alert(1)</script>')
@@ -181,3 +185,21 @@ class StatisticsTests(TestCase):
         self.assertContains(response, 'data-media="music"')
         self.assertNotContains(response, '</script><script>alert(1)</script>')
         self.assertContains(response, 'id="statistics-data" type="application/json"')
+
+    def test_chart_details_link_exact_titles_and_keep_period_membership(self):
+        genre = Genre.objects.create(name='Comedy')
+        self.movie.genres.add(genre)
+        self.review(self.movie, 8.5, year=2024)
+        other = Movie.objects.create(title='Other film', tmdb_id=9002, runtime=90, rating=6)
+        self.review(other, 2, year=2025)
+        movies = stats.get_all_stats(self.user)['movies']
+        self.assertEqual(movies['detail_titles'][str(self.movie.pk)], {
+            'title': 'Film', 'url': self.movie.get_absolute_url(), 'genres': [genre.pk],
+        })
+        year = movies['yearly']['2024']
+        self.assertEqual(year['title_scores'], [[self.movie.pk, 8.5]])
+        self.assertEqual(year['ratings_over_time'], [
+            {'object_id': self.movie.pk, 'date': '2024-06-10', 'rating': 8.5},
+        ])
+        self.client.force_login(self.user)
+        self.assertContains(self.client.get(reverse('statistics_page')), 'id="stat-detail-dialog"')
