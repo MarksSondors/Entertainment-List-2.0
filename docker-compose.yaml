@@ -33,7 +33,7 @@ services:
     # nginx keeps the old copy. gha-deploy only recreates services whose compose
     # config changed -- bump this label whenever nginx.conf changes.
     labels:
-      - "entlist.nginx-conf-rev=2026-11-15"
+      - "entlist.nginx-conf-rev=2026-11-20"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - static_volume:/app/staticfiles

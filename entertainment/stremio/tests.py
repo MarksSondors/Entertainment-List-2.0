@@ -304,3 +304,84 @@ class PosterContentVersionTests(TestCase):
         Schedule.objects.create(func='stremio.tasks.warm_all_posters', schedule_type=Schedule.MINUTES, minutes=20)
         _setup_stremio_schedules(apps.get_app_config('stremio'))
         self.assertFalse(Schedule.objects.filter(func='stremio.tasks.warm_all_posters').exists())
+
+    def test_bulk_poster_states_matches_single_and_avoids_n_plus_1(self):
+        from .poster import bulk_poster_states, poster_state
+
+        extra_movies = [
+            Movie.objects.create(
+                title=f'Film {i}', original_title=f'Film {i}', tmdb_id=9200 + i, imdb_id=f'tt920000{i}',
+                runtime=100, rating=7.0, description='x', poster=f'/p{i}.jpg', release_date=date(2020, 1, 1),
+            )
+            for i in range(15)
+        ]
+        all_movies = [self.movie, *extra_movies]
+        self.review(8)
+        for m in all_movies:
+            Watchlist.objects.create(
+                user=self.user, content_type=ContentType.objects.get_for_model(Movie), object_id=m.id
+            )
+
+        bulk = bulk_poster_states(all_movies, 'movie', self.user, None)
+        for m in all_movies:
+            self.assertEqual(bulk[m.id], poster_state(m, 'movie', self.user, None))
+
+        # Series with progress + future episode banner
+        WatchedEpisode.objects.create(user=self.user, episode=self.eps[0])
+        WatchedEpisode.objects.create(user=self.user, episode=self.eps[1])
+        future = date.today() + timedelta(days=10)
+        Episode.objects.create(season=self.eps[0].season, episode_number=3, title='E3', air_date=future)
+        self.assertEqual(
+            bulk_poster_states([self.show], 'series', self.user, 'cw')[self.show.id],
+            poster_state(self.show, 'series', self.user, 'cw'),
+        )
+        self.assertEqual(
+            bulk_poster_states([self.show], 'series', self.user, None)[self.show.id],
+            poster_state(self.show, 'series', self.user, None),
+        )
+
+        # Catalog endpoint must not scale queries with item count (16 items in 5 queries total)
+        cache.clear()
+        with self.assertNumQueries(5):
+            res = self.client.get(f'/stremio/{self.config}/catalog/movie/watchlist-movies.json')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.json()['metas']), 16)
+
+    def test_poster_cache_uses_dedicated_posters_alias(self):
+        from django.core.cache import caches
+        from . import poster
+
+        two_caches = {
+            'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'default-only'},
+            'posters': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'posters-only'},
+        }
+        with override_settings(CACHES=two_caches):
+            with mock.patch.object(poster, 'render_catalog_poster', return_value=b'jpeg-bytes') as render:
+                first = poster.get_cached_poster(self.movie, 'movie', self.user, None)
+                second = poster.get_cached_poster(self.movie, 'movie', self.user, None)
+            self.assertEqual(first, b'jpeg-bytes')
+            self.assertEqual(second, b'jpeg-bytes')
+            self.assertEqual(render.call_count, 1)
+            # Stored in 'posters', not 'default'
+            self.assertEqual(len(caches['default']._cache), 0)
+            self.assertGreater(len(caches['posters']._cache), 0)
+
+    def test_stremio_recommendation_build_warms_web_cache_too(self):
+        from custom_auth.services.recommendation_cache import SCOPE_MOVIES, SCOPE_STREMIO, get_cached
+        from .views import RECOMMENDATIONS_SIZE, _build_recommendation_movie_ids
+
+        self.movie.predicted_rating = 8.4
+
+        class FakeRec:
+            def get_recommendations_for_user(self, user_id, max_recommendations=60):
+                return [self.movie_ref]
+
+        FakeRec.movie_ref = self.movie
+        with mock.patch('stremio.views.MovieRecommender', FakeRec):
+            ids = _build_recommendation_movie_ids(self.user)
+
+        self.assertEqual(ids, [self.movie.id])
+        self.assertEqual(get_cached(SCOPE_STREMIO, self.user.id, RECOMMENDATIONS_SIZE), [self.movie.id])
+        web_cached = get_cached(SCOPE_MOVIES, self.user.id, 10)
+        self.assertIsNotNone(web_cached)
+        self.assertEqual(web_cached[0]['tmdb_id'], self.movie.tmdb_id)

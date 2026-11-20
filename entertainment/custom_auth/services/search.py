@@ -71,13 +71,20 @@ def text_search(
     if fts_qs.exists():
         return fts_qs
 
+    trigram_q = Q()
     similarity = None
     for field in fields:
+        # Filtering on `trigram_similar` compiles to Postgres's `%` operator, which
+        # can use a `gin_trgm_ops` index (e.g. `person_name_trgm_idx`). Filtering only
+        # on `TrigramSimilarity(...) > 0.3` compiles to a function call that forces a
+        # full seq scan over 73k+ rows.
+        trigram_q |= Q(**{f"{field}__trigram_similar": term})
         component = TrigramSimilarity(field, term)
         similarity = component if similarity is None else similarity + component
 
     trigram_qs = (
-        queryset.annotate(similarity=similarity)
+        queryset.filter(trigram_q)
+        .annotate(similarity=similarity)
         .filter(similarity__gt=trigram_threshold)
         # "pk" breaks ties between equally similar rows, so the same query
         # returns the same rows in the same order (paginated results then do

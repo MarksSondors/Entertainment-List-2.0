@@ -328,11 +328,25 @@ LOGGING = {
 }
 
 # Caching configuration
+# Redis holds small JSON/ORM caches (recommendations, stats, catalogs, auth).
+# Stremio poster binaries live in the separate ``posters`` FileBasedCache so
+# multi-hundred-MB image blobs cannot evict app caches under Redis's 256 MB cap.
+POSTER_CACHE_DIR = MEDIA_ROOT / 'stremio_poster_cache'
+POSTER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': 'redis://redis:6379/1',
-    }
+    },
+    'posters': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': str(POSTER_CACHE_DIR),
+        'OPTIONS': {
+            'MAX_ENTRIES': 4000,
+            'CULL_FREQUENCY': 4,
+        },
+    },
 }
 
 # Optional: Cache timeout for views (default is 300 seconds if not specified in cache_page)

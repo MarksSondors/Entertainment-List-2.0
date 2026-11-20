@@ -8,7 +8,7 @@ import numpy as np
 import requests
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.staticfiles import finders
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.db.models import Avg, Count
 from django.utils import timezone
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -20,8 +20,16 @@ from .formatters import get_poster_url
 SOURCE_IMAGE_CACHE_TTL = 7 * 24 * 3600  # TMDB posters rarely change, cache long
 # Rendered posters are keyed by a hash of everything drawn on them (content_version), so a
 # cached image can never be stale: a new rating or episode yields a new key. Long TTL is safe;
-# superseded keys just age out (Redis runs volatile-lru with a maxmemory cap).
+# superseded files are pruned by FileBasedCache's MAX_ENTRIES cull.
 RENDERED_POSTER_CACHE_TTL = 30 * 24 * 3600
+
+
+def _poster_cache():
+    """Dedicated disk cache for poster blobs, falling back to default in tests that override only 'default'."""
+    try:
+        return caches['posters']
+    except Exception:
+        return cache
 
 
 def poster_version(media) -> str:
@@ -45,6 +53,103 @@ def poster_state(media, media_type: str, user, ctx: str | None) -> dict:
         'rating': _rating_badge(media),
         'banner': _movie_banner(media) if media_type == 'movie' else _series_banner(media, user, ctx),
     }
+
+
+def bulk_poster_states(medias, media_type: str, user, ctx: str | None) -> dict[int, dict]:
+    """Compute poster_state() for a whole catalog page in O(1) queries instead of N+1."""
+    medias = list(medias)
+    if not medias:
+        return {}
+
+    model = medias[0].__class__
+    media_ids = [m.id for m in medias]
+    ct = ContentType.objects.get_for_model(model)
+
+    rating_rows = (
+        Review.objects.filter(content_type=ct, object_id__in=media_ids)
+        .values('object_id')
+        .annotate(avg=Avg('rating'), count=Count('id'))
+    )
+    ratings = {
+        row['object_id']: f"{row['avg']:.1f}"
+        for row in rating_rows
+        if row['count'] and row['avg'] is not None
+    }
+
+    if media_type == 'movie':
+        today = date.today()
+        return {
+            m.id: {'rating': ratings.get(m.id), 'banner': _movie_banner(m, today=today)}
+            for m in medias
+        }
+
+    from tvshows.models import Episode, WatchedEpisode
+
+    today = timezone.now().date()
+    aired_rows = (
+        Episode.objects.filter(
+            season__show_id__in=media_ids,
+            season__season_number__gt=0,
+            air_date__isnull=False,
+            air_date__lte=today,
+        )
+        .values('season__show_id')
+        .annotate(count=Count('id'))
+    )
+    total_aired_map = {row['season__show_id']: row['count'] for row in aired_rows}
+
+    aired_show_ids = list(total_aired_map.keys())
+    watched_aired_map: dict[int, int] = {}
+    if aired_show_ids and user is not None:
+        watched_rows = (
+            WatchedEpisode.objects.filter(
+                user=user,
+                episode__season__show_id__in=aired_show_ids,
+                episode__season__season_number__gt=0,
+                episode__air_date__isnull=False,
+                episode__air_date__lte=today,
+            )
+            .values('episode__season__show_id')
+            .annotate(count=Count('id'))
+        )
+        watched_aired_map = {row['episode__season__show_id']: row['count'] for row in watched_rows}
+
+    next_ep_map: dict[int, tuple] = {}
+    if ctx != 'cw':
+        caught_up_ids = [
+            sid for sid in aired_show_ids
+            if watched_aired_map.get(sid, 0) >= total_aired_map[sid]
+        ]
+        if caught_up_ids:
+            future_eps = (
+                Episode.objects.filter(
+                    season__show_id__in=caught_up_ids,
+                    season__season_number__gt=0,
+                    air_date__gt=today,
+                )
+                .values('season__show_id', 'air_date', 'season__season_number', 'episode_number')
+                .order_by('season__show_id', 'air_date', 'season__season_number', 'episode_number')
+            )
+            for row in future_eps:
+                sid = row['season__show_id']
+                if sid not in next_ep_map:
+                    next_ep_map[sid] = (row['air_date'], row['season__season_number'], row['episode_number'])
+
+    states: dict[int, dict] = {}
+    for m in medias:
+        total_aired = total_aired_map.get(m.id, 0)
+        banner = None
+        if total_aired:
+            watched_aired = watched_aired_map.get(m.id, 0)
+            if ctx == 'cw':
+                pct = min(int(watched_aired / total_aired * 100), 100)
+                banner = {'icon': 'play', 'text': f"{watched_aired}/{total_aired} EPISODES", 'progress': pct}
+            elif watched_aired >= total_aired and m.id in next_ep_map:
+                air_dt, s_num, e_num = next_ep_map[m.id]
+                date_str = air_dt.strftime('%b %d').upper()
+                banner = {'icon': 'next', 'text': f"NEXT: {date_str} \u00b7 S{s_num}E{e_num}"}
+        states[m.id] = {'rating': ratings.get(m.id), 'banner': banner}
+    return states
 
 
 def content_version(media, media_type: str, user, ctx: str | None, state: dict | None = None) -> str:
@@ -126,7 +231,8 @@ def get_cached_poster(media, media_type: str, user, ctx: str | None) -> bytes | 
     state = poster_state(media, media_type, user, ctx)
     version = content_version(media, media_type, user, ctx, state)
     cache_key = f"stremio:posterimg:{media_type}:{media.id}:{user.id}:{ctx or ''}:{version}"
-    image_bytes = cache.get(cache_key)
+    pcache = _poster_cache()
+    image_bytes = pcache.get(cache_key)
     if image_bytes is not None:
         return image_bytes
 
@@ -135,7 +241,7 @@ def get_cached_poster(media, media_type: str, user, ctx: str | None) -> bytes | 
     except Exception:
         image_bytes = None
     if image_bytes:
-        cache.set(cache_key, image_bytes, RENDERED_POSTER_CACHE_TTL)
+        pcache.set(cache_key, image_bytes, RENDERED_POSTER_CACHE_TTL)
     return image_bytes
 
 
@@ -188,7 +294,8 @@ def _render_rating_base(media, media_type: str, source_bytes: bytes, rating_text
     """Poster + rating chip only, cached per media item (not per user) so the blur runs once."""
     # rating text is in the key: a new review re-renders the shared base once, not on a timer
     cache_key = f"stremio:posterbase:{media_type}:{media.id}:{poster_version(media)}:{rating_text}"
-    cached = cache.get(cache_key)
+    pcache = _poster_cache()
+    cached = pcache.get(cache_key)
     if cached is not None:
         return cached
 
@@ -205,7 +312,7 @@ def _render_rating_base(media, media_type: str, source_bytes: bytes, rating_text
     buf = io.BytesIO()
     composited.save(buf, format='PNG')  # lossless intermediate; re-decoded once per user on top
     base_bytes = buf.getvalue()
-    cache.set(cache_key, base_bytes, RENDERED_POSTER_CACHE_TTL)
+    pcache.set(cache_key, base_bytes, RENDERED_POSTER_CACHE_TTL)
     return base_bytes
 
 
@@ -216,7 +323,8 @@ def fetch_source_image(url: str) -> bytes | None:
     (movies.views.network_graph_poster).
     """
     cache_key = f"stremio:posrc:{hashlib.sha1(url.encode()).hexdigest()}"
-    cached = cache.get(cache_key)
+    pcache = _poster_cache()
+    cached = pcache.get(cache_key)
     if cached is not None:
         return cached
     try:
@@ -225,7 +333,7 @@ def fetch_source_image(url: str) -> bytes | None:
         content = response.content
     except requests.RequestException:
         return None
-    cache.set(cache_key, content, SOURCE_IMAGE_CACHE_TTL)
+    pcache.set(cache_key, content, SOURCE_IMAGE_CACHE_TTL)
     return content
 
 
@@ -238,8 +346,8 @@ def _rating_badge(media) -> str | None:
     return f"{agg['avg']:.1f}"
 
 
-def _movie_banner(movie) -> dict | None:
-    today = date.today()
+def _movie_banner(movie, today: date | None = None) -> dict | None:
+    today = today or date.today()
     if movie.release_date and movie.release_date > today:
         return {'icon': 'calendar', 'text': f"RELEASES {movie.release_date.strftime('%b %d, %Y').upper()}"}
     if movie.digital_release_date and movie.digital_release_date > today:

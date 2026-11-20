@@ -148,6 +148,7 @@ class RecommendationCacheTests(TestCase):
         self.assertEqual(counter['built'], 1, 'the recommender must only be built once')
 
 
+@override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}})
 class PersonFullTextIndexTests(TestCase):
     """A people search used to seq-scan 73k rows (~290 ms) for every query."""
 
@@ -161,3 +162,29 @@ class PersonFullTextIndexTests(TestCase):
             row = cursor.fetchone()
         self.assertIsNotNone(row, 'the people full-text index is missing')
         self.assertIn('gin', row[0].lower())
+
+    def test_discover_people_search_batches_credits_and_reviews(self):
+        from custom_auth.models import MediaPerson, Person
+
+        User = get_user_model()
+        user = User.objects.create_user(username='searcher', email='searcher@example.test', password='x')
+        movie_ct = ContentType.objects.get_for_model(Movie)
+        movie = Movie.objects.create(
+            title='Inception', tmdb_id=990055, runtime=148, rating=8.8,
+            release_date=timezone.now().date(),
+        )
+        Review.objects.create(user=user, content_type=movie_ct, object_id=movie.id, rating=9.0)
+
+        for i in range(8):
+            p = Person.objects.create(name=f'Nolan Testperson {i}')
+            MediaPerson.objects.create(person=p, content_type=movie_ct, object_id=movie.id, role='Director')
+
+        self.client.force_login(user)
+        # 8 people must not trigger 16+ N+1 queries (session + user + people + MediaPerson + Review + last_active = 6)
+        with self.assertNumQueries(6):
+            res = self.client.get('/discover/search/', {'search': 'Nolan', 'type': 'people'}, secure=True)
+        self.assertEqual(res.status_code, 200)
+        results = res.json()['results']
+        self.assertEqual(len(results), 8)
+        self.assertEqual(results[0]['avg_rating'], 9.0)
+        self.assertEqual(results[0]['rating_count'], 1)

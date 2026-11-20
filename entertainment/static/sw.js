@@ -1,9 +1,7 @@
 // Service Worker for Entertainment List PWA
-const CACHE_NAME = 'entertainment-list-v2';
+const CACHE_NAME = 'entertainment-list-v3';
 const urlsToCache = [
   '/',
-  '/static/css/',
-  '/static/js/',
   '/static/favicon/web-app-manifest-192x192.png',
   '/static/favicon/web-app-manifest-512x512.png',
   '/static/favicon/apple-touch-icon.png',

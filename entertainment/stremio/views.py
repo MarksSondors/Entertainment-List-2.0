@@ -15,13 +15,13 @@ from django.db.models import Avg, Case, Count, F, IntegerField, Max, Q, When
 
 from .authentication import decode_config, get_user_from_config, is_rate_limited, require_stremio_auth
 from .formatters import FINISHED_TVSHOW_STATUSES, to_stremio_meta, to_stremio_catalog_item, get_poster_url
-from .poster import content_version, get_cached_poster
+from .poster import bulk_poster_states, content_version, get_cached_poster
 
 from movies.models import Movie, MovieOfWeekPick
 from tvshows.models import TVShow
 from custom_auth.models import Watchlist, Review, Genre
-from custom_auth.services.recommendation_cache import SCOPE_STREMIO, get_cached, set_cached
-from movies.services.recommendation import MovieRecommender
+from custom_auth.services.recommendation_cache import SCOPE_MOVIES, SCOPE_STREMIO, get_cached, set_cached
+from movies.services.recommendation import MovieRecommender, get_shared_recommender
 from api.services.movies import MoviesService
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ def cors_preflight_response() -> HttpResponse:
     return response
 
 
-def _poster_url(poster_base: str, media_type: str, imdb_id: str, ctx: str = None, v: str = None) -> str:
+def _poster_url(poster_base: str, media_type: str, imdb_id: str, ctx: str | None = None, v: str | None = None) -> str:
     """Build the overlay poster URL embedded into catalog items.
 
     `v` is a poster-art hash: changing it changes the URL, which busts Stremio's own
@@ -331,6 +331,24 @@ def _warm_catalog_posters(metas: list[dict], media_type: str, user_id: int) -> N
         async_task('stremio.tasks.warm_poster', media_type, imdb_id, user_id, ctx)
 
 
+def _catalog_items(medias, media_type: str, poster_base: str, user, ctx: str | None = None) -> list[dict]:
+    """Serialize a page of Movie/TVShow objects with batched poster-state queries (no N+1)."""
+    medias = [m for m in medias if m and m.imdb_id]
+    if not medias:
+        return []
+    states = bulk_poster_states(medias, media_type, user, ctx)
+    metas = []
+    for media in medias:
+        v = content_version(media, media_type, user, ctx, state=states.get(media.id))
+        item = to_stremio_catalog_item(
+            media, media_type,
+            poster_url=_poster_url(poster_base, media_type, media.imdb_id, ctx=ctx, v=v),
+        )
+        if item:
+            metas.append(item)
+    return metas
+
+
 def get_watchlist_movies(user, poster_base: str, skip: int = 0, genre: str = None) -> list[dict]:
     """Get movies from user's watchlist."""
     movie_ct = ContentType.objects.get_for_model(Movie)
@@ -357,13 +375,7 @@ def get_watchlist_movies(user, poster_base: str, skip: int = 0, genre: str = Non
         
         # Apply pagination
         paginated_movies = sorted_movies[skip:skip + PAGE_SIZE]
-        
-        metas = []
-        for movie in paginated_movies:
-            item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id, v=content_version(movie, 'movie', user, None)))
-            if item:
-                metas.append(item)
-        return metas
+        return _catalog_items(paginated_movies, 'movie', poster_base, user)
 
     else:
         # Standard efficient pagination
@@ -381,14 +393,8 @@ def get_watchlist_movies(user, poster_base: str, skip: int = 0, genre: str = Non
         
         # Preserve watchlist order
         movie_dict = {m.id: m for m in movies}
-        metas = []
-        for movie_id in movie_ids:
-            if movie_id in movie_dict:
-                item = to_stremio_catalog_item(movie_dict[movie_id], 'movie', poster_url=_poster_url(poster_base, 'movie', movie_dict[movie_id].imdb_id, v=content_version(movie_dict[movie_id], 'movie', user, None)))
-                if item:
-                    metas.append(item)
-        
-        return metas
+        ordered = [movie_dict[movie_id] for movie_id in movie_ids if movie_id in movie_dict]
+        return _catalog_items(ordered, 'movie', poster_base, user)
 
 
 def _bulk_watch_stats(user, tvshow_ids) -> dict:
@@ -451,17 +457,8 @@ def get_continue_watching(user, poster_base: str, skip: int = 0) -> list[dict]:
         reverse=True,
     )
 
-    metas = []
-    for tvshow_id in sorted_ids[skip:skip + PAGE_SIZE]:
-        tvshow = tvshow_dict[tvshow_id]
-        item = to_stremio_catalog_item(
-            tvshow, 'series',
-            poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, ctx='cw', v=content_version(tvshow, 'series', user, 'cw'))
-        )
-        if item:
-            metas.append(item)
-
-    return metas
+    page = [tvshow_dict[tvshow_id] for tvshow_id in sorted_ids[skip:skip + PAGE_SIZE]]
+    return _catalog_items(page, 'series', poster_base, user, ctx='cw')
 
 
 def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = None) -> list[dict]:
@@ -485,26 +482,9 @@ def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = Non
         # Sort by date added
         tvshows_sorted = sorted(tvshows, key=lambda t: date_map.get(t.id), reverse=True)
         progress_map = _bulk_watch_progress(user, [t.id for t in tvshows_sorted])
-        
-        metas = []
-        skipped = 0
-        
-        for tvshow in tvshows_sorted:
-            # Only shows with no watched episodes at all
-            if progress_map.get(tvshow.id, 0) != 0:
-                continue
-            
-            # Handle pagination
-            if skipped < skip:
-                skipped += 1
-                continue
-            
-            item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, v=content_version(tvshow, 'series', user, None)))
-            if item:
-                metas.append(item)
-                if len(metas) >= PAGE_SIZE:
-                    break
-        return metas
+
+        unstarted = [t for t in tvshows_sorted if progress_map.get(t.id, 0) == 0]
+        return _catalog_items(unstarted[skip:skip + PAGE_SIZE], 'series', poster_base, user)
 
     else:
         watchlist_items = Watchlist.objects.filter(
@@ -522,33 +502,13 @@ def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = Non
         # Build dict for ordering
         tvshow_dict = {t.id: t for t in tvshows}
         progress_map = _bulk_watch_progress(user, tvshow_ids)
-        
-        # Filter out fully watched shows and apply pagination
-        metas = []
-        skipped = 0
-        
-        for tvshow_id in tvshow_ids:
-            if tvshow_id not in tvshow_dict:
-                continue
-            
-            tvshow = tvshow_dict[tvshow_id]
-            
-            # Only shows with no watched episodes at all
-            if progress_map.get(tvshow_id, 0) != 0:
-                continue
-            
-            # Handle pagination
-            if skipped < skip:
-                skipped += 1
-                continue
-            
-            item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, v=content_version(tvshow, 'series', user, None)))
-            if item:
-                metas.append(item)
-                if len(metas) >= PAGE_SIZE:
-                    break
-        
-        return metas
+
+        unstarted = [
+            tvshow_dict[tid]
+            for tid in tvshow_ids
+            if tid in tvshow_dict and progress_map.get(tid, 0) == 0
+        ]
+        return _catalog_items(unstarted[skip:skip + PAGE_SIZE], 'series', poster_base, user)
 
 
 def get_waiting_for_new_episodes(user, poster_base: str, skip: int = 0, genre: str = None) -> list[dict]:
@@ -579,13 +539,7 @@ def get_waiting_for_new_episodes(user, poster_base: str, skip: int = 0, genre: s
     caught_up = [t for t in tvshows if progress_map.get(t.id, 0) >= 100]
     caught_up.sort(key=lambda t: date_map.get(t.id), reverse=True)
 
-    metas = []
-    for tvshow in caught_up[skip:skip + PAGE_SIZE]:
-        item = to_stremio_catalog_item(tvshow, 'series', poster_url=_poster_url(poster_base, 'series', tvshow.imdb_id, v=content_version(tvshow, 'series', user, None)))
-        if item:
-            metas.append(item)
-
-    return metas
+    return _catalog_items(caught_up[skip:skip + PAGE_SIZE], 'series', poster_base, user)
 
 
 def get_community_picks(user, poster_base: str, skip: int = 0) -> list[dict]:
@@ -605,9 +559,8 @@ def get_community_picks(user, poster_base: str, skip: int = 0) -> list[dict]:
         'movie__genres'
     ).order_by(F('end_date').desc(nulls_last=True), F('start_date').desc(nulls_last=True))
 
-    metas = []
+    picked_movies = []
     seen_movie_ids = set()
-    skipped = 0
 
     for pick in motw_picks:
         movie = pick.movie
@@ -615,24 +568,38 @@ def get_community_picks(user, poster_base: str, skip: int = 0) -> list[dict]:
         if movie.id in user_reviewed_movie_ids or movie.id in seen_movie_ids or not movie.imdb_id:
             continue
         seen_movie_ids.add(movie.id)
+        picked_movies.append(movie)
 
-        # Handle pagination
-        if skipped < skip:
-            skipped += 1
+    return _catalog_items(picked_movies[skip:skip + PAGE_SIZE], 'movie', poster_base, user)
+
+
+def _serialize_web_movie_recommendations(recommendations) -> list[dict]:
+    """Serialize MovieRecommender results in the shape /movies/recommendations/ returns."""
+    data = []
+    for rec in recommendations:
+        movie = rec if isinstance(rec, Movie) else rec[0] if isinstance(rec, tuple) else None
+        if movie is None:
             continue
+        data.append({
+            'id': movie.id,
+            'tmdb_id': movie.tmdb_id,
+            'title': movie.title,
+            'poster': movie.poster,
+            'release_date': movie.release_date,
+            'rating': movie.rating,
+            'predicted_rating': getattr(movie, 'predicted_rating', None),
+            'collection': movie.collection.name if movie.collection else None,
+        })
+    return data
 
-        item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id, v=content_version(movie, 'movie', user, None)))
-        if item:
-            metas.append(item)
-            if len(metas) >= PAGE_SIZE:
-                break
 
-    return metas
+def _build_recommendation_movie_ids(user, *, shared: bool = False) -> list[int]:
+    """Run the ML recommender and cache the resulting movie ids; shared by the live view and the warm task.
 
-
-def _build_recommendation_movie_ids(user) -> list[int]:
-    """Run the ML recommender and cache the resulting movie ids; shared by the live view and the warm task."""
-    recommender = MovieRecommender()
+    Also populates the web ``/movies/recommendations/`` cache (limit=10) from the same
+    model pass so web visitors don't pay a 10 s cold unpickle in a gunicorn worker.
+    """
+    recommender = get_shared_recommender() if shared else MovieRecommender()
     recommendations = recommender.get_recommendations_for_user(
         user.id,
         max_recommendations=RECOMMENDATIONS_SIZE
@@ -646,6 +613,8 @@ def _build_recommendation_movie_ids(user) -> list[int]:
             movie_ids.append(movie.id)
 
     set_cached(SCOPE_STREMIO, user.id, RECOMMENDATIONS_SIZE, movie_ids, ttl=RECOMMENDATIONS_CACHE_TTL)
+    web_payload = _serialize_web_movie_recommendations(recommendations[:10])
+    set_cached(SCOPE_MOVIES, user.id, 10, web_payload, ttl=RECOMMENDATIONS_CACHE_TTL)
     return movie_ids
 
 
@@ -656,15 +625,8 @@ def get_recommendations(user, poster_base: str) -> list[dict]:
         movie_ids = _build_recommendation_movie_ids(user)
 
     movies_by_id = Movie.objects.prefetch_related('genres').in_bulk(movie_ids)
-    metas = []
-    for movie_id in movie_ids:
-        movie = movies_by_id.get(movie_id)
-        if movie and movie.imdb_id:
-            item = to_stremio_catalog_item(movie, 'movie', poster_url=_poster_url(poster_base, 'movie', movie.imdb_id, v=content_version(movie, 'movie', user, None)))
-            if item:
-                metas.append(item)
-
-    return metas
+    ordered = [movies_by_id[mid] for mid in movie_ids if mid in movies_by_id]
+    return _catalog_items(ordered, 'movie', poster_base, user)
 
 
 def _parse_tmdb_date(value: str | None) -> date | None:
@@ -691,9 +653,9 @@ def _external_meta(details: dict) -> dict:
     return meta
 
 
-def _build_discover_external(user) -> list[dict]:
+def _build_discover_external(user, *, shared: bool = False) -> list[dict]:
     """Fetch+cache the external discover list; shared by the live view and the background warm task."""
-    recommender = MovieRecommender()
+    recommender = get_shared_recommender() if shared else MovieRecommender()
     recommendations = recommender.get_recommendations_for_user(
         user.id, DISCOVER_EXTERNAL_CANDIDATE_COUNT, scope='external'
     )
@@ -763,15 +725,8 @@ def _top_rated(model, media_type: str, user, poster_base: str, skip: int, genre:
 
     ids = [r['object_id'] for r in rated]
     by_id = model.objects.prefetch_related('genres').in_bulk(ids)
-
-    metas = []
-    for media_id in ids:
-        media = by_id.get(media_id)
-        if media:
-            item = to_stremio_catalog_item(media, media_type, poster_url=_poster_url(poster_base, media_type, media.imdb_id, v=content_version(media, media_type, user, None)))
-            if item:
-                metas.append(item)
-    return metas
+    ordered = [by_id[media_id] for media_id in ids if media_id in by_id]
+    return _catalog_items(ordered, media_type, poster_base, user)
 
 
 def get_top_rated(user, poster_base: str, skip: int = 0, genre: str = None) -> list[dict]:
@@ -790,7 +745,7 @@ def search_local(model, media_type: str, query: str | None, poster_base: str, us
         return []
     query = query[:100]
 
-    results = model.objects.filter(
+    results = list(model.objects.filter(
         Q(title__icontains=query) | Q(original_title__icontains=query)
     ).filter(_has_imdb_id()).annotate(
         match_rank=Case(
@@ -799,14 +754,9 @@ def search_local(model, media_type: str, query: str | None, poster_base: str, us
             default=2,
             output_field=IntegerField(),
         )
-    ).order_by('match_rank', F('rating').desc(nulls_last=True), 'id').prefetch_related('genres')[:SEARCH_LIMIT]
+    ).order_by('match_rank', F('rating').desc(nulls_last=True), 'id').prefetch_related('genres')[:SEARCH_LIMIT])
 
-    metas = []
-    for media in results:
-        item = to_stremio_catalog_item(media, media_type, poster_url=_poster_url(poster_base, media_type, media.imdb_id, v=content_version(media, media_type, user, None)))
-        if item:
-            metas.append(item)
-    return metas
+    return _catalog_items(results, media_type, poster_base, user)
 
 
 @csrf_exempt
