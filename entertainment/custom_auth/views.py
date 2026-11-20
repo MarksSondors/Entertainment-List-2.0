@@ -25,7 +25,7 @@ from django.views.decorators.http import require_POST, require_http_methods
 
 # Add these imports if they're not already at the top  
 from django.db import models
-from django.db.models import Count, Avg, F, Q, Case, When, IntegerField
+from django.db.models import Count, Avg, Sum, F, Q, Case, When, IntegerField
 from django.db.models.functions import ExtractMonth, ExtractYear
 from collections import defaultdict
 import json
@@ -282,52 +282,64 @@ def search_bar_discover(request):
     elif search_type == 'people':
         search_query_obj = SearchQuery(search_query, config='english')
         
-        # Primary search using full-text search
-        people = Person.objects.annotate(
-            search=SearchVector('name', config='english'),
-            rank=SearchRank(SearchVector('name', config='english'), search_query_obj)
-        ).filter(search=search_query_obj).order_by('-rank')[:10]
+        # Primary search using full-text search (uses custom_auth_person_name_fts_gin)
+        people = list(
+            Person.objects.alias(
+                search=SearchVector('name', config='english'),
+                rank=SearchRank(SearchVector('name', config='english'), search_query_obj),
+            ).filter(search=search_query_obj).order_by('-rank', 'pk')[:10]
+        )
         
-        # If no results, try fuzzy matching with trigrams
+        # If no results, try fuzzy matching with trigrams (`%` operator uses person_name_trgm_idx)
         if not people:
-            people = Person.objects.annotate(
-                similarity=TrigramSimilarity('name', search_query)
-            ).filter(similarity__gt=0.3).order_by('-similarity')[:10]
+            people = list(
+                Person.objects.filter(name__trigram_similar=search_query).annotate(
+                    similarity=TrigramSimilarity('name', search_query)
+                ).filter(similarity__gt=0.3).order_by('-similarity', 'pk')[:10]
+            )
         
         # If still no results, try partial case-insensitive matching
         if not people:
-            people = Person.objects.filter(name__icontains=search_query)[:10]
+            people = list(Person.objects.filter(name__icontains=search_query).order_by('pk')[:10])
         
-        # Get ratings for people's work
+        # Batch-fetch credits and review aggregates for all matched people (2 queries, no N+1)
+        person_ids = [person.id for person in people]
+        person_media: dict[int, set[tuple[int, int]]] = defaultdict(set)
+        all_media_by_ct: dict[int, set[int]] = defaultdict(set)
+        if person_ids:
+            for mp in MediaPerson.objects.filter(person_id__in=person_ids).values(
+                'person_id', 'content_type_id', 'object_id'
+            ):
+                pair = (mp['content_type_id'], mp['object_id'])
+                person_media[mp['person_id']].add(pair)
+                all_media_by_ct[mp['content_type_id']].add(mp['object_id'])
+
+        media_review_stats: dict[tuple[int, int], tuple[float, int]] = {}
+        if all_media_by_ct:
+            review_filter = Q()
+            for ct_id, obj_ids in all_media_by_ct.items():
+                review_filter |= Q(content_type_id=ct_id, object_id__in=obj_ids)
+            for row in (
+                Review.objects.filter(review_filter)
+                .values('content_type_id', 'object_id')
+                .annotate(total_rating=Sum('rating'), count=Count('id'))
+            ):
+                if row['count'] and row['total_rating'] is not None:
+                    media_review_stats[(row['content_type_id'], row['object_id'])] = (
+                        float(row['total_rating']),
+                        int(row['count']),
+                    )
+
         results = []
         for person in people:
-            # Get all media this person has worked on
-            person_credits = MediaPerson.objects.filter(person=person)
-            
-            # Collect all media identifiers
-            media_identifiers = set()
-            for credit in person_credits:
-                media_identifiers.add((credit.content_type_id, credit.object_id))
-            
-            # Calculate average rating for this person's work
-            avg_rating = None
+            total_rating = 0.0
             rating_count = 0
-            if media_identifiers:
-                q_objects = Q()
-                for ct_id, obj_id in media_identifiers:
-                    q_objects |= Q(content_type_id=ct_id, object_id=obj_id)
-                
-                # Get all reviews for this person's work
-                reviews = Review.objects.filter(q_objects)
-                if reviews.exists():
-                    rating_data = reviews.aggregate(
-                        avg_rating=Avg('rating'),
-                        count=Count('id')
-                    )
-                    if rating_data['avg_rating'] is not None:
-                        avg_rating = round(rating_data['avg_rating'], 1)
-                        rating_count = rating_data['count']
-            
+            for pair in person_media.get(person.id, ()):
+                stats = media_review_stats.get(pair)
+                if stats:
+                    total_rating += stats[0]
+                    rating_count += stats[1]
+            avg_rating = round(total_rating / rating_count, 1) if rating_count else None
             results.append({
                 'id': person.id,
                 'name': person.name,
