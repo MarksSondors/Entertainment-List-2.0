@@ -782,10 +782,18 @@ class PopularTVShowsView(APIView):
         ])}
     )
     def get(self, request):
+        from django.core.cache import cache
+
+        cache_key = 'tmdb_popular_tvshows_v1'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached, status=status.HTTP_200_OK)
+
         popular_shows = TVShowsService().get_popular_shows()
         popular_shows = sorted(popular_shows['results'], key=lambda x: x['popularity'], reverse=True)[:10]
         for show in popular_shows:
             show['poster_path'] = f"https://image.tmdb.org/t/p/w500{show['poster_path']}"
+        cache.set(cache_key, popular_shows, 1800)
         return Response(popular_shows, status=status.HTTP_200_OK)
     
 class TVShowImagesView(APIView):
@@ -1180,7 +1188,13 @@ class TVShowReviewView(APIView):
 @permission_classes([IsAuthenticated])
 def tv_show_recommendations(request):
     """Get personalized TV show recommendations for the current user"""
+    from custom_auth.services.recommendation_cache import SCOPE_TVSHOWS, get_cached, set_cached
+
     limit = query_int(request.GET, 'limit', 10, minimum=1, maximum=50)
+    cached = get_cached(SCOPE_TVSHOWS, request.user.id, limit)
+    if cached is not None:
+        return Response(cached)
+
     recommender = TVShowRecommender()
     recommendations = recommender.get_recommendations_for_user(request.user.id, limit)
     
@@ -1197,4 +1211,4 @@ def tv_show_recommendations(request):
             'score': score
         })
     
-    return Response(data)
+    return Response(set_cached(SCOPE_TVSHOWS, request.user.id, limit, data))
