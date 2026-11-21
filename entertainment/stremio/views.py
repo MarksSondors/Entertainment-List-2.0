@@ -21,7 +21,7 @@ from movies.models import Movie, MovieOfWeekPick
 from tvshows.models import TVShow
 from custom_auth.models import Watchlist, Review, Genre
 from custom_auth.services.recommendation_cache import SCOPE_MOVIES, SCOPE_STREMIO, get_cached, set_cached
-from movies.services.recommendation import MovieRecommender, get_shared_recommender
+from movies.services.recommendation import MovieRecommender
 from api.services.movies import MoviesService
 
 logger = logging.getLogger(__name__)
@@ -593,13 +593,14 @@ def _serialize_web_movie_recommendations(recommendations) -> list[dict]:
     return data
 
 
-def _build_recommendation_movie_ids(user, *, shared: bool = False) -> list[int]:
+def _build_recommendation_movie_ids(user, *, recommender=None) -> list[int]:
     """Run the ML recommender and cache the resulting movie ids; shared by the live view and the warm task.
 
     Also populates the web ``/movies/recommendations/`` cache (limit=10) from the same
     model pass so web visitors don't pay a 10 s cold unpickle in a gunicorn worker.
     """
-    recommender = get_shared_recommender() if shared else MovieRecommender()
+    if recommender is None:
+        recommender = MovieRecommender()
     recommendations = recommender.get_recommendations_for_user(
         user.id,
         max_recommendations=RECOMMENDATIONS_SIZE
@@ -653,9 +654,10 @@ def _external_meta(details: dict) -> dict:
     return meta
 
 
-def _build_discover_external(user, *, shared: bool = False) -> list[dict]:
+def _build_discover_external(user, *, recommender=None) -> list[dict]:
     """Fetch+cache the external discover list; shared by the live view and the background warm task."""
-    recommender = get_shared_recommender() if shared else MovieRecommender()
+    if recommender is None:
+        recommender = MovieRecommender()
     recommendations = recommender.get_recommendations_for_user(
         user.id, DISCOVER_EXTERNAL_CANDIDATE_COUNT, scope='external'
     )
