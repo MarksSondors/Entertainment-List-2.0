@@ -66,6 +66,8 @@ def warm_all_posters() -> None:
 
 def warm_discover_external(user_id: int) -> None:
     """Refresh one user's Discover (external TMDB) cache ahead of its expiry."""
+    import gc
+
     from custom_auth.models import CustomUser
 
     from .views import _build_discover_external
@@ -75,23 +77,45 @@ def warm_discover_external(user_id: int) -> None:
     except CustomUser.DoesNotExist:
         return
 
-    _build_discover_external(user, shared=True)
+    try:
+        _build_discover_external(user)
+    finally:
+        gc.collect()
 
 
 def warm_all_discover_external() -> None:
-    """Scheduled entrypoint: fan out Discover cache warming for every addon user."""
+    """Scheduled entrypoint: warm Discover caches for every addon user using one transient model load."""
+    import gc
+    import logging
+
     from django.db.models import Q
-    from django_q.tasks import async_task
 
     from custom_auth.models import CustomUser
+    from movies.services.recommendation import MovieRecommender
 
-    user_ids = CustomUser.objects.exclude(Q(api_key__isnull=True) | Q(api_key='')).values_list('id', flat=True)
-    for user_id in user_ids:
-        async_task('stremio.tasks.warm_discover_external', user_id)
+    from .views import _build_discover_external
+
+    logger = logging.getLogger(__name__)
+    users = list(CustomUser.objects.exclude(Q(api_key__isnull=True) | Q(api_key='')))
+    if not users:
+        return
+
+    recommender = MovieRecommender()
+    try:
+        for user in users:
+            try:
+                _build_discover_external(user, recommender=recommender)
+            except Exception:
+                logger.exception("warm_all_discover_external failed for user %s", user.id)
+    finally:
+        del recommender
+        gc.collect()
 
 
 def warm_recommendations(user_id: int) -> None:
     """Refresh one user's movie recommendation cache (Stremio + web) ahead of its expiry."""
+    import gc
+
     from custom_auth.models import CustomUser
 
     from .views import _build_recommendation_movie_ids
@@ -101,26 +125,43 @@ def warm_recommendations(user_id: int) -> None:
     except CustomUser.DoesNotExist:
         return
 
-    _build_recommendation_movie_ids(user, shared=True)
+    try:
+        _build_recommendation_movie_ids(user)
+    finally:
+        gc.collect()
 
 
 def warm_all_recommendations() -> None:
-    """Scheduled entrypoint: fan out recommendation cache warming for active/addon users."""
+    """Scheduled entrypoint: warm recommendation caches for active/addon users with one transient model load."""
+    import gc
+    import logging
     from datetime import timedelta
 
     from django.db.models import Q
     from django.utils import timezone
-    from django_q.tasks import async_task
 
     from custom_auth.models import CustomUser
+    from movies.services.recommendation import MovieRecommender
 
+    from .views import _build_recommendation_movie_ids
+
+    logger = logging.getLogger(__name__)
     recent_cutoff = timezone.now() - timedelta(days=30)
-    user_ids = (
+    users = list(
         CustomUser.objects.filter(
             (~Q(api_key__isnull=True) & ~Q(api_key='')) | Q(last_login__gte=recent_cutoff)
-        )
-        .values_list('id', flat=True)
-        .distinct()
+        ).distinct()
     )
-    for user_id in user_ids:
-        async_task('stremio.tasks.warm_recommendations', user_id)
+    if not users:
+        return
+
+    recommender = MovieRecommender()
+    try:
+        for user in users:
+            try:
+                _build_recommendation_movie_ids(user, recommender=recommender)
+            except Exception:
+                logger.exception("warm_all_recommendations failed for user %s", user.id)
+    finally:
+        del recommender
+        gc.collect()
