@@ -860,7 +860,13 @@ def collection_detail(request, pk):
 @permission_classes([IsAuthenticated])
 def game_recommendations(request):
     """Get personalized game recommendations for the current user"""
+    from custom_auth.services.recommendation_cache import SCOPE_GAMES, get_cached, set_cached
+
     limit = query_int(request.GET, 'limit', 10, minimum=1, maximum=50)
+    cached = get_cached(SCOPE_GAMES, request.user.id, limit)
+    if cached is not None:
+        return Response(cached)
+
     recommender = GameRecommender()
     recommendations = recommender.get_recommendations_for_user(request.user.id, limit)
     
@@ -877,5 +883,5 @@ def game_recommendations(request):
             'score': score
         })
     
-    return Response(data)
+    return Response(set_cached(SCOPE_GAMES, request.user.id, limit, data))
 

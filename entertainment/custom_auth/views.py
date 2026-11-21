@@ -2413,6 +2413,7 @@ def country_detail(request, country_id):
         'watched_status': watched_status,
     })
 
+@login_required
 def recent_reviews(request):
     """
     Returns recent reviews across all content types as JSON
@@ -2500,6 +2501,7 @@ def _parse_activity_filters(params):
     return media, kind
 
 
+@login_required
 def recent_activity(request):
     """
     Community activity feed for the Discover page, filterable by media type

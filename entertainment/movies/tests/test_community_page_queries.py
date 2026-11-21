@@ -84,3 +84,26 @@ class CommunityPageQueryScalingTests(TestCase):
             f'({small} with 2 picks, {large} with 22) - the pick rows are not '
             f'using select_related, so pick.movie costs one query each.',
         )
+
+    def test_community_page_activates_queued_pick_when_none_active(self):
+        movie = Movie.objects.create(
+            title='Queued Pick',
+            original_title='Queued Pick',
+            tmdb_id=900999,
+            description='desc',
+            rating=7.5,
+            status='Released',
+            runtime=110,
+            release_date=datetime.date(2022, 1, 1),
+        )
+        pick = MovieOfWeekPick.objects.create(
+            movie=movie,
+            suggested_by=self.user,
+            status='queued',
+        )
+        response = self.client.get(reverse('community_page'))
+        self.assertEqual(response.status_code, 200)
+        pick.refresh_from_db()
+        self.assertEqual(pick.status, 'active')
+        self.assertIsNotNone(pick.start_date)
+        self.assertIsNotNone(pick.end_date)

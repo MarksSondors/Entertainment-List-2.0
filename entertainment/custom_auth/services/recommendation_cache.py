@@ -46,6 +46,8 @@ SCOPE_MOVIES = 'movies'
 SCOPE_EXTERNAL = 'movies_external'
 SCOPE_COMBINED = 'combined'
 SCOPE_STREMIO = 'stremio_recommendations'
+SCOPE_TVSHOWS = 'tvshows'
+SCOPE_GAMES = 'games'
 
 
 def model_version() -> str:

@@ -147,6 +147,73 @@ class RecommendationCacheTests(TestCase):
         self.assertEqual(first.json(), [])
         self.assertEqual(counter['built'], 1, 'the recommender must only be built once')
 
+    def test_popular_movies_and_tvshows_are_cached(self):
+        cache.clear()
+        self.client.force_login(self.user)
+        fake_movies = {'results': [{'title': 'M1', 'popularity': 10, 'poster_path': '/m1.jpg'}]}
+        fake_shows = {'results': [{'name': 'S1', 'popularity': 10, 'poster_path': '/s1.jpg'}]}
+
+        with patch('movies.views.MoviesService') as m_cls:
+            m_cls.return_value.get_popular_movies.return_value = fake_movies
+            r1 = self.client.get('/movies/popular/', secure=True)
+            r2 = self.client.get('/movies/popular/', secure=True)
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r1.json(), r2.json())
+        self.assertEqual(m_cls.return_value.get_popular_movies.call_count, 1)
+
+        with patch('tvshows.views.TVShowsService') as s_cls:
+            s_cls.return_value.get_popular_shows.return_value = fake_shows
+            t1 = self.client.get('/tvshows/popular/', secure=True)
+            t2 = self.client.get('/tvshows/popular/', secure=True)
+        self.assertEqual(t1.status_code, 200)
+        self.assertEqual(t1.json(), t2.json())
+        self.assertEqual(s_cls.return_value.get_popular_shows.call_count, 1)
+
+    def test_tvshow_and_game_recommendations_are_cached(self):
+        from games.models import Game
+        from tvshows.models import TVShow
+
+        cache.clear()
+        self.client.force_login(self.user)
+        show = TVShow.objects.create(title='Cached Show', original_title='Cached Show', tmdb_id=991001)
+        game = Game.objects.create(title='Cached Game', rawg_id=991002, rating=4.5)
+
+        tv_counter = {'built': 0}
+        class FakeTVRec:
+            def __init__(self):
+                tv_counter['built'] += 1
+            def get_recommendations_for_user(self, user_id, limit):
+                return [(show, 8.5)]
+
+        with patch('tvshows.views.TVShowRecommender', FakeTVRec):
+            r1 = self.client.get('/tvshows/recommendations/', secure=True)
+            r2 = self.client.get('/tvshows/recommendations/', secure=True)
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r1.json(), r2.json())
+        self.assertEqual(tv_counter['built'], 1)
+
+        game_counter = {'built': 0}
+        class FakeGameRec:
+            def __init__(self):
+                game_counter['built'] += 1
+            def get_recommendations_for_user(self, user_id, limit):
+                return [(game, 9.0)]
+
+        with patch('games.views.GameRecommender', FakeGameRec):
+            g1 = self.client.get('/games/recommendations/', secure=True)
+            g2 = self.client.get('/games/recommendations/', secure=True)
+        self.assertEqual(g1.status_code, 200)
+        self.assertEqual(g1.json(), g2.json())
+        self.assertEqual(game_counter['built'], 1)
+
+    def test_activity_reviews_and_community_require_login(self):
+        self.client.logout()
+        for url in ('/activity/recent/', '/reviews/recent/', '/movies/community/'):
+            resp = self.client.get(url, secure=True)
+            self.assertEqual(resp.status_code, 302, f'{url} should redirect anonymous visitors')
+        api_resp = self.client.get('/movies/community/current-pick/', secure=True)
+        self.assertIn(api_resp.status_code, (401, 403))
+
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}})
 class PersonFullTextIndexTests(TestCase):

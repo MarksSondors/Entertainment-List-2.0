@@ -425,10 +425,18 @@ class PopularMoviesView(APIView):
         ])}
     )
     def get(self, request):
+        from django.core.cache import cache
+
+        cache_key = 'tmdb_popular_movies_v1'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached, status=status.HTTP_200_OK)
+
         popular_movies = MoviesService().get_popular_movies()
         popular_movies = sorted(popular_movies['results'], key=lambda x: x['popularity'], reverse=True)[:10]
         for movie in popular_movies:
             movie['poster_path'] = f"https://image.tmdb.org/t/p/w500{movie['poster_path']}"
+        cache.set(cache_key, popular_movies, 1800)
         return Response(popular_movies, status=status.HTTP_200_OK)
     
 class MovieImagesView(APIView):
@@ -891,15 +899,17 @@ def watch_together(request):
     return JsonResponse(payload)
 
 
+@login_required
 def community_page(request):
     """Main community page with Movie of the Week feature"""
     # Get current active movie of the week
     current_pick = MovieOfWeekPick.objects.filter(status='active').select_related('movie').first()
 
     # If no active pick but there are queued picks, activate the next one
-    if not current_pick and MovieOfWeekPick.objects.filter(status='queued').exists():
-        next_pick = MovieOfWeekPick.objects.filter(status='queued').order_by('date_created').first()
-        # Code to activate the next pick
+    if not current_pick:
+        activated = activate_next_movie()
+        if activated is not None:
+            current_pick = MovieOfWeekPick.objects.filter(pk=activated.pk).select_related('movie').first()
 
     # Get queued movie suggestions
     # select_related: the template walks pick.movie / pick.suggested_by for every row,
@@ -1255,6 +1265,7 @@ def get_current_community_pick_data():
     return data
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def current_community_pick(request):
     """Return the current movie of the week for the home page"""
     current_pick = MovieOfWeekPick.objects.filter(status='active').first()
