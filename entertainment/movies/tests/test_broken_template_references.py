@@ -25,9 +25,10 @@ class CommunityPageLoginLinkTests(TestCase):
         super().tearDownClass()
 
 
-    def test_anonymous_community_page_renders(self):
+    def test_anonymous_community_page_redirects_to_login(self):
         response = self.client.get(reverse('community_page'))
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response['Location'].startswith(reverse('login_page')))
 
     def test_login_url_name_used_by_community_page_exists(self):
         self.assertEqual(reverse('login_page'), '/')
