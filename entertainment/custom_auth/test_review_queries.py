@@ -17,6 +17,8 @@ LOCMEM_CACHE = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMem
 @override_settings(CACHES=LOCMEM_CACHE, SECURE_SSL_REDIRECT=False)
 class RecentReviewsTests(TestCase):
     def setUp(self):
+        self.viewer = User.objects.create_user(username='viewer', email='viewer@example.com', password='***')
+        self.client.force_login(self.viewer)
         self.movie_ct = ContentType.objects.get_for_model(Movie)
         self.tv_ct = ContentType.objects.get_for_model(TVShow)
 
@@ -35,6 +37,8 @@ class RecentReviewsTests(TestCase):
 
     def test_query_count_is_constant_and_titles_are_formatted(self):
         self._add_reviews(1, offset=0)
+        # Warm session/last_active middleware before counting queries
+        self.client.get(reverse('recent_reviews'))
         with CaptureQueriesContext(connection) as few:
             self.client.get(reverse('recent_reviews'))
 
