@@ -18,7 +18,11 @@ from tvshows.models import (
 
 User = get_user_model()
 
+# CI has no Redis and no TMDB token (see .github/workflows): never touch either.
+LOCMEM_CACHE = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 
+
+@override_settings(CACHES=LOCMEM_CACHE)
 class _NoSSLRedirect(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -113,9 +117,12 @@ class PersonFilmographyQueryTests(_NoSSLRedirect):
             'cast': [{'id': 201, 'name': 'Known show'}] + [{'id': 3000 + i, 'name': f'S{i}'} for i in range(n_credits)],
             'crew': [{'id': 4000 + i, 'name': f'T{i}', 'job': 'Writer'} for i in range(n_credits)],
         }
-        with patch('api.services.movies.MoviesService.get_person_movie_credits', return_value=movie_credits), \
-             patch('api.services.tvshows.TVShowsService.get_person_tv_credits', return_value=tv_credits), \
+        # Patch the classes, not just the methods: their constructors read TMDB_BEARER_TOKEN
+        with patch('api.services.movies.MoviesService') as movies_cls, \
+             patch('api.services.tvshows.TVShowsService') as tv_cls, \
              CaptureQueriesContext(connection) as ctx:
+            movies_cls.return_value.get_person_movie_credits.return_value = movie_credits
+            tv_cls.return_value.get_person_tv_credits.return_value = tv_credits
             response = self.client.get(reverse('person_tmdb_filmography', args=[self.person.id]))
         self.assertEqual(response.status_code, 200)
         return len(ctx.captured_queries), response.json()
@@ -154,6 +161,7 @@ class UploadModelAuthTests(_NoSSLRedirect):
         self.assertEqual(self._post('Bearer correct-key').status_code, 400)
 
 
+@override_settings(CACHES=LOCMEM_CACHE)
 class CreateExistingTitleTests(TestCase):
     """#39: importing a title that already exists returns it instead of crashing."""
 
@@ -163,9 +171,9 @@ class CreateExistingTitleTests(TestCase):
     def test_create_tvshow_returns_existing_without_tmdb_fetch(self):
         from tvshows.parsers import create_tvshow
         show = _make_show(tmdb_id=119769)
-        with patch('tvshows.parsers.TVShowsService.get_show_details') as fetch:
+        with patch('tvshows.parsers.TVShowsService') as service:
             result = create_tvshow(119769, add_to_watchlist=True, user_id=self.user.id)
-        fetch.assert_not_called()
+        service.assert_not_called()
         self.assertEqual(result.pk, show.pk)
         self.assertEqual(TVShow.objects.filter(tmdb_id=119769).count(), 1)
         ct = ContentType.objects.get_for_model(TVShow)
@@ -177,19 +185,20 @@ class CreateExistingTitleTests(TestCase):
     def test_create_movie_basic_returns_existing_without_tmdb_fetch(self):
         from movies.parsers import create_movie, create_movie_basic
         movie = _make_movie(tmdb_id=555001)
-        with patch('movies.parsers.MoviesService.get_movie_details') as fetch:
+        with patch('movies.parsers.MoviesService') as service:
             self.assertEqual(create_movie_basic(555001).pk, movie.pk)
             self.assertEqual(create_movie(555001).pk, movie.pk)
-        fetch.assert_not_called()
+        service.assert_not_called()
 
     def test_create_movie_fast_does_not_reenrich_existing(self):
         from movies.tasks import create_movie_fast
         movie = _make_movie(tmdb_id=555002)
-        with patch('movies.tasks.async_task') as enqueue:
+        with patch('movies.tasks.async_task') as enqueue, patch('movies.parsers.MoviesService'):
             self.assertEqual(create_movie_fast(555002).pk, movie.pk)
         enqueue.assert_not_called()
 
 
+@override_settings(CACHES=LOCMEM_CACHE)
 class BackdropFallbackTemplateTests(TestCase):
     """#40: a missing backdrop must not render url('None')."""
 
