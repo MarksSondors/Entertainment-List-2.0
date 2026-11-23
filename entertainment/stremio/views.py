@@ -12,9 +12,13 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from django.db.models import Avg, Case, Count, F, IntegerField, Max, Q, When
+import requests
 
 from .authentication import decode_config, get_user_from_config, is_rate_limited, require_stremio_auth
-from .formatters import FINISHED_TVSHOW_STATUSES, to_stremio_meta, to_stremio_catalog_item, get_poster_url
+from .catalog_cache import catalog_generation
+from .formatters import (
+    FINISHED_TVSHOW_STATUSES, get_poster_url, resize_tmdb_image, to_stremio_catalog_item, to_stremio_meta,
+)
 from .poster import bulk_poster_states, content_version, get_cached_poster
 
 from movies.models import Movie, MovieOfWeekPick
@@ -48,6 +52,19 @@ NO_OUTER_CACHE_CATALOGS = {'recommendations', 'discover-external', 'search-movie
 POSTER_CONTEXTS = {'cw'}
 # Bump on any catalogs/config change so Stremio's client detects it and offers "Update" in Addons
 MANIFEST_VERSION = '1.2.0'
+
+# IMDb ratings come from Cinemeta (Stremio's own keyless metadata addon); the site only stores TMDB scores
+CINEMETA_META_URL = 'https://v3-cinemeta.strem.io/meta/{media_type}/{imdb_id}.json'
+CINEMETA_TIMEOUT = 2.5
+IMDB_RATING_TTL = 7 * 24 * 3600
+IMDB_RATING_MISS_TTL = 24 * 3600      # Cinemeta has no rating for this title
+IMDB_RATING_ERROR_TTL = 3600          # Cinemeta unreachable; retry sooner
+_IMDB_RATING_RE = re.compile(r'\d{1,2}(?:\.\d)?')
+# Genre links open the first of these the user has enabled ("Top Rated (Unseen)" first)
+GENRE_LINK_CATALOG_KEYS = {
+    'movie': ['top-rated-movies', 'watchlist-movies'],
+    'series': ['top-rated-series', 'watchlist-series', 'waiting-for-new-episodes'],
+}
 
 CATALOG_HTTP_CACHE = 'private, max-age=60, stale-while-revalidate=300, stale-if-error=86400'
 META_HTTP_CACHE = 'private, max-age=300, stale-if-error=86400'
@@ -300,7 +317,8 @@ def catalog(request, config: str, media_type: str, catalog_id: str, extra: str =
         if catalog_id in NO_OUTER_CACHE_CATALOGS:
             metas = handler()
         else:
-            cache_key = f"stremio_catalog_{media_type}_{catalog_id}_{user.id}_{skip}_{genre or ''}"
+            generation = catalog_generation(user.id)
+            cache_key = f"stremio_catalog_{media_type}_{catalog_id}_{user.id}_g{generation}_{skip}_{genre or ''}"
             metas = cache.get(cache_key)
             if metas is None:
                 metas = handler()
@@ -337,12 +355,17 @@ def _catalog_items(medias, media_type: str, poster_base: str, user, ctx: str | N
     if not medias:
         return []
     states = bulk_poster_states(medias, media_type, user, ctx)
+    show_plot = _show_plot(user)
+    # Only ratings already fetched for a meta page; a catalog page never waits on Cinemeta
+    ratings = cache.get_many([_imdb_rating_key(media_type, m.imdb_id) for m in medias])
     metas = []
     for media in medias:
         v = content_version(media, media_type, user, ctx, state=states.get(media.id))
         item = to_stremio_catalog_item(
             media, media_type,
             poster_url=_poster_url(poster_base, media_type, media.imdb_id, ctx=ctx, v=v),
+            show_plot=show_plot,
+            imdb_rating=ratings.get(_imdb_rating_key(media_type, media.imdb_id)) or None,
         )
         if item:
             metas.append(item)
@@ -663,6 +686,7 @@ def _build_discover_external(user, *, recommender=None) -> list[dict]:
     )
 
     movies_service = MoviesService()
+    show_plot = _show_plot(user)
 
     def fetch_item(rec):
         try:
@@ -679,7 +703,8 @@ def _build_discover_external(user, *, recommender=None) -> list[dict]:
             genres=[g['name'] for g in details.get('genres') or [] if g.get('name')],
         )
         poster_url = f"https://image.tmdb.org/t/p/w500{details['poster_path']}"
-        return rec['ranking_score'], to_stremio_catalog_item(media, 'movie', poster_url=poster_url), _external_meta(details)
+        item = to_stremio_catalog_item(media, 'movie', poster_url=poster_url, show_plot=show_plot)
+        return rec['ranking_score'], item, _external_meta(details)
 
     results = []
     with ThreadPoolExecutor(max_workers=8) as executor:
@@ -820,6 +845,7 @@ def meta(request, config: str, media_type: str, imdb_id: str):
     links = {
         'site_base': request.build_absolute_uri('/'),
         'manifest_url': request.build_absolute_uri(f'/stremio/{config}/manifest.json'),
+        'genre_catalog': genre_link_catalog(media_type, enabled_catalog_keys(decode_config(config))),
     }
 
     try:
@@ -839,6 +865,41 @@ def meta(request, config: str, media_type: str, imdb_id: str):
     return cors_response({'meta': meta_data}, cache_control=META_HTTP_CACHE)
 
 
+def genre_link_catalog(media_type: str, enabled: set[str] | None) -> str | None:
+    """Catalog id that genre links should open: one the user actually has enabled, else none."""
+    ids = {c.key: c.id for c in CATALOGS}
+    for key in GENRE_LINK_CATALOG_KEYS.get(media_type, []):
+        if enabled is None or key in enabled:
+            return ids[key]
+    return None
+
+
+def _imdb_rating_key(media_type: str, imdb_id: str) -> str:
+    return f"stremio_imdb_rating_{media_type}_{imdb_id}"
+
+
+def imdb_rating(media_type: str, imdb_id: str) -> str | None:
+    """IMDb rating from Cinemeta, cached per title (misses too, so a title is looked up at most daily)."""
+    key = _imdb_rating_key(media_type, imdb_id)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached or None
+
+    rating, ttl = '', IMDB_RATING_MISS_TTL
+    try:
+        response = requests.get(
+            CINEMETA_META_URL.format(media_type=media_type, imdb_id=imdb_id), timeout=CINEMETA_TIMEOUT
+        )
+        if response.ok:
+            value = str((response.json().get('meta') or {}).get('imdbRating') or '')
+            if _IMDB_RATING_RE.fullmatch(value):
+                rating, ttl = value, IMDB_RATING_TTL
+    except (requests.RequestException, ValueError, AttributeError):
+        ttl = IMDB_RATING_ERROR_TTL
+    cache.set(key, rating, ttl)
+    return rating or None
+
+
 def _show_plot(user) -> bool:
     user_settings = getattr(user, 'settings', None)  # reverse one-to-one; missing row raises AttributeError subclass
     return getattr(user_settings, 'show_plot', True)
@@ -854,6 +915,8 @@ def _meta_kwargs(user, ct, media, url_name: str, links: dict) -> dict:
         'show_plot': _show_plot(user),
         'site_url': links['site_base'].rstrip('/') + reverse(url_name, args=[media.tmdb_id]),
         'manifest_url': links['manifest_url'],
+        'genre_catalog': links.get('genre_catalog'),
+        'imdb_rating': imdb_rating('movie' if url_name == 'movie_page' else 'series', media.imdb_id),
     }
 
 
@@ -861,7 +924,15 @@ def get_movie_meta(user, imdb_id: str, links: dict) -> dict | None:
     """Get movie metadata with user's rating; falls back to cached TMDB data for Discover titles."""
     movie = _get_by_imdb(Movie, imdb_id, 'genres')
     if movie is None:
-        return cache.get(f"stremio_ext_meta_{imdb_id}")
+        external = cache.get(f"stremio_ext_meta_{imdb_id}")
+        if external:
+            external = {**external, 'behaviorHints': {'defaultVideoId': imdb_id}}
+            if not _show_plot(user):  # shared cache entry is built with the plot; hide it per user
+                external['description'] = ''
+            rating = imdb_rating('movie', imdb_id)
+            if rating:
+                external['imdbRating'] = rating
+        return external
 
     movie_ct = ContentType.objects.get_for_model(Movie)
     review = Review.objects.filter(
@@ -873,7 +944,7 @@ def get_movie_meta(user, imdb_id: str, links: dict) -> dict | None:
     return to_stremio_meta(movie, 'movie', review, **_meta_kwargs(user, movie_ct, movie, 'movie_page', links))
 
 
-def _series_videos(tvshow, user) -> list[dict]:
+def _series_videos(tvshow, user, show_plot: bool = True) -> list[dict]:
     """Episode list for the series page; episodes the user has watched get a ✓ prefix."""
     from tvshows.models import Episode, WatchedEpisode
 
@@ -893,12 +964,12 @@ def _series_videos(tvshow, user) -> list[dict]:
             'title': f"✓ {title}" if episode.id in watched_ids else title,
             'season': season_number,
             'episode': episode.episode_number,
-            'overview': episode.overview or '',
+            'overview': (episode.overview or '') if show_plot else '',
         }
         if episode.air_date:
             video['released'] = f"{episode.air_date.isoformat()}T00:00:00.000Z"
         if episode.still:
-            video['thumbnail'] = episode.still
+            video['thumbnail'] = resize_tmdb_image(episode.still, 'w500')
         videos.append(video)
     return videos
 
@@ -941,5 +1012,5 @@ def get_series_meta(user, imdb_id: str, links: dict) -> dict | None:
         tvshow, 'series', aggregated_review, **_meta_kwargs(user, tvshow_ct, tvshow, 'tv_show_page', links)
     )
     if meta_data:
-        meta_data['videos'] = _series_videos(tvshow, user)
+        meta_data['videos'] = _series_videos(tvshow, user, show_plot=_show_plot(user))
     return meta_data

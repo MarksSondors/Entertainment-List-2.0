@@ -58,6 +58,10 @@ class StremioEndpointTests(TestCase):
         async_patch = mock.patch('django_q.tasks.async_task')
         async_patch.start()
         self.addCleanup(async_patch.stop)
+        # Never call Cinemeta from tests; individual tests override the response
+        self.cinemeta = mock.patch('stremio.views.requests.get').start()
+        self.cinemeta.return_value.ok = False
+        self.addCleanup(mock.patch.stopall)
 
     def make_movie(self, tmdb_id, imdb_id, title='Movie', **kwargs):
         return Movie.objects.create(
@@ -196,6 +200,113 @@ class StremioEndpointTests(TestCase):
             [(v['id'], v['title']) for v in meta['videos']],
             [('tt0000061:1:1', '✓ Pilot'), ('tt0000061:1:2', 'Second')],
         )
+
+    # --- #31 addon fixes -----------------------------------------------------------------------
+
+    def _cinemeta_rating(self, value):
+        self.cinemeta.return_value.ok = True
+        self.cinemeta.return_value.json.return_value = {'meta': {'imdbRating': value}}
+
+    def test_movie_meta_has_imdb_rating_and_default_video(self):
+        self._cinemeta_rating('8.5')
+        self.make_movie(1, 'tt6751668', title='Parasite')
+        meta = self.client.get(self.url('meta/movie/tt6751668.json')).json()['meta']
+        self.assertEqual(meta['imdbRating'], '8.5')
+        self.assertEqual(meta['behaviorHints'], {'defaultVideoId': 'tt6751668'})
+        # cached: a second request doesn't hit Cinemeta again
+        self.client.get(self.url('meta/movie/tt6751668.json'))
+        self.assertEqual(self.cinemeta.call_count, 1)
+
+    def test_imdb_rating_reaches_catalog_only_from_cache(self):
+        movie = self.make_movie(1, 'tt0000071')
+        Watchlist.objects.create(user=self.user, content_type=ContentType.objects.get_for_model(Movie), object_id=movie.id)
+        item = self.client.get(self.url('catalog/movie/watchlist-movies.json')).json()['metas'][0]
+        self.assertNotIn('imdbRating', item)
+        self.cinemeta.assert_not_called()  # catalogs never wait on Cinemeta
+
+        self._cinemeta_rating('7.1')
+        self.client.get(self.url('meta/movie/tt0000071.json'))
+        from .catalog_cache import bump_catalog_generation
+        bump_catalog_generation(self.user.id)  # skip the 120 s outer page cache
+        item = self.client.get(self.url('catalog/movie/watchlist-movies.json')).json()['metas'][0]
+        self.assertEqual(item['imdbRating'], '7.1')
+
+    def test_bad_or_missing_cinemeta_rating_is_dropped(self):
+        self._cinemeta_rating('<b>9</b>')
+        self.make_movie(1, 'tt0000072')
+        meta = self.client.get(self.url('meta/movie/tt0000072.json')).json()['meta']
+        self.assertNotIn('imdbRating', meta)
+        self.cinemeta.side_effect = __import__('requests').ConnectionError
+        self.make_movie(2, 'tt0000073')
+        self.assertEqual(self.client.get(self.url('meta/movie/tt0000073.json')).status_code, 200)
+
+    def _series_with_episode(self):
+        show = TVShow.objects.create(title='Show', original_title='Show', tmdb_id=7, imdb_id='tt0000081')
+        season = Season.objects.create(show=show, season_number=1)
+        Episode.objects.create(
+            season=season, episode_number=1, title='Pilot', overview='Who did it',
+            still='https://image.tmdb.org/t/p/original/still.jpg',
+        )
+        return show
+
+    def test_episode_thumbnails_are_w500(self):
+        self._series_with_episode()
+        video = self.client.get(self.url('meta/series/tt0000081.json')).json()['meta']['videos'][0]
+        self.assertEqual(video['thumbnail'], 'https://image.tmdb.org/t/p/w500/still.jpg')
+        self.assertEqual(video['overview'], 'Who did it')
+
+    def test_hidden_plot_also_hides_episode_and_catalog_overviews(self):
+        from custom_auth.models import UserSettings
+        UserSettings.objects.update_or_create(user=self.user, defaults={'show_plot': False})
+        self.user.refresh_from_db()
+        show = self._series_with_episode()
+        Watchlist.objects.create(user=self.user, content_type=ContentType.objects.get_for_model(TVShow), object_id=show.id)
+        show.description = 'Series plot'
+        show.save()
+        meta = self.client.get(self.url('meta/series/tt0000081.json')).json()['meta']
+        self.assertEqual(meta['videos'][0]['overview'], '')
+        self.assertNotIn('Series plot', meta['description'])
+        item = self.client.get(self.url('catalog/series/watchlist-series.json')).json()['metas'][0]
+        self.assertNotIn('description', item)
+
+    def test_genre_links_follow_enabled_catalogs(self):
+        genre = Genre.objects.create(name='Drama')
+        self.make_movie(1, 'tt0000091').genres.add(genre)
+
+        def genre_urls(config):
+            meta = self.client.get(self.url('meta/movie/tt0000091.json', config)).json()['meta']
+            return [link['url'] for link in meta['links'] if link['category'] == 'Genres']
+
+        self.assertTrue(genre_urls(self.config)[0].endswith('/movie/top-rated?genre=Drama'))
+        only_watchlist = encode_config({'api_key': self.user.api_key, 'catalogs': ['watchlist-movies']})
+        self.assertTrue(genre_urls(only_watchlist)[0].endswith('/movie/watchlist-movies?genre=Drama'))
+        no_filter_catalog = encode_config({'api_key': self.user.api_key, 'catalogs': ['recommendations']})
+        self.assertEqual(genre_urls(no_filter_catalog), [])
+
+    def test_watchlist_change_shows_up_in_catalog_immediately(self):
+        movie_ct = ContentType.objects.get_for_model(Movie)
+        first = self.make_movie(1, 'tt0000101')
+        second = self.make_movie(2, 'tt0000102')
+        with self.captureOnCommitCallbacks(execute=True):
+            Watchlist.objects.create(user=self.user, content_type=movie_ct, object_id=first.id)
+        ids = lambda: [m['id'] for m in self.client.get(self.url('catalog/movie/watchlist-movies.json')).json()['metas']]
+        self.assertEqual(ids(), ['tt0000101'])
+        with self.captureOnCommitCallbacks(execute=True):
+            Watchlist.objects.create(user=self.user, content_type=movie_ct, object_id=second.id)
+        self.assertCountEqual(ids(), ['tt0000101', 'tt0000102'])  # not the 120 s cached page
+        with self.captureOnCommitCallbacks(execute=True):
+            Review.objects.create(user=self.user, content_type=movie_ct, object_id=second.id, rating=8)
+            Watchlist.objects.filter(user=self.user, object_id=second.id).delete()
+        self.assertEqual(ids(), ['tt0000101'])
+
+    def test_catalog_invalidation_is_per_user(self):
+        from .catalog_cache import catalog_generation
+        other = CustomUser.objects.create_user(username='other2', email='other2@example.com', password='x')
+        before = catalog_generation(other.id)
+        with self.captureOnCommitCallbacks(execute=True):
+            Watchlist.objects.create(user=self.user, content_type=ContentType.objects.get_for_model(Movie),
+                                     object_id=self.make_movie(1, 'tt0000111').id)
+        self.assertEqual(catalog_generation(other.id), before)
 
     # --- auth cache -----------------------------------------------------------------------------
 
@@ -340,9 +451,10 @@ class PosterContentVersionTests(TestCase):
             poster_state(self.show, 'series', self.user, None),
         )
 
-        # Catalog endpoint must not scale queries with item count (16 items in 5 queries total)
+        # Catalog endpoint must not scale queries with item count (16 items in 6 queries total;
+        # the 6th is the one UserSettings.show_plot lookup, constant per page)
         cache.clear()
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(6):
             res = self.client.get(f'/stremio/{self.config}/catalog/movie/watchlist-movies.json')
         self.assertEqual(res.status_code, 200)
         self.assertEqual(len(res.json()['metas']), 16)

@@ -28,6 +28,13 @@ def get_poster_url(media, size: str = 'w780') -> str | None:
     return None
 
 
+def resize_tmdb_image(url: str | None, size: str) -> str | None:
+    """Rewrite a TMDB image URL to `size` (e.g. w500); non-TMDB URLs pass through unchanged."""
+    if not url:
+        return None
+    return _TMDB_IMAGE_SIZE_RE.sub(rf'\g<1>{size}\g<2>', str(url))
+
+
 def youtube_id(url: str | None) -> str | None:
     """Pull the 11-char video id out of a stored YouTube embed/watch/short link."""
     if not url:
@@ -63,7 +70,8 @@ def _genre_names(media) -> list[str]:
 
 
 def to_stremio_meta(media, media_type: str, review=None, *, community=None, show_plot: bool = True,
-                    site_url: str | None = None, manifest_url: str | None = None) -> dict | None:
+                    site_url: str | None = None, manifest_url: str | None = None,
+                    genre_catalog: str | None = 'top-rated', imdb_rating: str | None = None) -> dict | None:
     """
     Convert a Movie or TVShow to Stremio meta format.
 
@@ -75,6 +83,8 @@ def to_stremio_meta(media, media_type: str, review=None, *, community=None, show
         show_plot: False hides the overview (UserSettings.show_plot)
         site_url: Absolute URL of this title's page on the site
         manifest_url: This addon's manifest URL, used for genre deep links into its own catalogs
+        genre_catalog: Catalog id the genre links open (one the user has enabled); None drops them
+        imdb_rating: IMDb rating string (e.g. "8.5"); shown as Stremio's IMDb badge
     """
     imdb_id = getattr(media, 'imdb_id', None)
     if not imdb_id:
@@ -91,6 +101,13 @@ def to_stremio_meta(media, media_type: str, review=None, *, community=None, show
     info = release_info(media)
     if info:
         meta['releaseInfo'] = info
+
+    if imdb_rating:
+        meta['imdbRating'] = imdb_rating
+
+    if media_type == 'movie':
+        # Lets Stremio open the stream list for the movie directly instead of a one-item video list
+        meta['behaviorHints'] = {'defaultVideoId': imdb_id}
 
     genres = _genre_names(media)
     if genres:
@@ -122,19 +139,20 @@ def to_stremio_meta(media, media_type: str, review=None, *, community=None, show
         meta['trailers'] = [{'source': yt_id, 'type': 'Trailer'}]
         meta['trailerStreams'] = [{'title': 'Trailer', 'ytId': yt_id}]
 
-    meta['links'] = _build_links(media_type, genres, cast, directors, site_url, manifest_url)
+    meta['links'] = _build_links(media_type, genres, cast, directors, site_url, manifest_url, genre_catalog)
     return meta
 
 
 def _build_links(media_type: str, genres: list[str], cast: list[str], directors: list[str],
-                 site_url: str | None, manifest_url: str | None) -> list[dict]:
+                 site_url: str | None, manifest_url: str | None,
+                 genre_catalog: str | None = 'top-rated') -> list[dict]:
     """Newer Stremio clients render genres/cast/directors from `links` rather than the legacy flat fields."""
     links = []
-    if manifest_url:
+    if manifest_url and genre_catalog:
         encoded_manifest = quote(manifest_url, safe='')
         links += [
             {'name': g, 'category': 'Genres',
-             'url': f"stremio:///discover/{encoded_manifest}/{media_type}/top-rated?genre={quote(g)}"}
+             'url': f"stremio:///discover/{encoded_manifest}/{media_type}/{genre_catalog}?genre={quote(g)}"}
             for g in genres
         ]
     links += [{'name': n, 'category': 'Cast', 'url': f"stremio:///search?search={quote(n)}"} for n in cast]
@@ -176,7 +194,8 @@ def build_description(media, review=None, *, community=None, show_plot: bool = T
     return '\n\n'.join(parts)
 
 
-def to_stremio_catalog_item(media, media_type: str, poster_url: str | None = None) -> dict | None:
+def to_stremio_catalog_item(media, media_type: str, poster_url: str | None = None, *,
+                            show_plot: bool = True, imdb_rating: str | None = None) -> dict | None:
     """Convert media to minimal Stremio catalog item format."""
     imdb_id = getattr(media, 'imdb_id', None)
     if not imdb_id:
@@ -190,8 +209,11 @@ def to_stremio_catalog_item(media, media_type: str, poster_url: str | None = Non
     }
 
     # Add optional fields for richer catalog display
+    if imdb_rating:
+        item['imdbRating'] = imdb_rating
+
     overview = getattr(media, 'overview', None) or getattr(media, 'description', '')
-    if overview:
+    if show_plot and overview:
         # Truncate for catalog view
         item['description'] = overview[:200] + '...' if len(overview) > 200 else overview
 

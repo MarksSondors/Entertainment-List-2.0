@@ -73,13 +73,25 @@ def watched_episode_changed(sender, instance, **kwargs):
     _queue('series', show.imdb_id, instance.user_id, None)
 
 
+def catalog_source_changed(sender, instance, **kwargs):
+    """The user's own rating / watchlist / progress moved: drop their cached catalog pages."""
+    from .catalog_cache import bump_catalog_generation
+
+    user_id = getattr(instance, 'user_id', None)
+    if user_id:
+        transaction.on_commit(lambda: bump_catalog_generation(user_id))
+
+
 def connect():
     from django.db.models.signals import post_delete, post_save
 
-    from custom_auth.models import Review
+    from custom_auth.models import Review, Watchlist
     from tvshows.models import WatchedEpisode
 
     for signal in (post_save, post_delete):
         signal.connect(review_changed, sender=Review, dispatch_uid=f'stremio_poster_review_{signal is post_save}')
         signal.connect(watched_episode_changed, sender=WatchedEpisode,
                        dispatch_uid=f'stremio_poster_watched_{signal is post_save}')
+        for model in (Review, Watchlist, WatchedEpisode):
+            signal.connect(catalog_source_changed, sender=model,
+                           dispatch_uid=f'stremio_catalog_{model.__name__}_{signal is post_save}')
