@@ -184,9 +184,11 @@ class StremioEndpointTests(TestCase):
             rating=9, review_text='secret thoughts',
         )
         meta = self.client.get(self.url('meta/movie/tt0000051.json')).json()['meta']
-        self.assertIn('Your Rating: 9', meta['description'])
-        self.assertIn('Community: 9.0/10 (1 review)', meta['description'])
-        self.assertNotIn('secret thoughts', meta['description'])
+        # Ratings are chips now; the description is the plot alone
+        self.assertEqual(meta['description'], 'Movie overview')
+        site_group = [link['name'] for link in meta['links'] if link['category'] == 'Entertainment List']
+        self.assertEqual(site_group, ['You ★ 9', 'Community ★ 9 (1)', 'Open in Entertainment List'])
+        self.assertNotIn('secret thoughts', json.dumps(meta))
         self.assertEqual(meta['trailerStreams'], [{'title': 'Trailer', 'ytId': 'dQw4w9WgXcQ'}])
         self.assertIn('Open in Entertainment List', [link['name'] for link in meta['links']])
 
@@ -336,6 +338,39 @@ class StremioEndpointTests(TestCase):
         self.assertEqual(catalog_generation(other.id), before)
 
     # --- auth cache -----------------------------------------------------------------------------
+
+    def test_series_ratings_are_chips_in_order_after_genres(self):
+        show = TVShow.objects.create(title='Show', original_title='Show', tmdb_id=9, imdb_id='tt0000121',
+                                     description='Plot here')
+        show.genres.add(Genre.objects.create(name='Horror'))
+        ct = ContentType.objects.get_for_model(TVShow)
+        for n, rating in ((1, 7), (2, 9), (10, 8)):
+            season = Season.objects.create(show=show, season_number=n)
+            episode = Episode.objects.create(season=season, episode_number=1, title='E1',
+                                             air_date=date.today() - timedelta(days=30))
+            WatchedEpisode.objects.create(user=self.user, episode=episode)  # season reviews need it watched
+            Review.objects.create(user=self.user, content_type=ct, object_id=show.id, season=season, rating=rating)
+        meta = self.client.get(self.url('meta/series/tt0000121.json')).json()['meta']
+        self.assertEqual(meta['description'], 'Plot here')
+        self.assertEqual([l['name'] for l in meta['links'] if l['category'] == 'Season ratings'], ['S1 7', 'S2 9', 'S10 8'])
+        site = [l['name'] for l in meta['links'] if l['category'] == 'Entertainment List']
+        self.assertEqual(site, ['You ★ 8', 'Community ★ 8 (3)', 'Open in Entertainment List'])
+        order = []
+        for link in meta['links']:
+            if link['category'] not in order:
+                order.append(link['category'])
+        self.assertEqual(order[:3], ['Genres', 'Entertainment List', 'Season ratings'])
+        self.assertTrue(all(l['url'].startswith('http') for l in meta['links'] if l['category'] == 'Season ratings'))
+
+    def test_hidden_plot_leaves_description_empty_but_keeps_rating_chips(self):
+        from custom_auth.models import UserSettings
+        UserSettings.objects.update_or_create(user=self.user, defaults={'show_plot': False})
+        movie = self.make_movie(1, 'tt0000122')
+        Review.objects.create(user=self.user, content_type=ContentType.objects.get_for_model(Movie),
+                              object_id=movie.id, rating=6)
+        meta = self.client.get(self.url('meta/movie/tt0000122.json')).json()['meta']
+        self.assertEqual(meta['description'], '')
+        self.assertIn('You ★ 6', [l['name'] for l in meta['links']])
 
     def test_regenerating_key_revokes_old_key_immediately(self):
         self.client.get(self.url('catalog/movie/watchlist-movies.json'))  # populates the auth cache

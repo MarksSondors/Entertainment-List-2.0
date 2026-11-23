@@ -141,14 +141,16 @@ def to_stremio_meta(media, media_type: str, review=None, *, community=None, show
         meta['trailerStreams'] = [{'title': 'Trailer', 'ytId': yt_id}]
 
     meta['links'] = _build_links(media_type, genres, cast, directors, site_url, manifest_url, genre_catalog,
-                                 imdb_id=imdb_id, imdb_rating=imdb_rating)
+                                 imdb_id=imdb_id, imdb_rating=imdb_rating,
+                                 ratings=rating_links(review, community, site_url))
     return meta
 
 
 def _build_links(media_type: str, genres: list[str], cast: list[str], directors: list[str],
                  site_url: str | None, manifest_url: str | None,
                  genre_catalog: str | None = 'top-rated', *, imdb_id: str | None = None,
-                 imdb_rating: str | None = None) -> list[dict]:
+                 imdb_rating: str | None = None,
+                 ratings: tuple[list[dict], list[dict]] = ([], [])) -> list[dict]:
     """Newer Stremio clients render genres/cast/directors from `links` rather than the legacy flat fields.
 
     stremio-core only turns the legacy `imdbRating` into its IMDb badge when a meta has *no* `links`
@@ -165,10 +167,14 @@ def _build_links(media_type: str, genres: list[str], cast: list[str], directors:
              'url': f"stremio:///discover/{encoded_manifest}/{media_type}/{genre_catalog}?genre={quote(g)}"}
             for g in genres
         ]
+    # Ratings sit right after genres, ahead of the long cast list; groups render in first-seen order
+    site_ratings, season_ratings = ratings
+    links += site_ratings
+    if site_url:
+        links.append({'name': 'Open in Entertainment List', 'category': SITE_LINK_CATEGORY, 'url': site_url})
+    links += season_ratings
     links += [{'name': n, 'category': 'Cast', 'url': f"stremio:///search?search={quote(n)}"} for n in cast]
     links += [{'name': n, 'category': 'Directors', 'url': f"stremio:///search?search={quote(n)}"} for n in directors]
-    if site_url:
-        links.append({'name': 'Open in Entertainment List', 'category': 'Entertainment List', 'url': site_url})
     return links
 
 
@@ -182,35 +188,46 @@ def _add_release_dates(target: dict, media, info: str | None) -> None:
 
 
 def build_description(media, review=None, *, community=None, show_plot: bool = True) -> str:
-    """Build description: the user's own ratings, the community average, then the overview."""
-    parts = []
-
-    if review:
-        if isinstance(review, dict):
-            # Aggregated review data for TV shows
-            rating = review.get('avg_rating')
-            season_ratings = review.get('season_ratings', [])
-
-            if rating:
-                parts.append(f"⭐ Your Rating: {rating:.1f}/10")
-
-            if season_ratings:
-                season_strs = [f"{s['label']}: {s['rating']}/10" for s in season_ratings]
-                parts.append(f"📺 Season Ratings: {', '.join(season_strs)}")
-        elif review.rating:
-            parts.append(f"⭐ Your Rating: {review.rating}/10")
-
-    if community and community.get('count'):
-        noun = 'review' if community['count'] == 1 else 'reviews'
-        parts.append(f"👥 Community: {community['avg']:.1f}/10 ({community['count']} {noun})")
-
+    """Plot only. Ratings are rendered as link chips (see rating_links) so they don't bury the overview."""
     overview = getattr(media, 'overview', None) or getattr(media, 'description', '')
-    if show_plot and overview:
-        if parts:
-            parts.append("─" * 30)
-        parts.append(overview)
+    return overview if show_plot and overview else ''
 
-    return '\n\n'.join(parts)
+
+def _fmt_rating(value) -> str:
+    """9 -> "9", 8.25 -> "8.3": chips are small, so no "/10" and no trailing ".0"."""
+    value = round(float(value), 1)
+    return str(int(value)) if value == int(value) else f"{value:.1f}"
+
+
+SITE_LINK_CATEGORY = 'Entertainment List'
+SEASON_RATINGS_CATEGORY = 'Season ratings'
+
+
+def rating_links(review=None, community=None, site_url: str | None = None) -> tuple[list[dict], list[dict]]:
+    """(site group, season group) chips: "You ★ 8.3", "Community ★ 8.3 (11)", "S1 7", ...
+
+    Stremio only renders links that carry a URL, so the chips point at the title's site page.
+    """
+    if not site_url:
+        return [], []
+    site, seasons = [], []
+    rating = None
+    if isinstance(review, dict):  # aggregated TV review data
+        rating = review.get('avg_rating')
+        seasons = [
+            {'name': f"{s['label']} {_fmt_rating(s['rating'])}", 'category': SEASON_RATINGS_CATEGORY, 'url': site_url}
+            for s in review.get('season_ratings', [])
+        ]
+    elif review is not None:
+        rating = review.rating
+    if rating:
+        site.append({'name': f"You ★ {_fmt_rating(rating)}", 'category': SITE_LINK_CATEGORY, 'url': site_url})
+    if community and community.get('count'):
+        site.append({
+            'name': f"Community ★ {_fmt_rating(community['avg'])} ({community['count']})",
+            'category': SITE_LINK_CATEGORY, 'url': site_url,
+        })
+    return site, seasons
 
 
 def to_stremio_catalog_item(media, media_type: str, poster_url: str | None = None, *,
