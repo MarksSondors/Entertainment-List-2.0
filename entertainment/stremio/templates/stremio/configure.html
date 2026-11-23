@@ -118,14 +118,47 @@
 </div>
 
 <style>
+    /* Same theme variables and Win98 controls as the settings page, so dark mode matches the site */
+    :root {
+        --text-muted: #666;
+        --link-color: #0000ee;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --text-muted: #b0b0b0;
+            --link-color: #7fb8ff;
+        }
+
+        .title-bar {
+            background: linear-gradient(90deg, var(--win98-dark), var(--win98-light));
+        }
+    }
+
     .profile-layout {
         display: flex;
         justify-content: center;
     }
-    
+
     .main-content {
         flex: 1;
         max-width: 600px;
+    }
+
+    .window {
+        background-color: var(--win98-gray);
+    }
+
+    .window-body {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        padding: 12px;
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+    }
+
+    .window-body a {
+        color: var(--link-color);
     }
 
     .win98-icon {
@@ -135,14 +168,11 @@
         margin-right: 4px;
     }
 
-    .window-body {
-        padding: 12px;
-    }
-
     .sunken-panel {
         border: 2px solid;
         border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
         background-color: var(--win98-input-bg);
+        color: var(--win98-input-text);
         padding: 8px;
         margin: 4px 0;
     }
@@ -156,10 +186,11 @@
         border-top: none;
         padding: 2px 4px;
         background-color: var(--win98-gray);
+        color: var(--win98-text);
         font-size: 11px;
         margin-top: 2px;
     }
-    
+
     .status-bar-field {
         font-size: 11px;
         margin-right: 10px;
@@ -167,6 +198,39 @@
         border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
         padding: 0 4px;
         flex: 1;
+    }
+
+    .btn {
+        background-color: var(--win98-gray);
+        color: var(--win98-text);
+        font-family: 'MS Sans Serif', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+        text-align: center;
+        min-width: 75px;
+        padding: 4px 12px;
+        border-top: 1px solid var(--win98-light);
+        border-left: 1px solid var(--win98-light);
+        border-right: 1px solid var(--win98-black);
+        border-bottom: 1px solid var(--win98-black);
+        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+    }
+
+    .btn:active {
+        border-top: 1px solid var(--win98-black);
+        border-left: 1px solid var(--win98-black);
+        border-right: 1px solid var(--win98-light);
+        border-bottom: 1px solid var(--win98-light);
+        box-shadow: inset 1px 1px 0 var(--win98-dark);
+    }
+
+    .btn:focus {
+        outline: 1px dotted var(--win98-text);
+        outline-offset: -4px;
     }
 
     .btn.disabled {
@@ -184,9 +248,53 @@
         background-color: #006666;
     }
 
+    input[type="text"] {
+        background-color: var(--win98-input-bg);
+        color: var(--win98-input-text);
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+        font-size: 11px;
+        padding: 2px 4px;
+        box-sizing: border-box;
+    }
+
+    input[type="text"]:read-only {
+        background-color: var(--win98-gray);
+        color: var(--text-muted);
+    }
+
+    /* 98.css draws checkboxes on a sibling <label for>; these are wrapped in the label, so draw them here */
+    input[type="checkbox"] {
+        appearance: none;
+        -webkit-appearance: none;
+        position: static;
+        opacity: 1;
+        flex: 0 0 auto;
+        width: 13px;
+        height: 13px;
+        margin: 0;
+        background-color: var(--win98-input-bg);
+        border: 2px solid;
+        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+
+    input[type="checkbox"]:checked::after {
+        content: '✓';
+        font-size: 12px;
+        font-weight: bold;
+        color: var(--win98-input-text);
+        line-height: 1;
+    }
+
     h3, h4 {
         font-weight: bold;
         margin: 0 0 8px 0;
+        color: var(--win98-text);
     }
 
     h3 {
@@ -216,17 +324,14 @@
         line-height: 1.5;
     }
 
-    .status-message {
-        padding: 8px 10px;
-        margin-bottom: 15px;
-        font-size: 11px;
-        border: 2px solid;
+    small, .catalog-type {
+        color: var(--text-muted);
     }
 
     .catalog-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 4px 12px;
+        gap: 6px 12px;
     }
 
     .catalog-option {
@@ -234,10 +339,15 @@
         align-items: center;
         gap: 6px;
         font-size: 11px;
+        color: var(--win98-input-text);
+        cursor: pointer;
     }
 
-    .catalog-type {
-        color: var(--text-muted);
+    .status-message {
+        padding: 8px 10px;
+        margin-bottom: 15px;
+        font-size: 11px;
+        border: 2px solid;
     }
 
     .status-message.success {
@@ -252,25 +362,39 @@
         color: #721c24;
     }
 
+    @media (prefers-color-scheme: dark) {
+        .status-message.success {
+            background-color: #1e3a24;
+            border-color: #4caf50;
+            color: #b9f6ca;
+        }
+
+        .status-message.error {
+            background-color: #3a1e1e;
+            border-color: #e57373;
+            color: #ffcdd2;
+        }
+    }
+
     @media (max-width: 768px) {
         .profile-layout {
             flex-direction: column;
         }
-        
+
         .main-content {
             flex: 1;
             width: 100%;
         }
-        
+
         .container.py-4 {
             padding: 10px !important;
         }
-        
+
         .field-row {
             flex-wrap: wrap;
             gap: 8px;
         }
-        
+
         .sunken-panel {
             padding: 12px !important;
             margin-bottom: 15px !important;
