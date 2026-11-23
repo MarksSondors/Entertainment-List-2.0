@@ -5,6 +5,7 @@ import requests
 from .models import *
 from api.services.movies import MoviesService
 from django.contrib.contenttypes.models import ContentType
+from django.db import IntegrityError, transaction
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -282,15 +283,25 @@ def process_crew(movie, crew, movies_service):
         )
 
 def add_to_movie_watchlist(movie, user_id):
-    """Add movie to watchlist"""
-    Watchlist.objects.create(
+    """Add movie to watchlist (no-op if it is already there)"""
+    Watchlist.objects.get_or_create(
         user_id=user_id,
         content_type=ContentType.objects.get_for_model(movie),
         object_id=movie.id
     )
 
+def _existing_movie(movie_id, add_to_watchlist=False, user_id=None):
+    """Return the already-imported movie for this TMDB id, adding it to the watchlist if asked."""
+    movie = Movie.objects.filter(tmdb_id=movie_id).first()
+    if movie and add_to_watchlist and user_id:
+        add_to_movie_watchlist(movie, user_id)
+    return movie
+
 def create_movie_basic(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
     """Create a movie with basic information only - fast creation for immediate user feedback"""
+    existing = _existing_movie(movie_id, add_to_watchlist, user_id)
+    if existing:
+        return existing
     movies_service = MoviesService()
     
     # Get movie details from API
@@ -305,7 +316,12 @@ def create_movie_basic(movie_id, movie_poster=None, movie_backdrop=None, is_anim
     genre_instances, country_instances, keyword_instances = process_genres_countries_keywords(movie_details)
     
     # Create the movie instance with basic information
-    movie = Movie.objects.create(**movie_dict, added_by=CustomUser.objects.filter(id=user_id).first() if user_id else None)
+    try:
+        with transaction.atomic():
+            movie = Movie.objects.create(**movie_dict, added_by=CustomUser.objects.filter(id=user_id).first() if user_id else None)
+    except IntegrityError:
+        # Lost a race with a concurrent import of the same movie
+        return _existing_movie(movie_id, add_to_watchlist, user_id)
     movie.genres.set(genre_instances)
     movie.countries.set(country_instances)
     movie.keywords.set(keyword_instances)
@@ -318,6 +334,9 @@ def create_movie_basic(movie_id, movie_poster=None, movie_backdrop=None, is_anim
 
 def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
     """Main function to create a movie from TMDB ID - complete with all foreign objects"""
+    existing = _existing_movie(movie_id, add_to_watchlist, user_id)
+    if existing:
+        return existing
     movies_service = MoviesService()
     
     # Get movie details from API
@@ -333,7 +352,12 @@ def create_movie(movie_id, movie_poster=None, movie_backdrop=None, is_anime=Fals
     company_instances = process_production_companies(movie_details)
     
     # Create the movie instance
-    movie = Movie.objects.create(**movie_dict, added_by=CustomUser.objects.filter(id=user_id).first() if user_id else None)
+    try:
+        with transaction.atomic():
+            movie = Movie.objects.create(**movie_dict, added_by=CustomUser.objects.filter(id=user_id).first() if user_id else None)
+    except IntegrityError:
+        # Lost a race with a concurrent import of the same movie
+        return _existing_movie(movie_id, add_to_watchlist, user_id)
     movie.genres.set(genre_instances)
     movie.countries.set(country_instances)
     movie.keywords.set(keyword_instances)

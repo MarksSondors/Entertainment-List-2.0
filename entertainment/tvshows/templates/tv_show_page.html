@@ -54,7 +54,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: url('{{ tv_show.backdrop }}') no-repeat center center fixed;
+    background: {% if tv_show.backdrop %}url('{{ tv_show.backdrop }}') no-repeat center center fixed{% else %}#008080{% endif %};
     background-size: cover;
     z-index: -2;
 }

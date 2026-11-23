@@ -3,6 +3,7 @@ from api.services.tvshows import TVShowsService
 from api.services.movies import MoviesService
 from api.services.tvdb import TVDBService
 from django.contrib.contenttypes.models import ContentType
+from django.db import IntegrityError, transaction
 from custom_auth.models import CustomUser
 from datetime import datetime, date
 import zoneinfo
@@ -269,15 +270,28 @@ def process_creators(tvshow, creators):
         )
 
 def add_to_tvshow_watchlist(tvshow, user_id):
-    """Add TV show to watchlist"""
-    Watchlist.objects.create(
+    """Add TV show to watchlist (no-op if it is already there)"""
+    Watchlist.objects.get_or_create(
         user_id=user_id,
         content_type=ContentType.objects.get_for_model(tvshow),
         object_id=tvshow.id
     )
 
+def _existing_tvshow(tvshow_id, add_to_watchlist=False, user_id=None):
+    """Return the already-imported show for this TMDB id, adding it to the watchlist if asked."""
+    tvshow = TVShow.objects.filter(tmdb_id=tvshow_id).first()
+    if tvshow and add_to_watchlist and user_id:
+        add_to_tvshow_watchlist(tvshow, user_id)
+    return tvshow
+
 def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=False, add_to_watchlist=False, user_id=None):
     """Main function to create a TV show from TMDB ID"""
+    # A double add (or two users adding the same show) must not run the whole
+    # TMDB import twice and then die on the tmdb_id unique constraint.
+    existing = _existing_tvshow(tvshow_id, add_to_watchlist, user_id)
+    if existing:
+        return existing
+
     tvshows_service = TVShowsService()
     
     # Get TV show details from API
@@ -293,7 +307,12 @@ def create_tvshow(tvshow_id, tvshow_poster=None, tvshow_backdrop=None, is_anime=
 
     # Create the TV show instance with proper user assignment
     user = CustomUser.objects.filter(id=user_id).first() if user_id else None
-    tvshow = TVShow.objects.create(**tvshow_dict, added_by=user)
+    try:
+        with transaction.atomic():
+            tvshow = TVShow.objects.create(**tvshow_dict, added_by=user)
+    except IntegrityError:
+        # Lost a race with a concurrent import of the same show
+        return _existing_tvshow(tvshow_id, add_to_watchlist, user_id)
     tvshow.genres.set(genre_instances)
     tvshow.countries.set(country_instances)
     tvshow.keywords.set(keyword_instances)

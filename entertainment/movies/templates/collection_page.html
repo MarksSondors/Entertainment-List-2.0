@@ -153,7 +153,7 @@
 
 /* Background image setup */
 body {
-    background: url('{{ collection.backdrop }}') no-repeat center center fixed;
+    background: {% if collection.backdrop %}url('{{ collection.backdrop }}') no-repeat center center fixed{% else %}#008080{% endif %};
     background-size: cover;
 }
 

@@ -432,18 +432,19 @@ def subgroup_episodes(request, subgroup_id):
     """Get all episodes for a specific subgroup."""
     subgroup = get_object_or_404(EpisodeSubGroup, id=subgroup_id)
     
-    # Get all watched episodes for this user
-    watched_episodes = WatchedEpisode.objects.filter(
-        user=request.user
-    ).values_list('episode_id', flat=True)
-    
+    episodes = list(subgroup.episodes.select_related('season').order_by('air_date'))
+    episode_ids = [episode.id for episode in episodes]
+
+    # One query for everyone who watched any of these episodes, grouped in Python
+    watched_by = {}
+    for episode_id, user_id, username in WatchedEpisode.objects.filter(
+        episode_id__in=episode_ids
+    ).values_list('episode_id', 'user_id', 'user__username'):
+        watched_by.setdefault(episode_id, []).append((user_id, username))
+
     episodes_data = []
-    for episode in subgroup.episodes.all().order_by('air_date'):
-        # Get all users who watched this episode
-        watched_users = WatchedEpisode.objects.filter(
-            episode=episode
-        ).select_related('user')
-        
+    for episode in episodes:
+        watchers = watched_by.get(episode.id, [])
         episodes_data.append({
             'id': episode.id,
             'title': episode.title,
@@ -455,8 +456,8 @@ def subgroup_episodes(request, subgroup_id):
             'runtime': episode.runtime,
             'air_date': episode.air_date,
             'air_time': episode.air_time,
-            'is_watched': episode.id in watched_episodes,
-            'watched_by': [watched.user.username for watched in watched_users],
+            'is_watched': any(user_id == request.user.id for user_id, _ in watchers),
+            'watched_by': [username for _, username in watchers],
         })
     
     return JsonResponse({

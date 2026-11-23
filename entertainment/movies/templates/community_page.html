@@ -57,7 +57,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: {% if current_pick %}url('{{ current_pick.movie.backdrop }}') no-repeat center center fixed{% else %}linear-gradient(135deg, #667eea 0%, #764ba2 100%){% endif %};
+    background: {% if current_pick and current_pick.movie.backdrop %}url('{{ current_pick.movie.backdrop }}') no-repeat center center fixed{% else %}linear-gradient(135deg, #667eea 0%, #764ba2 100%){% endif %};
     background-size: cover;
     z-index: -2;
 }

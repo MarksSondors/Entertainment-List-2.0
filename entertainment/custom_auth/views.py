@@ -2044,6 +2044,22 @@ def get_person_tmdb_filmography(request, person_id):
         movie_credits_data = movies_service.get_person_movie_credits(person.tmdb_id)
         tv_credits_data = tvshows_service.get_person_tv_credits(person.tmdb_id)
         
+        # Resolve 'in_database' with two set lookups instead of one query per credit
+        movie_ids = {
+            credit.get('id')
+            for key in ('cast', 'crew')
+            for credit in (movie_credits_data or {}).get(key, [])
+            if credit.get('id')
+        }
+        tv_ids = {
+            credit.get('id')
+            for key in ('cast', 'crew')
+            for credit in (tv_credits_data or {}).get(key, [])
+            if credit.get('id')
+        }
+        movies_in_db = set(Movie.objects.filter(tmdb_id__in=movie_ids).values_list('tmdb_id', flat=True))
+        tv_in_db = set(TVShow.objects.filter(tmdb_id__in=tv_ids).values_list('tmdb_id', flat=True))
+
         # Process movie credits
         movies = []
         if movie_credits_data and 'cast' in movie_credits_data:
@@ -2057,7 +2073,7 @@ def get_person_tmdb_filmography(request, person_id):
                     'poster_path': f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None,
                     'vote_average': movie.get('vote_average', 0),
                     'role_type': 'Acting',
-                    'in_database': Movie.objects.filter(tmdb_id=movie.get('id')).exists()
+                    'in_database': movie.get('id') in movies_in_db
                 })
         
         if movie_credits_data and 'crew' in movie_credits_data:
@@ -2072,7 +2088,7 @@ def get_person_tmdb_filmography(request, person_id):
                     'poster_path': f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None,
                     'vote_average': movie.get('vote_average', 0),
                     'role_type': 'Crew',
-                    'in_database': Movie.objects.filter(tmdb_id=movie.get('id')).exists()
+                    'in_database': movie.get('id') in movies_in_db
                 })
         
         # Process TV credits
@@ -2089,7 +2105,7 @@ def get_person_tmdb_filmography(request, person_id):
                     'poster_path': f"https://image.tmdb.org/t/p/w500{show['poster_path']}" if show.get('poster_path') else None,
                     'vote_average': show.get('vote_average', 0),
                     'role_type': 'Acting',
-                    'in_database': TVShow.objects.filter(tmdb_id=show.get('id')).exists()
+                    'in_database': show.get('id') in tv_in_db
                 })
         
         if tv_credits_data and 'crew' in tv_credits_data:
@@ -2105,7 +2121,7 @@ def get_person_tmdb_filmography(request, person_id):
                     'poster_path': f"https://image.tmdb.org/t/p/w500{show['poster_path']}" if show.get('poster_path') else None,
                     'vote_average': show.get('vote_average', 0),
                     'role_type': 'Crew',
-                    'in_database': TVShow.objects.filter(tmdb_id=show.get('id')).exists()
+                    'in_database': show.get('id') in tv_in_db
                 })
         
         # Sort by date (most recent first)

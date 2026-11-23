@@ -932,6 +932,12 @@ def create_movie_fast(movie_id, movie_poster=None, movie_backdrop=None, is_anime
     # Use a local import to avoid circular imports
     from .parsers import create_movie_basic
 
+    from .parsers import _existing_movie
+    existing = _existing_movie(movie_id, add_to_watchlist, user_id)
+    if existing:
+        # Already imported (and enriched): don't fetch TMDB or re-queue enrichment
+        return existing
+
     # Create movie with basic information first
     try:
         movie = create_movie_basic(

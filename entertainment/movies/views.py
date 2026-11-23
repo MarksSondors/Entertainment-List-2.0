@@ -1493,7 +1493,8 @@ def upload_model(request):
 
     # Validate Bearer token
     auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-    if not auth_header.startswith('Bearer ') or auth_header[7:] != upload_key:
+    import hmac
+    if not auth_header.startswith('Bearer ') or not hmac.compare_digest(auth_header[7:].encode(), upload_key.encode()):
         return Response({'error': 'Invalid or missing authorization.'},
                         status=status.HTTP_403_FORBIDDEN)
 
