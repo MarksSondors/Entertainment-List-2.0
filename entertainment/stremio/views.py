@@ -932,6 +932,11 @@ def get_movie_meta(user, imdb_id: str, links: dict) -> dict | None:
             rating = imdb_rating('movie', imdb_id)
             if rating:
                 external['imdbRating'] = rating
+                # same reason as _build_links: with `links` present, only an 'imdb' link shows the badge
+                external['links'] = [
+                    {'name': rating, 'category': 'imdb', 'url': f"https://imdb.com/title/{imdb_id}"},
+                    *[link for link in external.get('links', []) if link.get('category') != 'imdb'],
+                ]
         return external
 
     movie_ct = ContentType.objects.get_for_model(Movie)

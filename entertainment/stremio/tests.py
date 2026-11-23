@@ -170,6 +170,13 @@ class StremioEndpointTests(TestCase):
         response = self.client.get(self.url('meta/movie/tt0000041.json'))
         self.assertEqual(response.json()['meta']['name'], 'Elsewhere')
 
+    def test_discover_title_gets_imdb_link(self):
+        self.cinemeta.return_value.ok = True
+        self.cinemeta.return_value.json.return_value = {'meta': {'imdbRating': '6.9'}}
+        cache.set('stremio_ext_meta_tt0000042', {'id': 'tt0000042', 'type': 'movie', 'name': 'Far', 'links': []})
+        meta = self.client.get(self.url('meta/movie/tt0000042.json')).json()['meta']
+        self.assertEqual(meta['links'][0], {'name': '6.9', 'category': 'imdb', 'url': 'https://imdb.com/title/tt0000042'})
+
     def test_movie_description_has_rating_but_not_review_text(self):
         movie = self.make_movie(1, 'tt0000051', trailer='https://www.youtube.com/embed/dQw4w9WgXcQ')
         Review.objects.create(
@@ -212,6 +219,8 @@ class StremioEndpointTests(TestCase):
         self.make_movie(1, 'tt6751668', title='Parasite')
         meta = self.client.get(self.url('meta/movie/tt6751668.json')).json()['meta']
         self.assertEqual(meta['imdbRating'], '8.5')
+        # Stremio ignores imdbRating when links exist, so the badge has to be an 'imdb' link
+        self.assertIn({'name': '8.5', 'category': 'imdb', 'url': 'https://imdb.com/title/tt6751668'}, meta['links'])
         self.assertEqual(meta['behaviorHints'], {'defaultVideoId': 'tt6751668'})
         # cached: a second request doesn't hit Cinemeta again
         self.client.get(self.url('meta/movie/tt6751668.json'))
@@ -230,6 +239,24 @@ class StremioEndpointTests(TestCase):
         bump_catalog_generation(self.user.id)  # skip the 120 s outer page cache
         item = self.client.get(self.url('catalog/movie/watchlist-movies.json')).json()['metas'][0]
         self.assertEqual(item['imdbRating'], '7.1')
+
+    def test_meta_and_catalog_carry_released_and_year(self):
+        movie = self.make_movie(1, 'tt0000075', release_date=date(2019, 5, 30))
+        Watchlist.objects.create(user=self.user, content_type=ContentType.objects.get_for_model(Movie), object_id=movie.id)
+        meta = self.client.get(self.url('meta/movie/tt0000075.json')).json()['meta']
+        self.assertEqual((meta['releaseInfo'], meta['year'], meta['released']),
+                         ('2019', '2019', '2019-05-30T00:00:00.000Z'))
+        item = self.client.get(self.url('catalog/movie/watchlist-movies.json')).json()['metas'][0]
+        self.assertEqual(item['released'], '2019-05-30T00:00:00.000Z')
+        show = TVShow.objects.create(title='S', original_title='S', tmdb_id=8, imdb_id='tt0000076',
+                                     first_air_date=date(2021, 3, 1), status='Returning Series')
+        meta = self.client.get(self.url('meta/series/tt0000076.json')).json()['meta']
+        self.assertEqual((meta['year'], meta['released']), ('2021–', '2021-03-01T00:00:00.000Z'))
+
+    def test_no_imdb_link_without_rating(self):
+        self.make_movie(1, 'tt0000077')
+        meta = self.client.get(self.url('meta/movie/tt0000077.json')).json()['meta']
+        self.assertNotIn('imdb', [link['category'] for link in meta['links']])
 
     def test_bad_or_missing_cinemeta_rating_is_dropped(self):
         self._cinemeta_rating('<b>9</b>')

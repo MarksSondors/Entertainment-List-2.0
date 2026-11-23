@@ -101,9 +101,10 @@ def to_stremio_meta(media, media_type: str, review=None, *, community=None, show
     info = release_info(media)
     if info:
         meta['releaseInfo'] = info
+    _add_release_dates(meta, media, info)
 
     if imdb_rating:
-        meta['imdbRating'] = imdb_rating
+        meta['imdbRating'] = imdb_rating  # only read by clients when `links` is absent; see _build_links
 
     if media_type == 'movie':
         # Lets Stremio open the stream list for the movie directly instead of a one-item video list
@@ -139,15 +140,24 @@ def to_stremio_meta(media, media_type: str, review=None, *, community=None, show
         meta['trailers'] = [{'source': yt_id, 'type': 'Trailer'}]
         meta['trailerStreams'] = [{'title': 'Trailer', 'ytId': yt_id}]
 
-    meta['links'] = _build_links(media_type, genres, cast, directors, site_url, manifest_url, genre_catalog)
+    meta['links'] = _build_links(media_type, genres, cast, directors, site_url, manifest_url, genre_catalog,
+                                 imdb_id=imdb_id, imdb_rating=imdb_rating)
     return meta
 
 
 def _build_links(media_type: str, genres: list[str], cast: list[str], directors: list[str],
                  site_url: str | None, manifest_url: str | None,
-                 genre_catalog: str | None = 'top-rated') -> list[dict]:
-    """Newer Stremio clients render genres/cast/directors from `links` rather than the legacy flat fields."""
+                 genre_catalog: str | None = 'top-rated', *, imdb_id: str | None = None,
+                 imdb_rating: str | None = None) -> list[dict]:
+    """Newer Stremio clients render genres/cast/directors from `links` rather than the legacy flat fields.
+
+    stremio-core only turns the legacy `imdbRating` into its IMDb badge when a meta has *no* `links`
+    (MetaItemPreviewLegacy -> MetaItemPreview), so with links present the rating must be a link too,
+    in the same shape Cinemeta sends.
+    """
     links = []
+    if imdb_rating and imdb_id:
+        links.append({'name': imdb_rating, 'category': 'imdb', 'url': f"https://imdb.com/title/{imdb_id}"})
     if manifest_url and genre_catalog:
         encoded_manifest = quote(manifest_url, safe='')
         links += [
@@ -160,6 +170,15 @@ def _build_links(media_type: str, genres: list[str], cast: list[str], directors:
     if site_url:
         links.append({'name': 'Open in Entertainment List', 'category': 'Entertainment List', 'url': site_url})
     return links
+
+
+def _add_release_dates(target: dict, media, info: str | None) -> None:
+    """`released` (ISO) and `year` like Cinemeta: Stremio Web reads releaseInfo, other clients these."""
+    released = getattr(media, 'release_date', None) or getattr(media, 'first_air_date', None)
+    if released:
+        target['released'] = f"{released.isoformat()}T00:00:00.000Z"
+    if info:
+        target['year'] = info
 
 
 def build_description(media, review=None, *, community=None, show_plot: bool = True) -> str:
@@ -220,6 +239,7 @@ def to_stremio_catalog_item(media, media_type: str, poster_url: str | None = Non
     info = release_info(media)
     if info:
         item['releaseInfo'] = info
+    _add_release_dates(item, media, info)
 
     genres = _genre_names(media)
     if genres:
