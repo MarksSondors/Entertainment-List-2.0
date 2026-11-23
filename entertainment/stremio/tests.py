@@ -372,6 +372,52 @@ class StremioEndpointTests(TestCase):
         self.assertEqual(meta['description'], '')
         self.assertIn('You ★ 6', [l['name'] for l in meta['links']])
 
+    # --- watch sync probe (#33 step 0) ------------------------------------------------------------
+
+    def test_manifest_declares_player_and_library(self):
+        data = self.client.get(self.url('manifest.json')).json()
+        self.assertEqual(data['resources'], ['catalog', 'meta', 'player', 'library'])
+
+    def test_player_event_is_recorded_and_answers_empty(self):
+        from .models import AddonEvent
+        response = self.client.get(
+            self.url('player/series/tt0903747:2:5/action=stop&currentTime=2712000&duration=2820000.json'),
+            HTTP_USER_AGENT='StremioTest/1.0',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'metas': []})
+        self.assertEqual(response['Access-Control-Allow-Origin'], '*')
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        event = AddonEvent.objects.get()
+        self.assertEqual((event.user, event.kind, event.media_type, event.item_id, event.action),
+                         (self.user, 'player', 'series', 'tt0903747:2:5', 'stop'))
+        self.assertEqual((event.current_time, event.duration), (2712000, 2820000))
+        self.assertEqual(event.user_agent, 'StremioTest/1.0')
+
+    def test_library_batch_event_keeps_video_ids(self):
+        from .models import AddonEvent
+        response = self.client.get(self.url('library/series/tt0903747/action=watched&videoId=tt0903747:1:1,tt0903747:1:2.json'))
+        self.assertEqual(response.status_code, 200)
+        event = AddonEvent.objects.get()
+        self.assertEqual((event.kind, event.action), ('library', 'watched'))
+        self.assertEqual(event.video_ids, ['tt0903747:1:1', 'tt0903747:1:2'])
+        self.client.get(self.url('library/movie/tt6751668/action=libraryAdd.json'))
+        self.assertEqual(AddonEvent.objects.filter(action='libraryAdd').count(), 1)
+
+    def test_unknown_action_is_flagged_and_bad_key_rejected(self):
+        from .models import AddonEvent
+        self.client.get(self.url('player/movie/tt6751668/action=rewind&currentTime=abc.json'))
+        event = AddonEvent.objects.get()
+        self.assertEqual((event.action, event.current_time), ('?rewind', None))
+        bad = encode_config({'api_key': 'nope'})
+        self.assertEqual(self.client.get(self.url('player/movie/tt1/action=start.json', bad)).status_code, 401)
+        self.assertEqual(AddonEvent.objects.count(), 1)
+
+    def test_event_storage_failure_still_answers_ok(self):
+        with mock.patch('stremio.models.AddonEvent.objects.create', side_effect=RuntimeError('db down')):
+            response = self.client.get(self.url('player/movie/tt6751668/action=start&currentTime=0&duration=1.json'))
+        self.assertEqual(response.status_code, 200)
+
     def test_regenerating_key_revokes_old_key_immediately(self):
         self.client.get(self.url('catalog/movie/watchlist-movies.json'))  # populates the auth cache
         old_key = self.user.api_key

@@ -51,7 +51,7 @@ NO_OUTER_CACHE_CATALOGS = {'recommendations', 'discover-external', 'search-movie
 # Only these poster contexts change the rendered image; anything else is treated as no context
 POSTER_CONTEXTS = {'cw'}
 # Bump on any catalogs/config change so Stremio's client detects it and offers "Update" in Addons
-MANIFEST_VERSION = '1.2.0'
+MANIFEST_VERSION = '1.3.0'
 
 # IMDb ratings come from Cinemeta (Stremio's own keyless metadata addon); the site only stores TMDB scores
 CINEMETA_META_URL = 'https://v3-cinemeta.strem.io/meta/{media_type}/{imdb_id}.json'
@@ -253,7 +253,8 @@ def manifest(request, config: str = None):
         'name': 'Entertainment List',
         'description': 'Your personal entertainment tracking addon - watchlists, recommendations, and community picks',
         'logo': request.build_absolute_uri('/static/images/logo.png'),
-        'resources': ['catalog', 'meta'],
+        # player/library: Stremio sends playback and watched events to addons that declare them (#33)
+        'resources': ['catalog', 'meta', 'player', 'library'],
         'types': ['movie', 'series'],
         'idPrefixes': ['tt'],
         'catalogs': [
@@ -1019,3 +1020,55 @@ def get_series_meta(user, imdb_id: str, links: dict) -> dict | None:
     if meta_data:
         meta_data['videos'] = _series_videos(tvshow, user, show_plot=_show_plot(user))
     return meta_data
+
+
+ADDON_EVENT_ACTIONS = {
+    'player': {'start', 'pause', 'stop'},
+    'library': {'libraryAdd', 'libraryRemove', 'watched', 'unwatched'},
+}
+
+
+def _int_or_none(value):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+@csrf_exempt
+@require_stremio_auth
+def addon_event(request, config: str, kind: str, media_type: str, item_id: str, extra: str = ''):
+    """Record a player/library event from a Stremio client. Probe only: nothing is marked watched yet.
+
+    Paths (stremio-core src/models/common/addon_events.rs):
+      player/{type}/{videoId}/action={start|pause|stop}&currentTime={ms}&duration={ms}.json
+      library/{type}/{id}/action={libraryAdd|libraryRemove|watched|unwatched}[&videoId=a,b].json
+    Always answers an empty, parseable response; a failure here must never surface in the client.
+    """
+    if request.method == 'OPTIONS':
+        return cors_preflight_response()
+
+    from urllib.parse import parse_qsl
+
+    from .models import AddonEvent
+
+    extra = extra or ''
+    params = dict(parse_qsl(extra, keep_blank_values=True))
+    action = params.get('action', '')
+    try:
+        AddonEvent.objects.create(
+            user=request.stremio_user,
+            kind=kind,
+            media_type=media_type[:20],
+            item_id=item_id[:100],
+            action=action[:30] if action in ADDON_EVENT_ACTIONS[kind] else f"?{action[:28]}",
+            current_time=_int_or_none(params.get('currentTime')),
+            duration=_int_or_none(params.get('duration')),
+            video_ids=[v for v in params.get('videoId', '').split(',') if v][:200],
+            extra=extra[:4000],
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:300],
+        )
+    except Exception:
+        logger.exception("could not record stremio %s event for user %s", kind, request.stremio_user.id)
+    logger.info("stremio %s event user=%s %s/%s %s", kind, request.stremio_user.id, media_type, item_id, extra[:200])
+    return cors_response({'metas': []}, cache_control='no-store')

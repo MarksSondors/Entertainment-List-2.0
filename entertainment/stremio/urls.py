@@ -35,6 +35,14 @@ urlpatterns = [
         name='meta'
     ),
 
+    # Player / library events (watch sync probe, #33). <kind> is limited to the two event resources.
+    path('<str:config>/player/<str:media_type>/<str:item_id>/<str:extra>.json',
+         views.addon_event, {'kind': 'player'}, name='player_event'),
+    path('<str:config>/library/<str:media_type>/<str:item_id>/<str:extra>.json',
+         views.addon_event, {'kind': 'library'}, name='library_event'),
+    path('<str:config>/library/<str:media_type>/<str:item_id>.json',
+         views.addon_event, {'kind': 'library'}, name='library_event_bare'),
+
     # Catalog poster overlay endpoint (rating badge / status banner)
     path(
         '<str:config>/poster/<str:media_type>/<str:imdb_id>.png',
