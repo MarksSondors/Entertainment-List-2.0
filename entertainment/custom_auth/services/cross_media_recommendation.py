@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from custom_auth.models import Review, Watchlist
+from custom_auth.services.image_sizes import tmdb_size
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
@@ -206,7 +207,7 @@ class CrossMediaRecommender:
             # 'item': item,  # Removed to avoid serialization issues
             'id': item.id,
             'title': item.title,
-            'poster': getattr(item, 'poster', None),
+            'poster': tmdb_size(getattr(item, 'poster', None), 'poster'),
             'rating': rating,
             'normalized_rating': getattr(item, 'normalized_rating', None),
             'year': getattr(item, 'year', None),

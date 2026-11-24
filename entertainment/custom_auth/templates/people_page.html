@@ -809,7 +809,7 @@ body::before {
     </div>
     <div style="padding: 10px; text-align: center; background-color: var(--modal-bg);">
         <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
-             alt="{{ person.name }} Profile" 
+             alt="{{ person.name }} Profile" loading="lazy"
              style="max-width: 100%; max-height: 80vh;">
     </div>
 </div>

@@ -61,6 +61,8 @@ class MoviePageImagesAndPredictionTests(TestCase):
         html = self.page()
         self.assertIn('/t/p/w500/poster.jpg', html)
         self.assertIn('/t/p/w1280/backdrop.jpg', html)
+        # the click-to-zoom original is only fetched when the modal opens
+        self.assertRegex(html, r'<img src="[^"]*/t/p/original/poster\.jpg"[^>]*loading="lazy"')
 
     def test_watchlist_html_and_api_use_card_size(self):
         Watchlist.objects.create(user=self.user, content_type=ContentType.objects.get_for_model(Movie),
