@@ -46,6 +46,7 @@ from custom_auth.models import CustomUser, Review
 from django.db.models import Avg, Count, F
 from collections import defaultdict, Counter
 import json
+from custom_auth.services.image_sizes import tmdb_size
 
 # Create your views here.
 
@@ -128,8 +129,18 @@ def movie_page(request, movie_id):
         object_id=movie_db.id
     )
 
+    # "For you" score from the background-cached recommender, only for titles the
+    # user hasn't rated yet (never loads the model in a web request).
+    predicted_rating = None
+    if request.user.is_authenticated and not Review.objects.filter(
+        user=request.user, content_type=content_type, object_id=movie_db.id
+    ).exists():
+        from movies.services.predicted_ratings import get_for_movie
+        predicted_rating = get_for_movie(request.user.id, movie_db.tmdb_id)
+
     context = {
         'movie': movie_db,
+        'predicted_rating': predicted_rating,
         'user_watchlist': user_watchlist,
         'user_settings': user_settings,
         'watchlist_users': watchlist_users,
@@ -785,7 +796,7 @@ def movie_recommendations(request):
             'id': movie.id,
             'tmdb_id': movie.tmdb_id,
             'title': movie.title,
-            'poster': movie.poster,
+            'poster': tmdb_size(movie.poster, 'poster'),
             'release_date': movie.release_date,
             'rating': movie.rating,
             'predicted_rating': getattr(movie, 'predicted_rating', None),
@@ -1228,7 +1239,7 @@ def movie_search(request):
             'tmdb_id': movie.tmdb_id,
             'title': movie.title,
             'release_date': movie.release_date.strftime('%Y-%m-%d') if movie.release_date else None,
-            'poster_path': movie.poster,
+            'poster_path': tmdb_size(movie.poster, 'poster'),
             'rating': movie.rating,
             'runtime': movie.runtime,
             'genres': [genre.name for genre in list(movie.genres.all())[:3]]

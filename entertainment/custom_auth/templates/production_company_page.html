@@ -54,7 +54,7 @@
 
 body {
     font-family: 'MS Sans Serif', Arial, sans-serif;
-    background: var(--bg-color) url('{{ random_backdrop|default:"" }}') no-repeat center center fixed;
+    background: var(--bg-color) url('{{ random_backdrop|tmdb:'backdrop'|default:"" }}') no-repeat center center fixed;
     background-size: cover;
     color: var(--text-color);
     margin: 0;
@@ -469,7 +469,7 @@ body::before {
         <div class="profile-container">
             <div class="company-logo" onclick="openLogoModal()">
                 {% if company.logo_path %}
-                    <img src="{{ company.logo_path }}" alt="{{ company.name }} Logo">
+                    <img src="{{ company.logo_path|tmdb:'w300' }}" alt="{{ company.name }} Logo">
                 {% else %}
                     <div style="text-align: center; padding: 20px;">
                         <span>No Logo Available</span>
@@ -554,7 +554,7 @@ body::before {
                         <div class="production-card">
                             <div class="production-poster">
                                 {% if item.poster %}
-                                <img src="{{ item.poster }}" alt="{{ item.title }}" loading="lazy">
+                                <img src="{{ item.poster|tmdb:'poster' }}" alt="{{ item.title }}" loading="lazy">
                                 {% else %}
                                 <div class="poster-placeholder">{{ item.title|first }}</div>
                                 {% endif %}

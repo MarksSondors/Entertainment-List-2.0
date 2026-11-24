@@ -1,5 +1,6 @@
 // Service Worker for Entertainment List PWA
-const CACHE_NAME = 'entertainment-list-v3';
+// v4: drops the v3 cache, which held every API response ever fetched
+const CACHE_NAME = 'entertainment-list-v4';
 const urlsToCache = [
   '/',
   '/static/favicon/web-app-manifest-192x192.png',
@@ -25,21 +26,28 @@ self.addEventListener('install', (event) => {
 });
 
 // Fetch event
-// Network-first: try the network, fall back to cache only when offline.
+// Only page navigations go through the service worker: network-first, with the
+// last good copy as an offline fallback. Everything else (images from TMDB and
+// other CDNs, static files, API/JSON polling) is left to the browser and its
+// HTTP cache. Routing every TMDB image through the worker added a hop per
+// image, and caching every GET (each API response and query string) grew the
+// cache storage on phones without limit.
 // The old cache-first strategy served stale HTML forever (pages never
 // updated after a deploy until the SW cache was manually cleared).
 self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET' || request.mode !== 'navigate') return;
+  if (new URL(request.url).origin !== self.location.origin) return;
   event.respondWith(
-    fetch(event.request)
+    fetch(request)
       .then((response) => {
-        // Opportunistically refresh the cache with fresh responses
-        if (response && response.ok && event.request.method === 'GET') {
+        if (response && response.ok && response.type === 'basic') {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
   );
 });
 

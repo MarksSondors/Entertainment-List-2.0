@@ -35,6 +35,7 @@ from ..algorithms import (
     get_user_similarity_matrix,
     get_collaborative_filtering_predictions,
 )
+from custom_auth.services.image_sizes import tmdb_size
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -246,8 +247,8 @@ def _build_movie_nodes_and_groups(movies, movie_stats, enrichment):
             'size': round(size, 1),
             'importance': round(importance, 3),
             'tmdb_id': movie.tmdb_id,
-            'poster': movie.poster,
-            'backdrop': movie.backdrop,
+            'poster': tmdb_size(movie.poster, 'w185'),
+            'backdrop': tmdb_size(movie.backdrop, 'backdrop'),
             'rating': movie.rating,
             'user_rating': round(user_rating, 1) if user_rating else None,
             'review_count': review_count,
@@ -393,7 +394,7 @@ def _add_people_overlay(nodes, edges, movie_nodes, directors_by_movie, cast_by_m
                 seen_directors[director.id] = d_node
                 nodes.append({
                     'id': d_node, 'label': director.name, 'type': 'director', 'size': 16,
-                    'profile_picture': director.profile_picture, 'person_id': director.id,
+                    'profile_picture': tmdb_size(director.profile_picture, 'profile'), 'person_id': director.id,
                 })
             edges.append({'source': node_id, 'target': d_node, 'type': 'directed_by', 'weight': 1.0})
         for actor in cast_by_movie.get(movie_id, [])[: const.PEOPLE_OVERLAY_TOP_CAST]:
@@ -405,7 +406,7 @@ def _add_people_overlay(nodes, edges, movie_nodes, directors_by_movie, cast_by_m
                 seen_actors[actor.id] = a_node
                 nodes.append({
                     'id': a_node, 'label': actor.name, 'type': 'actor', 'size': 12,
-                    'profile_picture': actor.profile_picture, 'person_id': actor.id,
+                    'profile_picture': tmdb_size(actor.profile_picture, 'profile'), 'person_id': actor.id,
                 })
             edges.append({'source': node_id, 'target': a_node, 'type': 'acted_in', 'weight': 0.6})
 

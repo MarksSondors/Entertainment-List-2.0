@@ -57,7 +57,7 @@
 
 body {
     font-family: 'MS Sans Serif', Arial, sans-serif;
-    background: var(--bg-color) url('{{ random_backdrop|default:"" }}') no-repeat center center fixed;
+    background: var(--bg-color) url('{{ random_backdrop|tmdb:'backdrop'|default:"" }}') no-repeat center center fixed;
     background-size: cover;
     color: var(--text-color);
     margin: 0;
@@ -509,7 +509,7 @@ body::before {
                         <div class="production-card">
                             <div class="production-poster">
                                 {% if game.poster %}
-                                <img src="{{ game.poster }}" alt="{{ game.title }}" loading="lazy">
+                                <img src="{{ game.poster|tmdb:'poster' }}" alt="{{ game.title }}" loading="lazy">
                                 {% else %}
                                 <div class="poster-placeholder">{{ game.title|first }}</div>
                                 {% endif %}

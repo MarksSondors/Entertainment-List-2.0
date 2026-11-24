@@ -347,7 +347,8 @@ def _warm_catalog_posters(metas: list[dict], media_type: str, user_id: int) -> N
         # only queue a render when this exact content version hasn't been queued yet
         if not cache.add(f"stremio:warmq:{media_type}:{imdb_id}:{user_id}:{ctx or ''}:{version}", 1, WARM_DEDUPE_TTL):
             continue
-        async_task('stremio.tasks.warm_poster', media_type, imdb_id, user_id, ctx)
+        # save=False: keep the task history for jobs worth reading (failures are still saved)
+        async_task('stremio.tasks.warm_poster', media_type, imdb_id, user_id, ctx, save=False)
 
 
 def _catalog_items(medias, media_type: str, poster_base: str, user, ctx: str | None = None) -> list[dict]:

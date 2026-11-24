@@ -90,7 +90,7 @@
                   <a href="{% if item.content_type_model == 'movie' %}{% url 'movie_page' item.media_tmdb_id %}{% else %}{% url 'tv_show_page' item.media_tmdb_id %}{% endif %}" class="item-link">
                     <div class="item-card">
                       {% if item.media_poster %}
-                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      <img loading="lazy" decoding="async" src="{{ item.media_poster|tmdb:'poster' }}" class="item-poster" alt="{{ item.media_title }}">
                       {% else %}
                       <div class="item-poster no-image">
                         <span>No Image</span>
@@ -152,7 +152,7 @@
                   <a href="{% if item.content_type_model == 'movie' %}{% url 'movie_page' item.media_tmdb_id %}{% else %}{% url 'tv_show_page' item.media_tmdb_id %}{% endif %}" class="item-link">
                     <div class="item-card">
                       {% if item.media_poster %}
-                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      <img loading="lazy" decoding="async" src="{{ item.media_poster|tmdb:'poster' }}" class="item-poster" alt="{{ item.media_title }}">
                       {% else %}
                       <div class="item-poster no-image">
                         <span>No Image</span>
@@ -206,7 +206,7 @@
                   <a href="{% url 'tv_show_page' item.media_tmdb_id %}" class="item-link">
                     <div class="item-card">
                       {% if item.media_poster %}
-                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      <img loading="lazy" decoding="async" src="{{ item.media_poster|tmdb:'poster' }}" class="item-poster" alt="{{ item.media_title }}">
                       {% else %}
                       <div class="item-poster no-image">
                         <span>No Image</span>
@@ -261,7 +261,7 @@
                   <a href="{% url 'movie_page' item.media_tmdb_id %}" class="item-link">
                     <div class="item-card">
                       {% if item.media_poster %}
-                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      <img loading="lazy" decoding="async" src="{{ item.media_poster|tmdb:'poster' }}" class="item-poster" alt="{{ item.media_title }}">
                       {% else %}
                       <div class="item-poster no-image">
                         <span>No Image</span>
@@ -313,7 +313,7 @@
                   <a href="{% url 'books:book_page' item.media_id %}" class="item-link">
                     <div class="item-card">
                       {% if item.media_cover %}
-                      <img src="{{ item.media_cover }}" class="item-poster" alt="{{ item.media_title }}">
+                      <img loading="lazy" decoding="async" src="{{ item.media_cover }}" class="item-poster" alt="{{ item.media_title }}">
                       {% else %}
                       <div class="item-poster no-image">
                         <span>No Image</span>
@@ -369,7 +369,7 @@
                   <a href="{% url 'game_detail' item.media_id %}" class="item-link">
                     <div class="item-card">
                       {% if item.media_poster %}
-                      <img src="{{ item.media_poster }}" class="item-poster" alt="{{ item.media_title }}">
+                      <img loading="lazy" decoding="async" src="{{ item.media_poster|tmdb:'poster' }}" class="item-poster" alt="{{ item.media_title }}">
                       {% else %}
                       <div class="item-poster no-image">
                         <span>No Image</span>
@@ -1296,7 +1296,7 @@
           <a href="${detailUrl}" class="item-link">
             <div class="item-card">
               ${item.media_poster ? 
-                `<img src="${item.media_poster}" class="item-poster" alt="${item.media_title}">` : 
+                `<img loading="lazy" decoding="async" src="${item.media_poster}" class="item-poster" alt="${item.media_title}">` : 
                 `<div class="item-poster no-image">
                   <span>No Image</span>
                 </div>`

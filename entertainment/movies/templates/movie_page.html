@@ -66,7 +66,7 @@ iframe[src*="tiktok.com"] {
     left: 0;
     right: 0;
     bottom: 0;
-    background: {% if movie.backdrop %}url('{{ movie.backdrop }}') no-repeat center center fixed{% else %}#008080{% endif %};
+    background: {% if movie.backdrop %}url('{{ movie.backdrop|tmdb:'backdrop' }}') no-repeat center center fixed{% else %}#008080{% endif %};
     background-size: cover;
     z-index: -2;
 }
@@ -541,7 +541,7 @@ iframe[src*="tiktok.com"] {
         <div class="window-body">
             <div class="movie-info-container" style="display: flex; align-items: flex-start; gap: 20px;">
                 <div class="movie-poster" style="flex-shrink: 0;">
-                    <img src="{{ movie.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                    <img src="{{ movie.poster|tmdb:'poster_lg'|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
                          alt="{{ movie.title }} Poster" 
                          style="width: 200px;" 
                          onclick="openPosterModal()">
@@ -566,6 +566,9 @@ iframe[src*="tiktok.com"] {
                     <p><strong>User Rating:</strong> {{ user_avg_rating }}/10 ({{ user_rating_count }} review{{ user_rating_count|pluralize }})</p>
                     {% else %}
                     <p><strong>User Rating:</strong> <em style="color: var(--text-muted);">No user reviews yet</em></p>
+                    {% endif %}
+                    {% if predicted_rating %}
+                    <p><strong>For You:</strong> <span class="predicted-rating" title="What the recommender expects you'd rate it">{{ predicted_rating }}/10</span></p>
                     {% endif %}
                     <p><strong>Runtime:</strong> {{ movie.minutes_to_hours }}</p>
                     <p><strong>Country:</strong> 
@@ -622,7 +625,7 @@ iframe[src*="tiktok.com"] {
                         <a href="{{ company.get_absolute_url }}" class="production-company">
                             {% if company.logo_path %}
                                 <div style="height: 100%; display: flex; justify-content: center; align-items: center;">
-                                    <img src="{{ company.logo_path }}" alt="{{ company.name }}" title="{{ company.name }}">
+                                    <img src="{{ company.logo_path|tmdb:'logo' }}" alt="{{ company.name }}" title="{{ company.name }}">
                                 </div>
                             {% else %}
                                 <div class="production-company-placeholder">

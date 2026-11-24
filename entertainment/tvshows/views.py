@@ -26,6 +26,7 @@ from .tasks import create_tvshow_async
 from django.db.models import Prefetch, Count, Q, OuterRef, Subquery, F
 from rest_framework.decorators import api_view, permission_classes
 from .services.recommendation import TVShowRecommender
+from custom_auth.services.image_sizes import tmdb_size
 
 # Create your views here.
 
@@ -450,7 +451,7 @@ def subgroup_episodes(request, subgroup_id):
             'title': episode.title,
             'season_number': episode.season.season_number,
             'episode_number': episode.episode_number,
-            'still': episode.still,
+            'still': tmdb_size(episode.still, 'still'),
             'overview': episode.overview,
             'rating': episode.rating,
             'runtime': episode.runtime,
@@ -1206,7 +1207,7 @@ def tv_show_recommendations(request):
             'id': show.id,
             'tmdb_id': show.tmdb_id,
             'title': show.title,
-            'poster': show.poster,
+            'poster': tmdb_size(show.poster, 'poster'),
             'first_air_date': show.first_air_date,
             'rating': show.rating,
             'score': score

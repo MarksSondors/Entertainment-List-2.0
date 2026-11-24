@@ -44,6 +44,7 @@ from rest_framework.response import Response
 from .services.cross_media_recommendation import CrossMediaRecommender
 from .services.recommendation_cache import SCOPE_COMBINED, get_cached, set_cached
 from .services import genre_images
+from custom_auth.services.image_sizes import tmdb_size
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +181,7 @@ def search_bar_discover(request):
             result = {
                 'id': movie.id,
                 'title': movie.title,
-                'poster': movie.poster,
+                'poster': tmdb_size(movie.poster, 'poster'),
                 'tmdb_id': movie.tmdb_id,
                 'year': movie.release_date.year if movie.release_date else None,
                 'url': f'/movies/{movie.tmdb_id}/',
@@ -264,7 +265,7 @@ def search_bar_discover(request):
             result = {
                 'id': tv.id, 
                 'title': tv.title, 
-                'poster': tv.poster, 
+                'poster': tmdb_size(tv.poster, 'poster'), 
                 'tmdb_id': tv.tmdb_id, 
                 'year': tv.first_air_date.year if tv.first_air_date else None,
                 'url': f'/tvshows/{tv.tmdb_id}/',
@@ -343,7 +344,7 @@ def search_bar_discover(request):
             results.append({
                 'id': person.id,
                 'name': person.name,
-                'profile_picture': person.profile_picture,
+                'profile_picture': tmdb_size(person.profile_picture, 'profile'),
                 'url': f'/people/{person.id}/',
                 'avg_rating': avg_rating,
                 'rating_count': rating_count
@@ -1187,7 +1188,7 @@ def watchlist_page(request):
             'content_type_model': item.content_type.model,
             'media_id': media.id,
             'media_title': media.title,
-            'media_poster': media.poster,
+            'media_poster': tmdb_size(media.poster, 'poster'),
             'media_tmdb_id': media.tmdb_id,
             'media_release_date': getattr(media, 'release_date', None),
             'avg_rating': getattr(item, 'avg_rating', None),
@@ -1208,7 +1209,7 @@ def watchlist_page(request):
             'content_type_model': item.content_type.model,
             'media_id': media.id,
             'media_title': media.title,
-            'media_poster': media.poster,
+            'media_poster': tmdb_size(media.poster, 'poster'),
             'media_tmdb_id': media.tmdb_id,
             'media_first_air_date': getattr(media, 'first_air_date', None),
             'avg_rating': getattr(item, 'avg_rating', None),
@@ -1228,7 +1229,7 @@ def watchlist_page(request):
             'content_type_model': item.content_type.model,
             'media_id': media.id,
             'media_title': media.title,
-            'media_poster': media.poster,
+            'media_poster': tmdb_size(media.poster, 'poster'),
             'media_tmdb_id': media.tmdb_id,
             'media_release_date': getattr(media, 'release_date', None),
             'avg_rating': getattr(item, 'avg_rating', None),
@@ -1248,7 +1249,7 @@ def watchlist_page(request):
             'content_type_model': item.content_type.model,
             'media_id': media.id,
             'media_title': media.title,
-            'media_poster': media.poster,
+            'media_poster': tmdb_size(media.poster, 'poster'),
             'media_tmdb_id': media.tmdb_id,
             'media_first_air_date': getattr(media, 'first_air_date', None),
             'avg_rating': getattr(item, 'avg_rating', None),
@@ -1268,7 +1269,7 @@ def watchlist_page(request):
             'content_type_model': item.content_type.model,
             'media_id': media.id,
             'media_title': media.title,
-            'media_poster': media.poster,
+            'media_poster': tmdb_size(media.poster, 'poster'),
             'media_rawg_id': media.rawg_id,
             'media_release_date': getattr(media, 'release_date', None),
             'avg_rating': getattr(item, 'avg_rating', None),
@@ -1480,7 +1481,7 @@ def _api_watchlist_continue_only(user, tv_ct):
                 'content_type_model': tv_model_label,
                 'media_id': show.id,
                 'media_title': show.title,
-                'media_poster': show.poster,
+                'media_poster': tmdb_size(show.poster, 'poster'),
                 'media_tmdb_id': show.tmdb_id,
                 'date_added': entry['date_added'].isoformat(),
                 'media_first_air_date': show.first_air_date.isoformat() if show.first_air_date else None,
@@ -1782,7 +1783,7 @@ def serialize_watchlist_item(item, media_obj=None):
         'content_type_model': item.content_type.model,  # Flattened
         'media_id': media.id,                          # Flattened
         'media_title': media.title,                    # Flattened
-        'media_poster': media.poster,                  # Flattened
+        'media_poster': tmdb_size(media.poster, 'poster'),                  # Flattened
         'media_tmdb_id': media.tmdb_id,               # Flattened
         'date_added': item.date_added.isoformat(),
     }

@@ -15,7 +15,7 @@
             <div class="community-content">
                 <div class="poster-wrapper">
                     <a href="/movies/{{ community_pick.movie.tmdb_id }}" style="text-decoration:none; display: block; height: 100%;">
-                        <img src="{% if community_pick.movie.poster %}{{ community_pick.movie.poster }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" 
+                        <img src="{% if community_pick.movie.poster %}{{ community_pick.movie.poster|tmdb:'poster_lg' }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" 
                              alt="{{ community_pick.movie.title }}" 
                              class="community-poster">
                     </a>

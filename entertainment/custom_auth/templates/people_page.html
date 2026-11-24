@@ -61,7 +61,7 @@
 
 body {
     font-family: 'MS Sans Serif', Arial, sans-serif;
-    background: var(--bg-color) url('{{ random_backdrop|default:person.profile_picture|default:"" }}') no-repeat center center fixed;
+    background: var(--bg-color) url('{{ random_backdrop|tmdb:'backdrop'|default:person.profile_picture|tmdb:'profile_lg'|default:"" }}') no-repeat center center fixed;
     background-size: cover;
     color: var(--text-color);
     margin: 0;
@@ -741,7 +741,7 @@ body::before {
     <div class="window-body">
         <div class="profile-container">
             <div>
-                <img src="{{ person.profile_picture|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                <img src="{{ person.profile_picture|tmdb:'profile_lg'|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
                      alt="{{ person.name }} Profile" 
                      class="profile-image"
                      onclick="openProfileModal()">
@@ -910,7 +910,7 @@ body::before {
                             {% if item.media_type == 'book' and media.image_url %}
                             <img src="{{ media.image_url }}" alt="{{ media.title }}" loading="lazy">
                             {% elif media.poster %}
-                            <img src="{{ media.poster }}" alt="{{ media.title }}" loading="lazy">
+                            <img src="{{ media.poster|tmdb:'poster' }}" alt="{{ media.title }}" loading="lazy">
                             {% else %}
                             <div class="poster-placeholder">{{ media.title|first }}</div>
                             {% endif %}

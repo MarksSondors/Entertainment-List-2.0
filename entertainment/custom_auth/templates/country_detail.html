@@ -123,7 +123,7 @@
                                     <a href="{% url 'movie_page' movie.tmdb_id %}" class="item-link">
                                         <div class="item-card">
                                             {% if movie.poster %}
-                                            <img src="{{ movie.poster }}" class="item-poster" alt="{{ movie.title }}">
+                                            <img loading="lazy" decoding="async" src="{{ movie.poster|tmdb:'poster' }}" class="item-poster" alt="{{ movie.title }}">
                                             {% else %}
                                             <div class="item-poster no-image">
                                                 <span>No Image</span>
@@ -194,7 +194,7 @@
                                 <a href="{% url 'tv_show_page' show.tmdb_id %}" class="item-link">
                                     <div class="item-card">
                                         {% if show.poster %}
-                                        <img src="{{ show.poster }}" class="item-poster" alt="{{ show.title }}">
+                                        <img loading="lazy" decoding="async" src="{{ show.poster|tmdb:'poster' }}" class="item-poster" alt="{{ show.title }}">
                                         {% else %}
                                         <div class="item-poster no-image">
                                             <span>No Image</span>

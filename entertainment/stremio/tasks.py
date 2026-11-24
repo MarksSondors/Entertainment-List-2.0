@@ -141,6 +141,7 @@ def warm_all_recommendations() -> None:
     from django.utils import timezone
 
     from custom_auth.models import CustomUser
+    from movies.services.predicted_ratings import build_for_user as build_predicted_ratings
     from movies.services.recommendation import MovieRecommender
 
     from .views import _build_recommendation_movie_ids
@@ -162,6 +163,11 @@ def warm_all_recommendations() -> None:
                 _build_recommendation_movie_ids(user, recommender=recommender)
             except Exception:
                 logger.exception("warm_all_recommendations failed for user %s", user.id)
+            try:
+                # "For you" score on movie pages, from the same model load
+                build_predicted_ratings(recommender, user)
+            except Exception:
+                logger.exception("predicted ratings failed for user %s", user.id)
     finally:
         del recommender
         gc.collect()

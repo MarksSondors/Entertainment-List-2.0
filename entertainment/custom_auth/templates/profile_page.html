@@ -99,7 +99,7 @@
                                         <div class="poster-row">
                                             {% for movie in favorite_movies %}
                                                 <a href="{% url 'movie_page' movie.tmdb_id %}" class="poster-link">
-                                                    <img src="{% if movie.poster %}{{ movie.poster }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ movie.title }}" 
+                                                    <img loading="lazy" decoding="async" src="{% if movie.poster %}{{ movie.poster|tmdb:'poster' }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ movie.title }}" 
                                                          class="poster-image"
                                                          onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if movie.user_rating %}
@@ -133,7 +133,7 @@
                                         <div class="poster-row">
                                             {% for show in favorite_shows %}
                                                 <a href="{% url 'tv_show_page' show.tmdb_id %}" class="poster-link">
-                                                    <img src="{% if show.poster %}{{ show.poster }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ show.title }}" 
+                                                    <img loading="lazy" decoding="async" src="{% if show.poster %}{{ show.poster|tmdb:'poster' }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ show.title }}" 
                                                          class="poster-image"
                                                          onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if show.user_rating %}
@@ -167,7 +167,7 @@
                                         <div class="poster-row">
                                             {% for game in favorite_games %}
                                                 <a href="{% url 'game_detail' game.id %}" class="poster-link">
-                                                    <img src="{% if game.poster %}{{ game.poster }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ game.title }}" 
+                                                    <img loading="lazy" decoding="async" src="{% if game.poster %}{{ game.poster|tmdb:'poster' }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ game.title }}" 
                                                          class="poster-image"
                                                          onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if game.user_rating %}
@@ -201,7 +201,7 @@
                                         <div class="poster-row">
                                             {% for book in favorite_books %}
                                                 <a href="{% url 'books:book_page' book.id %}" class="poster-link">
-                                                    <img src="{% if book.image_url %}{{ book.image_url }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ book.title }}"
+                                                    <img loading="lazy" decoding="async" src="{% if book.image_url %}{{ book.image_url }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ book.title }}"
                                                          class="poster-image"
                                                          onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if book.user_rating %}
@@ -245,7 +245,7 @@
                                                 {% else %}
                                                     <a href="#" class="poster-link">
                                                 {% endif %}
-                                                    <img src="{% if item.poster_url %}{{ item.poster_url }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ item.title }}" 
+                                                    <img loading="lazy" decoding="async" src="{% if item.poster_url %}{{ item.poster_url|tmdb:'poster' }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ item.title }}" 
                                                         class="poster-image"
                                                         onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if item.avg_rating %}

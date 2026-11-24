@@ -57,7 +57,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: {% if current_pick and current_pick.movie.backdrop %}url('{{ current_pick.movie.backdrop }}') no-repeat center center fixed{% else %}linear-gradient(135deg, #667eea 0%, #764ba2 100%){% endif %};
+    background: {% if current_pick and current_pick.movie.backdrop %}url('{{ current_pick.movie.backdrop|tmdb:'backdrop' }}') no-repeat center center fixed{% else %}linear-gradient(135deg, #667eea 0%, #764ba2 100%){% endif %};
     background-size: cover;
     z-index: -2;
 }
@@ -800,7 +800,7 @@ input[type=text], input[type=url], select {
                 <div class="movie-info-container">
                     <!-- Movie Poster -->
                     <div class="movie-poster">
-                        <img src="{{ current_pick.movie.poster }}" alt="{{ current_pick.movie.title }}" 
+                        <img src="{{ current_pick.movie.poster|tmdb:'poster_lg' }}" alt="{{ current_pick.movie.title }}" 
                              onclick="window.open('{{ current_pick.movie.poster }}', '_blank')">
                         
                         <div style="margin-top: 10px; font-size: 11px;">
@@ -1099,7 +1099,7 @@ input[type=text], input[type=url], select {
                                     <td>#{{ forloop.counter }}</td>
                                     <td>
                                         <div style="display: flex; align-items: center; gap: 8px;">
-                                            <img src="{{ pick.movie.poster }}" alt="{{ pick.movie.title }}" 
+                                            <img loading="lazy" decoding="async" src="{{ pick.movie.poster|tmdb:'poster' }}" alt="{{ pick.movie.title }}" 
                                                  style="height: 40px; width: auto; border: 1px solid var(--border-dark);">
                                             <a href="{% url 'movie_page' pick.movie.tmdb_id %}" style="color: var(--text-color); text-decoration: none;">{{ pick.movie.title }}</a>
                                         </div>
@@ -1135,7 +1135,7 @@ input[type=text], input[type=url], select {
                 <div class="horizontal-scroll">
                     {% for pick in completed_picks %}
                         <div class="movie-card">
-                            <img src="{{ pick.movie.poster }}" alt="{{ pick.movie.title }}">
+                            <img loading="lazy" decoding="async" src="{{ pick.movie.poster|tmdb:'poster' }}" alt="{{ pick.movie.title }}">
                             <div class="movie-card-body">
                                 <div class="movie-card-title">{{ pick.movie.title }}</div>
                                 <div class="movie-card-date">{{ pick.start_date|date:"M d, Y" }}</div>

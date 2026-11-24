@@ -192,6 +192,8 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'entertainment.context_processors.site',
             ],
+            # {{ url|tmdb:'poster' }} everywhere without {% load %}
+            'builtins': ['custom_auth.templatetags.media_images'],
         },
     },
 ]

@@ -54,7 +54,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: {% if tv_show.backdrop %}url('{{ tv_show.backdrop }}') no-repeat center center fixed{% else %}#008080{% endif %};
+    background: {% if tv_show.backdrop %}url('{{ tv_show.backdrop|tmdb:'backdrop' }}') no-repeat center center fixed{% else %}#008080{% endif %};
     background-size: cover;
     z-index: -2;
 }
@@ -708,7 +708,7 @@
         <div class="window-body">
             <div class="tv-show-info-container" style="display: flex; align-items: flex-start; gap: 20px;">
                 <div class="tv-poster" style="flex-shrink: 0;">
-                    <img src="{{ tv_show.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                    <img src="{{ tv_show.poster|tmdb:'poster_lg'|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
                          alt="{{ tv_show.title }} Poster" 
                          style="width: 200px;" 
                          onclick="openPosterModal()">
@@ -756,7 +756,7 @@
                         <a href="{{ company.get_absolute_url }}" class="production-company">
                             {% if company.logo_path %}
                                 <div style="height: 100%; display: flex; justify-content: center; align-items: center;">
-                                    <img src="{{ company.logo_path }}" alt="{{ company.name }}" title="{{ company.name }}">
+                                    <img src="{{ company.logo_path|tmdb:'logo' }}" alt="{{ company.name }}" title="{{ company.name }}">
                                 </div>
                             {% else %}
                                 <div class="production-company-placeholder">
@@ -854,7 +854,7 @@
                 <div class="seasons-grid">
                 {% for season in tv_show.seasons.all %}
                     <div class="season-card" onclick="toggleSeason('season-{{ season.id }}')">
-                        <img src="{{ season.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                        <img src="{{ season.poster|tmdb:'poster'|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
                              {% if season.poster %}
                              srcset="{{ season.poster|tmdb_image_size:'w154' }} 154w, {{ season.poster|tmdb_image_size:'w342' }} 342w, {{ season.poster }} 780w"
                              sizes="(max-width: 768px) 90px, 240px"
@@ -897,7 +897,7 @@
                         {% for episode in season.episodes.all %}
                             <div class="episode-item" id="episode-{{ episode.id }}">
                                 <div class="episode-image">
-                                    <img src="{{ episode.still|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-38-picture-grey-c2ebdbb057f2a7614185931650f8cee23fa137b93812ccb132b9df511df1cfac.svg' }}" 
+                                    <img src="{{ episode.still|tmdb:'still'|default:'https://www.themoviedb.org/assets/2/v4/glyphicons/basic/glyphicons-basic-38-picture-grey-c2ebdbb057f2a7614185931650f8cee23fa137b93812ccb132b9df511df1cfac.svg' }}" 
                                          alt="Episode {{ episode.episode_number }} Still" 
                                          loading="lazy"
                                          width="160" height="90"

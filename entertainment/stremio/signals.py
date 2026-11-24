@@ -24,7 +24,10 @@ def _queue(media_type: str, imdb_id: str, user_id: int, ctx: str | None) -> None
             if not cache.add(f"stremio:evtq:{media_type}:{imdb_id}:{user_id}:{ctx or ''}", 1, EVENT_DEDUPE_TTL):
                 return
             from django_q.tasks import async_task
-            async_task('stremio.tasks.warm_poster', media_type, imdb_id, user_id, ctx)
+            # save=False: successful renders are not kept in the task history (they
+            # used to fill all of Q_CLUSTER['save_limit'] and push every other job out);
+            # failures are still recorded.
+            async_task('stremio.tasks.warm_poster', media_type, imdb_id, user_id, ctx, save=False)
         except Exception:
             logger.warning("poster pre-render not queued for %s %s", media_type, imdb_id, exc_info=True)
 

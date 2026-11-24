@@ -15,7 +15,7 @@
         <div class="window-body">
             <div class="collection-info">
                 <div class="poster-container">
-                    <img src="{{ collection.poster|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
+                    <img src="{{ collection.poster|tmdb:'poster_lg'|default:'https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png' }}" 
                          alt="{{ collection.name }} Poster" 
                          class="collection-poster"
                          onclick="openPosterModal()">
@@ -62,7 +62,7 @@
                         <div class="card h-100 movie-card {% if movie.user_rating %}card-reviewed{% elif movie.in_watchlist %}card-watchlist{% endif %}">
                             <a href="{% url 'movie_page' movie.tmdb_id %}" class="text-decoration-none">
                                 {% if movie.poster %}
-                                <img src="{{ movie.poster }}" class="card-img-top" alt="{{ movie.title }}">
+                                <img loading="lazy" decoding="async" src="{{ movie.poster|tmdb:'poster' }}" class="card-img-top" alt="{{ movie.title }}">
                                 {% else %}
                                 <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
                                     <span>No Image</span>
@@ -153,7 +153,7 @@
 
 /* Background image setup */
 body {
-    background: {% if collection.backdrop %}url('{{ collection.backdrop }}') no-repeat center center fixed{% else %}#008080{% endif %};
+    background: {% if collection.backdrop %}url('{{ collection.backdrop|tmdb:'backdrop' }}') no-repeat center center fixed{% else %}#008080{% endif %};
     background-size: cover;
 }
 

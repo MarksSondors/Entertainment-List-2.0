@@ -54,6 +54,16 @@ def _setup_custom_auth_schedules(sender, **kwargs):
                 'next_run': _next_sunday_at(4, 30),
             },
         )
+        # Weekly removal of expired login sessions.
+        Schedule.objects.get_or_create(
+            func='custom_auth.tasks.clear_expired_sessions',
+            defaults={
+                'name': 'Clear expired sessions',
+                'schedule_type': Schedule.WEEKLY,
+                'repeats': -1,
+                'next_run': _next_sunday_at(4, 45),
+            },
+        )
     except (OperationalError, ProgrammingError):
         # DB not ready yet (first-ever migrate) — the next boot will register.
         pass

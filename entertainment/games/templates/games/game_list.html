@@ -33,7 +33,7 @@
                     <a href="{% url 'game_detail' game.pk %}" class="text-decoration-none">
                         <div class="card h-100 game-card">
                             {% if game.poster %}
-                            <img src="{{ game.poster }}" class="card-img-top" alt="{{ game.title }}" style="height: 200px; object-fit: cover;">
+                            <img loading="lazy" decoding="async" src="{{ game.poster|tmdb:'poster' }}" class="card-img-top" alt="{{ game.title }}" style="height: 200px; object-fit: cover;">
                             {% else %}
                             <div class="card-img-top bg-secondary text-white d-flex justify-content-center align-items-center" style="height: 200px;">
                                 <span>No Image</span>

@@ -325,3 +325,11 @@ def import_imdb_data(user_id, items):
         notification_type="system"
     )
 
+
+def clear_expired_sessions():
+    """Delete expired login sessions (Django never removes them on its own)."""
+    from django.contrib.sessions.models import Session
+    from django.utils import timezone
+
+    deleted, _ = Session.objects.filter(expire_date__lt=timezone.now()).delete()
+    return f"{deleted} expired sessions removed"

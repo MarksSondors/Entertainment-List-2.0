@@ -54,7 +54,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: {% if movie.backdrop %}url('{{ movie.backdrop }}') no-repeat center center fixed{% else %}#008080{% endif %};
+    background: {% if movie.backdrop %}url('{{ movie.backdrop|tmdb:'backdrop' }}') no-repeat center center fixed{% else %}#008080{% endif %};
     background-size: cover;
     z-index: -2;
 }
@@ -345,7 +345,7 @@
             <div class="movie-info-container">
                 <!-- Movie Info -->
                 <div class="movie-poster text-center">
-                    <img src="{{ movie.poster }}" alt="{{ movie.title }}">
+                    <img src="{{ movie.poster|tmdb:'poster_lg' }}" alt="{{ movie.title }}">
                     
                     <div class="mt-3">
                         <div class="d-flex justify-content-between mb-2">
