@@ -17,8 +17,10 @@ class CustomUser(AbstractUser):
     last_active = models.DateTimeField(blank=True, null=True)
 
     def get_profile_picture(self):
+        """Avatar URL for display: a small WebP thumbnail, else the original upload."""
         if self.profile_picture:
-            return self.profile_picture.url
+            from .services.avatar_images import thumbnail_url
+            return thumbnail_url(self) or self.profile_picture.url
         return 'https://www.gravatar.com/avatar/'
 
     def __str__(self):
@@ -372,6 +374,16 @@ def build_genre_thumbnail(sender, instance, **kwargs):
     """Pre-render the card thumbnail so the first discover visit isn't slowed down."""
     if instance.background_image:
         from .services.genre_images import ensure_thumbnail
+        ensure_thumbnail(instance)
+
+
+@receiver(post_save, sender=CustomUser)
+def build_avatar_thumbnail(sender, instance, update_fields=None, **kwargs):
+    """Pre-render the avatar thumbnail when a new picture is saved."""
+    if update_fields is not None and 'profile_picture' not in update_fields:
+        return
+    if instance.profile_picture:
+        from .services.avatar_images import ensure_thumbnail
         ensure_thumbnail(instance)
 
 

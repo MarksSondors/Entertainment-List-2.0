@@ -997,7 +997,7 @@
                         <div class="subgroups-grid">
                             {% for subgroup in group.sub_groups.all %}
                                 <div class="subgroup-card" onclick="toggleSubgroup('{{ subgroup.id }}')">
-                                    <img src="{% if subgroups_data|get_item:subgroup.id|get_item:'still_image' %}{{ subgroups_data|get_item:subgroup.id|get_item:'still_image' }}{% else %}https://via.placeholder.com/300x169?text=No+Image{% endif %}" 
+                                    <img src="{% if subgroups_data|get_item:subgroup.id|get_item:'still_image' %}{{ subgroups_data|get_item:subgroup.id|get_item:'still_image' }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" 
                                          alt="{{ subgroup.name }}" 
                                          class="subgroup-poster">
                                     <div class="subgroup-info">
@@ -1416,7 +1416,7 @@
                     html += `
                         <div class="episode-item" id="subgroup-episode-${episode.id}" style="display: flex; align-items: flex-start; padding: 10px; border-bottom: 1px solid var(--border-dark); background-color: var(--progress-bg); margin-bottom: 8px; border-radius: 2px;">
                             <div class="episode-image" style="flex-shrink: 0; margin-right: 15px;">
-                                <img src="${episode.still || 'https://via.placeholder.com/160x90?text=No+Image'}" 
+                                <img src="${episode.still || '{% static "images/no-poster.png" %}'}" 
                                      alt="Episode ${episode.episode_number}" 
                                      style="width: 160px; height: 90px; object-fit: cover; border: 1px solid var(--poster-border);">
                             </div>

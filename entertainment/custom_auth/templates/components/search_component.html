@@ -293,6 +293,11 @@
         
         let currentEndpoint = 'movies';
         let searchTimeout = null;
+        // Only the newest search may draw results: older requests are aborted,
+        // and any response that still arrives late is ignored by sequence number.
+        let searchController = null;
+        let searchSeq = 0;
+        const SEARCH_DEBOUNCE_MS = 300;
 
         const placeholders = {
             'movies': 'Search for movies...',
@@ -304,6 +309,9 @@
         };
 
         function clearSearch() {
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (searchController) searchController.abort();
+            searchSeq++;
             searchInput.value = '';
             searchTabs.style.display = 'none';
             cancelButton.style.display = 'none';
@@ -325,9 +333,15 @@
             resultsGrid.innerHTML = '<div style="padding: 10px; text-align: center;">Searching...</div>';
             resultsCount.textContent = 'Searching...';
 
-            fetch(`{% url 'discover_search' %}?search=${encodeURIComponent(query)}&type=${type}`)
+            if (searchController) searchController.abort();
+            searchController = new AbortController();
+            const mySeq = ++searchSeq;
+
+            fetch(`{% url 'discover_search' %}?search=${encodeURIComponent(query)}&type=${type}`,
+                  { signal: searchController.signal })
                 .then(response => response.json())
                 .then(data => {
+                    if (mySeq !== searchSeq) return;
                     if (data.success) {
                         displayResults(data);
                     } else {
@@ -336,6 +350,7 @@
                     }
                 })
                 .catch(error => {
+                    if (error.name === 'AbortError' || mySeq !== searchSeq) return;
                     console.error('Search error:', error);
                     resultsGrid.innerHTML = '<div style="padding: 10px; text-align: center;">Search failed.</div>';
                     resultsCount.textContent = 'Failed';
@@ -521,7 +536,7 @@
             if (query.trim().length >= 2) {
                 searchTimeout = setTimeout(() => {
                     performSearch(query, currentEndpoint);
-                }, 150);
+                }, SEARCH_DEBOUNCE_MS);
             }
         });
 

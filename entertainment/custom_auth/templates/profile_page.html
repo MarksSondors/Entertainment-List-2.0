@@ -21,7 +21,7 @@
                     <div class="field-row user-profile-section">
                         <div class="profile-picture-container">
                             {% if user.profile_picture %}
-                                <img src="{{ user.profile_picture.url }}" alt="Profile Picture" class="profile-picture" id="profilePicture">
+                                <img src="{{ user.get_profile_picture }}" alt="Profile Picture" class="profile-picture" id="profilePicture">
                             {% else %}
                                 <div class="profile-initial" id="profilePicture">{{ user.username|first|upper }}</div>
                             {% endif %}
@@ -48,7 +48,7 @@
                     <div id="profileZoomOverlay" class="profile-zoom-overlay">
                         <div class="profile-zoom-container">
                             {% if user.profile_picture %}
-                                <img src="{{ user.profile_picture.url }}" alt="Profile Picture" class="profile-zoom-image">
+                                <img src="{{ user.profile_picture.url }}" alt="Profile Picture" class="profile-zoom-image" loading="lazy">
                             {% else %}
                                 <div class="profile-zoom-initial">{{ user.username|first|upper }}</div>
                             {% endif %}
@@ -99,9 +99,9 @@
                                         <div class="poster-row">
                                             {% for movie in favorite_movies %}
                                                 <a href="{% url 'movie_page' movie.tmdb_id %}" class="poster-link">
-                                                    <img src="{{ movie.poster|default:'#' }}" alt="{{ movie.title }}" 
+                                                    <img src="{% if movie.poster %}{{ movie.poster }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ movie.title }}" 
                                                          class="poster-image"
-                                                         onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
+                                                         onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if movie.user_rating %}
                                                     <div class="rating-badge">
                                                         {{ movie.user_rating }}
@@ -133,9 +133,9 @@
                                         <div class="poster-row">
                                             {% for show in favorite_shows %}
                                                 <a href="{% url 'tv_show_page' show.tmdb_id %}" class="poster-link">
-                                                    <img src="{{ show.poster|default:'#' }}" alt="{{ show.title }}" 
+                                                    <img src="{% if show.poster %}{{ show.poster }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ show.title }}" 
                                                          class="poster-image"
-                                                         onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
+                                                         onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if show.user_rating %}
                                                     <div class="rating-badge">
                                                         {{ show.user_rating }}
@@ -167,9 +167,9 @@
                                         <div class="poster-row">
                                             {% for game in favorite_games %}
                                                 <a href="{% url 'game_detail' game.id %}" class="poster-link">
-                                                    <img src="{{ game.poster|default:'#' }}" alt="{{ game.title }}" 
+                                                    <img src="{% if game.poster %}{{ game.poster }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ game.title }}" 
                                                          class="poster-image"
-                                                         onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
+                                                         onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if game.user_rating %}
                                                     <div class="rating-badge">
                                                         {{ game.user_rating }}
@@ -201,9 +201,9 @@
                                         <div class="poster-row">
                                             {% for book in favorite_books %}
                                                 <a href="{% url 'books:book_page' book.id %}" class="poster-link">
-                                                    <img src="{{ book.image_url|default:'#' }}" alt="{{ book.title }}"
+                                                    <img src="{% if book.image_url %}{{ book.image_url }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ book.title }}"
                                                          class="poster-image"
-                                                         onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
+                                                         onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if book.user_rating %}
                                                     <div class="rating-badge">
                                                         {{ book.user_rating }}
@@ -245,9 +245,9 @@
                                                 {% else %}
                                                     <a href="#" class="poster-link">
                                                 {% endif %}
-                                                    <img src="{{ item.poster_url|default:'#' }}" alt="{{ item.title }}" 
+                                                    <img src="{% if item.poster_url %}{{ item.poster_url }}{% else %}{% static 'images/no-poster.png' %}{% endif %}" alt="{{ item.title }}" 
                                                         class="poster-image"
-                                                        onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/c/c2/No_image_poster.png'">
+                                                        onerror="this.onerror=null; this.src='{% static 'images/no-poster.png' %}'">
                                                     {% if item.avg_rating %}
                                                         <div class="rating-badge avg-rating-badge">
                                                             {{ item.avg_rating }}
@@ -307,7 +307,7 @@
                                         {% for list_user in all_users %}
                                             <a href="{% url 'profile_with_username' username=list_user.username %}" class="user-card {% if list_user.username == current_user.username %}current-user{% endif %} {% if list_user.username == user.username %}selected-user{% endif %}">
                                                 {% if list_user.profile_picture %}
-                                                    <img src="{{ list_user.profile_picture.url }}" alt="User Avatar" class="user-card-avatar">
+                                                    <img src="{{ list_user.get_profile_picture }}" loading="lazy" alt="User Avatar" class="user-card-avatar">
                                                 {% else %}
                                                     <div class="user-card-avatar-initial">{{ list_user.username|first|upper }}</div>
                                                 {% endif %}
@@ -1542,7 +1542,7 @@
             const card = document.createElement('a');
             card.className = 'activity-card';
 
-            const posterPath = activity.poster_path || 'https://via.placeholder.com/200x120/333333/FFFFFF?text=No+Image';
+            const posterPath = activity.poster_path || '{% static "images/no-poster.png" %}';
 
             let detailUrl = '#';
             if (activity.content_type === 'Movie' && activity.tmdb_id) {

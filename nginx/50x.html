@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- Fallback if scripts are blocked: try again every 15 s. -->
+<meta http-equiv="refresh" content="15">
+<title>Back in a moment | Entertainment List</title>
+<style>
+  /* Self-contained: Django and the static files may be down when this is served. */
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background: #008080; color: #000;
+    font: 13px/1.4 Tahoma, "MS Sans Serif", Geneva, Verdana, sans-serif;
+    padding: 16px; box-sizing: border-box;
+  }
+  .window {
+    width: 100%; max-width: 360px; background: #c0c0c0;
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff;
+    padding: 3px;
+  }
+  .title-bar {
+    background: linear-gradient(90deg, #000080, #1084d0); color: #fff;
+    font-weight: bold; padding: 3px 4px; display: flex; align-items: center; gap: 6px;
+  }
+  .body { padding: 14px 12px 10px; display: flex; gap: 12px; align-items: flex-start; }
+  .icon {
+    flex: 0 0 32px; height: 32px; border-radius: 50%; background: #ffff00;
+    box-shadow: inset -2px -2px #808000; display: flex; align-items: center; justify-content: center;
+    font-weight: bold; font-size: 20px;
+  }
+  p { margin: 0 0 8px; }
+  .status { color: #444; font-size: 12px; }
+  .buttons { display: flex; justify-content: flex-end; padding: 0 12px 10px; }
+  button {
+    min-width: 75px; min-height: 23px; background: #c0c0c0; border: none; font: inherit; cursor: pointer;
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+  }
+  button:active { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #032028; }
+  }
+</style>
+</head>
+<body>
+  <div class="window" role="alertdialog" aria-labelledby="t" aria-describedby="d">
+    <div class="title-bar" id="t">Entertainment List</div>
+    <div class="body">
+      <div class="icon" aria-hidden="true">!</div>
+      <div id="d">
+        <p>The site is restarting, usually for an update. It should be back in a few seconds.</p>
+        <p>This page will reload itself when it's back.</p>
+        <p class="status" id="status">Checking...</p>
+      </div>
+    </div>
+    <div class="buttons"><button type="button" onclick="location.reload()">Retry</button></div>
+  </div>
+<script>
+  (function () {
+    var status = document.getElementById('status');
+    var tries = 0;
+    function check() {
+      tries += 1;
+      fetch('/healthz', { cache: 'no-store' })
+        .then(function (r) {
+          if (r.ok) { status.textContent = 'Back. Reloading...'; location.reload(); return; }
+          throw new Error(r.status);
+        })
+        .catch(function () {
+          status.textContent = 'Still restarting (check ' + tries + ')...';
+          setTimeout(check, 3000);
+        });
+    }
+    setTimeout(check, 2000);
+  })();
+</script>
+</body>
+</html>
