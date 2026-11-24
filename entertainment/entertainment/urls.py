@@ -24,9 +24,7 @@ from django.views.generic.base import RedirectView
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.contrib.sitemaps.views import sitemap
 
-from .sitemaps import sitemaps as sitemap_registry
 
 @require_http_methods(["GET"])
 def chrome_devtools_manifest(request):
@@ -70,18 +68,30 @@ def healthz(request):
         task_clusters = None
     return JsonResponse({'status': 'ok', 'task_clusters': task_clusters})
 
-ROBOTS_DISALLOW = ['/admin/', '/api/', '/watchlist/', '/profile/', '/accounts/']
+# The site is private (friends only): nothing should be indexed, archived or used
+# as AI training data. "User-agent: *" already covers everyone; the AI crawlers are
+# also named because some only obey a group addressed to them. robots.txt is a
+# request, not a lock: Traefik additionally sends `X-Robots-Tag: noindex` and
+# rejects the AI/scraper user agents outright (traefik/dynamic_conf.yml).
+ROBOTS_AI_AGENTS = [
+    'GPTBot', 'ChatGPT-User', 'OAI-SearchBot', 'ClaudeBot', 'Claude-User', 'Claude-SearchBot',
+    'Claude-Web', 'anthropic-ai', 'CCBot', 'Google-Extended', 'Google-CloudVertexBot',
+    'Applebot-Extended', 'Bytespider', 'PerplexityBot', 'Perplexity-User', 'Amazonbot',
+    'meta-externalagent', 'meta-externalfetcher', 'meta-webindexer', 'FacebookBot',
+    'cohere-ai', 'cohere-training-data-crawler', 'Diffbot', 'AI2Bot', 'Ai2Bot-Dolma',
+    'MistralAI-User', 'DuckAssistBot', 'YouBot', 'Timpibot', 'ImagesiftBot', 'Omgilibot',
+    'PanguBot', 'Webzio-Extended', 'img2dataset', 'FirecrawlAgent',
+]
 
 
 @require_http_methods(["GET"])
 def robots_txt(request):
-    """robots.txt with a Sitemap URL built from the request host (no hardcoded domain)."""
+    """Disallow everything for every crawler (no sitemap: the site is not meant to be found)."""
     from django.http import HttpResponse
-    from django.urls import reverse
 
-    lines = ['User-agent: *']
-    lines += [f'Disallow: {path}' for path in ROBOTS_DISALLOW]
-    lines += ['', f"Sitemap: {request.build_absolute_uri(reverse('django.contrib.sitemaps.views.sitemap'))}", '']
+    lines = []
+    for agent in ROBOTS_AI_AGENTS + ['*']:
+        lines += [f'User-agent: {agent}', 'Disallow: /', '']
     return HttpResponse('\n'.join(lines), content_type='text/plain')
 
 urlpatterns = [
@@ -106,9 +116,8 @@ urlpatterns = [
     path('.well-known/appspecific/com.chrome.devtools.json', chrome_devtools_manifest, name='chrome-devtools-manifest'),
     path('.well-known/<path:path>', well_known_handler, name='well-known-handler'),
 
-    # SEO: robots.txt and sitemap.xml
+    # robots.txt: disallow all crawling (no sitemap on purpose)
     path('robots.txt', robots_txt, name='robots_txt'),
-    path('sitemap.xml', sitemap, {'sitemaps': sitemap_registry}, name='django.contrib.sitemaps.views.sitemap'),
 
 ]
 

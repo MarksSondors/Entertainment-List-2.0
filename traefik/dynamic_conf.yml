@@ -34,6 +34,34 @@ http:
       observability:
         accessLogs: false
 
+    # AI-training crawlers and SEO scrapers: rejected with 403 before reaching
+    # Django, and not logged. robots.txt asks them to stay out too, but obeying it
+    # is voluntary, so this is the part that is actually enforced. /robots.txt
+    # itself stays reachable so well-behaved bots can read the Disallow and stop.
+    # Link-preview bots (Discord, Telegram, WhatsApp, Slack) are not listed.
+    block-ai-crawlers:
+      rule: "HeaderRegexp(`User-Agent`, `(?i)(GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|Claude-SearchBot|Claude-Web|anthropic-ai|CCBot|Google-CloudVertexBot|Bytespider|TikTokSpider|PerplexityBot|Perplexity-User|Amazonbot|meta-externalagent|meta-externalfetcher|meta-webindexer|FacebookBot|cohere-ai|cohere-training-data-crawler|Diffbot|AI2Bot|Ai2Bot-Dolma|MistralAI-User|DuckAssistBot|YouBot|Timpibot|ImagesiftBot|Omgilibot|omgili|PanguBot|Webzio-Extended|img2dataset|FirecrawlAgent|PetalBot|AhrefsBot|SemrushBot|MJ12bot|DotBot|DataForSeoBot|Scrapy)`) && !Path(`/robots.txt`)"
+      priority: 3100
+      service: noop@internal
+      entryPoints:
+        - websecure
+      tls: {}
+      middlewares:
+        - deny-all
+      observability:
+        accessLogs: false
+
+    block-ai-crawlers-http:
+      rule: "HeaderRegexp(`User-Agent`, `(?i)(GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|Claude-SearchBot|Claude-Web|anthropic-ai|CCBot|Google-CloudVertexBot|Bytespider|TikTokSpider|PerplexityBot|Perplexity-User|Amazonbot|meta-externalagent|meta-externalfetcher|meta-webindexer|FacebookBot|cohere-ai|cohere-training-data-crawler|Diffbot|AI2Bot|Ai2Bot-Dolma|MistralAI-User|DuckAssistBot|YouBot|Timpibot|ImagesiftBot|Omgilibot|omgili|PanguBot|Webzio-Extended|img2dataset|FirecrawlAgent|PetalBot|AhrefsBot|SemrushBot|MJ12bot|DotBot|DataForSeoBot|Scrapy)`) && !Path(`/robots.txt`)"
+      priority: 3100
+      service: noop@internal
+      entryPoints:
+        - web
+      middlewares:
+        - deny-all
+      observability:
+        accessLogs: false
+
     # Vulnerability scanners probing for PHP/WordPress/dotfiles: rejected with
     # 403 before reaching Django, and not logged. No real page matches these.
     block-scanners:
@@ -218,6 +246,8 @@ http:
           geolocation=(), gyroscope=(), magnetometer=(), microphone=(),
           midi=(), payment=(), usb=()
         customResponseHeaders:
+          # Private site: no search index, cache, snippet, image index or AI use.
+          X-Robots-Tag: "noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai"
           X-Content-Type-Options: "nosniff"
           Referrer-Policy: "strict-origin-when-cross-origin"
           X-XSS-Protection: "0"

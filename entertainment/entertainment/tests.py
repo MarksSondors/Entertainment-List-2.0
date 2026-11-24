@@ -31,13 +31,19 @@ LOCMEM_CACHE = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMem
 
 @override_settings(CACHES=LOCMEM_CACHE, SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=['testserver', 'example.test'])
 class SiteDomainTests(TestCase):
-    def test_robots_txt_points_sitemap_at_requesting_host(self):
+    def test_robots_txt_disallows_everything_and_has_no_sitemap(self):
         response = self.client.get('/robots.txt', HTTP_HOST='example.test')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'text/plain')
         body = response.content.decode()
-        self.assertIn('Disallow: /admin/', body)
-        self.assertIn('Sitemap: http://example.test/sitemap.xml', body)
+        self.assertIn('User-agent: *\nDisallow: /\n', body)
+        self.assertIn('User-agent: GPTBot\nDisallow: /\n', body)
+        self.assertIn('User-agent: meta-externalagent\nDisallow: /\n', body)
+        self.assertNotIn('Allow: /', body.replace('Disallow: /', ''))
+        self.assertNotIn('Sitemap', body)
+
+    def test_sitemap_is_gone(self):
+        self.assertEqual(self.client.get('/sitemap.xml', HTTP_HOST='example.test').status_code, 404)
 
     @override_settings(SITE_DOMAIN='brand.example')
     def test_brand_comes_from_site_domain_setting(self):
