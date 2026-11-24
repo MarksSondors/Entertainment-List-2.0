@@ -155,14 +155,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://nginx:80"  # Now points to nginx instead of web
-        # Shows the backend as UP/DOWN in the dashboard. A failing check takes the
-        # server out of rotation (503) until /healthz (DB + cache) passes again.
-        healthCheck:
-          path: /healthz
-          # Django only accepts its own domain in the Host header
-          hostname: "{{ env "DOMAIN" | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" }}"
-          interval: 15s
-          timeout: 5s
+        # No healthCheck on purpose: nginx is the only server, so taking it out of
+        # rotation never helps. A failing check made Traefik answer every request
+        # with its own bare 503 (hiding nginx's self-retrying restart page) and kept
+        # doing so for up to one check interval after Django was already back.
 
     goaccess:
       loadBalancer:
