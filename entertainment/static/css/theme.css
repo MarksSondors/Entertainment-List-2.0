@@ -1,0 +1,97 @@
+/* theme.css — one palette for every page that extends components/base.html.
+
+   Loaded once, last in <head>. Values follow css/main.css (the login page's
+   foundation) where the two systems overlap.
+
+   Why `html:root`: ~30 templates still carry their own copy of these tokens in a
+   plain `:root {}` block inside {% block content %}. `html:root` (0,1,1) outranks
+   `:root` (0,1,0) regardless of source order, so those copies stop mattering
+   and can be deleted page by page without visual change.
+
+   New tokens use the `--el-` prefix so they cannot collide with page-local names. */
+
+html:root {
+  /* surfaces */
+  --bg-color: #c0c0c0;
+  --window-bg: #c0c0c0;
+  --button-bg: #c0c0c0;
+  --button-hover: #e0e0e0;
+  --input-bg: #ffffff;
+  --progress-bg: #ffffff;
+  --backdrop-overlay: rgba(192, 192, 192, 0.9);
+
+  /* text */
+  --text-color: #000000;
+  --button-text: #000000;
+  --text-muted: #666666;
+
+  /* bevels */
+  --border-light: #dfdfdf;
+  --border-dark: #808080;
+  --poster-border: #a0a0a0;
+  --shadow-color: rgba(0, 0, 0, 0.25);
+
+  /* bottom-nav / bevel set (base.html). Several pages reused --win98-dark/light
+     as title-bar colours, which broke their title bars; title bars now have
+     their own tokens below. */
+  --win98-gray: #c0c0c0;
+  --win98-light: #ffffff;
+  --win98-dark: #808080;
+  --win98-black: #000000;
+  --win98-text: #000000;
+  --win98-active-bg: #e0e0e0;
+  --win98-active-pattern: #c0c0c0;
+  --win98-input-bg: #ffffff;
+  --win98-input-text: #000000;
+
+  /* accents */
+  --progress-bar: #008080;
+
+  /* title bars (same as main.css --title-a / --title-b) */
+  --el-title-a: #000080;
+  --el-title-b: #1084d0;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:root {
+    --bg-color: #383838;
+    --window-bg: #404040;
+    --button-bg: #505050;
+    --button-hover: #606060;
+    --input-bg: #2a2a2a;
+    --progress-bg: #2a2a2a;
+    --backdrop-overlay: rgba(56, 56, 56, 0.9);
+
+    --text-color: #ffffff;
+    --button-text: #ffffff;
+    --text-muted: #b0b0b0;
+
+    --border-light: #505050;
+    --border-dark: #2a2a2a;
+    --poster-border: #606060;
+    --shadow-color: rgba(0, 0, 0, 0.5);
+
+    --win98-gray: #303030;
+    --win98-light: #606060;
+    --win98-dark: #151515;
+    --win98-black: #000000;
+    --win98-text: #e0e0e0;
+    --win98-active-bg: #404040;
+    --win98-active-pattern: #303030;
+    --win98-input-bg: #383838;
+    --win98-input-text: #ffffff;
+
+    --progress-bar: #00a0a0;
+
+    /* navy, like the login window — not the grey the bevel tokens produced */
+    --el-title-a: #000040;
+    --el-title-b: #0a5f9e;
+  }
+}
+
+/* One title bar everywhere. The ID + !important outrank the per-page and
+   per-modal rules (some use `#game-search-modal .title-bar ... !important`);
+   drop both once those rules are deleted. */
+html body #main-container .title-bar {
+  background: linear-gradient(90deg, var(--el-title-a), var(--el-title-b)) !important;
+}

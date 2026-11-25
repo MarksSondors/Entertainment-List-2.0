@@ -263,6 +263,8 @@
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}">
     <link rel="icon" type="image/png" sizes="96x96" href="{% static 'favicon/favicon-96x96.png' %}">
     <meta name="username" content="{{ request.user.username }}">
+    <!-- Site-wide palette and shared components; must stay last in <head>. -->
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}">
 </head>
 <body data-username="{{ request.user.username }}">
     <!-- Page loader overlay - Windows 98 style -->
