@@ -148,6 +148,8 @@ def bulk_poster_states(medias, media_type: str, user, ctx: str | None) -> dict[i
                 air_dt, s_num, e_num = next_ep_map[m.id]
                 date_str = air_dt.strftime('%b %d').upper()
                 banner = {'icon': 'next', 'text': f"NEXT: {date_str} \u00b7 S{s_num}E{e_num}"}
+        elif ctx != 'cw':
+            banner = _premiere_banner(m, today)
         states[m.id] = {'rating': ratings.get(m.id), 'banner': banner}
     return states
 
@@ -357,6 +359,14 @@ def _movie_banner(movie, today: date | None = None) -> dict | None:
     return None
 
 
+def _premiere_banner(tvshow, today: date) -> dict | None:
+    """Banner for a show with no aired episodes yet, when TMDB has a future premiere date."""
+    first = tvshow.first_air_date
+    if first and first > today:
+        return {'icon': 'calendar', 'text': f"PREMIERES {first.strftime('%b %d, %Y').upper()}"}
+    return None
+
+
 def _series_banner(tvshow, user, ctx: str | None) -> dict | None:
     from tvshows.models import Episode, WatchedEpisode
 
@@ -367,7 +377,7 @@ def _series_banner(tvshow, user, ctx: str | None) -> dict | None:
     )
     total_aired = aired.count()
     if not total_aired:
-        return None
+        return None if ctx == 'cw' else _premiere_banner(tvshow, today)
     watched_aired = WatchedEpisode.objects.filter(user=user, episode__in=aired).count()
 
     if ctx == 'cw':

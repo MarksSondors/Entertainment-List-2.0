@@ -510,6 +510,7 @@ def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = Non
         progress_map = _bulk_watch_progress(user, [t.id for t in tvshows_sorted])
 
         unstarted = [t for t in tvshows_sorted if progress_map.get(t.id, 0) == 0]
+        unstarted = _unaired_last(unstarted)
         return _catalog_items(unstarted[skip:skip + PAGE_SIZE], 'series', poster_base, user)
 
     else:
@@ -534,7 +535,18 @@ def get_watchlist_series(user, poster_base: str, skip: int = 0, genre: str = Non
             for tid in tvshow_ids
             if tid in tvshow_dict and progress_map.get(tid, 0) == 0
         ]
+        unstarted = _unaired_last(unstarted)
         return _catalog_items(unstarted[skip:skip + PAGE_SIZE], 'series', poster_base, user)
+
+
+def _unaired_last(tvshows: list) -> list:
+    """Keep startable shows in their order, then shows that haven't premiered, soonest premiere first."""
+    today = timezone.now().date()
+    aired, unaired = [], []
+    for t in tvshows:
+        (aired if t.first_air_date and t.first_air_date <= today else unaired).append(t)
+    unaired.sort(key=lambda t: (t.first_air_date is None, t.first_air_date or date.max))
+    return aired + unaired
 
 
 def get_waiting_for_new_episodes(user, poster_base: str, skip: int = 0, genre: str = None) -> list[dict]:
@@ -564,7 +576,8 @@ def get_waiting_for_new_episodes(user, poster_base: str, skip: int = 0, genre: s
     # Caught up on everything aired so far, but the show itself isn't finished
     caught_up = [t for t in tvshows if progress_map.get(t.id, 0) >= 100]
 
-    # Soonest next episode first; shows with no announced date follow, newest watchlist add first.
+    # Soonest next episode first. Shows with no announced date follow, longest since their last
+    # episode first (the likeliest to return next); ties keep newest watchlist add first.
     # Same episode filter as the poster's "NEXT:" banner (regular seasons only).
     today = timezone.now().date()
     next_air = dict(
@@ -575,7 +588,7 @@ def get_waiting_for_new_episodes(user, poster_base: str, skip: int = 0, genre: s
         ).values('season__show_id').annotate(next_air=Min('air_date')).values_list('season__show_id', 'next_air')
     ) if caught_up else {}
     caught_up.sort(key=lambda t: date_map.get(t.id), reverse=True)
-    caught_up.sort(key=lambda t: (next_air.get(t.id) is None, next_air.get(t.id) or date.max))
+    caught_up.sort(key=lambda t: (0, next_air[t.id]) if t.id in next_air else (1, t.last_air_date or date.max))
 
     return _catalog_items(caught_up[skip:skip + PAGE_SIZE], 'series', poster_base, user)
 

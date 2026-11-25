@@ -231,17 +231,58 @@ class StremioEndpointTests(TestCase):
             Watchlist.objects.create(user=self.user, content_type=tvshow_ct, object_id=show.id)
             return show
 
-        # watchlist add order: 1 (oldest) .. 5 (newest)
+        # watchlist add order: 1 (oldest) .. 7 (newest)
         caught_up_show(1, 30)
         caught_up_show(2, None)
         caught_up_show(3, 3)
         caught_up_show(4, None)
         caught_up_show(5, 10)
+        old = caught_up_show(6, None)
+        recent = caught_up_show(7, None)
+        TVShow.objects.filter(id=recent.id).update(last_air_date=date.today() - timedelta(days=20))
+        TVShow.objects.filter(id=old.id).update(last_air_date=date(2024, 4, 23))
 
         metas = self.client.get(self.url('catalog/series/waiting-for-new-episodes.json')).json()['metas']
-        # soonest release first; no announced date last, newest watchlist add first
+        # soonest release first; then no announced date, longest since the last episode first;
+        # no last_air_date at all goes last, newest watchlist add first
         self.assertEqual([m['id'] for m in metas],
-                         ['tt0900003', 'tt0900005', 'tt0900001', 'tt0900004', 'tt0900002'])
+                         ['tt0900003', 'tt0900005', 'tt0900001', 'tt0900006', 'tt0900007',
+                          'tt0900004', 'tt0900002'])
+
+    def test_not_started_puts_unaired_shows_last_with_premiere_banner(self):
+        from .poster import poster_state
+        tvshow_ct = ContentType.objects.get_for_model(TVShow)
+        yesterday = date.today() - timedelta(days=1)
+
+        def show(n, first_air, aired_episode):
+            s = TVShow.objects.create(
+                title=f'Show {n}', original_title=f'Show {n}', tmdb_id=950 + n, imdb_id=f'tt09500{n:02d}',
+                first_air_date=first_air, status='Returning Series',
+            )
+            season = Season.objects.create(show=s, season_number=1)
+            Episode.objects.create(season=season, episode_number=1, title='E1',
+                                   air_date=yesterday if aired_episode else first_air)
+            Watchlist.objects.create(user=self.user, content_type=tvshow_ct, object_id=s.id)
+            return s
+
+        # watchlist add order: 1 (oldest) .. 4 (newest)
+        show(1, date(2020, 1, 1), True)
+        later = show(2, date.today() + timedelta(days=40), False)
+        soon = show(3, date.today() + timedelta(days=16), False)
+        show(4, date(2021, 1, 1), True)
+
+        metas = self.client.get(self.url('catalog/series/watchlist-series.json')).json()['metas']
+        # startable shows keep newest-add-first; unaired follow, soonest premiere first
+        self.assertEqual([m['id'] for m in metas], ['tt0950004', 'tt0950001', 'tt0950003', 'tt0950002'])
+
+        expected = f"PREMIERES {soon.first_air_date.strftime('%b %d, %Y').upper()}"
+        self.assertEqual(poster_state(soon, 'series', self.user, None)['banner'],
+                         {'icon': 'calendar', 'text': expected})
+        from .poster import bulk_poster_states
+        self.assertEqual(bulk_poster_states([soon, later], 'series', self.user, None)[soon.id]['banner'],
+                         {'icon': 'calendar', 'text': expected})
+        # continue-watching posters never get a premiere banner
+        self.assertIsNone(poster_state(soon, 'series', self.user, 'cw')['banner'])
 
     # --- #31 addon fixes -----------------------------------------------------------------------
 
