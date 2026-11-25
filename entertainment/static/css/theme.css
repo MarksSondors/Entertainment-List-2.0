@@ -102,3 +102,20 @@ html:root {
 html body #main-container .title-bar {
   background: linear-gradient(90deg, var(--el-title-a), var(--el-title-b)) !important;
 }
+
+/* Touch: bigger hit areas without changing how anything looks. */
+@media (pointer: coarse) {
+  .title-bar-controls button[aria-label="Close"] {
+    position: relative;
+  }
+  .title-bar-controls button[aria-label="Close"]::after {
+    content: '';
+    position: absolute;
+    inset: -9px -8px -9px -6px;       /* 16x14 drawn, ~30x32 tappable */
+  }
+  .remove-item::after {
+    content: '';
+    position: absolute;
+    inset: -7px;                       /* 20x20 drawn, 34x34 tappable */
+  }
+}
