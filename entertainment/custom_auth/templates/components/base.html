@@ -33,8 +33,17 @@
     <!-- jQuery for CSS loading detection -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     
+    <!-- Boot screen once per app session; later navigations show the page straight away. -->
+    <script>
+        try {
+            if (sessionStorage.getItem('el-booted')) document.documentElement.classList.add('el-booted');
+            sessionStorage.setItem('el-booted', '1');
+        } catch (e) {}
+    </script>
+
     <!-- Loading overlay - Windows 98 style -->
     <style>
+        .el-booted #page-loader { display: none; }
         #page-loader {
             position: fixed;
             top: 0;
