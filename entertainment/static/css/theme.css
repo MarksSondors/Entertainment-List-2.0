@@ -20,10 +20,10 @@ html:root {
   --progress-bg: #ffffff;
   --backdrop-overlay: rgba(192, 192, 192, 0.9);
 
-  /* text */
+  /* text — muted was #666 (3.2:1 on #c0c0c0); #4a4a4a is 4.9:1 */
   --text-color: #000000;
   --button-text: #000000;
-  --text-muted: #666666;
+  --text-muted: #4a4a4a;
 
   /* bevels */
   --border-light: #dfdfdf;
@@ -45,7 +45,10 @@ html:root {
   --win98-input-text: #000000;
 
   /* accents */
-  --progress-bar: #008080;
+  --progress-bar: #008080;            /* fills only */
+  --el-accent-text: #005555;          /* teal used as text: 4.8:1 on #c0c0c0 */
+  --el-danger-text: #a80000;
+  --el-success-text: #0d5c0d;
 
   /* title bars (same as main.css --title-a / --title-b) */
   --el-title-a: #000080;
@@ -62,9 +65,10 @@ html:root {
     --progress-bg: #2a2a2a;
     --backdrop-overlay: rgba(56, 56, 56, 0.9);
 
+    /* muted was #b0b0b0 (3.7:1 on #505050 buttons); #c4c4c4 is 4.6:1 */
     --text-color: #ffffff;
     --button-text: #ffffff;
-    --text-muted: #b0b0b0;
+    --text-muted: #c4c4c4;
 
     --border-light: #505050;
     --border-dark: #2a2a2a;
@@ -82,6 +86,9 @@ html:root {
     --win98-input-text: #ffffff;
 
     --progress-bar: #00a0a0;
+    --el-accent-text: #5fd3d3;
+    --el-danger-text: #ff8a8a;
+    --el-success-text: #5fd35f;
 
     /* navy, like the login window — not the grey the bevel tokens produced */
     --el-title-a: #000040;

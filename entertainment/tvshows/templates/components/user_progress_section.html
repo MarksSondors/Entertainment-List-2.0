@@ -165,7 +165,7 @@
 }
 
 .tooltip-group-rating {
-    color: #008080; /* Teal for light mode */
+    color: var(--el-accent-text);
     font-weight: bold;
 }
 
@@ -261,7 +261,7 @@
                                 {{ user_progress.watched_count }}/{{ user_progress.total_episodes }} ({{ user_progress.progress_percentage|floatformat:1 }}%)
                             </span>
                             {% if user_progress.average_rating %}
-                                <span style="font-weight: bold; color: var(--progress-bar); font-size: 11px; display: inline-flex; align-items: center; gap: 2px;">
+                                <span style="font-weight: bold; color: var(--el-accent-text); font-size: 11px; display: inline-flex; align-items: center; gap: 2px;">
                                     Avg: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 12px; height: 12px;">{{ user_progress.average_rating|floatformat:1 }}
                                 </span>
                             {% endif %}

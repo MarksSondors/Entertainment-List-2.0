@@ -718,7 +718,7 @@
                 <div class="tv-details" style="flex-grow: 1;">
                     <p><strong>Plot:</strong> {{ tv_show.description }}</p>
                     <p><strong>Status:</strong> 
-                        <span style="{% if tv_show.status == 'Ended' %}color: #700;{% elif tv_show.status == 'Returning Series' %}color: #070;{% endif %}">
+                        <span style="{% if tv_show.status == 'Ended' %}color: var(--el-danger-text);{% elif tv_show.status == 'Returning Series' %}color: var(--el-success-text);{% endif %}">
                             {{ tv_show.status }}
                         </span>
                     </p>
@@ -881,7 +881,7 @@
                             <!-- Add user rating display if it exists -->
                             {% if season.user_rating %}
                             <div id="season-rating-{{ season.id }}" class="user-rating" style="margin-top: 5px; font-weight: bold; font-size: 11px;">
-                                <span style="color: var(--progress-bar);">Your Rating: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 14px; height: 14px; vertical-align: middle;"> {{ season.user_rating }}/10</span>
+                                <span style="color: var(--el-accent-text);">Your Rating: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 14px; height: 14px; vertical-align: middle;"> {{ season.user_rating }}/10</span>
                             </div>
                             {% endif %}
                             
@@ -1025,7 +1025,7 @@
                                         <!-- Add user rating display if it exists -->
                                         {% if subgroups_data|get_item:subgroup.id|get_item:'user_rating' %}
                                         <div class="user-rating" style="margin-top: 5px; font-weight: bold; font-size: 11px;">
-                                            <span style="color: var(--progress-bar);">Your Rating: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 14px; height: 14px; vertical-align: middle;"> {{ subgroups_data|get_item:subgroup.id|get_item:'user_rating' }}/10</span>
+                                            <span style="color: var(--el-accent-text);">Your Rating: <img src="{% static 'images/win98/star-in-win-98 style.png' %}" alt="Rating" style="width: 14px; height: 14px; vertical-align: middle;"> {{ subgroups_data|get_item:subgroup.id|get_item:'user_rating' }}/10</span>
                                         </div>
                                         {% endif %}
                                         
