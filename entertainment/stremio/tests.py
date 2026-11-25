@@ -210,6 +210,39 @@ class StremioEndpointTests(TestCase):
             [('tt0000061:1:1', '✓ Pilot'), ('tt0000061:1:2', 'Second')],
         )
 
+    def test_waiting_for_new_episodes_orders_by_next_air_date(self):
+        tvshow_ct = ContentType.objects.get_for_model(TVShow)
+        yesterday = date.today() - timedelta(days=1)
+
+        def caught_up_show(n, next_in_days):
+            show = TVShow.objects.create(
+                title=f'Show {n}', original_title=f'Show {n}', tmdb_id=900 + n, imdb_id=f'tt09000{n:02d}',
+                first_air_date=date(2020, 1, 1), status='Returning Series',
+            )
+            season = Season.objects.create(show=show, season_number=1)
+            aired = Episode.objects.create(season=season, episode_number=1, title='E1', air_date=yesterday)
+            WatchedEpisode.objects.create(user=self.user, episode=aired)
+            if next_in_days is not None:
+                Episode.objects.create(season=season, episode_number=2, title='E2',
+                                       air_date=date.today() + timedelta(days=next_in_days))
+                # a later episode must not override the earliest one
+                Episode.objects.create(season=season, episode_number=3, title='E3',
+                                       air_date=date.today() + timedelta(days=next_in_days + 1))
+            Watchlist.objects.create(user=self.user, content_type=tvshow_ct, object_id=show.id)
+            return show
+
+        # watchlist add order: 1 (oldest) .. 5 (newest)
+        caught_up_show(1, 30)
+        caught_up_show(2, None)
+        caught_up_show(3, 3)
+        caught_up_show(4, None)
+        caught_up_show(5, 10)
+
+        metas = self.client.get(self.url('catalog/series/waiting-for-new-episodes.json')).json()['metas']
+        # soonest release first; no announced date last, newest watchlist add first
+        self.assertEqual([m['id'] for m in metas],
+                         ['tt0900003', 'tt0900005', 'tt0900001', 'tt0900004', 'tt0900002'])
+
     # --- #31 addon fixes -----------------------------------------------------------------------
 
     def _cinemeta_rating(self, value):

@@ -11,7 +11,8 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
-from django.db.models import Avg, Case, Count, F, IntegerField, Max, Q, When
+from django.db.models import Avg, Case, Count, F, IntegerField, Max, Min, Q, When
+from django.utils import timezone
 import requests
 
 from .authentication import decode_config, get_user_from_config, is_rate_limited, require_stremio_auth
@@ -22,7 +23,7 @@ from .formatters import (
 from .poster import bulk_poster_states, content_version, get_cached_poster
 
 from movies.models import Movie, MovieOfWeekPick
-from tvshows.models import TVShow
+from tvshows.models import Episode, TVShow
 from custom_auth.models import Watchlist, Review, Genre
 from custom_auth.services.recommendation_cache import SCOPE_MOVIES, SCOPE_STREMIO, get_cached, set_cached
 from movies.services.recommendation import MovieRecommender
@@ -562,7 +563,19 @@ def get_waiting_for_new_episodes(user, poster_base: str, skip: int = 0, genre: s
 
     # Caught up on everything aired so far, but the show itself isn't finished
     caught_up = [t for t in tvshows if progress_map.get(t.id, 0) >= 100]
+
+    # Soonest next episode first; shows with no announced date follow, newest watchlist add first.
+    # Same episode filter as the poster's "NEXT:" banner (regular seasons only).
+    today = timezone.now().date()
+    next_air = dict(
+        Episode.objects.filter(
+            season__show_id__in=[t.id for t in caught_up],
+            season__season_number__gt=0,
+            air_date__gt=today,
+        ).values('season__show_id').annotate(next_air=Min('air_date')).values_list('season__show_id', 'next_air')
+    ) if caught_up else {}
     caught_up.sort(key=lambda t: date_map.get(t.id), reverse=True)
+    caught_up.sort(key=lambda t: (next_air.get(t.id) is None, next_air.get(t.id) or date.max))
 
     return _catalog_items(caught_up[skip:skip + PAGE_SIZE], 'series', poster_base, user)
 
