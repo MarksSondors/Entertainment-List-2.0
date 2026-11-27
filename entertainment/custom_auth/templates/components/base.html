@@ -33,17 +33,47 @@
     <!-- jQuery for CSS loading detection -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     
-    <!-- Boot screen once per app session; later navigations show the page straight away. -->
+    <!-- Boot screen once per app session. Later navigations skip it but keep the page hidden
+         until it is styled: most templates put their <style> after their markup, so without
+         this the browser paints raw HTML first on a slow connection. -->
     <script>
-        try {
-            if (sessionStorage.getItem('el-booted')) document.documentElement.classList.add('el-booted');
-            sessionStorage.setItem('el-booted', '1');
-        } catch (e) {}
+        (function () {
+            var root = document.documentElement;
+            try {
+                if (sessionStorage.getItem('el-booted')) root.classList.add('el-booted');
+                sessionStorage.setItem('el-booted', '1');
+            } catch (e) {}
+            if (!root.classList.contains('el-booted')) return;
+            // Reveal once the parser has passed every <style> (DOMContentLoaded) and every
+            // stylesheet has loaded; the CSS animation below is the fallback if this never runs.
+            function reveal() {
+                var pending = [].filter.call(document.querySelectorAll('link[rel="stylesheet"]'),
+                    function (link) { return !link.sheet; });
+                var left = pending.length;
+                if (!left) { root.classList.add('el-ready'); return; }
+                pending.forEach(function (link) {
+                    function done() { if (--left === 0) root.classList.add('el-ready'); }
+                    link.addEventListener('load', done);
+                    link.addEventListener('error', done);
+                });
+            }
+            document.addEventListener('DOMContentLoaded', reveal);
+        })();
     </script>
 
     <!-- Loading overlay - Windows 98 style -->
     <style>
         .el-booted #page-loader { display: none; }
+        /* opacity too: some pages set `visibility: visible !important` on floating buttons,
+           which escapes an inherited `hidden`; a child cannot undo its ancestor's opacity. */
+        .el-booted:not(.el-ready) body > :not(#page-loader) {
+            visibility: hidden;
+            opacity: 0;
+            /* Fallback only for a script that never runs. Heavy pages on slow phones can take
+               5 s+ to parse, and a shorter cut-off would reveal them half-styled. */
+            animation: el-reveal 0s 10s forwards;
+        }
+        @keyframes el-reveal { to { visibility: visible; opacity: 1; } }
         #page-loader {
             position: fixed;
             top: 0;
