@@ -192,7 +192,7 @@
                 <div class="sunken-panel" style="padding: 10px;">
                     <p style="margin-bottom: 10px;">Manage the Movie Recommendation System (SVD Model).</p>
                     
-                    <div style="display: flex; gap: 10px; align-items: center;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
                         <!-- Download Button -->
                          <form action="{% url 'download_dataset' %}" method="post">
                             {% csrf_token %}

@@ -165,6 +165,79 @@ html body .title-bar-text {
   }
 }
 
+/* ---------- Component: button (the sign-in page's secondary button) ----------
+   One look for action buttons; ~10 templates each define .retro-btn their own
+   way (outset borders, 10-14px text, 24-44px tall). Tabs, filter chips, tiles,
+   the bottom bar and title-bar controls are separate components. */
+html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn:not(.btn-group), .nf-btn, .btn-watchlist,
+              .ca-show-more, .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick) {
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  min-height: 32px;
+  padding: 0 12px !important;
+  color: var(--el-text) !important;
+  background: var(--el-face) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow:
+    inset -1px -1px 0 0 var(--el-edge),
+    inset 1px 1px 0 0 var(--el-highlight),
+    inset -2px -2px 0 0 var(--el-shadow),
+    inset 2px 2px 0 0 var(--el-face-light) !important;
+  text-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+/* links styled as buttons: centre the label like a <button> does */
+html body a:is(.retro-btn:not(.movie-card-btn), .btn, .nf-btn) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none !important;
+}
+/* icon-only buttons: square */
+html body :is(.settings-btn, .ca-quick) {
+  padding: 0 !important;
+  min-width: 40px;
+}
+html body .settings-btn {
+  width: 40px !important;           /* was 48 x 40 */
+  height: 40px !important;
+}
+@media (hover: hover) {
+  html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+                .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick):hover {
+    background: var(--el-face-light) !important;
+  }
+}
+/* pressed, and toggles that are on (Compact/Detailed, active filters) */
+html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+              .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick):is(:active, .active, [aria-pressed="true"]) {
+  background: var(--el-face-light) !important;
+  box-shadow:
+    inset 1px 1px 0 0 var(--el-edge),
+    inset -1px -1px 0 0 var(--el-highlight),
+    inset 2px 2px 0 0 var(--el-shadow),
+    inset -2px -2px 0 0 var(--el-face-light) !important;
+}
+html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+              .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick):is(:disabled, [disabled], .disabled) {
+  color: var(--el-muted) !important;
+  cursor: default;
+}
+html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+              .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick):focus-visible {
+  outline: 2px solid var(--el-focus) !important;
+  outline-offset: 2px !important;
+}
+@media (max-width: 767px) {
+  html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+                .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick) {
+    min-height: 40px !important;
+  }
+}
+
 /* 98.css paints <legend> silver in both themes (light text on it in dark). */
 html body legend {
   background: var(--el-face);
