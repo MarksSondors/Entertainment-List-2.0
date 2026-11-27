@@ -1,201 +1,51 @@
 {% load static %}
-
-<div class="search-wrapper">
-    <!-- Compact Search Bar -->
-    <div class="win98-search-bar">
-        <div class="search-input-row">
-            <img src="{% static 'images/win98/search_globe_transparent.gif' %}" alt="" class="search-icon">
-            <input type="text" 
-                   id="searchInput" 
-                   name="search" 
-                   placeholder="Search..."
-                   value="{{ request.GET.search }}"
-                   autocomplete="off"
-                   autocorrect="off"
-                   autocapitalize="off"
-                   spellcheck="false">
-            <button id="cancelButton" class="win98-btn-small" onclick="clearSearch()" style="display: none;" aria-label="Close">
-                <img src="{% static 'images/win98/close_icon.png' %}" alt="X" style="width: 12px; height: 12px; image-rendering: pixelated;">
-            </button>
+{% comment %}
+Discover search: field, "Look in:" type picker, results list. Styles: el-search, el-combo,
+el-listbox, el-result in static/css/el/components.css. Keeps the globals the add-content
+modals call after a successful add: performSearch(query, type), clearSearch(),
+getCurrentQuery(), getCurrentEndpoint().
+{% endcomment %}
+<div class="el-search" id="elSearch" data-search-url="{% url 'discover_search' %}" data-icons="{% static 'images/win98/' %}">
+    <div class="el-search-bar" role="search">
+        <div class="el-field-row">
+            <label class="el-visually-hidden" for="searchInput">Search</label>
+            <input class="el-input" type="search" id="searchInput" name="search"
+                   placeholder="Search movies…" value="{{ request.GET.search }}"
+                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   enterkeyhint="search" aria-controls="searchResults">
+            <button type="button" class="el-btn el-btn-secondary" id="cancelButton" hidden>Cancel</button>
         </div>
 
-        <!-- Tabs (Hidden by default) -->
-        <div id="searchTabs" class="win98-tabs" style="display: none;">
-            <button class="search-tab active" data-endpoint="movies">Movies</button>
-            <button class="search-tab" data-endpoint="tvshows">TV Shows</button>
-            <button class="search-tab" data-endpoint="games">Games</button>
-            <button class="search-tab" data-endpoint="books">Books</button>
-            <button class="search-tab" data-endpoint="people">People</button>
-            <button class="search-tab" data-endpoint="users">Users</button>
+        <div class="el-search-scope">
+            <span class="el-search-scope-label" id="elScopeLabel">Look in:</span>
+            <div class="el-combo-wrap">
+                <button type="button" class="el-combo" id="elScope"
+                        aria-haspopup="listbox" aria-expanded="false" aria-controls="elScopeList"
+                        aria-labelledby="elScopeLabel elScopeValue">
+                    <img class="el-type-icon" id="elScopeIcon" src="{% static 'images/win98/camera_vid.png' %}" alt="" width="16" height="16">
+                    <span class="el-combo-value" id="elScopeValue">Movies</span>
+                    <span class="el-combo-arrow" aria-hidden="true"></span>
+                </button>
+                <div class="el-listbox" id="elScopeList" role="listbox" tabindex="-1" aria-labelledby="elScopeLabel" hidden></div>
+            </div>
         </div>
     </div>
 
-    <!-- Results Dropdown (Floating) -->
-    <div id="searchResults" class="win98-results-dropdown" style="display: none;">
-        <div class="results-status-bar" id="resultsCount">Ready</div>
-        <div class="sunken-panel">
-            <div id="resultsGrid" class="results-list">
-                <!-- Results populated by JS -->
+    <div class="el-search-results" id="searchResults" hidden>
+        <div class="el-search-panel">
+            <div class="el-search-list" id="elResultsList" aria-live="polite" aria-busy="false"></div>
+            <button type="button" class="el-btn el-search-add" id="elAddButton" hidden></button>
+            <div class="el-status-bar">
+                <div class="el-status-bar-field" id="resultsCount" role="status">Ready</div>
+                <div class="el-status-bar-field" id="resultsScope">Movies</div>
             </div>
-        </div>
-        
-        <!-- Add Content Container -->
-        <div id="addContentContainer" style="display: none; padding: 4px; text-align: center; border-top: 1px solid var(--win98-dark);">
-            <button type="button" id="addMovieButton" class="win98-btn-small" style="display: none; width: 100%;">Add Movie</button>
-            <button type="button" id="addTvShowButton" class="win98-btn-small" style="display: none; width: 100%;">Add TV Show</button>
-            <button type="button" id="addGameButton" class="win98-btn-small" style="display: none; width: 100%;">Add Game</button>
         </div>
     </div>
 </div>
 
 <style>
-    .search-wrapper {
-        position: relative;
-        max-width: 800px;
-        margin: 0 auto 10px auto;
-        z-index: 1000;
-    }
-
-    .win98-search-bar {
-        background: var(--win98-gray);
-        border: 2px solid var(--win98-light);
-        border-right-color: var(--win98-dark);
-        border-bottom-color: var(--win98-dark);
-        padding: 4px;
-        box-shadow: 1px 1px 0 var(--win98-black);
-    }
-
-    .search-input-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .search-icon {
-        width: 16px;
-        height: 16px;
-        image-rendering: pixelated;
-    }
-
-    #searchInput {
-        flex: 1;
-        height: 30px;
-        border: 2px solid;
-        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
-        padding: 0 6px;
-        font-family: 'MS Sans Serif', 'Segoe UI', sans-serif;
-        font-size: 14px;
-        background: var(--win98-input-bg);
-        color: var(--win98-input-text);
-        outline: none;
-    }
-
-    .win98-btn-small {
-        min-width: 30px;
-        height: 30px;
-        padding: 0 8px;
-        background: var(--win98-gray);
-        color: var(--win98-text);
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 12px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        
-        /* Win98 Button Style (Outset) - Matching Navbar */
-        border-top: 1px solid var(--win98-light);
-        border-left: 1px solid var(--win98-light);
-        border-right: 1px solid var(--win98-black);
-        border-bottom: 1px solid var(--win98-black);
-        box-shadow: 1px 1px 0 var(--win98-black), inset 1px 1px 0 var(--win98-light), inset -1px -1px 0 var(--win98-dark);
-        transition: none;
-    }
-
-    .win98-btn-small:active {
-        /* Win98 Pressed Style (Inset) - Matching Navbar */
-        border-top: 1px solid var(--win98-black);
-        border-left: 1px solid var(--win98-black);
-        border-right: 1px solid var(--win98-light);
-        border-bottom: 1px solid var(--win98-light);
-        box-shadow: inset 1px 1px 0 var(--win98-dark);
-        
-        /* Dithered pattern for active state */
-        background-image: linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern)), 
-                          linear-gradient(45deg, var(--win98-active-pattern) 25%, transparent 25%, transparent 75%, var(--win98-active-pattern) 75%, var(--win98-active-pattern));
-        background-position: 0 0, 1px 1px;
-        background-size: 4px 4px;
-        
-        padding-top: 0;
-        padding-left: 0;
-    }
-
-    .win98-tabs {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 2px;
-        margin-top: 6px;
-        padding-left: 0;
-    }
-
-    .search-tab {
-        flex: 1 1 auto;
-        min-width: 0;
-        text-align: center;
-        background: var(--win98-gray);
-        border: none;
-        box-shadow: inset 1px 1px var(--win98-light), 
-                    inset -1px 0 var(--win98-dark), 
-                    inset -2px 0 var(--win98-black);
-        padding: 4px 8px;
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 12px;
-        color: var(--win98-text);
-        cursor: pointer;
-        border-radius: 3px 3px 0 0;
-        white-space: nowrap;
-    }
-
-    .search-tab.active {
-        font-weight: bold;
-        padding-bottom: 5px;
-        position: relative;
-        top: 2px;
-        z-index: 2;
-        box-shadow: inset 1px 1px var(--win98-light), 
-                    inset -1px 0 var(--win98-dark), 
-                    inset -2px 0 var(--win98-black);
-    }
-
-    @media (max-width: 480px) {
-        .search-tab {
-            padding: 4px 4px;
-            font-size: 11px;
-        }
-    }
-
-    .win98-results-dropdown {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: var(--win98-gray);
-        border: 2px outset var(--win98-light);
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
-        margin-top: 2px;
-        padding: 2px;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .results-status-bar {
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 11px;
-        color: var(--win98-text);
-        padding: 2px 4px;
-        margin-bottom: 2px;
-    }
-
+    /* Kept from the old search component: the add-content modals on this page
+       (movie/TV/game/book) rely on it. Remove when they move to el-* classes. */
     .sunken-panel {
         border: 2px solid;
         border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
@@ -203,352 +53,252 @@
         max-height: 60vh;
         overflow-y: auto;
     }
-
-    .result-item {
-        display: flex;
-        align-items: center;
-        padding: 4px;
-        cursor: pointer;
-        color: var(--win98-input-text);
-        border: 1px dotted transparent;
-    }
-
-    .result-item:hover {
-        background-color: #000080;
-        color: white;
-        border: 1px dotted #ffffff;
-    }
-
-    @media (prefers-color-scheme: dark) {
-        .result-item:hover {
-            background-color: #004e98;
-        }
-    }
-
-    .result-poster {
-        width: 32px;
-        height: 48px;
-        object-fit: cover;
-        margin-right: 8px;
-        border: 1px solid var(--win98-dark);
-    }
-
-    .result-poster-placeholder {
-        width: 32px;
-        height: 48px;
-        background: var(--win98-dark);
-        margin-right: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 8px;
-    }
-
-    .result-content {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .result-title {
-        font-family: 'MS Sans Serif', sans-serif;
-        font-size: 12px;
-        font-weight: bold;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .result-meta {
-        font-size: 10px;
-        opacity: 0.8;
-    }
-
-    .user-avatar {
-        width: 32px;
-        height: 32px;
-        background: var(--win98-dark);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 8px;
-        font-weight: bold;
-        border: 1px solid var(--win98-light);
-    }
 </style>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const searchInput = document.getElementById('searchInput');
-        const searchTabs = document.getElementById('searchTabs');
-        const cancelButton = document.getElementById('cancelButton');
-        const searchResults = document.getElementById('searchResults');
-        const defaultContent = document.getElementById('defaultContent');
-        const resultsGrid = document.getElementById('resultsGrid');
-        const resultsCount = document.getElementById('resultsCount');
-        const addContentContainer = document.getElementById('addContentContainer');
-        const addMovieButton = document.getElementById('addMovieButton');
-        const addTvShowButton = document.getElementById('addTvShowButton');
-        
-        let currentEndpoint = 'movies';
-        let searchTimeout = null;
-        // Only the newest search may draw results: older requests are aborted,
-        // and any response that still arrives late is ignored by sequence number.
-        let searchController = null;
-        let searchSeq = 0;
-        const SEARCH_DEBOUNCE_MS = 300;
+document.addEventListener('DOMContentLoaded', function () {
+    const root = document.getElementById('elSearch');
+    if (!root) return;
+    const URL_ = root.dataset.searchUrl, ICONS = root.dataset.icons;
+    const input = document.getElementById('searchInput');
+    const cancel = document.getElementById('cancelButton');
+    const combo = document.getElementById('elScope');
+    const comboIcon = document.getElementById('elScopeIcon');
+    const comboValue = document.getElementById('elScopeValue');
+    const listbox = document.getElementById('elScopeList');
+    const results = document.getElementById('searchResults');
+    const list = document.getElementById('elResultsList');
+    const addButton = document.getElementById('elAddButton');
+    const status = document.getElementById('resultsCount');
+    const statusScope = document.getElementById('resultsScope');
+    const defaultContent = document.getElementById('defaultContent');
+    const me = document.body.dataset.username || '';
 
-        const placeholders = {
-            'movies': 'Search for movies...',
-            'tvshows': 'Search for TV shows...',
-            'games': 'Search for games...',
-            'books': 'Search for books or authors...',
-            'people': 'Search for people...',
-            'users': 'Search for users...'
-        };
+    // type key -> label, icon, placeholder, noun for "Add", modal opener
+    const TYPES = {
+        movies:  { label: 'Movies',   icon: 'camera_vid.png',         ph: 'Search movies…',           add: 'movie',   open: () => window.openModal },
+        tvshows: { label: 'TV Shows', icon: 'network_television.png', ph: 'Search TV shows…',         add: 'TV show', open: () => window.openTVShowModal },
+        games:   { label: 'Games',    icon: 'solitaire.png',          ph: 'Search games…',            add: 'game',    open: () => window.openGameModal },
+        books:   { label: 'Books',    icon: 'document.png',           ph: 'Search books or authors…', add: 'book',    open: () => window.openBookModal },
+        people:  { label: 'People',   icon: 'user_card.png',          ph: 'Search actors, directors…' },
+        users:   { label: 'Users',    icon: 'users.png',              ph: 'Search friends…' },
+    };
+    const KEYS = Object.keys(TYPES);
+    const STORE = 'el-search-type';
+    const DEBOUNCE_MS = 300;
 
-        function clearSearch() {
-            if (searchTimeout) clearTimeout(searchTimeout);
-            if (searchController) searchController.abort();
-            searchSeq++;
-            searchInput.value = '';
-            searchTabs.style.display = 'none';
-            cancelButton.style.display = 'none';
-            searchResults.style.display = 'none';
-            if (defaultContent) defaultContent.style.display = 'block';
-            addContentContainer.style.display = 'none';
-            searchInput.blur();
-        }
+    let type = new URLSearchParams(location.search).get('type');
+    if (!TYPES[type]) { try { type = localStorage.getItem(STORE); } catch (e) { type = null; } }
+    if (!TYPES[type]) type = 'movies';
+    let timer = null, controller = null, seq = 0, active = -1;
 
-        function performSearch(query, type) {
-            if (!query.trim()) {
-                clearSearch();
-                return;
-            }
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    const icon = (t, size) => { const i = el('img', 'el-type-icon'); i.src = ICONS + TYPES[t].icon; i.alt = ''; i.width = i.height = size; return i; };
 
-            searchResults.style.display = 'flex';
-            if (defaultContent) defaultContent.style.display = 'none';
-            
-            resultsGrid.innerHTML = '<div style="padding: 10px; text-align: center;">Searching...</div>';
-            resultsCount.textContent = 'Searching...';
-
-            if (searchController) searchController.abort();
-            searchController = new AbortController();
-            const mySeq = ++searchSeq;
-
-            fetch(`{% url 'discover_search' %}?search=${encodeURIComponent(query)}&type=${type}`,
-                  { signal: searchController.signal })
-                .then(response => response.json())
-                .then(data => {
-                    if (mySeq !== searchSeq) return;
-                    if (data.success) {
-                        displayResults(data);
-                    } else {
-                        resultsGrid.innerHTML = `<div style="padding: 10px; text-align: center;">Error: ${data.error}</div>`;
-                        resultsCount.textContent = 'Error';
-                    }
-                })
-                .catch(error => {
-                    if (error.name === 'AbortError' || mySeq !== searchSeq) return;
-                    console.error('Search error:', error);
-                    resultsGrid.innerHTML = '<div style="padding: 10px; text-align: center;">Search failed.</div>';
-                    resultsCount.textContent = 'Failed';
-                });
-        }
-
-        function displayResults(data) {
-            resultsCount.textContent = `${data.count} object(s) found`;
-
-            if (data.results.length === 0) {
-                resultsGrid.innerHTML = '<div style="padding: 10px; text-align: center;">No results found</div>';
-                addAddContentResults();
-                return;
-            }
-
-            resultsGrid.innerHTML = '';
-
-            data.results.forEach(item => {
-                const resultItem = document.createElement('div');
-                resultItem.className = 'result-item';
-                resultItem.onclick = () => window.location.href = item.url;
-
-                if (data.search_type === 'users') {
-                    resultItem.innerHTML = `
-                        <div class="user-avatar">${item.username.charAt(0).toUpperCase()}</div>
-                        <div class="result-content">
-                            <div class="result-title">${item.username}</div>
-                        </div>
-                    `;
-                } else if (data.search_type === 'people') {
-                    resultItem.innerHTML = `
-                        ${item.profile_picture ? 
-                            `<img src="${item.profile_picture}" alt="${item.name}" class="result-poster">` : 
-                            '<div class="result-poster-placeholder">No Image</div>'
-                        }
-                        <div class="result-content">
-                            <div class="result-title">${item.name}</div>
-                            <div class="result-meta">
-                                ${item.avg_rating ? `<span>Rating: ${item.avg_rating}/10</span>` : ''}
-                            </div>
-                        </div>
-                    `;
-                } else if (data.search_type === 'games') {
-                    let yearText = item.year ? item.year.toString() : '';
-
-                    resultItem.innerHTML = `
-                        ${item.poster ? 
-                            `<img src="${item.poster}" alt="${item.title}" class="result-poster" style="object-fit: cover;">` : 
-                            '<div class="result-poster-placeholder">No Image</div>'
-                        }
-                        <div class="result-content">
-                            <div class="result-title">${item.title}</div>
-                            <div class="result-meta">
-                                <span>${yearText}</span>
-                                ${item.metacritic ? `<span>MC: ${item.metacritic}</span>` : ''}
-                                ${item.avg_rating ? `<span>★ ${item.avg_rating}</span>` : ''}
-                                ${item.in_watchlist ? '<span style="color: #008000; font-weight: bold;">(In Watchlist)</span>' : ''}
-                            </div>
-                        </div>
-                    `;
-                } else if (data.search_type === 'books') {
-                    resultItem.onclick = () => window.location.href = item.url;
-                    resultItem.innerHTML = `
-                        ${item.poster ?
-                            `<img src="${item.poster}" alt="${item.title}" class="result-poster" style="object-fit: cover;">` :
-                            '<div class="result-poster-placeholder">No Cover</div>'
-                        }
-                        <div class="result-content">
-                            <div class="result-title">${item.title}</div>
-                            <div class="result-meta">
-                                ${item.authors ? `<span>${item.authors}</span>` : ''}
-                                ${item.year ? `<span>${item.year}</span>` : ''}
-                                ${item.avg_rating ? `<span>★ ${item.avg_rating}</span>` : ''}
-                                ${item.in_watchlist ? '<span style="color: #008000; font-weight: bold;">(In Watchlist)</span>' : ''}
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    let yearText = '';
-                    if (item.year) {
-                        yearText = (item.end_year && item.end_year !== item.year) ? 
-                            `${item.year}-${item.end_year}` : item.year.toString();
-                    }
-
-                    resultItem.innerHTML = `
-                        ${item.poster ? 
-                            `<img src="${item.poster}" alt="${item.title}" class="result-poster">` : 
-                            '<div class="result-poster-placeholder">No Poster</div>'
-                        }
-                        <div class="result-content">
-                            <div class="result-title">${item.title}</div>
-                            <div class="result-meta">
-                                <span>${yearText}</span>
-                                ${item.avg_rating ? `<span>★ ${item.avg_rating}</span>` : ''}
-                                ${item.in_watchlist ? '<span style="color: #008000; font-weight: bold;">(In Watchlist)</span>' : ''}
-                            </div>
-                        </div>
-                    `;
-                }
-
-                resultsGrid.appendChild(resultItem);
-            });
-            
-            addAddContentResults();
-        }
-
-        function addAddContentResults() {
-            if (currentEndpoint === 'movies' || currentEndpoint === 'tvshows' || currentEndpoint === 'games' || currentEndpoint === 'books') {
-                const addResultItem = document.createElement('div');
-                addResultItem.className = 'result-item';
-                addResultItem.style.borderTop = '1px dotted var(--win98-dark)';
-                addResultItem.style.marginTop = '4px';
-                
-                let buttonText = 'Add Movie';
-                if (currentEndpoint === 'tvshows') buttonText = 'Add TV Show';
-                else if (currentEndpoint === 'games') buttonText = 'Add Game';
-                else if (currentEndpoint === 'books') buttonText = 'Add Book';
-                
-                const currentQuery = searchInput.value.trim();
-                
-                addResultItem.innerHTML = `
-                    <div class="result-poster-placeholder" style="background: var(--win98-gray); color: var(--win98-text); border: 1px solid var(--win98-text);">
-                        <span style="font-size: 16px; font-weight: bold;">+</span>
-                    </div>
-                    <div class="result-content">
-                        <div class="result-title">${buttonText}</div>
-                        <div class="result-meta">
-                            <span>Not found? Add it to the database!</span>
-                        </div>
-                    </div>
-                `;
-                
-                addResultItem.onclick = () => {
-                    if (currentEndpoint === 'movies') {
-                        if (typeof openModal === 'function') openModal(currentQuery);
-                    } else if (currentEndpoint === 'tvshows') {
-                        if (typeof openTVShowModal === 'function') openTVShowModal(currentQuery);
-                    } else if (currentEndpoint === 'games') {
-                        if (typeof openGameModal === 'function') openGameModal(currentQuery);
-                    } else if (currentEndpoint === 'books') {
-                        if (typeof openBookModal === 'function') openBookModal(currentQuery);
-                    }
-                };
-                
-                resultsGrid.appendChild(addResultItem);
-            }
-        }
-
-        searchInput.addEventListener('focus', function() {
-            searchTabs.style.display = 'flex';
-            cancelButton.style.display = 'flex';
-            if (searchInput.value.trim()) performSearch(searchInput.value, currentEndpoint);
-        });
-
-        document.querySelectorAll('.search-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                document.querySelectorAll('.search-tab').forEach(t => {
-                    t.classList.remove('active');
-                });
-                
-                this.classList.add('active');
-                
-                const endpoint = this.getAttribute('data-endpoint');
-                currentEndpoint = endpoint;
-                searchInput.placeholder = placeholders[endpoint];
-                
-                if (searchInput.value.trim()) performSearch(searchInput.value, currentEndpoint);
-            });
-        });
-
-        searchInput.addEventListener('input', function() {
-            const query = searchInput.value;
-            if (searchTimeout) clearTimeout(searchTimeout);
-            
-            if (!query.trim()) {
-                clearSearch();
-                return;
-            }
-            
-            searchTabs.style.display = 'flex';
-            cancelButton.style.display = 'flex';
-            
-            if (query.trim().length >= 2) {
-                searchTimeout = setTimeout(() => {
-                    performSearch(query, currentEndpoint);
-                }, SEARCH_DEBOUNCE_MS);
-            }
-        });
-
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                if (searchTimeout) clearTimeout(searchTimeout);
-                performSearch(searchInput.value, currentEndpoint);
-            }
-        });
-
-        window.clearSearch = clearSearch;
-        window.performSearch = performSearch;
+    // ---------- Look in: combobox ----------
+    KEYS.forEach((k, i) => {
+        const o = el('div', 'el-listbox-option'); o.id = 'elScope-' + k; o.dataset.type = k;
+        o.setAttribute('role', 'option');
+        o.append(icon(k, 32), el('span', null, TYPES[k].label));
+        o.addEventListener('click', () => { closeList(); choose(k); });
+        o.addEventListener('mousemove', () => setActive(i));
+        listbox.append(o);
     });
+    const options = [...listbox.children];
+
+    function setActive(i) {
+        active = (i + options.length) % options.length;
+        options.forEach((o, j) => o.classList.toggle('is-active', j === active));
+        listbox.setAttribute('aria-activedescendant', options[active].id);
+    }
+    function openList() {
+        listbox.hidden = false; combo.setAttribute('aria-expanded', 'true');
+        setActive(KEYS.indexOf(type)); listbox.focus({ preventScroll: true });
+    }
+    function closeList(refocus) {
+        if (listbox.hidden) return;
+        listbox.hidden = true; combo.setAttribute('aria-expanded', 'false');
+        if (refocus) combo.focus();
+    }
+    function showType() {
+        const t = TYPES[type];
+        comboIcon.src = ICONS + t.icon; comboValue.textContent = t.label;
+        statusScope.textContent = t.label; input.placeholder = t.ph;
+        options.forEach(o => o.setAttribute('aria-selected', String(o.dataset.type === type)));
+    }
+    function choose(k) {
+        if (!TYPES[k]) return;
+        const changed = k !== type;
+        type = k; showType();
+        try { localStorage.setItem(STORE, k); } catch (e) { /* private mode */ }
+        if (input.value.trim()) { if (changed) performSearch(input.value, type); }
+        else input.focus();
+    }
+    combo.addEventListener('click', () => listbox.hidden ? openList() : closeList(true));
+    combo.addEventListener('keydown', e => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); openList(); }
+    });
+    listbox.addEventListener('keydown', e => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+        else if (e.key === 'Home') { e.preventDefault(); setActive(0); }
+        else if (e.key === 'End') { e.preventDefault(); setActive(options.length - 1); }
+        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const k = KEYS[active]; closeList(true); choose(k); }
+        else if (e.key === 'Escape') { e.preventDefault(); closeList(true); }
+        else if (e.key === 'Tab') { closeList(); }
+        else if (e.key.length === 1) {           // type-ahead on the first letter
+            const c = e.key.toLowerCase(), hit = j => TYPES[KEYS[j]].label[0].toLowerCase() === c;
+            for (let n = 1; n <= KEYS.length; n++) { const j = (active + n) % KEYS.length; if (hit(j)) { setActive(j); break; } }
+        }
+    });
+    listbox.addEventListener('blur', e => { if (!root.contains(e.relatedTarget)) closeList(); });
+    document.addEventListener('pointerdown', e => { if (!listbox.hidden && !e.target.closest('.el-combo-wrap')) closeList(); });
+
+    // ---------- results ----------
+    function fitResults() {
+        // keep the list above the bottom bar (phones) and inside the screen
+        const top = root.getBoundingClientRect().bottom;
+        const nav = document.querySelector('.win98-navbar');
+        const navTop = nav && getComputedStyle(nav).display !== 'none' ? nav.getBoundingClientRect().top : innerHeight;
+        document.documentElement.style.setProperty('--el-search-room', Math.max(160, Math.round(navTop - top - 8)) + 'px');
+    }
+    function openResults() {
+        results.hidden = false; cancel.hidden = false;
+        if (defaultContent) defaultContent.style.display = 'none';
+        fitResults();
+    }
+    const score = v => v >= 7 ? 'is-good' : v >= 5 ? 'is-mid' : 'is-bad';
+    function row(it) {
+        const a = el('a', 'el-result'); a.href = it.url;
+        const pic = it.poster || it.profile_picture;
+        if (pic) { const im = el('img', 'el-result-pic'); im.src = pic; im.alt = ''; im.loading = 'lazy'; im.width = 40; im.height = 60; a.append(im); }
+        else {
+            const name = it.username || it.name;   // people and users: their initial; titles: a dash
+            a.append(el('span', 'el-result-pic is-empty', name ? name.trim()[0].toUpperCase() : '—'));
+        }
+        const body = el('span', 'el-result-body');
+        body.append(el('span', 'el-result-title', it.title || it.name || it.username));
+        const meta = [];
+        if (type === 'books' && it.authors) meta.push(it.authors);
+        if (it.year) meta.push(it.end_year && it.end_year !== it.year ? `${it.year}–${it.end_year}` : String(it.year));
+        if (it.metacritic) meta.push(`Metacritic ${it.metacritic}`);
+        if (type === 'people') {
+            if (it.avg_rating) meta.push(`their titles ★ ${Number(it.avg_rating).toFixed(1)} (${it.rating_count})`);
+        } else if (it.avg_rating) {
+            meta.push(`friends ★ ${Number(it.avg_rating).toFixed(1)}` + (it.rating_count ? ` (${it.rating_count})` : ''));
+        } else if (it.rating_count === 0) meta.push('no ratings yet');
+        if (type === 'users') meta.push('profile');
+        if (meta.length) body.append(el('span', 'el-result-meta', meta.join(' · ')));
+        const chips = el('span', 'el-result-chips');
+        if (it.user_rating != null) chips.append(el('span', 'el-chip el-chip-score ' + score(it.user_rating), `you ★ ${it.user_rating}`));
+        if (it.in_watchlist) chips.append(el('span', 'el-chip', 'on your watchlist'));
+        const others = (it.watchlist_users || []).filter(u => u !== me);
+        if (others.length) chips.append(el('span', 'el-chip', `on ${others.slice(0, 2).join(', ')}${others.length > 2 ? ' +' + (others.length - 2) : ''}'s list`));
+        if (chips.childElementCount) body.append(chips);
+        a.append(body);
+        return a;
+    }
+    function header(query) {
+        const h = el('div', 'el-search-head');
+        h.append(icon(type, 16), el('span', null, `${TYPES[type].label} matching “${query}”`));
+        return h;
+    }
+    function render(data, query) {
+        list.replaceChildren(header(query));
+        const rs = data.results || [];
+        rs.forEach(it => list.append(row(it)));
+        if (!rs.length) {
+            const empty = el('div', 'el-search-empty');
+            empty.append(el('p', null, `No ${TYPES[type].label.toLowerCase()} match “${query}”.`));
+            const other = el('div', 'el-search-other');
+            other.append(el('span', null, 'Look in:'));
+            KEYS.filter(k => k !== type).forEach(k => {
+                const b = el('button', 'el-link-button', TYPES[k].label); b.type = 'button';
+                b.addEventListener('click', () => choose(k)); other.append(b);
+            });
+            empty.append(other); list.append(empty);
+        }
+        const t = TYPES[type];
+        addButton.hidden = !t.add;
+        if (t.add) addButton.textContent = `+ Not here? Add “${query}” as a new ${t.add}`;
+        status.textContent = `${data.count ?? rs.length} found`;
+        list.setAttribute('aria-busy', 'false');
+        list.scrollTop = 0;
+    }
+    function fail(msg) {
+        list.replaceChildren(el('div', 'el-search-empty', msg));
+        status.textContent = 'Failed'; list.setAttribute('aria-busy', 'false');
+    }
+
+    function performSearch(query, t) {
+        query = (query || '').trim();
+        if (TYPES[t] && t !== type) { type = t; showType(); }
+        if (!query) { clearSearch(); return; }
+        openResults();
+        status.textContent = 'Searching…'; list.setAttribute('aria-busy', 'true');
+        if (!list.childElementCount) list.append(el('div', 'el-search-empty', 'Searching…'));
+        if (controller) controller.abort();
+        controller = new AbortController();
+        const mine = ++seq, forType = type;
+        fetch(`${URL_}?search=${encodeURIComponent(query)}&type=${forType}`, { signal: controller.signal })
+            .then(r => r.json())
+            .then(data => {
+                if (mine !== seq || forType !== type) return;
+                if (data.success) render(data, query); else fail(data.error || 'Search failed.');
+            })
+            .catch(err => { if (err.name !== 'AbortError' && mine === seq) fail('Search failed. Check your connection and try again.'); });
+    }
+    function clearSearch() {
+        clearTimeout(timer);
+        if (controller) controller.abort();
+        seq++;
+        input.value = '';
+        results.hidden = true; cancel.hidden = true; addButton.hidden = true;
+        list.replaceChildren(); status.textContent = 'Ready';
+        if (defaultContent) defaultContent.style.display = '';
+        input.blur();
+    }
+
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = input.value.trim();
+        if (!q) { clearSearch(); return; }
+        cancel.hidden = false;
+        if (q.length >= 2) timer = setTimeout(() => performSearch(q, type), DEBOUNCE_MS);
+    });
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); performSearch(input.value, type); }
+        else if (e.key === 'Escape') { e.preventDefault(); clearSearch(); }
+        else if (e.key === 'ArrowDown' && !results.hidden) {
+            const first = list.querySelector('.el-result'); if (first) { e.preventDefault(); first.focus(); }
+        }
+    });
+    input.addEventListener('focus', () => { if (input.value.trim() && results.hidden) performSearch(input.value, type); });
+    cancel.addEventListener('click', clearSearch);
+    list.addEventListener('keydown', e => {
+        const rows = [...list.querySelectorAll('.el-result')], i = rows.indexOf(document.activeElement);
+        if (i < 0) return;
+        if (e.key === 'ArrowDown' && rows[i + 1]) { e.preventDefault(); rows[i + 1].focus(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); (rows[i - 1] || input).focus(); }
+        else if (e.key === 'Escape') { e.preventDefault(); input.focus(); }
+    });
+    addButton.addEventListener('click', () => {
+        const open = TYPES[type].open && TYPES[type].open();
+        if (typeof open === 'function') open(input.value.trim());
+    });
+    addEventListener('resize', () => { if (!results.hidden) fitResults(); });
+
+    // the page reserves room under the pinned bar; tell it how tall the bar is
+    const bar = root.closest('.pinned-search-wrapper') || root;
+    const setHeight = () => document.documentElement.style.setProperty('--el-search-h', Math.round(bar.getBoundingClientRect().height) + 'px');
+    if (window.ResizeObserver) new ResizeObserver(setHeight).observe(bar);
+    setHeight();
+
+    showType();
+    window.performSearch = performSearch;
+    window.clearSearch = clearSearch;
+    window.getCurrentQuery = () => input.value.trim();
+    window.getCurrentEndpoint = () => type;
+    if (input.value.trim()) performSearch(input.value, type);
+});
 </script>

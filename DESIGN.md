@@ -341,8 +341,13 @@ rounding). A rounded shape is a deliberate exception, such as a status dot, neve
   third-party requests. Inner pages wait on jsdelivr, unpkg and code.jquery.com before first paint.
 - **Do** use the tokens. New tokens go in `el/tokens.css` (light and dark) and in this file.
 - **Do** build new UI from `el/components.css` (`el-window`, `el-title-bar`, `el-field`, `el-input`,
-  `el-btn`, `el-btn-primary`, `el-checkbox`, `el-alert`, `el-status-bar`). A new shared component goes
-  there, with the `el-` prefix, so it cannot collide with 98.css, Bootstrap or old page CSS.
+  `el-btn`, `el-btn-primary`, `el-checkbox`, `el-alert`, `el-status-bar`, `el-combo` + `el-listbox`,
+  `el-result`, `el-chip`, `el-search`). A new shared component goes there, with the `el-` prefix, so
+  it cannot collide with 98.css, Bootstrap or old page CSS. While inner pages still load 98.css, add
+  the component's `button`/`input` overrides to the "98.css guard" block in the same file.
+- **Do** make a choice the user must make visible before they need it: Discover's search shows
+  "Look in: [type]" under the field at all times, and repeats the type in the placeholder, the
+  results header and the status bar.
 - **Do** keep a dark override directly after the light rule it overrides. One placed earlier in
   the file loses on source order.
 - **Do** honour `prefers-reduced-motion`. Motion is 140 ms for controls and 180 ms for modals,

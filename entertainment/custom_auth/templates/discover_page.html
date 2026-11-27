@@ -1007,18 +1007,15 @@
         .default-content {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 80px 20px 0 20px; /* Add top padding to account for fixed search bar */
-            /* Add safe area to top padding for PWA mode */
-            padding-top: calc(80px + env(safe-area-inset-top, 0px));
+            padding: 80px 20px 0 20px;
+            /* Room for the fixed search bar: its measured height (search_component.html
+               sets --el-search-h, safe area included) plus the 20px window gap. */
+            padding-top: calc(var(--el-search-h, 120px) + 20px);
         }
 
         /* Adjust padding for mobile */
         @media (max-width: 768px) {
             .search-results-wrapper {
-                padding-top: calc(90px + env(safe-area-inset-top, 0px)); /* Slightly more padding on mobile + safe area */
-            }
-            
-            .default-content {
                 padding-top: calc(90px + env(safe-area-inset-top, 0px)); /* Slightly more padding on mobile + safe area */
             }
         }        .discover-section {
