@@ -1,0 +1,17 @@
+el-pixel-sans-400.woff2, el-pixel-sans-700.woff2 ("EL Pixel Sans")
+
+Licence: Creative Commons Attribution-ShareAlike 3.0 Unported
+         https://creativecommons.org/licenses/by-sa/3.0/
+
+Based on the "MS Sans Serif" FontStruction by lou (2017), as shipped with
+98.css (https://github.com/jdan/98.css), licensed CC BY-SA 3.0.
+
+Changes, 2026: added Latin-1 and Latin Extended-A letters (accents built on the
+font's 11-pixel grid), curly quotes, dashes, ellipsis, middle dot, bullet,
+arrows, triangles, check, close, star and a few other UI symbols; completed the
+bold (98.css's bold has no , . ' / ? and similar) by the same rule the original
+bold follows (each glyph OR'd with itself one pixel to the left); spaced the
+regular to the advance widths the site already used, so existing text keeps
+its layout.
+
+These font files are distributed under the same licence.
