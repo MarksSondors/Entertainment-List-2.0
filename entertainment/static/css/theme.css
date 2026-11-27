@@ -1,98 +1,95 @@
 /* theme.css — one palette for every page that extends components/base.html.
 
-   Loaded once, last in <head>. Values follow css/main.css (the login page's
-   foundation) where the two systems overlap.
+   Loaded once, last in <head>. The palette is DESIGN.md's: the sign-in page's
+   css/main.css values. `--el-*` tokens are the palette; the older names below
+   them (--bg-color, --win98-*, ...) are aliases so existing templates follow it.
 
-   Why `html:root`: ~30 templates still carry their own copy of these tokens in a
-   plain `:root {}` block inside {% block content %}. `html:root` (0,1,1) outranks
-   `:root` (0,1,0) regardless of source order, so those copies stop mattering
-   and can be deleted page by page without visual change.
-
-   New tokens use the `--el-` prefix so they cannot collide with page-local names. */
+   Why `html:root`: ~30 templates still carry their own copy of the old tokens in
+   a plain `:root {}` block inside {% block content %}. `html:root` (0,1,1)
+   outranks `:root` (0,1,0) regardless of source order, so those copies stop
+   mattering and can be deleted page by page without visual change. */
 
 html:root {
-  /* surfaces */
-  --bg-color: #c0c0c0;
-  --window-bg: #c0c0c0;
-  --button-bg: #c0c0c0;
-  --button-hover: #e0e0e0;
-  --input-bg: #ffffff;
-  --progress-bg: #ffffff;
-  --backdrop-overlay: rgba(192, 192, 192, 0.9);
+  /* ---- palette: neutrals ---- */
+  --el-face: #c0c0c0;          /* windows, buttons, bars */
+  --el-face-light: #dfdfdf;    /* hover, tabs, quotes, alt rows */
+  --el-well: #ffffff;          /* inputs, lists, sunken panels */
+  --el-highlight: #ffffff;     /* bevel: top/left */
+  --el-shadow: #808080;        /* bevel: bottom/right */
+  --el-edge: #0a0a0a;          /* bevel: outermost */
+  --el-text: #000000;
+  --el-muted: #4a4a4a;         /* 4.9:1 on face */
 
-  /* text — muted was #666 (3.2:1 on #c0c0c0); #4a4a4a is 4.9:1 */
-  --text-color: #000000;
-  --button-text: #000000;
-  --text-muted: #4a4a4a;
-
-  /* bevels */
-  --border-light: #dfdfdf;
-  --border-dark: #808080;
-  --poster-border: #a0a0a0;
-  --shadow-color: rgba(0, 0, 0, 0.25);
-
-  /* bottom-nav / bevel set (base.html). Several pages reused --win98-dark/light
-     as title-bar colours, which broke their title bars; title bars now have
-     their own tokens below. */
-  --win98-gray: #c0c0c0;
-  --win98-light: #ffffff;
-  --win98-dark: #808080;
-  --win98-black: #000000;
-  --win98-text: #000000;
-  --win98-active-bg: #e0e0e0;
-  --win98-active-pattern: #c0c0c0;
-  --win98-input-bg: #ffffff;
-  --win98-input-text: #000000;
-
-  /* accents */
-  --progress-bar: #008080;            /* fills only */
-  --el-accent-text: #005555;          /* teal used as text: 4.8:1 on #c0c0c0 */
-  --el-danger-text: #a80000;
+  /* ---- palette: accents ---- */
+  --el-title-a: #000080;       /* title bar gradient start (text sits here) */
+  --el-title-b: #1084d0;       /* gradient end, no text */
+  --el-selection: #000080;     /* selected tab/row, white text */
+  --el-link: #0000a0;
+  --el-focus: #000080;
+  --progress-bar: #008080;     /* fills only */
+  --el-accent-text: #005555;   /* teal as text */
+  --el-rating-good: #1e6b2e;   /* score 7-10, white text */
+  --el-rating-mid: #7a5d00;    /* score 5-6, white text */
+  --el-rating-bad: #9c1f1b;    /* score 0-4, white text */
+  --el-avg-rating: #ffc107;    /* average / TMDB-style badge, black text */
   --el-success-text: #0d5c0d;
+  --el-danger-text: #990000;   /* 4.9:1 on face (#a80000 was 4.3:1) */
+  --el-danger-fill: #a80000;   /* destructive buttons, white text */
+  --el-success-fill: #1e6b2e;  /* "add" buttons, white text */
 
-  /* title bars (same as main.css --title-a / --title-b) */
-  --el-title-a: #000080;
-  --el-title-b: #1084d0;
+  /* ---- aliases used by existing templates ---- */
+  --bg-color: var(--el-face);
+  --window-bg: var(--el-face);
+  --button-bg: var(--el-face);
+  --button-hover: var(--el-face-light);
+  --input-bg: var(--el-well);
+  --progress-bg: var(--el-well);
+  --backdrop-overlay: rgba(192, 192, 192, 0.9);
+  --text-color: var(--el-text);
+  --button-text: var(--el-text);
+  --text-muted: var(--el-muted);
+  --border-light: var(--el-face-light);
+  --border-dark: var(--el-shadow);
+  --poster-border: var(--el-shadow);
+  --shadow-color: rgba(0, 0, 0, 0.25);
+  --win98-gray: var(--el-face);
+  --win98-light: var(--el-highlight);
+  --win98-dark: var(--el-shadow);
+  --win98-black: var(--el-edge);
+  --win98-text: var(--el-text);
+  --win98-active-bg: var(--el-face-light);
+  --win98-active-pattern: var(--el-face);
+  --win98-input-bg: var(--el-well);
+  --win98-input-text: var(--el-text);
+  --username-color: var(--el-link);      /* profile */
+  --online-color: var(--el-success-text);
 }
 
 @media (prefers-color-scheme: dark) {
   html:root {
-    --bg-color: #383838;
-    --window-bg: #404040;
-    --button-bg: #505050;
-    --button-hover: #606060;
-    --input-bg: #2a2a2a;
-    --progress-bg: #2a2a2a;
-    --backdrop-overlay: rgba(56, 56, 56, 0.9);
+    --el-face: #303030;
+    --el-face-light: #3f3f3f;
+    --el-well: #1b1b1b;
+    --el-highlight: #5c5c5c;
+    --el-shadow: #141414;
+    --el-edge: #000000;
+    --el-text: #eaeaea;
+    --el-muted: #b4b4b4;       /* 6.4:1 on face */
 
-    /* muted was #b0b0b0 (3.7:1 on #505050 buttons); #c4c4c4 is 4.6:1 */
-    --text-color: #ffffff;
-    --button-text: #ffffff;
-    --text-muted: #c4c4c4;
-
-    --border-light: #505050;
-    --border-dark: #2a2a2a;
-    --poster-border: #606060;
-    --shadow-color: rgba(0, 0, 0, 0.5);
-
-    --win98-gray: #303030;
-    --win98-light: #606060;
-    --win98-dark: #151515;
-    --win98-black: #000000;
-    --win98-text: #e0e0e0;
-    --win98-active-bg: #404040;
-    --win98-active-pattern: #303030;
-    --win98-input-bg: #383838;
-    --win98-input-text: #ffffff;
-
-    --progress-bar: #00a0a0;
-    --el-accent-text: #5fd3d3;
-    --el-danger-text: #ff8a8a;
-    --el-success-text: #5fd35f;
-
-    /* navy, like the login window — not the grey the bevel tokens produced */
     --el-title-a: #000040;
     --el-title-b: #0a5f9e;
+    --el-selection: #0a5f9e;
+    --el-link: #9cc4ff;
+    --el-focus: #9cc4ff;
+    --progress-bar: #00a0a0;
+    --el-accent-text: #5fd3d3;
+    --el-success-text: #5fd35f;
+    --el-danger-text: #ff8a8a;
+
+    --backdrop-overlay: rgba(48, 48, 48, 0.9);
+    --border-light: var(--el-highlight);   /* face-light is too close to face in dark */
+    --poster-border: var(--el-highlight);
+    --shadow-color: rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -101,6 +98,29 @@ html:root {
    drop both once those rules are deleted. */
 html body #main-container .title-bar {
   background: linear-gradient(90deg, var(--el-title-a), var(--el-title-b)) !important;
+}
+
+/* 98.css paints <legend> silver in both themes (light text on it in dark). */
+html body legend {
+  background: var(--el-face);
+  color: var(--el-text);
+}
+
+/* Links without their own class fall through to a bare `a { color: #00f }`,
+   1.5:1 on the dark window face. Specificity (0,1,1) on purpose: beats bare
+   `a {}` rules, ties with `.card a` style rules, which come later in the page
+   and so still win. */
+a:not([class]) {
+  color: var(--el-link);
+}
+
+/* Watchlist remove button: #ff4444 with white text was 3.3:1. */
+html body .remove-item {
+  background: var(--el-danger-fill) !important;
+  border-color: var(--el-danger-fill) !important;
+}
+html body .remove-item:hover {
+  background: #c00000 !important;
 }
 
 /* Touch: bigger hit areas without changing how anything looks. */

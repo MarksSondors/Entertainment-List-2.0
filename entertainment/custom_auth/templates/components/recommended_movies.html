@@ -47,9 +47,9 @@
     .tmdb-add-button {
         width: 100%;
         padding: 4px;
-        background-color: #4CAF50;
+        background-color: var(--el-success-fill);
         color: white;
-        border: 1px outset #4CAF50;
+        border: 1px outset var(--el-success-fill);
         cursor: pointer;
         font-weight: bold;
         font-size: 11px;
@@ -60,17 +60,18 @@
     }
 
     .tmdb-add-button:hover {
-        background-color: #45a049;
+        background-color: var(--el-success-fill);
+        filter: brightness(1.15);
     }
 
     .tmdb-add-button:active {
-        border: 1px inset #4CAF50;
+        border: 1px inset var(--el-success-fill);
     }
 
     .tmdb-add-button:disabled {
-        background-color: #cccccc;
-        color: #666666;
-        border: 1px solid #999;
+        background-color: var(--el-face-light);
+        color: var(--el-muted);
+        border: 1px solid var(--el-shadow);
         cursor: not-allowed;
     }
 

@@ -43,40 +43,25 @@
 </div>
 
 <style>
+    /* Site palette (static/css/theme.css); light and dark both come from there. */
     .community-activity-window {
-        --ca-field: #ffffff;
-        --ca-text: #000000;
-        --ca-muted: #464646;
-        --ca-rule: #d6d6d6;
-        --ca-hover: #ececf6;
-        --ca-press: #dcdcee;
-        --ca-bevel-light: #ffffff;
-        --ca-bevel-dark: #0a0a0a;
-        --ca-dither: #ffffff;
-        --ca-quote-bg: #f4f4f4;
-        --ca-accent: #000080;
+        --ca-field: var(--el-well);
+        --ca-text: var(--el-text);
+        --ca-muted: var(--el-muted);
+        --ca-rule: var(--el-face-light);
+        --ca-hover: var(--el-face-light);
+        --ca-press: var(--el-face);
+        --ca-bevel-light: var(--el-highlight);
+        --ca-bevel-dark: var(--el-edge);
+        --ca-dither: var(--el-highlight);
+        --ca-quote-bg: var(--el-face-light);
+        --ca-accent: var(--el-selection);
         --ca-accent-text: #ffffff;
-        --ca-good: #1e6b2e;
-        --ca-mid: #7a5d00;
-        --ca-bad: #9c1f1b;
+        --ca-good: var(--el-rating-good);
+        --ca-mid: var(--el-rating-mid);
+        --ca-bad: var(--el-rating-bad);
         --ca-poster-w: 60px;
         --ca-poster-h: 90px;
-    }
-
-    @media (prefers-color-scheme: dark) {
-        .community-activity-window {
-            --ca-field: #262626;
-            --ca-text: #f0f0f0;
-            --ca-muted: #bdbdbd;
-            --ca-rule: #3a3a3a;
-            --ca-hover: #30303e;
-            --ca-press: #3a3a4c;
-            --ca-bevel-light: #6a6a6a;
-            --ca-bevel-dark: #111111;
-            --ca-dither: #6a6a6a;
-            --ca-quote-bg: #1e1e1e;
-            --ca-accent: #1084d0;
-        }
     }
 
     @media (min-width: 600px) {
@@ -456,7 +441,7 @@
 
     @media (prefers-color-scheme: dark) {
         .community-activity-window .ca-quick[aria-pressed="true"] {
-            color: #7fdc8f;
+            color: var(--el-success-text);
         }
     }
 
@@ -628,13 +613,13 @@
 
     /* Appended to <body>, so it carries its own tokens */
     .ca-menu {
-        --m-bg: #c0c0c0;
-        --m-text: #000000;
-        --m-light: #ffffff;
-        --m-face-light: #dfdfdf;
-        --m-shadow: #808080;
-        --m-dark: #0a0a0a;
-        --m-hi: #000080;
+        --m-bg: var(--el-face);
+        --m-text: var(--el-text);
+        --m-light: var(--el-highlight);
+        --m-face-light: var(--el-face-light);
+        --m-shadow: var(--el-shadow);
+        --m-dark: var(--el-edge);
+        --m-hi: var(--el-selection);
         --m-hi-text: #ffffff;
         position: fixed;
         z-index: 3000;
@@ -649,18 +634,6 @@
             inset -2px -2px var(--m-shadow),
             inset 2px 2px var(--m-light),
             2px 2px 0 rgba(0, 0, 0, 0.35);
-    }
-
-    @media (prefers-color-scheme: dark) {
-        .ca-menu {
-            --m-bg: #404040;
-            --m-text: #f0f0f0;
-            --m-light: #6a6a6a;
-            --m-face-light: #505050;
-            --m-shadow: #1a1a1a;
-            --m-dark: #000000;
-            --m-hi: #1084d0;
-        }
     }
 
     .ca-menu[hidden] {

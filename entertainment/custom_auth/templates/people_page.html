@@ -290,18 +290,18 @@ body::before {
 
 /* Rating color classes */
 .high-rating {
-    background-color: #4CAF50;
-    color: white;
+    background-color: var(--el-rating-good);
+    color: #fff;
 }
 
 .mid-rating {
-    background-color: #FFC107;
-    color: black;
+    background-color: var(--el-rating-mid);
+    color: #fff;
 }
 
 .low-rating {
-    background-color: #F44336;
-    color: white;
+    background-color: var(--el-rating-bad);
+    color: #fff;
 }
 
 .rating-max {
@@ -569,7 +569,7 @@ body::before {
 .tmdb-error {
     text-align: center;
     padding: 40px;
-    color: #F44336;
+    color: var(--el-danger-text);
     font-size: 14px;
 }
 
@@ -577,31 +577,32 @@ body::before {
     width: 100%;
     padding: 5px;
     margin-top: 5px;
-    background-color: #4CAF50;
+    background-color: var(--el-success-fill);
     color: white;
-    border: 1px outset #4CAF50;
+    border: 1px outset var(--el-success-fill);
     cursor: pointer;
     font-weight: bold;
 }
 
 .tmdb-add-button:hover {
-    background-color: #45a049;
+    background-color: var(--el-success-fill);
+        filter: brightness(1.15);
 }
 
 .tmdb-add-button:active {
-    border: 1px inset #4CAF50;
+    border: 1px inset var(--el-success-fill);
 }
 
 .tmdb-add-button:disabled {
-    background-color: #cccccc;
-    color: #666666;
+    background-color: var(--el-face-light);
+    color: var(--el-muted);
     cursor: not-allowed;
 }
 
 .tmdb-badge {
     display: inline-block;
     padding: 2px 6px;
-    background-color: #4CAF50;
+    background-color: var(--el-success-fill);
     color: white;
     font-size: 11px;
     border-radius: 3px;

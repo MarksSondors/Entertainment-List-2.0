@@ -770,10 +770,12 @@
         font-style: italic;
     }
 
+    /* selected = the palette's selection colour (teal is for progress fills;
+       white on dark-theme teal was 3.2:1) */
     .user-card.selected-user {
-        background-color: var(--progress-bar);
+        background-color: var(--el-selection);
         color: white;
-        border-color: var(--progress-bar);
+        border-color: var(--el-selection);
     }
 
     .user-card.selected-user .user-card-name,
@@ -858,8 +860,8 @@
         position: absolute;
         top: 5px;
         right: 5px;
-        background-color: #E0B020;
-        color: black;
+        background-color: var(--el-avg-rating);
+        color: #000;
         padding: 4px 8px;
         border-radius: 4px;
         font-weight: bold;
@@ -867,9 +869,10 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
     
+    /* average score: same badge as everywhere else (white on #1e90ff was 3.2:1) */
     .avg-rating-badge {
-        background-color: #1E90FF;
-        color: white;
+        background-color: var(--el-avg-rating);
+        color: #000;
     }
 
     /* Window styling removed to use default 98.css styles */
@@ -1558,8 +1561,8 @@
 
             if ('rating' in activity) {
                 const ratingValue = Math.round(activity.rating);
-                const ratingColor = ratingValue >= 7 ? '#4CAF50' :
-                                  ratingValue >= 5 ? '#FFC107' : '#F44336';
+                const ratingColor = ratingValue >= 7 ? 'var(--el-rating-good)' :
+                                  ratingValue >= 5 ? 'var(--el-rating-mid)' : 'var(--el-rating-bad)';
                 card.innerHTML = `
                     <div class="poster-container">
                         <img src="${posterPath}" alt="${activity.title}" class="activity-poster">
