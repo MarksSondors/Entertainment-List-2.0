@@ -100,6 +100,71 @@ html body #main-container .title-bar {
   background: linear-gradient(90deg, var(--el-title-a), var(--el-title-b)) !important;
 }
 
+/* ---------- Component: window (the sign-in page's window) ----------
+   Frame: the 98 bevel in palette colours. 98.css hard-codes the light-theme
+   greys (pale edges on dark windows) and 11 pages swapped the bevel for a
+   2px 2px 4px drop shadow. !important because those page rules are later in
+   the document; drop it once they are deleted. */
+html body .window {
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 3px;
+  box-shadow:
+    inset -1px -1px 0 0 var(--el-edge),
+    inset 1px 1px 0 0 var(--el-face-light),
+    inset -2px -2px 0 0 var(--el-shadow),
+    inset 2px 2px 0 0 var(--el-highlight) !important;
+}
+
+/* Title bar: 24px, 12px bold, long titles end in an ellipsis. */
+html body .title-bar {
+  min-height: 24px !important;
+  height: auto !important;          /* statistics fixes 20-22px */
+  padding: 2px 2px 2px 5px !important;
+  gap: 8px;
+}
+html body .title-bar-text {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Phones: every page's windows sit 10px from the screen edges, 20px apart.
+   Before: 0/4/5/6/10/18/20 px edges (two pages wider than the screen) and
+   5/20/24/40 px gaps. */
+@media (max-width: 767px) {
+  html body .default-content,
+  html body .tv-show-page-container,
+  html body .community-page-container,
+  html body .game-page-container,
+  html body .book-page-container,
+  html body .stats-container {
+    padding-left: 10px !important;    /* TV, game, book set 5px !important under 480px */
+    padding-right: 10px !important;
+  }
+  html body .calendar-page-container > .container {
+    padding-left: 0 !important;       /* Bootstrap .px-2 is !important */
+    padding-right: 0 !important;
+  }
+  /* Discover wraps each window in a section with its own 40px margin */
+  html body .discover-section:not(:has(.quick-actions-grid)) {
+    margin-bottom: 20px !important;
+  }
+  /* windows placed straight in #main-container (person, company, developer,
+     publisher, explorer) get the margin themselves */
+  html body #main-container > .window {
+    width: auto !important;
+    margin-left: 10px !important;
+    margin-right: 10px !important;
+  }
+  html body #main-container .window:not(.window .window):not(.modal .window) {
+    margin-bottom: 20px !important;
+  }
+}
+
 /* 98.css paints <legend> silver in both themes (light text on it in dark). */
 html body legend {
   background: var(--el-face);
