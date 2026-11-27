@@ -1,12 +1,14 @@
-/* TMDB / IMDb rating badges (components/rating_badge.html): a raised Win98 button per site,
-   logo + score + optional vote count, linking to the title on that site. */
-.rating-badges {
+/* TMDB / IMDb rating badges (components/rating_badge.html): a raised Win98 button per site.
+   Class prefix is site-rating, not rating-badge: tvshows user_progress_section.html binds a
+   click handler to every .rating-badge on the TV page and would swallow these links.
+   Logo + score + optional vote count, linking to the title on that site. */
+.site-ratings {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     margin-bottom: 1rem;
 }
-a.rating-badge[href] {
+a.site-rating[href] {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -19,46 +21,46 @@ a.rating-badge[href] {
     vertical-align: middle;
     box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
 }
-a.rating-badge[href]:hover,
-a.rating-badge[href]:focus-visible {
+a.site-rating[href]:hover,
+a.site-rating[href]:focus-visible {
     background: var(--button-hover, #e0e0e0);
     color: var(--button-text, #000);
     opacity: 1;
     text-decoration: none;
 }
-a.rating-badge[href]:focus-visible {
+a.site-rating[href]:focus-visible {
     outline: 1px dotted currentColor;
     outline-offset: -5px;
 }
-a.rating-badge[href]:active {
+a.site-rating[href]:active {
     padding: 4px 9px 2px 5px;
     box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
 }
-.rating-badge-logo {
+.site-rating-logo {
     display: block;
     height: 20px;
     width: auto;
 }
-.rating-badge-score strong {
+.site-rating-score strong {
     font-size: 14px;
 }
-.rating-badge-votes {
+.site-rating-votes {
     padding-left: 8px;
     border-left: 1px solid #808080;
 }
 @media (prefers-color-scheme: dark) {
-    a.rating-badge[href] {
+    a.site-rating[href] {
         box-shadow: inset -1px -1px #101010, inset 1px 1px #7a7a7a, inset -2px -2px #2a2a2a, inset 2px 2px #626262;
     }
-    a.rating-badge[href]:active {
+    a.site-rating[href]:active {
         box-shadow: inset -1px -1px #7a7a7a, inset 1px 1px #101010, inset -2px -2px #626262, inset 2px 2px #2a2a2a;
     }
-    .rating-badge-votes {
+    .site-rating-votes {
         border-left-color: #2a2a2a;
     }
 }
 @media (pointer: coarse) {
-    a.rating-badge[href] {
+    a.site-rating[href] {
         min-height: 32px;
     }
 }

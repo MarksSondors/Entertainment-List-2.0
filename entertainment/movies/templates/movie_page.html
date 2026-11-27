@@ -1,7 +1,7 @@
 {% extends "components/base.html" %}
 {% load static %}
 
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/components/rating-badge.css' %}">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/components/site-rating.css' %}">{% endblock %}
 
 {% block content %}
 <!-- Add this near the top of your content block, before any scripts -->
@@ -563,7 +563,7 @@ iframe[src*="tiktok.com"] {
                             <a href="{{ genre.get_absolute_url }}">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
                         {% endfor %}
                     </p>
-                    <div class="rating-badges">
+                    <div class="site-ratings">
                         {% include "components/rating_badge.html" with site="tmdb" kind="movie" ident=movie.tmdb_id rating=movie.rating %}
                         {% if movie.imdb_id %}
                         {% include "components/rating_badge.html" with site="imdb" ident=movie.imdb_id rating=movie.imdb_rating votes=movie.imdb_votes %}

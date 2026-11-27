@@ -137,10 +137,10 @@ class RatingBadgeTests(TestCase):
                            release_date=datetime.date(1994, 9, 23), status='Released')
         Movie.objects.filter(pk=movie.pk).update(rating=8.734)
         html = self.movie_page(movie)
-        self.assertIn('css/components/rating-badge', html)
-        self.assertIn('<a class="rating-badge rating-badge-tmdb" href="https://www.themoviedb.org/movie/20/" '
+        self.assertIn('css/components/site-rating', html)
+        self.assertIn('<a class="site-rating site-rating-tmdb" href="https://www.themoviedb.org/movie/20/" '
                       'target="_blank" rel="noopener noreferrer"', html)
-        self.assertIn('<a class="rating-badge rating-badge-imdb" href="https://www.imdb.com/title/tt0111161/" '
+        self.assertIn('<a class="site-rating site-rating-imdb" href="https://www.imdb.com/title/tt0111161/" '
                       'target="_blank" rel="noopener noreferrer"', html)
         self.assertIn('images/tmdb_logo', html)
         self.assertIn('images/imdb_logo', html)
@@ -164,8 +164,8 @@ class RatingBadgeTests(TestCase):
 
     def test_no_imdb_badge_without_imdb_id(self):
         html = self.movie_page(make_movie(22, None, release_date=datetime.date(2001, 1, 1)))
-        self.assertIn('rating-badge-tmdb', html)
-        self.assertNotIn('rating-badge-imdb', html)
+        self.assertIn('site-rating-tmdb', html)
+        self.assertNotIn('site-rating-imdb', html)
 
     def test_tv_show_page_has_both_badges(self):
         show = TVShow.objects.create(title='Show', original_title='Show', tmdb_id=30, imdb_id='tt0903747',
@@ -178,6 +178,10 @@ class RatingBadgeTests(TestCase):
         self.assertIn('<strong>9.5</strong>/10', html)
         self.assertIn('2.4M votes', html)
         self.assertIn('TMDB: 9.0 • IMDb: 9.5', html)
+        # user_progress_section.html turns every .rating-badge on this page into a review-modal
+        # trigger (preventDefault), so the outbound links must never carry that class
+        self.assertIn("querySelectorAll('.rating-badge')", html)
+        self.assertNotRegex(html, r'<a class="[^"]*\brating-badge\b')
 
     def test_people_page_uses_local_imdb_logo(self):
         person = Person.objects.create(name='Someone', tmdb_id=40, imdb_id='nm0000151')

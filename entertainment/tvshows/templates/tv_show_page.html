@@ -1,7 +1,7 @@
 {% extends "components/base.html" %}
 {% load static %}
 {% load tvshow_extras %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/components/rating-badge.css' %}">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/components/site-rating.css' %}">{% endblock %}
 {% block content %}
 <style>
 /* Theme-adaptive CSS variables */
@@ -731,7 +731,7 @@
                             <a href="{{ genre.get_absolute_url }}">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
                         {% endfor %}
                     </p>
-                    <div class="rating-badges">
+                    <div class="site-ratings">
                         {% include "components/rating_badge.html" with site="tmdb" kind="tv" ident=tv_show.tmdb_id rating=tv_show.rating %}
                         {% if tv_show.imdb_id %}
                         {% include "components/rating_badge.html" with site="imdb" ident=tv_show.imdb_id rating=tv_show.imdb_rating votes=tv_show.imdb_votes %}
