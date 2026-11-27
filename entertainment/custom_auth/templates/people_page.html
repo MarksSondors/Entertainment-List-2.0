@@ -775,7 +775,7 @@ body::before {
                     {% if person.imdb_id %}
                     <p>
                         <a href="https://www.imdb.com/name/{{ person.imdb_id }}/" target="_blank" style="text-decoration: none;">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/6/69/IMDB_Logo_2016.svg" alt="IMDb" style="height: 18px; vertical-align: middle;">
+                            <img src="{% static 'images/imdb_logo.svg' %}" alt="IMDb" width="36" height="18" style="height: 18px; vertical-align: middle;">
                             View Profile
                         </a>
                     </p>

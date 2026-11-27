@@ -1,4 +1,4 @@
-"""Number formatting for the IMDb badge: ``{{ votes|compact_count }}`` -> ``2.1M``."""
+"""Number formatting for rating badges: ``{{ votes|compact_count }}`` -> ``2.1M``."""
 from django import template
 
 register = template.Library()

@@ -1,0 +1,27 @@
+{% load static rating_extras %}
+{% comment %}
+Rating badge linking to the title on TMDB or IMDb. Needs css/components/rating-badge.css on the page.
+  site    'tmdb' or 'imdb'
+  ident   the title's id on that site: TMDB id or IMDb tt-id (renders nothing without it)
+  kind    TMDB only: 'movie' or 'tv'
+  rating  optional number out of 10; missing or 0 reads "View on TMDB/IMDb"
+  votes   optional int
+{% endcomment %}
+{% if ident %}
+{% if site == 'tmdb' %}{% firstof 'TMDB' as name %}{% else %}{% firstof 'IMDb' as name %}{% endif %}
+<a class="rating-badge rating-badge-{{ site }}" href="{% if site == 'tmdb' %}https://www.themoviedb.org/{{ kind }}/{{ ident }}/{% else %}https://www.imdb.com/title/{{ ident }}/{% endif %}" target="_blank" rel="noopener noreferrer"
+   title="Open on {{ name }}"
+   aria-label="{% if rating %}{{ name }} rating {{ rating|floatformat:1 }} out of 10{% if votes %} from {{ votes|thousands }} votes{% endif %}{% else %}View on {{ name }}{% endif %}, opens {{ name }}">
+    {% if site == 'tmdb' %}
+    <img class="rating-badge-logo" src="{% static 'images/tmdb_logo.svg' %}" alt="" width="101" height="20">
+    {% else %}
+    <img class="rating-badge-logo" src="{% static 'images/imdb_logo.svg' %}" alt="" width="40" height="20">
+    {% endif %}
+    {% if rating %}
+    <span class="rating-badge-score"><strong>{{ rating|floatformat:1 }}</strong>/10</span>
+    {% if votes %}<span class="rating-badge-votes">{{ votes|compact_count }} votes</span>{% endif %}
+    {% else %}
+    <span class="rating-badge-score">View on {{ name }}</span>
+    {% endif %}
+</a>
+{% endif %}

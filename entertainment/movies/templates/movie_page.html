@@ -1,6 +1,8 @@
 {% extends "components/base.html" %}
 {% load static %}
 
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/components/rating-badge.css' %}">{% endblock %}
+
 {% block content %}
 <!-- Add this near the top of your content block, before any scripts -->
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
@@ -561,10 +563,12 @@ iframe[src*="tiktok.com"] {
                             <a href="{{ genre.get_absolute_url }}">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
                         {% endfor %}
                     </p>
-                    <p><strong>TMDB Rating:</strong> {{ movie.rating }}</p>
-                    {% if movie.imdb_id %}
-                    <p>{% include "components/imdb_badge.html" with imdb_id=movie.imdb_id rating=movie.imdb_rating votes=movie.imdb_votes %}</p>
-                    {% endif %}
+                    <div class="rating-badges">
+                        {% include "components/rating_badge.html" with site="tmdb" kind="movie" ident=movie.tmdb_id rating=movie.rating %}
+                        {% if movie.imdb_id %}
+                        {% include "components/rating_badge.html" with site="imdb" ident=movie.imdb_id rating=movie.imdb_rating votes=movie.imdb_votes %}
+                        {% endif %}
+                    </div>
                     {% if user_avg_rating %}
                     <p><strong>User Rating:</strong> {{ user_avg_rating }}/10 ({{ user_rating_count }} review{{ user_rating_count|pluralize }})</p>
                     {% else %}
@@ -680,7 +684,7 @@ iframe[src*="tiktok.com"] {
         </div>
         <div class="status-bar">
             <div class="status-bar-field">
-                TMDB: {{ movie.rating }}{% if movie.imdb_rating is not None %} • IMDb: {{ movie.imdb_rating }}{% endif %}{% if user_avg_rating %} • Users: {{ user_avg_rating }}/10{% endif %} • {{ movie.release_date|date:"Y" }} • {{ movie.minutes_to_hours }}
+                TMDB: {{ movie.rating|floatformat:1 }}{% if movie.imdb_rating is not None %} • IMDb: {{ movie.imdb_rating }}{% endif %}{% if user_avg_rating %} • Users: {{ user_avg_rating }}/10{% endif %} • {{ movie.release_date|date:"Y" }} • {{ movie.minutes_to_hours }}
             </div>
             <div class="status-bar-field">Last updated: {{ movie.date_updated|date:"M d, Y" }}</div>
         </div>

@@ -1,6 +1,7 @@
 {% extends "components/base.html" %}
 {% load static %}
 {% load tvshow_extras %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/components/rating-badge.css' %}">{% endblock %}
 {% block content %}
 <style>
 /* Theme-adaptive CSS variables */
@@ -730,10 +731,12 @@
                             <a href="{{ genre.get_absolute_url }}">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
                         {% endfor %}
                     </p>
-                    <p><strong>TMDB Rating:</strong> {{ tv_show.rating }}</p>
-                    {% if tv_show.imdb_id %}
-                    <p>{% include "components/imdb_badge.html" with imdb_id=tv_show.imdb_id rating=tv_show.imdb_rating votes=tv_show.imdb_votes %}</p>
-                    {% endif %}
+                    <div class="rating-badges">
+                        {% include "components/rating_badge.html" with site="tmdb" kind="tv" ident=tv_show.tmdb_id rating=tv_show.rating %}
+                        {% if tv_show.imdb_id %}
+                        {% include "components/rating_badge.html" with site="imdb" ident=tv_show.imdb_id rating=tv_show.imdb_rating votes=tv_show.imdb_votes %}
+                        {% endif %}
+                    </div>
                     <p><strong>Country:</strong> 
                         {% for country in tv_show.countries.all %}
                             <a href="{{ country.get_absolute_url }}">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
@@ -822,7 +825,7 @@
             </div>
         </div>
         <div class="status-bar">
-            <div class="status-bar-field">TMDB: {{ tv_show.rating }}{% if tv_show.imdb_rating is not None %} • IMDb: {{ tv_show.imdb_rating }}{% endif %} • {{ tv_show.status }} • {{ tv_show.first_air_date|date:"Y" }}</div>
+            <div class="status-bar-field">TMDB: {{ tv_show.rating|floatformat:1 }}{% if tv_show.imdb_rating is not None %} • IMDb: {{ tv_show.imdb_rating }}{% endif %} • {{ tv_show.status }} • {{ tv_show.first_air_date|date:"Y" }}</div>
             <div class="status-bar-field">Last updated: {{ tv_show.date_updated|date:"M d, Y" }}</div>
         </div>
     </div>    <!-- Episodes & Groups Window -->
