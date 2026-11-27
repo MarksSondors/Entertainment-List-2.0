@@ -25,6 +25,7 @@ from .poster import bulk_poster_states, content_version, get_cached_poster
 from movies.models import Movie, MovieOfWeekPick
 from tvshows.models import Episode, TVShow
 from custom_auth.models import Watchlist, Review, Genre
+from custom_auth.services.imdb_ratings import imdb_rating_text
 from custom_auth.services.recommendation_cache import SCOPE_MOVIES, SCOPE_STREMIO, get_cached, set_cached
 from movies.services.recommendation import MovieRecommender
 from api.services.movies import MoviesService
@@ -359,8 +360,9 @@ def _catalog_items(medias, media_type: str, poster_base: str, user, ctx: str | N
         return []
     states = bulk_poster_states(medias, media_type, user, ctx)
     show_plot = _show_plot(user)
-    # Only ratings already fetched for a meta page; a catalog page never waits on Cinemeta
-    ratings = cache.get_many([_imdb_rating_key(media_type, m.imdb_id) for m in medias])
+    # Stored IMDb rating first; otherwise only one a meta page already fetched (never wait on Cinemeta)
+    unrated = [m for m in medias if m.imdb_rating is None]
+    ratings = cache.get_many([_imdb_rating_key(media_type, m.imdb_id) for m in unrated]) if unrated else {}
     metas = []
     for media in medias:
         v = content_version(media, media_type, user, ctx, state=states.get(media.id))
@@ -368,7 +370,7 @@ def _catalog_items(medias, media_type: str, poster_base: str, user, ctx: str | N
             media, media_type,
             poster_url=_poster_url(poster_base, media_type, media.imdb_id, ctx=ctx, v=v),
             show_plot=show_plot,
-            imdb_rating=ratings.get(_imdb_rating_key(media_type, media.imdb_id)) or None,
+            imdb_rating=imdb_rating_text(media) or ratings.get(_imdb_rating_key(media_type, media.imdb_id)) or None,
         )
         if item:
             metas.append(item)
@@ -944,7 +946,9 @@ def _meta_kwargs(user, ct, media, url_name: str, links: dict) -> dict:
         'site_url': links['site_base'].rstrip('/') + reverse(url_name, args=[media.tmdb_id]),
         'manifest_url': links['manifest_url'],
         'genre_catalog': links.get('genre_catalog'),
-        'imdb_rating': imdb_rating('movie' if url_name == 'movie_page' else 'series', media.imdb_id),
+        # stored daily from IMDb's dataset; Cinemeta only for a title the sync has not reached yet
+        'imdb_rating': imdb_rating_text(media)
+                       or imdb_rating('movie' if url_name == 'movie_page' else 'series', media.imdb_id),
     }
 
 

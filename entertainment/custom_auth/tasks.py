@@ -326,6 +326,13 @@ def import_imdb_data(user_id, items):
     )
 
 
+def sync_imdb_ratings():
+    """Daily: store IMDb's public rating and vote count on every movie and show (IMDb dataset)."""
+    from custom_auth.services.imdb_ratings import sync_imdb_ratings as run
+
+    return run()
+
+
 def clear_expired_sessions():
     """Delete expired login sessions (Django never removes them on its own)."""
     from django.contrib.sessions.models import Session

@@ -33,6 +33,11 @@ class Movie(Media):
     tmdb_id = models.IntegerField(unique=True)
     imdb_id = models.CharField(max_length=20, blank=True, null=True)
 
+    # IMDb's public rating, refreshed daily from IMDb's dataset (custom_auth/services/imdb_ratings.py)
+    imdb_rating = models.DecimalField(max_digits=3, decimal_places=1, blank=True, null=True)
+    imdb_votes = models.PositiveIntegerField(blank=True, null=True)
+    imdb_rating_updated = models.DateTimeField(blank=True, null=True)
+
     runtime = models.IntegerField()
     rating = models.FloatField()
     trailer = models.URLField(blank=True, null=True)

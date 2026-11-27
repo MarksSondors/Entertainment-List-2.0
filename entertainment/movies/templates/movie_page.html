@@ -562,6 +562,9 @@ iframe[src*="tiktok.com"] {
                         {% endfor %}
                     </p>
                     <p><strong>TMDB Rating:</strong> {{ movie.rating }}</p>
+                    {% if movie.imdb_id %}
+                    <p>{% include "components/imdb_badge.html" with imdb_id=movie.imdb_id rating=movie.imdb_rating votes=movie.imdb_votes %}</p>
+                    {% endif %}
                     {% if user_avg_rating %}
                     <p><strong>User Rating:</strong> {{ user_avg_rating }}/10 ({{ user_rating_count }} review{{ user_rating_count|pluralize }})</p>
                     {% else %}
@@ -677,7 +680,7 @@ iframe[src*="tiktok.com"] {
         </div>
         <div class="status-bar">
             <div class="status-bar-field">
-                TMDB: {{ movie.rating }}{% if user_avg_rating %} • Users: {{ user_avg_rating }}/10{% endif %} • {{ movie.release_date|date:"Y" }} • {{ movie.minutes_to_hours }}
+                TMDB: {{ movie.rating }}{% if movie.imdb_rating is not None %} • IMDb: {{ movie.imdb_rating }}{% endif %}{% if user_avg_rating %} • Users: {{ user_avg_rating }}/10{% endif %} • {{ movie.release_date|date:"Y" }} • {{ movie.minutes_to_hours }}
             </div>
             <div class="status-bar-field">Last updated: {{ movie.date_updated|date:"M d, Y" }}</div>
         </div>

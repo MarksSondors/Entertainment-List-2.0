@@ -1,0 +1,78 @@
+{% load static imdb_extras %}
+{% comment %}
+IMDb badge linking to the title on IMDb. Include once per page.
+  imdb_id  required, e.g. tt0111161 (renders nothing without it)
+  rating   optional Decimal (Movie/TVShow.imdb_rating); without it the badge reads "View on IMDb"
+  votes    optional int (imdb_votes)
+{% endcomment %}
+{% if imdb_id %}
+<style>
+a.imdb-badge[href] {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 10px 3px 4px;
+    background: var(--button-bg, #c0c0c0);
+    color: var(--button-text, #000);
+    font-size: 12px;
+    line-height: 1;
+    text-decoration: none;
+    vertical-align: middle;
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+}
+a.imdb-badge[href]:hover,
+a.imdb-badge[href]:focus-visible {
+    background: var(--button-hover, #e0e0e0);
+    color: var(--button-text, #000);
+    opacity: 1;
+    text-decoration: none;
+}
+a.imdb-badge[href]:focus-visible {
+    outline: 1px dotted currentColor;
+    outline-offset: -5px;
+}
+a.imdb-badge[href]:active {
+    padding: 4px 9px 2px 5px;
+    box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+}
+.imdb-badge-logo {
+    display: block;
+    width: 40px;
+    height: 20px;
+}
+.imdb-badge-score strong {
+    font-size: 14px;
+}
+.imdb-badge-votes {
+    padding-left: 8px;
+    border-left: 1px solid #808080;
+}
+@media (prefers-color-scheme: dark) {
+    a.imdb-badge[href] {
+        box-shadow: inset -1px -1px #101010, inset 1px 1px #7a7a7a, inset -2px -2px #2a2a2a, inset 2px 2px #626262;
+    }
+    a.imdb-badge[href]:active {
+        box-shadow: inset -1px -1px #7a7a7a, inset 1px 1px #101010, inset -2px -2px #626262, inset 2px 2px #2a2a2a;
+    }
+    .imdb-badge-votes {
+        border-left-color: #2a2a2a;
+    }
+}
+@media (pointer: coarse) {
+    a.imdb-badge[href] {
+        min-height: 32px;
+    }
+}
+</style>
+<a class="imdb-badge" href="https://www.imdb.com/title/{{ imdb_id }}/" target="_blank" rel="noopener noreferrer"
+   title="Open on IMDb"
+   aria-label="{% if rating is not None %}IMDb rating {{ rating }} out of 10{% if votes %} from {{ votes|thousands }} votes{% endif %}{% else %}View on IMDb{% endif %}, opens IMDb">
+    <img class="imdb-badge-logo" src="{% static 'images/imdb_logo.svg' %}" alt="" width="40" height="20">
+    {% if rating is not None %}
+    <span class="imdb-badge-score"><strong>{{ rating }}</strong>/10</span>
+    {% if votes %}<span class="imdb-badge-votes">{{ votes|compact_count }} votes</span>{% endif %}
+    {% else %}
+    <span class="imdb-badge-score">View on IMDb</span>
+    {% endif %}
+</a>
+{% endif %}

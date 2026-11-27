@@ -343,6 +343,22 @@ class StremioEndpointTests(TestCase):
         self.make_movie(2, 'tt0000073')
         self.assertEqual(self.client.get(self.url('meta/movie/tt0000073.json')).status_code, 200)
 
+    def test_stored_imdb_rating_is_served_without_cinemeta(self):
+        from decimal import Decimal
+        self._cinemeta_rating('5.0')  # what would show if Cinemeta were asked
+        movie = self.make_movie(1, 'tt0000091', imdb_rating=Decimal('8.4'), imdb_votes=2134567)
+        Watchlist.objects.create(user=self.user, content_type=ContentType.objects.get_for_model(Movie), object_id=movie.id)
+        meta = self.client.get(self.url('meta/movie/tt0000091.json')).json()['meta']
+        self.assertEqual(meta['imdbRating'], '8.4')
+        self.assertIn({'name': '8.4', 'category': 'imdb', 'url': 'https://imdb.com/title/tt0000091'}, meta['links'])
+        item = self.client.get(self.url('catalog/movie/watchlist-movies.json')).json()['metas'][0]
+        self.assertEqual(item['imdbRating'], '8.4')
+        TVShow.objects.create(title='S', original_title='S', tmdb_id=9, imdb_id='tt0000092', imdb_rating=Decimal('9.0'))
+        meta = self.client.get(self.url('meta/series/tt0000092.json')).json()['meta']
+        self.assertEqual(meta['imdbRating'], '9.0')
+        cinemeta_calls = [c for c in self.cinemeta.call_args_list if 'cinemeta' in str(c.args[:1])]
+        self.assertEqual(cinemeta_calls, [])
+
     def _series_with_episode(self):
         show = TVShow.objects.create(title='Show', original_title='Show', tmdb_id=7, imdb_id='tt0000081')
         season = Season.objects.create(show=show, season_number=1)

@@ -730,7 +730,10 @@
                             <a href="{{ genre.get_absolute_url }}">{{ genre.name }}</a>{% if not forloop.last %}, {% endif %}
                         {% endfor %}
                     </p>
-                    <p><strong>Rating:</strong> {{ tv_show.rating }}</p>
+                    <p><strong>TMDB Rating:</strong> {{ tv_show.rating }}</p>
+                    {% if tv_show.imdb_id %}
+                    <p>{% include "components/imdb_badge.html" with imdb_id=tv_show.imdb_id rating=tv_show.imdb_rating votes=tv_show.imdb_votes %}</p>
+                    {% endif %}
                     <p><strong>Country:</strong> 
                         {% for country in tv_show.countries.all %}
                             <a href="{{ country.get_absolute_url }}">{{ country.name }}</a>{% if not forloop.last %}, {% endif %}
@@ -819,7 +822,7 @@
             </div>
         </div>
         <div class="status-bar">
-            <div class="status-bar-field">{{ tv_show.rating }} • {{ tv_show.status }} • {{ tv_show.first_air_date|date:"Y" }}</div>
+            <div class="status-bar-field">TMDB: {{ tv_show.rating }}{% if tv_show.imdb_rating is not None %} • IMDb: {{ tv_show.imdb_rating }}{% endif %} • {{ tv_show.status }} • {{ tv_show.first_air_date|date:"Y" }}</div>
             <div class="status-bar-field">Last updated: {{ tv_show.date_updated|date:"M d, Y" }}</div>
         </div>
     </div>    <!-- Episodes & Groups Window -->
