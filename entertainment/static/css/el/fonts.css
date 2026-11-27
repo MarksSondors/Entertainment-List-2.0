@@ -1,0 +1,22 @@
+/* el/fonts.css: the site's one font, self-hosted, 400 + 700, with accented
+   letters and UI symbols (static/fonts/el-pixel-sans-LICENSE.txt).
+
+   Every page loads this file. On pages that still load 98.css it must come
+   after 98.css: these faces then replace 98.css's unpkg-hosted faces of the
+   same name. */
+
+@font-face {
+  font-family: 'Pixelated MS Sans Serif';
+  src: url('../../fonts/el-pixel-sans-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Pixelated MS Sans Serif';
+  src: url('../../fonts/el-pixel-sans-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

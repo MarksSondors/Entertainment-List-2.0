@@ -212,7 +212,7 @@ sitting on a wallpaper. The retro look is the point, so it is applied seriously:
 square corners, light-from-top-left bevels, and no gradients except the title bar's.
 
 **The sign-in page is the reference implementation.** It is the most recent and most carefully
-built screen (`static/css/main.css` + `static/css/login.css`, no inline CSS, no third-party
+built screen (`static/css/el/*.css` + `main.css` + `login.css`, no inline CSS, no third-party
 requests). It passes every contrast check in both themes, and its touch targets are 48–54 px on
 phones. Every other page should converge on it. Where an inner page and the sign-in page
 disagree, the sign-in page is right unless this file says otherwise.
@@ -220,7 +220,7 @@ disagree, the sign-in page is right unless this file says otherwise.
 The theme follows the device (`prefers-color-scheme`). There is no toggle. Dark mode keeps the
 same structure and only swaps the palette. Title bars stay navy, just darker.
 
-`main.css` holds the tokens in code. The YAML above is the same palette, with dark values as
+`static/css/el/tokens.css` holds the tokens in code, for every page. The YAML above is the same palette, with dark values as
 `*-dark` keys. When the two disagree, fix one in the same change.
 
 ## Colors
@@ -253,12 +253,13 @@ Rules:
 - No colour is written inline in a template (`style="color:#700"`). A value that only exists in
   one template cannot follow the theme.
 
-Note: `main.css` still has error `#a80000`, which is 4.33:1 on the face and fails at 11 px. This
-file sets `#990000` (4.90:1), and `main.css` should follow.
+The sign-in page's error colour was `#a80000` (4.33:1 on the face, fails at 11 px) until it moved to
+`el/tokens.css`, which has `#990000` (4.90:1).
 
 ## Typography
 
-One family: **Pixelated MS Sans Serif** (`static/fonts/ms-sans-serif-1.otf.woff2`), self-hosted,
+One family: **Pixelated MS Sans Serif** (`static/fonts/el-pixel-sans-{400,700}.woff2`, declared in
+`static/css/el/fonts.css`), self-hosted,
 with `font-display: swap`, falling back to `'MS Sans Serif', Tahoma, Arial, sans-serif`.
 Font smoothing is off (`-webkit-font-smoothing: none`), because the glyphs are drawn on a pixel grid.
 
@@ -338,7 +339,10 @@ rounding). A rounded shape is a deliberate exception, such as a status dot, neve
   the design: the page still cannot appear until its last style has been parsed.
 - **Do** self-host the fonts, CSS and JS that every page needs. The sign-in page makes no
   third-party requests. Inner pages wait on jsdelivr, unpkg and code.jquery.com before first paint.
-- **Do** use the tokens. New tokens go in `main.css` (light and dark) and in this file.
+- **Do** use the tokens. New tokens go in `el/tokens.css` (light and dark) and in this file.
+- **Do** build new UI from `el/components.css` (`el-window`, `el-title-bar`, `el-field`, `el-input`,
+  `el-btn`, `el-btn-primary`, `el-checkbox`, `el-alert`, `el-status-bar`). A new shared component goes
+  there, with the `el-` prefix, so it cannot collide with 98.css, Bootstrap or old page CSS.
 - **Do** keep a dark override directly after the light rule it overrides. One placed earlier in
   the file loses on source order.
 - **Do** honour `prefers-reduced-motion`. Motion is 140 ms for controls and 180 ms for modals,
@@ -360,8 +364,8 @@ rounding). A rounded shape is a deliberate exception, such as a status dot, neve
 
 | area | follows this file |
 |---|---|
-| Sign-in page | yes (the error colour still to change from `#a80000` to `#990000`) |
-| Inner pages via `theme.css` | title bars and contrast: yes. Faces, type scale, CSS delivery, touch sizes: not yet |
+| Sign-in page | yes: built from `el/tokens.css`, `el/fonts.css`, `el/components.css` |
+| Inner pages | same three files. Palette, font, window frame, title bar, buttons: yes, via `theme.css` (maps old classes and token names onto them). Markup on `el-*` classes, type scale, CSS delivery, touch sizes: not yet, one component at a time |
 | Explorer | no dark mode |
 
 Measured findings and their status are kept with the agent tooling, in the

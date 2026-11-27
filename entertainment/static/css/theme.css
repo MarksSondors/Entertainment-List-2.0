@@ -1,43 +1,16 @@
-/* theme.css — one palette for every page that extends components/base.html.
+/* theme.css: inner pages only (everything that extends components/base.html).
 
-   Loaded once, last in <head>. The palette is DESIGN.md's: the sign-in page's
-   css/main.css values. `--el-*` tokens are the palette; the older names below
-   them (--bg-color, --win98-*, ...) are aliases so existing templates follow it.
+   The palette is el/tokens.css, shared with the sign-in page. This file maps
+   the inner pages' old token names and old classes onto it until each page is
+   moved to the el-* components (el/components.css); then the matching block
+   here is deleted. Loaded last in <head>.
 
-   Why `html:root`: ~30 templates still carry their own copy of the old tokens in
-   a plain `:root {}` block inside {% block content %}. `html:root` (0,1,1)
-   outranks `:root` (0,1,0) regardless of source order, so those copies stop
-   mattering and can be deleted page by page without visual change. */
+   Why `html:root`: ~30 templates still carry their own copy of the old tokens
+   in a plain `:root {}` block inside {% block content %}. `html:root` (0,1,1)
+   outranks `:root` (0,1,0) regardless of source order. */
 
+/* ---- old token names -> palette ---- */
 html:root {
-  /* ---- palette: neutrals ---- */
-  --el-face: #c0c0c0;          /* windows, buttons, bars */
-  --el-face-light: #dfdfdf;    /* hover, tabs, quotes, alt rows */
-  --el-well: #ffffff;          /* inputs, lists, sunken panels */
-  --el-highlight: #ffffff;     /* bevel: top/left */
-  --el-shadow: #808080;        /* bevel: bottom/right */
-  --el-edge: #0a0a0a;          /* bevel: outermost */
-  --el-text: #000000;
-  --el-muted: #4a4a4a;         /* 4.9:1 on face */
-
-  /* ---- palette: accents ---- */
-  --el-title-a: #000080;       /* title bar gradient start (text sits here) */
-  --el-title-b: #1084d0;       /* gradient end, no text */
-  --el-selection: #000080;     /* selected tab/row, white text */
-  --el-link: #0000a0;
-  --el-focus: #000080;
-  --progress-bar: #008080;     /* fills only */
-  --el-accent-text: #005555;   /* teal as text */
-  --el-rating-good: #1e6b2e;   /* score 7-10, white text */
-  --el-rating-mid: #7a5d00;    /* score 5-6, white text */
-  --el-rating-bad: #9c1f1b;    /* score 0-4, white text */
-  --el-avg-rating: #ffc107;    /* average / TMDB-style badge, black text */
-  --el-success-text: #0d5c0d;
-  --el-danger-text: #990000;   /* 4.9:1 on face (#a80000 was 4.3:1) */
-  --el-danger-fill: #a80000;   /* destructive buttons, white text */
-  --el-success-fill: #1e6b2e;  /* "add" buttons, white text */
-
-  /* ---- aliases used by existing templates ---- */
   --bg-color: var(--el-face);
   --window-bg: var(--el-face);
   --button-bg: var(--el-face);
@@ -67,25 +40,6 @@ html:root {
 
 @media (prefers-color-scheme: dark) {
   html:root {
-    --el-face: #303030;
-    --el-face-light: #3f3f3f;
-    --el-well: #1b1b1b;
-    --el-highlight: #5c5c5c;
-    --el-shadow: #141414;
-    --el-edge: #000000;
-    --el-text: #eaeaea;
-    --el-muted: #b4b4b4;       /* 6.4:1 on face */
-
-    --el-title-a: #000040;
-    --el-title-b: #0a5f9e;
-    --el-selection: #0a5f9e;
-    --el-link: #9cc4ff;
-    --el-focus: #9cc4ff;
-    --progress-bar: #00a0a0;
-    --el-accent-text: #5fd3d3;
-    --el-success-text: #5fd35f;
-    --el-danger-text: #ff8a8a;
-
     --backdrop-overlay: rgba(48, 48, 48, 0.9);
     --border-light: var(--el-highlight);   /* face-light is too close to face in dark */
     --poster-border: var(--el-highlight);

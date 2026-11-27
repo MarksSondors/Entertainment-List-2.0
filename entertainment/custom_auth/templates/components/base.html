@@ -188,25 +188,12 @@
     {% bootstrap_css %}
     {% bootstrap_javascript %}
     <link rel="stylesheet" href="https://unpkg.com/98.css@0.1.21/dist/98.css" integrity="sha384-15ft94Qa+wtquckGuqoUZVwmRnPrMFakV20jxURH5clORpGUeXAbhNK5x6aVebrD" crossorigin="anonymous" />
+    <!-- Shared with the sign-in page: palette, font, components (DESIGN.md).
+         fonts.css must stay after 98.css so its faces replace 98.css's. -->
+    <link rel="stylesheet" href="{% static 'css/el/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/el/fonts.css' %}">
+    <link rel="stylesheet" href="{% static 'css/el/components.css' %}">
     <style>
-        /* Self-hosted, 400 + 700, with accented letters and UI symbols
-           (static/fonts/el-pixel-sans-LICENSE.txt). Declared after 98.css, so these
-           replace its unpkg-hosted faces of the same name. */
-        @font-face {
-            font-family: 'Pixelated MS Sans Serif';
-            src: url("{% static 'fonts/el-pixel-sans-400.woff2' %}") format('woff2');
-            font-weight: 400;
-            font-style: normal;
-            font-display: swap;
-        }
-        @font-face {
-            font-family: 'Pixelated MS Sans Serif';
-            src: url("{% static 'fonts/el-pixel-sans-700.woff2' %}") format('woff2');
-            font-weight: 700;
-            font-style: normal;
-            font-display: swap;
-        }
-
         body, button, input, select, textarea, .window, .title-bar, .status-bar, h1, h2, h3, h4, h5, h6, p, span, div, a, label, li, td, th {
             font-family: 'Pixelated MS Sans Serif', Arial, sans-serif !important;
         }

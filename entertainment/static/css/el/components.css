@@ -1,0 +1,374 @@
+/* el/components.css: the site's components, taken from the sign-in page
+   (DESIGN.md, "Components"). Every page loads this file.
+
+   Class names start with `el-` so they cannot collide with 98.css, Bootstrap
+   or the per-page CSS that inner pages still carry (`.window`, `.btn`,
+   `.alert`, `.field-row` all mean something else there). Inner pages move to
+   these classes one component at a time; until then theme.css maps their old
+   classes to the same look.
+
+   Sizes follow the sign-in page: 13px text, 40px controls, one step up on
+   touch screens (`pointer: coarse`), 11px floor. Colours are el/tokens.css. */
+
+/* ---------- Window ---------- */
+
+.el-window {
+  position: relative;
+  background-color: var(--el-face);
+  padding: 3px;
+  box-shadow:
+    inset -1px -1px 0 0 var(--el-edge),
+    inset 1px 1px 0 0 var(--el-face-light),
+    inset -2px -2px 0 0 var(--el-shadow),
+    inset 2px 2px 0 0 var(--el-highlight),
+    var(--el-shadow-cast);
+}
+
+.el-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  padding: 2px 2px 2px 5px;
+  background: linear-gradient(90deg, var(--el-title-a) 0%, var(--el-title-b) 100%);
+  color: var(--el-title-text);
+}
+
+.el-title-bar-text {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.el-title-bar-controls {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+/* Drawn min/max/close buttons. Decoration (aria-hidden) unless they do something. */
+.el-tb-btn {
+  position: relative;
+  display: inline-block;
+  width: 17px;
+  height: 15px;
+  background-color: var(--el-face);
+  border: 1px solid var(--el-highlight);
+  border-right-color: var(--el-edge);
+  border-bottom-color: var(--el-edge);
+  box-shadow: inset -1px -1px 0 0 var(--el-shadow), inset 1px 1px 0 0 var(--el-face-light);
+}
+
+.el-tb-min::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  width: 6px;
+  height: 2px;
+  background-color: var(--el-text);
+}
+
+.el-tb-max::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  width: 7px;
+  height: 6px;
+  border: 1px solid var(--el-text);
+  border-top-width: 2px;
+}
+
+.el-tb-close::before,
+.el-tb-close::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  width: 8px;
+  height: 2px;
+  background-color: var(--el-text);
+}
+
+.el-tb-close::before { transform: rotate(45deg); }
+.el-tb-close::after { transform: rotate(-45deg); }
+
+.el-window-body {
+  padding: 20px 18px 18px;
+  color: var(--el-text);
+}
+
+/* ---------- Alert ---------- */
+
+.el-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background-color: var(--el-face-light);
+  border: 1px solid var(--el-highlight);
+  border-right-color: var(--el-shadow);
+  border-bottom-color: var(--el-shadow);
+  box-shadow: inset 1px 1px 0 0 var(--el-highlight), inset -1px -1px 0 0 var(--el-shadow);
+}
+
+.el-alert[hidden] { display: none; }
+
+.el-alert-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.el-alert-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--el-text);
+}
+
+/* ---------- Field: label, sunken input, error / hint ---------- */
+
+.el-field { margin-bottom: 14px; }
+
+.el-field-label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.el-field-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.el-input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 7px 9px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--el-well-text);
+  background-color: var(--el-well);
+  border: 1px solid var(--el-edge);
+  border-right-color: var(--el-highlight);
+  border-bottom-color: var(--el-highlight);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.32);
+  border-radius: 0;
+  appearance: none;
+}
+
+.el-input::placeholder { color: var(--el-muted); opacity: 1; }
+
+.el-input:focus {
+  outline: none;
+  border-color: var(--el-focus);
+  border-right-color: var(--el-focus);
+  border-bottom-color: var(--el-focus);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.32), 0 0 0 2px var(--el-focus);
+}
+
+.el-input[aria-invalid="true"] {
+  border-color: var(--el-danger-text);
+  border-right-color: var(--el-danger-text);
+  border-bottom-color: var(--el-danger-text);
+}
+
+.el-field-error {
+  display: none;
+  margin: 5px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--el-danger-text);
+}
+
+.el-field-error.is-visible { display: block; }
+
+/* Non-blocking hint (Caps Lock): muted so it doesn't read as a failed field. */
+.el-field-hint {
+  display: none;
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: var(--el-muted);
+}
+
+.el-field-hint::before { content: '\26A0\FE0E\00A0'; }
+
+.el-field-hint.is-visible { display: block; }
+
+/* ---------- Buttons ---------- */
+
+.el-btn {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--el-text);
+  background-color: var(--el-face);
+  border: 1px solid var(--el-highlight);
+  border-right-color: var(--el-edge);
+  border-bottom-color: var(--el-edge);
+  box-shadow: inset -1px -1px 0 0 var(--el-shadow), inset 1px 1px 0 0 var(--el-face-light);
+  border-radius: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color var(--el-motion-fast) var(--el-motion-ease);
+}
+
+.el-btn:hover { background-color: var(--el-face-light); }
+
+.el-btn:active {
+  padding: 1px 0 0 1px;
+  box-shadow: inset 1px 1px 0 0 var(--el-shadow);
+}
+
+.el-btn:focus-visible {
+  outline: 2px solid var(--el-focus);
+  outline-offset: 2px;
+}
+
+.el-btn[disabled] {
+  color: var(--el-disabled-text);
+  cursor: progress;
+}
+
+.el-btn[disabled]:hover { background-color: var(--el-face); }
+
+/* A button that sits next to a field (Show, Clear). */
+.el-btn-secondary {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+/* Default (Enter-key) button, one per window: Win98 draws an extra dark ring outside the bevel. */
+.el-btn-primary {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow:
+    0 0 0 1px var(--el-edge),
+    inset -1px -1px 0 0 var(--el-shadow),
+    inset 1px 1px 0 0 var(--el-face-light);
+}
+
+.el-btn-primary:active {
+  box-shadow: 0 0 0 1px var(--el-edge), inset 1px 1px 0 0 var(--el-shadow);
+}
+
+/* ---------- Checkbox (drawn by the site, not the OS) ---------- */
+
+.el-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.el-checkbox input[type="checkbox"] {
+  position: relative;
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  appearance: none;
+  background-color: var(--el-well);
+  border: 1px solid var(--el-edge);
+  border-right-color: var(--el-highlight);
+  border-bottom-color: var(--el-highlight);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.32);
+  cursor: pointer;
+}
+
+.el-checkbox input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border-right: 2px solid var(--el-text);
+  border-bottom: 2px solid var(--el-text);
+  transform: rotate(42deg);
+}
+
+.el-checkbox input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--el-focus);
+  outline-offset: 2px;
+}
+
+.el-checkbox-label { font-size: 12px; }
+
+/* ---------- Status bar ---------- */
+
+.el-status-bar {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background-color: var(--el-face);
+}
+
+.el-status-bar-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--el-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid var(--el-shadow);
+  border-right-color: var(--el-highlight);
+  border-bottom-color: var(--el-highlight);
+}
+
+.el-status-bar-field:last-child { flex: 0 0 auto; }
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 640px) {
+  .el-window-body { padding: 22px 18px 20px; }
+}
+
+/* ---------- Touch: one size up, 16px in inputs (stops iOS zoom-on-focus) ---------- */
+
+@media (pointer: coarse) {
+  .el-input {
+    min-height: 50px;
+    font-size: 16px;
+  }
+
+  .el-btn-secondary {
+    min-height: 50px;
+    font-size: 13px;
+  }
+
+  .el-btn-primary {
+    min-height: 54px;
+    font-size: 16px;
+  }
+
+  .el-checkbox { min-height: 48px; }
+  .el-checkbox input[type="checkbox"] { width: 22px; height: 22px; }
+  .el-checkbox input[type="checkbox"]:checked::after {
+    left: 7px;
+    top: 1px;
+    width: 6px;
+    height: 13px;
+  }
+  .el-checkbox-label { font-size: 13px; }
+
+  .el-field-label { font-size: 13px; }
+}
