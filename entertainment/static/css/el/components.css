@@ -668,14 +668,15 @@
   color: var(--el-well-text);
 }
 
-.el-search-empty p { margin: 0 0 8px; }
-
-.el-search-other {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 12px;
-  color: var(--el-muted);
+/* Legacy, Discover only: the add-content modals (movie/TV/game) still use the old
+   .sunken-panel. Moved here from search_component.html; :where() keeps the old
+   specificity (0,1,0). Delete when the modals move to el-* classes. */
+:where(body:has(#elSearch)) .sunken-panel {
+  border: 2px solid;
+  border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+  background: var(--win98-input-bg);
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .el-link-button {
@@ -691,6 +692,35 @@
   box-shadow: none;             /* 98.css draws its button bevel on every <button> */
   cursor: pointer;
 }
+
+/* No matches in the chosen type: one row per type that has some, drawn like a result */
+.el-search-jump {
+  width: 100%;
+  min-height: 56px;
+  font-family: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--el-face-light);
+  cursor: pointer;
+}
+
+.el-search-jump-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+}
+
+.el-search-jump-go {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  font-size: 20px;
+  color: var(--el-muted);
+}
+
+.el-search-jump:hover .el-search-jump-go,
+.el-search-jump:focus-visible .el-search-jump-go { color: #ffffff; }
 
 /* "Show all 8 movies" under a group in All types */
 .el-search-more {
@@ -806,7 +836,9 @@ button.el-btn:not(.el-btn-primary):not(:disabled):active {
 }
 button.el-combo:not(:disabled):is(:hover, :active) { box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.32); text-shadow: none; }
 button.el-link-button:not(:disabled):is(:hover, :active) { box-shadow: none; text-shadow: none; }
-button:is(.el-btn, .el-combo, .el-link-button):focus:not(:focus-visible) { outline: none; }
+button.el-search-jump { min-width: 0; text-shadow: none; box-shadow: none; color: var(--el-well-text); }
+button.el-search-jump:not(:disabled):is(:hover, :active) { box-shadow: none; text-shadow: none; color: #ffffff; }
+button:is(.el-btn, .el-combo, .el-link-button, .el-search-jump):focus:not(:focus-visible) { outline: none; }
 
 /* ---------- Small screens ---------- */
 

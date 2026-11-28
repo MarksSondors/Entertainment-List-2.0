@@ -46,18 +46,6 @@ getCurrentEndpoint().
     </div>
 </div>
 
-<style>
-    /* Kept from the old search component: the add-content modals on this page
-       (movie/TV/game/book) rely on it. Remove when they move to el-* classes. */
-    .sunken-panel {
-        border: 2px solid;
-        border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
-        background: var(--win98-input-bg);
-        max-height: 60vh;
-        overflow-y: auto;
-    }
-</style>
-
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const root = document.getElementById('elSearch');
@@ -249,18 +237,20 @@ document.addEventListener('DOMContentLoaded', function () {
             list.append(head(type, `${TYPES[type].label} matching “${query}”`));
             groups[type].forEach(it => list.append(row(it, type)));
             if (!counts[type]) {
-                const empty = el('div', 'el-search-empty');
-                empty.append(el('p', null, `No ${TYPES[type].nouns} match “${query}”.`));
-                if (hit.length) {
-                    const other = el('div', 'el-search-other');
-                    other.append(el('span', null, 'Found in:'));
-                    hit.forEach(k => {
-                        const b = el('button', 'el-link-button', `${TYPES[k].label} (${counts[k]})`); b.type = 'button';
-                        b.addEventListener('click', () => choose(k, false)); other.append(b);
-                    });
-                    empty.append(other);
-                } else empty.append(el('p', null, 'Nothing in the other types either.'));
-                list.append(empty);
+                list.append(el('div', 'el-search-empty', hit.length
+                    ? `No ${TYPES[type].nouns} match “${query}”. Matches in other types:`
+                    : `No ${TYPES[type].nouns} match “${query}”, and nothing in the other types either.`));
+                // one row per type that has matches, drawn like a result row
+                for (const k of hit) {
+                    const b = el('button', 'el-result el-search-jump'); b.type = 'button';
+                    const body = el('span', 'el-result-body');
+                    body.append(el('span', 'el-result-title', TYPES[k].label),
+                                el('span', 'el-result-meta', `${counts[k]} match${counts[k] === 1 ? '' : 'es'}`));
+                    b.append(el('span', 'el-search-jump-icon'), body, el('span', 'el-search-jump-go', '›'));
+                    b.firstChild.append(icon(k, 32));
+                    b.addEventListener('click', () => choose(k, false));
+                    list.append(b);
+                }
             }
         }
 
