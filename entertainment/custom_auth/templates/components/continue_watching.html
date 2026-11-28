@@ -33,6 +33,14 @@
         return e;
     };
     const code = n => `S${n.season} E${n.episode}`;
+    // time left to finish the show: "4h 48m left", "10h 21m left", "123h left"
+    const left = row => {
+        const m = row.minutes_left || 0, eps = row.episodes_left || 0;
+        if (!m) return eps ? `${eps} ep${eps === 1 ? '' : 's'} left` : '';
+        const h = Math.floor(m / 60), mm = m % 60;
+        if (!h) return `${mm}m left`;
+        return h >= 100 ? `${h}h left` : `${h}h ${String(mm).padStart(2, '0')}m left`;
+    };
     const daysSince = iso => iso ? (Date.now() - Date.parse(iso)) / 864e5 : Infinity;
 
     function setCollapsed(collapsed) {
@@ -48,7 +56,9 @@
         const a = el('a', 'el-card');
         a.href = `/tvshows/${item.media_tmdb_id}/`;
         a.setAttribute('role', 'listitem');
-        if (next) a.title = `${item.media_title}: ${code(next)}${next.title ? ' · ' + next.title : ''}`;
+        const rest = left(row);
+        if (next) a.title = `${item.media_title}: next ${code(next)}${next.title ? ' · ' + next.title : ''}`
+            + (row.episodes_left ? ` · ${row.episodes_left} episode${row.episodes_left === 1 ? '' : 's'} to go` : '') + (rest ? `, ${rest}` : '');
 
         if (item.media_poster) {
             const img = el('img', 'el-card-pic');
@@ -72,6 +82,7 @@
         fill.style.width = `${Math.min(100, Math.max(0, row.progress))}%`;
         bar.append(fill);
         body.append(bar);
+        if (rest) body.append(el('span', 'el-card-meta', rest));
         a.append(body);
         return a;
     }
