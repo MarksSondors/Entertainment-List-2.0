@@ -687,6 +687,8 @@
   text-decoration: underline;
   background: none;
   border: 0;
+  border-radius: 0;
+  box-shadow: none;             /* 98.css draws its button bevel on every <button> */
   cursor: pointer;
 }
 
