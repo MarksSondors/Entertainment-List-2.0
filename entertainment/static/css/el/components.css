@@ -702,49 +702,59 @@
   border-top: 1px solid var(--el-face-light);
 }
 
+/* Add a title the search didn't find: a label, then one button per type, icon over name */
 .el-search-add {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px 8px;
+  flex-direction: column;
+  gap: 3px;
   margin-top: 3px;
 }
 
 .el-search-add[hidden] { display: none; }
 
-.el-search-add-one {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 40px;
-  padding: 0 10px;
-  text-align: left;
+.el-search-add-label {
+  padding: 2px 0 0 4px;
+  font-size: 12px;
+  color: var(--el-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.el-search-add-label {
-  flex: 1 0 100%;                   /* own line: the four choices need the full width on phones */
-  padding: 2px 0 0 4px;
-  font-size: 12px;
-  color: var(--el-text);
-}
-
 .el-search-add-choices {
-  display: flex;
-  flex: 1 1 auto;
+  display: grid;
+  grid-auto-flow: column;           /* one equal column per button: 4 under All types, 1 otherwise */
+  grid-auto-columns: minmax(0, 1fr);
   gap: 3px;
 }
 
-.el-search-add-choices .el-btn {
-  flex: 1 1 0;
-  min-height: 36px;
-  padding: 0 6px;
+.el-search-add-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 3px 2px;
   font-size: 12px;
   white-space: nowrap;
 }
 
-.el-search-panel .el-status-bar { padding: 3px 0 0; }
+.el-search-add-choice span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* one type only: a single wide button, icon beside the name */
+.el-search-add-choices > .el-search-add-choice:only-child {
+  flex-direction: row;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.el-search-panel .el-status-bar { padding: 4px 0 0; }
 
 /* Phones: the results fill the screen down to the bottom bar, edge to edge,
    however few there are (a list box, not a drop-down). */
@@ -837,8 +847,7 @@ button:is(.el-btn, .el-combo, .el-link-button):focus:not(:focus-visible) { outli
   .el-combo { min-height: 44px; font-size: 16px; }
   .el-listbox-option { min-height: 48px; font-size: 16px; }
   .el-search-scope-label { font-size: 14px; }
-  .el-search-add-one { min-height: 44px; font-size: 13px; }
-  .el-search-add-choices .el-btn { min-height: 44px; font-size: 13px; }
+  .el-search-add-choice { min-height: 52px; font-size: 13px; }
   .el-search-more { min-height: 44px; }
   .el-listbox-count { font-size: 15px; }
 }

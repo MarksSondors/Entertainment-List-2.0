@@ -81,10 +81,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // 'all' + type key -> label, icon, placeholder, nouns (for "Add" / "Show all"), add-dialog opener
     const ALL = { label: 'All types', icon: 'world.png', ph: 'Search movies, shows, games, books, people…' };
     const TYPES = {
-        movies:  { label: 'Movies',   icon: 'camera_vid.png',         ph: 'Search movies…',            noun: 'movie',   nouns: 'movies',   open: () => window.openModal },
-        tvshows: { label: 'TV Shows', icon: 'network_television.png', ph: 'Search TV shows…',          noun: 'TV show', nouns: 'TV shows', open: () => window.openTVShowModal },
-        games:   { label: 'Games',    icon: 'solitaire.png',          ph: 'Search games…',             noun: 'game',    nouns: 'games',    open: () => window.openGameModal },
-        books:   { label: 'Books',    icon: 'document.png',           ph: 'Search books or authors…',  noun: 'book',    nouns: 'books',    open: () => window.openBookModal },
+        movies:  { label: 'Movies',   icon: 'camera_vid.png',         ph: 'Search movies…',            noun: 'movie',   nouns: 'movies',   add: 'Movie',   open: () => window.openModal },
+        tvshows: { label: 'TV Shows', icon: 'network_television.png', ph: 'Search TV shows…',          noun: 'TV show', nouns: 'TV shows', add: 'TV show', open: () => window.openTVShowModal },
+        games:   { label: 'Games',    icon: 'solitaire.png',          ph: 'Search games…',             noun: 'game',    nouns: 'games',    add: 'Game',    open: () => window.openGameModal },
+        books:   { label: 'Books',    icon: 'document.png',           ph: 'Search books or authors…',  noun: 'book',    nouns: 'books',    add: 'Book',    open: () => window.openBookModal },
         people:  { label: 'People',   icon: 'user_card.png',          ph: 'Search actors, directors…', noun: 'person',  nouns: 'people' },
         users:   { label: 'Users',    icon: 'users.png',              ph: 'Search friends…',           noun: 'user',    nouns: 'users' },
     };
@@ -264,20 +264,18 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // add: one button for the chosen type, or a choice of type under "All types"
+        // add: a label, then one icon button per type that can be added (all four under
+        // "All types", just the chosen one otherwise)
         addBox.replaceChildren();
         const addable = type === 'all' ? ADDABLE : ADDABLE.filter(k => k === type);
         addBox.hidden = !addable.length;
-        if (addable.length === 1) {
-            const k = addable[0];
-            const b = el('button', 'el-btn el-search-add-one', `+ Not here? Add “${query}” as a new ${TYPES[k].noun}`); b.type = 'button';
-            b.addEventListener('click', () => openAdd(k, query));
-            addBox.append(b);
-        } else if (addable.length) {
-            addBox.append(el('span', 'el-search-add-label', 'Not here? Add it as a:'));
+        if (addable.length) {
+            addBox.append(el('span', 'el-search-add-label',
+                addable.length > 1 ? `Not here? Add “${query}” as a:` : `Not here? Add “${query}”:`));
             const g = el('div', 'el-search-add-choices');
             addable.forEach(k => {
-                const b = el('button', 'el-btn', '+ ' + TYPES[k].noun); b.type = 'button';
+                const b = el('button', 'el-btn el-search-add-choice'); b.type = 'button';
+                b.append(icon(k, 20), el('span', null, addable.length > 1 ? TYPES[k].add : `New ${TYPES[k].noun}`));
                 b.addEventListener('click', () => openAdd(k, query)); g.append(b);
             });
             addBox.append(g);
