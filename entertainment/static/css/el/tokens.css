@@ -18,6 +18,8 @@ html:root {
   --el-highlight: #ffffff;     /* bevel: top/left */
   --el-shadow: #808080;        /* bevel: bottom/right */
   --el-edge: #0a0a0a;          /* bevel: outermost */
+  --el-card-hi: #ffffff;       /* card edge: top/left  (what `1px outset` draws on the */
+  --el-card-lo: #6c6c6c;       /* card edge: bottom/right  person page, as fixed colours) */
   --el-text: #000000;
   --el-muted: #4a4a4a;         /* 4.9:1 on face */
   --el-disabled-text: #808080;
@@ -60,6 +62,8 @@ html:root {
     --el-highlight: #5c5c5c;
     --el-shadow: #141414;
     --el-edge: #000000;
+    --el-card-hi: #848484;
+    --el-card-lo: #000000;
     --el-text: #eaeaea;
     --el-muted: #b4b4b4;       /* 6.4:1 on face */
     --el-disabled-text: #7a7a7a;

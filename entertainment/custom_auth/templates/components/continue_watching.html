@@ -45,23 +45,24 @@
 
     function card(row) {
         const item = row.item, next = row.next_episode, pct = Math.round(row.progress);
-        const a = el('a', 'el-cw-card');
+        const a = el('a', 'el-card');
         a.href = `/tvshows/${item.media_tmdb_id}/`;
         a.setAttribute('role', 'listitem');
         if (next) a.title = `${item.media_title}: ${code(next)}${next.title ? ' · ' + next.title : ''}`;
 
         if (item.media_poster) {
-            const img = el('img', 'el-cw-poster');
+            const img = el('img', 'el-card-pic');
             img.src = item.media_poster; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
             img.width = 104; img.height = 156;
             a.append(img);
         } else {
-            a.append(el('span', 'el-cw-poster is-empty', item.media_title));
+            a.append(el('span', 'el-card-pic is-empty', item.media_title));
         }
-        a.append(el('span', 'el-cw-title', item.media_title));
-        if (next) a.append(el('span', 'el-cw-next', code(next) + (next.runtime ? ` · ${next.runtime}m` : '')));
+        const body = el('span', 'el-card-body');
+        body.append(el('span', 'el-card-title', item.media_title));
+        if (next) body.append(el('span', 'el-card-meta', code(next) + (next.runtime ? ` · ${next.runtime}m` : '')));
 
-        const bar = el('span', 'el-cw-bar');
+        const bar = el('span', 'el-progress');
         bar.setAttribute('role', 'progressbar');
         bar.setAttribute('aria-valuemin', '0');
         bar.setAttribute('aria-valuemax', '100');
@@ -70,7 +71,8 @@
         const fill = el('i');
         fill.style.width = `${Math.min(100, Math.max(0, row.progress))}%`;
         bar.append(fill);
-        a.append(bar);
+        body.append(bar);
+        a.append(body);
         return a;
     }
 
