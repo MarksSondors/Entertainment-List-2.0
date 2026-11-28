@@ -1,7 +1,8 @@
 {% load static %}
 
-<!-- Recent Community Activity Component -->
-<div class="window community-activity-window" id="community-activity" style="width: 100%;">
+<!-- Recent Community Activity: media tabs, events grouped by day. Styles: .el-tabs and
+     .ca-* in static/css/el/components.css. Data: /activity/recent/ (JSON, paged). -->
+<div class="window el-ca" id="community-activity">
     <div class="title-bar">
         <div class="title-bar-text">Recent Community Activity</div>
         <div class="title-bar-controls">
@@ -10,28 +11,20 @@
             <button type="button" aria-label="Close"></button>
         </div>
     </div>
-    <div class="window-body" id="ca-window-body">
-        <div class="ca-filters" role="toolbar" aria-label="Filter community activity">
-            <div class="ca-chip-scroll" id="ca-chip-scroll">
-                <div class="ca-chip-group" role="group" aria-label="Media type" data-axis="media">
-                    <button type="button" class="ca-chip" data-value="all" aria-pressed="true">All</button>
-                    <button type="button" class="ca-chip" data-value="movies" aria-pressed="false">Movies</button>
-                    <button type="button" class="ca-chip" data-value="tvshows" aria-pressed="false">TV</button>
-                    <button type="button" class="ca-chip" data-value="books" aria-pressed="false">Books</button>
-                    <button type="button" class="ca-chip" data-value="games" aria-pressed="false">Games</button>
-                </div>
-                <span class="ca-chip-divider" aria-hidden="true"></span>
-                <div class="ca-chip-group" role="group" aria-label="Activity type" data-axis="kind">
-                    <button type="button" class="ca-chip" data-value="reviews" aria-pressed="false">Reviews</button>
-                    <button type="button" class="ca-chip" data-value="watched" aria-pressed="false">Watched</button>
-                    <button type="button" class="ca-chip" data-value="watchlist" aria-pressed="false">Watchlist</button>
-                </div>
+    <div class="window-body el-ca-body" id="ca-window-body">
+        <div class="el-tabs" id="ca-tabs" role="tablist" aria-label="Media type">
+            <button type="button" class="el-tab" role="tab" id="ca-tab-all" data-value="all" aria-selected="true" aria-controls="ca-tabpanel">All</button>
+            <button type="button" class="el-tab" role="tab" id="ca-tab-movies" data-value="movies" aria-selected="false" aria-controls="ca-tabpanel" tabindex="-1">Movies</button>
+            <button type="button" class="el-tab" role="tab" id="ca-tab-tvshows" data-value="tvshows" aria-selected="false" aria-controls="ca-tabpanel" tabindex="-1">TV</button>
+            <button type="button" class="el-tab" role="tab" id="ca-tab-books" data-value="books" aria-selected="false" aria-controls="ca-tabpanel" tabindex="-1">Books</button>
+            <button type="button" class="el-tab" role="tab" id="ca-tab-games" data-value="games" aria-selected="false" aria-controls="ca-tabpanel" tabindex="-1">Games</button>
+        </div>
+        <div class="el-tab-panel" id="ca-tabpanel" role="tabpanel" aria-labelledby="ca-tab-all">
+            <div class="ca-panel">
+                <div id="ca-feed" class="ca-feed" aria-live="polite" aria-busy="true"></div>
+                <button type="button" id="ca-show-more" class="ca-show-more" hidden>Show more</button>
             </div>
         </div>
-        <div class="ca-panel">
-            <div id="ca-feed" class="ca-feed" aria-live="polite" aria-busy="true"></div>
-        </div>
-        <button type="button" id="ca-show-more" class="ca-show-more" hidden>Show more</button>
     </div>
     <div class="status-bar" id="ca-status-bar">
         <div class="status-bar-field" id="ca-status" aria-live="polite">Last updated: Just now</div>
@@ -42,733 +35,6 @@
     </div>
 </div>
 
-<style>
-    /* Site palette (static/css/theme.css); light and dark both come from there. */
-    .community-activity-window {
-        --ca-field: var(--el-well);
-        --ca-text: var(--el-text);
-        --ca-muted: var(--el-muted);
-        --ca-rule: var(--el-face-light);
-        --ca-hover: var(--el-face-light);
-        --ca-press: var(--el-face);
-        --ca-bevel-light: var(--el-highlight);
-        --ca-bevel-dark: var(--el-edge);
-        --ca-dither: var(--el-highlight);
-        --ca-quote-bg: var(--el-face-light);
-        --ca-accent: var(--el-selection);
-        --ca-accent-text: #ffffff;
-        --ca-good: var(--el-rating-good);
-        --ca-mid: var(--el-rating-mid);
-        --ca-bad: var(--el-rating-bad);
-        --ca-poster-w: 60px;
-        --ca-poster-h: 90px;
-    }
-
-    @media (min-width: 600px) {
-        .community-activity-window {
-            --ca-poster-w: 64px;
-            --ca-poster-h: 96px;
-        }
-    }
-
-    .community-activity-window .title-bar-text {
-        font-size: 13px;
-    }
-
-    .community-activity-window .status-bar-field {
-        font-size: 12px;
-    }
-
-    .community-activity-window.is-minimized .window-body,
-    .community-activity-window.is-minimized .status-bar {
-        display: none;
-    }
-
-    .community-activity-window img {
-        border: 0 !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-    }
-
-    .community-activity-window :focus-visible {
-        outline: 1px dotted var(--ca-text);
-        outline-offset: 2px;
-    }
-
-    /* ---------- Win98 buttons used inside the widget ---------- */
-
-    .community-activity-window .ca-chip,
-    .community-activity-window .ca-show-more,
-    .community-activity-window .ca-quick,
-    .community-activity-window .ca-retry {
-        border: 0;
-        border-radius: 0;
-        background-color: var(--button-bg, #c0c0c0);
-        color: var(--button-text, #000000);
-        text-shadow: none;
-        box-shadow:
-            inset -1px -1px var(--ca-bevel-dark),
-            inset 1px 1px var(--ca-bevel-light),
-            inset -2px -2px var(--border-dark),
-            inset 2px 2px var(--button-hover);
-        cursor: pointer;
-        touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
-    }
-
-    .community-activity-window .ca-chip:active,
-    .community-activity-window .ca-show-more:active,
-    .community-activity-window .ca-quick:active,
-    .community-activity-window .ca-retry:active,
-    .community-activity-window .ca-chip[aria-pressed="true"],
-    .community-activity-window .ca-quick[aria-pressed="true"] {
-        text-shadow: none;
-        box-shadow:
-            inset -1px -1px var(--ca-bevel-light),
-            inset 1px 1px var(--ca-bevel-dark),
-            inset -2px -2px var(--button-hover),
-            inset 2px 2px var(--border-dark);
-    }
-
-    /* ---------- Filter chips ---------- */
-
-    .ca-filters {
-        position: relative;
-        margin-bottom: 6px;
-    }
-
-    .ca-chip-scroll {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 2px;
-        overflow-x: auto;
-        scroll-snap-type: x proximity;
-        scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .ca-chip-scroll::-webkit-scrollbar {
-        display: none;
-    }
-
-    .ca-chip-scroll.has-more-right {
-        -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
-        mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
-    }
-
-    .ca-chip-group {
-        display: flex;
-        gap: 6px;
-    }
-
-    .ca-chip {
-        flex: 0 0 auto;
-        min-width: 0 !important;
-        min-height: 38px !important;
-        padding: 0 14px !important;
-        font-size: 13px;
-        white-space: nowrap;
-        scroll-snap-align: start;
-    }
-
-    .ca-chip[aria-pressed="true"] {
-        font-weight: bold;
-        background-image: repeating-conic-gradient(var(--ca-dither) 0% 25%, transparent 0% 50%);
-        background-size: 2px 2px;
-    }
-
-    .ca-chip-divider {
-        flex: 0 0 auto;
-        width: 2px;
-        height: 26px;
-        border-left: 1px solid var(--border-dark);
-        border-right: 1px solid var(--ca-bevel-light);
-    }
-
-    /* ---------- Feed panel ---------- */
-
-    .ca-panel {
-        background-color: var(--ca-field);
-        color: var(--ca-text);
-        box-shadow:
-            inset -1px -1px var(--ca-bevel-light),
-            inset 1px 1px var(--border-dark),
-            inset -2px -2px var(--button-hover),
-            inset 2px 2px var(--ca-bevel-dark);
-        padding: 2px;
-    }
-
-    .ca-feed {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .ca-row {
-        position: relative;
-        display: grid;
-        grid-template-columns: var(--ca-poster-w) minmax(0, 1fr) auto;
-        align-items: start;
-        column-gap: 10px;
-        padding: 10px 8px 10px 10px;
-        border-bottom: 1px solid var(--ca-rule);
-        color: var(--ca-text);
-        -webkit-tap-highlight-color: transparent;
-    }
-
-    .ca-feed > .ca-row:last-child {
-        border-bottom: 0;
-    }
-
-    @media (hover: hover) {
-        .ca-row:hover {
-            background-color: var(--ca-hover);
-        }
-    }
-
-    .ca-row:active {
-        background-color: var(--ca-press);
-    }
-
-    .ca-poster {
-        display: block;
-        width: var(--ca-poster-w);
-        height: var(--ca-poster-h);
-        object-fit: cover;
-        background-color: var(--bg-color);
-        outline: 1px solid var(--border-dark);
-    }
-
-    .ca-main {
-        display: flex;
-        min-width: 0;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    .ca-meta {
-        display: flex;
-        align-items: baseline;
-        flex-wrap: wrap;
-        column-gap: 6px;
-        color: var(--ca-muted);
-        font-size: 13px;
-    }
-
-    .ca-user {
-        position: relative;
-        z-index: 1;
-        color: var(--ca-text) !important;
-        font-weight: bold;
-        text-decoration: none;
-        /* Taller tap target without changing the line height */
-        padding: 6px 0;
-        margin: -6px 0;
-    }
-
-    .ca-user:hover {
-        text-decoration: underline;
-    }
-
-    .ca-line {
-        margin: 0;
-        font-size: 15px;
-        line-height: 1.35;
-        overflow-wrap: anywhere;
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 3;
-        overflow: hidden;
-    }
-
-    .ca-verb {
-        color: var(--ca-muted);
-    }
-
-    .ca-title {
-        color: var(--ca-text) !important;
-        font-weight: bold;
-        text-decoration: none;
-    }
-
-    .ca-title:hover {
-        text-decoration: underline;
-    }
-
-    /* Stretched link: the whole row opens the title */
-    .ca-stretch::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-    }
-
-    .ca-tags {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 6px;
-        font-size: 12px;
-    }
-
-    .ca-tag {
-        padding: 1px 5px;
-        border: 1px solid var(--border-dark);
-        color: var(--ca-text);
-        font-weight: bold;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-    }
-
-    .ca-note {
-        color: var(--ca-muted);
-        font-size: 13px;
-    }
-
-    .ca-rating {
-        padding: 2px 6px;
-        color: #ffffff;
-        font-size: 13px;
-        font-weight: bold;
-        outline: 1px solid var(--ca-bevel-dark);
-    }
-
-    .ca-rating--good { background-color: var(--ca-good); }
-    .ca-rating--mid { background-color: var(--ca-mid); }
-    .ca-rating--bad { background-color: var(--ca-bad); }
-
-    .ca-quote {
-        margin: 2px 0 0;
-        padding: 6px 8px;
-        border-left: 3px solid var(--ca-accent);
-        background-color: var(--ca-quote-bg);
-        box-shadow: inset 1px 1px var(--border-dark);
-        color: var(--ca-text);
-        font-size: 14px;
-        font-style: italic;
-        line-height: 1.4;
-        overflow-wrap: anywhere;
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 3;
-        overflow: hidden;
-    }
-
-    .ca-quote.is-expanded {
-        display: block;
-        -webkit-line-clamp: unset;
-    }
-
-    .ca-text-toggle {
-        position: relative;
-        z-index: 1;
-        align-self: flex-start;
-        min-width: 0 !important;
-        min-height: 32px !important;
-        padding: 0 !important;
-        border: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        color: var(--ca-text);
-        text-shadow: none;
-        font-size: 13px;
-        text-decoration: underline;
-        cursor: pointer;
-    }
-
-    /* ---------- Quick watchlist action ---------- */
-
-    .ca-quick {
-        position: relative;
-        z-index: 1;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 44px;
-        min-width: 44px !important;
-        height: 44px;
-        min-height: 44px !important;
-        padding: 0 !important;
-        align-self: center;
-    }
-
-    .ca-quick[hidden] {
-        display: none;
-    }
-
-    .ca-quick[disabled] {
-        cursor: progress;
-    }
-
-    /* Pixel plus / check drawn in CSS so they stay crisp in any font */
-    .ca-quick-icon {
-        position: relative;
-        display: block;
-        width: 14px;
-        height: 14px;
-    }
-
-    .ca-quick-icon::before,
-    .ca-quick-icon::after {
-        content: "";
-        position: absolute;
-        background-color: currentColor;
-    }
-
-    .ca-quick[aria-pressed="false"] .ca-quick-icon::before {
-        left: 6px; top: 0; width: 2px; height: 14px;
-    }
-
-    .ca-quick[aria-pressed="false"] .ca-quick-icon::after {
-        left: 0; top: 6px; width: 14px; height: 2px;
-    }
-
-    .ca-quick[aria-pressed="true"] .ca-quick-icon::before {
-        left: 1px; top: 7px; width: 5px; height: 2px;
-        transform: rotate(45deg);
-        transform-origin: left center;
-    }
-
-    .ca-quick[aria-pressed="true"] .ca-quick-icon::after {
-        left: 4px; top: 10px; width: 11px; height: 2px;
-        transform: rotate(-50deg);
-        transform-origin: left center;
-    }
-
-    .community-activity-window .ca-quick[aria-pressed="true"] {
-        color: var(--ca-good);
-    }
-
-    @media (prefers-color-scheme: dark) {
-        .community-activity-window .ca-quick[aria-pressed="true"] {
-            color: var(--el-success-text);
-        }
-    }
-
-    /* ---------- Bundles ---------- */
-
-    /* Posters cascade like Win98 "Cascade Windows" */
-    .ca-stack {
-        position: relative;
-        /* Own stacking context so the row's tap overlay stays on top */
-        z-index: 0;
-        width: var(--ca-poster-w);
-        height: var(--ca-poster-h);
-    }
-
-    .ca-stack-poster {
-        position: absolute;
-        width: calc(var(--ca-poster-w) - 14px);
-        height: calc(var(--ca-poster-h) - 18px);
-        object-fit: cover;
-        background-color: var(--bg-color);
-        outline: 1px solid var(--ca-bevel-dark);
-        box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35) !important;
-    }
-
-    .ca-stack-poster:nth-child(1) { left: 0; top: 0; z-index: 3; }
-    .ca-stack-poster:nth-child(2) { left: 7px; top: 9px; z-index: 2; }
-    .ca-stack-poster:nth-child(3) { left: 14px; top: 18px; z-index: 1; }
-
-    .ca-stack-count {
-        position: absolute;
-        right: -4px;
-        bottom: -4px;
-        z-index: 4;
-        min-width: 26px;
-        padding: 1px 4px;
-        background-color: var(--ca-accent);
-        color: var(--ca-accent-text);
-        font-size: 12px;
-        font-weight: bold;
-        text-align: center;
-        outline: 1px solid var(--ca-bevel-dark);
-    }
-
-    .ca-preview {
-        margin: 0;
-        color: var(--ca-muted);
-        font-size: 13px;
-        line-height: 1.35;
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 1;
-        overflow: hidden;
-    }
-
-    .ca-row.is-expanded .ca-preview {
-        display: none;
-    }
-
-    .ca-text-toggle.ca-bundle-toggle {
-        /* Static so its ::after overlay spans the row, not the button */
-        position: static;
-        text-align: left;
-    }
-
-    .ca-bundle-toggle::after {
-        /* Let the whole bundle row expand/collapse */
-        content: "";
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-    }
-
-    .ca-row.is-expanded .ca-bundle-toggle::after {
-        bottom: auto;
-        height: calc(var(--ca-poster-h) + 20px);
-    }
-
-    .ca-strip {
-        position: relative;
-        z-index: 1;
-        grid-column: 1 / -1;
-        display: flex;
-        gap: 10px;
-        margin: 10px -8px -2px -10px;
-        padding: 2px 10px 6px;
-        overflow-x: auto;
-        scroll-snap-type: x mandatory;
-        scroll-padding-left: 10px;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: thin;
-    }
-
-    .ca-strip[hidden] {
-        display: none;
-    }
-
-    .ca-strip-item {
-        position: relative;
-        flex: 0 0 80px;
-        scroll-snap-align: start;
-    }
-
-    .ca-strip-link {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        color: var(--ca-text) !important;
-        text-decoration: none;
-    }
-
-    .ca-strip-link img {
-        width: 80px;
-        height: 120px;
-        object-fit: cover;
-        background-color: var(--bg-color);
-        outline: 1px solid var(--border-dark);
-    }
-
-    .ca-strip-title {
-        font-size: 13px;
-        font-weight: bold;
-        line-height: 1.25;
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-        overflow: hidden;
-        overflow-wrap: anywhere;
-    }
-
-    .ca-strip-note {
-        color: var(--ca-muted);
-        font-size: 12px;
-    }
-
-    .ca-strip-item .ca-quick {
-        position: absolute;
-        top: 4px;
-        right: 4px;
-        width: 36px;
-        min-width: 36px !important;
-        height: 36px;
-        min-height: 36px !important;
-    }
-
-    /* ---------- Context menu ---------- */
-
-    .ca-row.is-menu-target,
-    .ca-strip-item.is-menu-target {
-        outline: 1px dotted var(--ca-text);
-        outline-offset: -3px;
-    }
-
-    .ca-row.is-menu-target {
-        background-color: var(--ca-press);
-    }
-
-    .ca-row a,
-    .ca-row img {
-        -webkit-touch-callout: none;
-    }
-
-    @media (pointer: coarse) {
-        /* Long-press opens the menu; "Copy review" replaces text selection */
-        .ca-row {
-            -webkit-user-select: none;
-            user-select: none;
-        }
-    }
-
-    /* Appended to <body>, so it carries its own tokens */
-    .ca-menu {
-        --m-bg: var(--el-face);
-        --m-text: var(--el-text);
-        --m-light: var(--el-highlight);
-        --m-face-light: var(--el-face-light);
-        --m-shadow: var(--el-shadow);
-        --m-dark: var(--el-edge);
-        --m-hi: var(--el-selection);
-        --m-hi-text: #ffffff;
-        position: fixed;
-        z-index: 3000;
-        min-width: 180px;
-        max-width: calc(100vw - 16px);
-        padding: 3px;
-        background-color: var(--m-bg);
-        color: var(--m-text);
-        box-shadow:
-            inset -1px -1px var(--m-dark),
-            inset 1px 1px var(--m-face-light),
-            inset -2px -2px var(--m-shadow),
-            inset 2px 2px var(--m-light),
-            2px 2px 0 rgba(0, 0, 0, 0.35);
-    }
-
-    .ca-menu[hidden] {
-        display: none;
-    }
-
-    .ca-menu .ca-menu-item {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        min-width: 0 !important;
-        min-height: 24px !important;
-        padding: 0 20px 0 22px !important;
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        box-shadow: none !important;
-        color: var(--m-text);
-        text-shadow: none !important;
-        font-size: 13px;
-        text-align: left;
-        white-space: nowrap;
-        cursor: default;
-        -webkit-tap-highlight-color: transparent;
-    }
-
-    .ca-menu .ca-menu-item.is-default {
-        font-weight: bold;
-    }
-
-    .ca-menu .ca-menu-item:hover,
-    .ca-menu .ca-menu-item:focus {
-        background-color: var(--m-hi);
-        color: var(--m-hi-text);
-        outline: none;
-    }
-
-    .ca-menu-sep {
-        height: 0;
-        margin: 3px 2px;
-        border-top: 1px solid var(--m-shadow);
-        border-bottom: 1px solid var(--m-light);
-    }
-
-    @media (pointer: coarse) {
-        .ca-menu {
-            min-width: 220px;
-        }
-
-        .ca-menu .ca-menu-item {
-            min-height: 44px !important;
-            font-size: 15px;
-        }
-    }
-
-    /* ---------- Loading, empty, error ---------- */
-
-    .ca-skeleton .ca-poster,
-    .ca-skeleton-line {
-        background: linear-gradient(90deg, var(--ca-rule) 25%, var(--ca-hover) 50%, var(--ca-rule) 75%);
-        background-size: 200% 100%;
-        animation: ca-shimmer 1.5s infinite;
-        outline: 0;
-    }
-
-    .ca-skeleton-line {
-        width: 85%;
-        height: 12px;
-        margin-top: 6px;
-    }
-
-    .ca-skeleton-line.is-short {
-        width: 50%;
-    }
-
-    @keyframes ca-shimmer {
-        0% { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
-    }
-
-    .ca-message {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-        padding: 22px 12px;
-        color: var(--ca-text);
-        font-size: 14px;
-        text-align: center;
-    }
-
-    .ca-retry {
-        min-height: 38px !important;
-        padding: 0 16px !important;
-        font-size: 13px;
-    }
-
-    .ca-show-more {
-        display: block;
-        width: 100%;
-        min-height: 44px !important;
-        margin-top: 6px;
-        font-size: 14px;
-    }
-
-    .ca-show-more[hidden] {
-        display: none;
-    }
-
-    .ca-status-right {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        flex: 0 0 auto;
-    }
-
-    .ca-refresh-indicator img {
-        display: block;
-        animation: ca-spin 1s infinite linear;
-    }
-
-    @keyframes ca-spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .ca-skeleton .ca-poster,
-        .ca-skeleton-line,
-        .ca-refresh-indicator img {
-            animation: none;
-        }
-    }
-</style>
-
 <script>
     (function() {
         const root = document.getElementById('community-activity');
@@ -776,7 +42,7 @@
 
         const IS_AUTHENTICATED = {{ user.is_authenticated|yesno:"true,false" }};
         const FALLBACK_POSTER = "{% static 'images/frontend-logo.png' %}";
-        const PAGE_SIZE = 3;
+        const PAGE_SIZE = 6;
         const REFRESH_MS = 60000;
         const MINIMIZED_KEY = 'communityActivityMinimized';
 
@@ -789,10 +55,10 @@
         const MEDIA_TAGS = { 'Movie': 'Movie', 'TV Show': 'TV', 'Game': 'Game', 'Book': 'Book', 'Mixed': 'Mixed' };
         const WANT_VERBS = { 'Book': 'read', 'Game': 'play' };
         const EMPTY_MEDIA = { all: '', movies: 'movie', tvshows: 'TV', books: 'book', games: 'game' };
-        const EMPTY_KIND = { all: 'activity', reviews: 'reviews', watched: 'watched episodes', watchlist: 'watchlist adds' };
 
         const feed = document.getElementById('ca-feed');
-        const chipScroll = document.getElementById('ca-chip-scroll');
+        const tabList = document.getElementById('ca-tabs');
+        const tabPanel = document.getElementById('ca-tabpanel');
         const showMoreButton = document.getElementById('ca-show-more');
         const statusField = document.getElementById('ca-status');
         const refreshIndicator = document.getElementById('ca-refresh-indicator');
@@ -805,9 +71,10 @@
             page: 1,
             hasMore: false,
             media: 'all',
-            kind: 'all',
+            kind: 'all',          // the API still takes it; nobody used the filter, so no UI
             controller: null,
             lastUpdated: 'Last updated: Just now',
+            lastDay: null,        // day heading of the last row drawn, so "Show more" continues it
             statusTimer: null,
             refreshTimer: null,
             autoRefresh: true,
@@ -818,33 +85,33 @@
         };
 
         setMinimized(readMinimized());
-        syncChips();
-        updateChipOverflow();
+        syncTabs();
         renderSkeleton();
         load(1, true);
         startAutoRefresh();
 
-        root.querySelectorAll('.ca-chip-group').forEach(function(group) {
-            group.addEventListener('click', function(event) {
-                const chip = event.target.closest('.ca-chip');
-                if (!chip) return;
-                const axis = group.dataset.axis;
-                const value = chip.dataset.value;
-                if (axis === 'media') {
-                    if (state.media === value) return;
-                    state.media = value;
-                } else {
-                    // Activity chips toggle: tapping the active one clears it.
-                    state.kind = state.kind === value ? 'all' : value;
-                }
-                applyFilters();
-            });
+        tabList.addEventListener('click', function(event) {
+            const tab = event.target.closest('.el-tab');
+            if (!tab || tab.dataset.value === state.media) return;
+            state.media = tab.dataset.value;
+            applyFilters();
         });
 
-        chipScroll.addEventListener('scroll', updateChipOverflow, { passive: true });
-        window.addEventListener('resize', updateChipOverflow);
-        window.addEventListener('load', updateChipOverflow);
-        if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateChipOverflow);
+        // Arrow keys move between tabs and select (Win98 / ARIA tabs).
+        tabList.addEventListener('keydown', function(event) {
+            const tabs = Array.from(tabList.querySelectorAll('.el-tab'));
+            const index = tabs.indexOf(document.activeElement);
+            if (index < 0) return;
+            let next = null;
+            if (event.key === 'ArrowRight') next = tabs[(index + 1) % tabs.length];
+            else if (event.key === 'ArrowLeft') next = tabs[(index - 1 + tabs.length) % tabs.length];
+            else if (event.key === 'Home') next = tabs[0];
+            else if (event.key === 'End') next = tabs[tabs.length - 1];
+            if (!next) return;
+            event.preventDefault();
+            next.focus();
+            next.click();
+        });
 
         showMoreButton.addEventListener('click', function() {
             if (!state.hasMore || state.controller) return;
@@ -896,7 +163,7 @@
         // ---------- Filters ----------
 
         function applyFilters() {
-            syncChips();
+            syncTabs();
             state.page = 1;
             state.hasMore = false;
             showMoreButton.hidden = true;
@@ -905,18 +172,13 @@
             load(1, true);
         }
 
-        function syncChips() {
-            root.querySelectorAll('.ca-chip-group').forEach(function(group) {
-                const active = group.dataset.axis === 'media' ? state.media : state.kind;
-                group.querySelectorAll('.ca-chip').forEach(function(chip) {
-                    chip.setAttribute('aria-pressed', String(chip.dataset.value === active));
-                });
+        function syncTabs() {
+            tabList.querySelectorAll('.el-tab').forEach(function(tab) {
+                const selected = tab.dataset.value === state.media;
+                tab.setAttribute('aria-selected', String(selected));
+                tab.tabIndex = selected ? 0 : -1;
+                if (selected) tabPanel.setAttribute('aria-labelledby', tab.id);
             });
-        }
-
-        function updateChipOverflow() {
-            const remaining = chipScroll.scrollWidth - chipScroll.clientWidth - chipScroll.scrollLeft;
-            chipScroll.classList.toggle('has-more-right', remaining > 4);
         }
 
         function isFiltered() {
@@ -987,7 +249,10 @@
                     state.lastUpdated = 'Last updated: ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     if (!state.statusTimer) statusField.textContent = state.lastUpdated;
 
-                    if (replace) feed.textContent = '';
+                    if (replace) {
+                        feed.textContent = '';
+                        state.lastDay = null;
+                    }
 
                     if (replace && results.length === 0) {
                         renderEmpty();
@@ -1021,12 +286,12 @@
         function renderSkeleton() {
             feed.setAttribute('aria-busy', 'true');
             feed.textContent = '';
+            state.lastDay = null;
             for (let i = 0; i < PAGE_SIZE; i++) {
                 const row = el('div', 'ca-row ca-skeleton');
                 row.setAttribute('aria-hidden', 'true');
                 row.appendChild(el('div', 'ca-poster'));
                 const main = el('div', 'ca-main');
-                main.appendChild(el('div', 'ca-skeleton-line is-short'));
                 main.appendChild(el('div', 'ca-skeleton-line'));
                 main.appendChild(el('div', 'ca-skeleton-line is-short'));
                 row.appendChild(main);
@@ -1038,7 +303,7 @@
             const box = el('div', 'ca-message');
             box.appendChild(el('span', '', emptyMessage()));
             if (isFiltered()) {
-                const reset = el('button', 'ca-retry', 'Show all activity');
+                const reset = el('button', 'el-btn', 'Show all activity');
                 reset.type = 'button';
                 reset.addEventListener('click', function() {
                     state.media = 'all';
@@ -1052,18 +317,15 @@
 
         function emptyMessage() {
             if (!isFiltered()) return 'No community activity yet.';
-            if (state.kind === 'watched' && state.media !== 'all' && state.media !== 'tvshows') {
-                return 'Watched activity is only tracked for TV episodes.';
-            }
             const mediaWord = EMPTY_MEDIA[state.media];
-            return 'No ' + (mediaWord ? mediaWord + ' ' : '') + EMPTY_KIND[state.kind] + ' yet.';
+            return 'No ' + (mediaWord ? mediaWord + ' ' : '') + 'activity yet.';
         }
 
         function renderError() {
             feed.textContent = '';
             const box = el('div', 'ca-message');
             box.appendChild(el('span', '', "Couldn't load activity."));
-            const retry = el('button', 'ca-retry', 'Retry');
+            const retry = el('button', 'el-btn', 'Retry');
             retry.type = 'button';
             retry.addEventListener('click', function() {
                 renderSkeleton();
@@ -1075,8 +337,25 @@
 
         // ---------- Rendering ----------
 
+        function dayLabel(date) {
+            if (!date) return 'Earlier';
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const days = Math.round((today - day) / 86400000);
+            if (days <= 0) return 'Today';
+            if (days === 1) return 'Yesterday';
+            if (days < 7) return 'This week';
+            return 'Earlier';
+        }
+
         function appendActivity(activity) {
             const date = parseActivityDate(activity);
+            const day = dayLabel(date);
+            if (day !== state.lastDay) {
+                state.lastDay = day;
+                feed.appendChild(el('h3', 'ca-day', day));
+            }
 
             let row;
             if (activity.kind === 'bundle') {
@@ -1094,19 +373,17 @@
             const row = rowShell(activity, 'ca-row--review');
             const main = row.querySelector('.ca-main');
 
-            main.appendChild(rowHeader(activity, date));
             // A binge merged with its season review reads as one event.
             const verb = activity.episode_label
                 ? 'watched ' + activity.episode_label + ' and reviewed'
                 : 'reviewed';
-            main.appendChild(sentence(verb, activity));
+            main.appendChild(sentence(activity, verb));
 
-            const tags = el('div', 'ca-tags');
-            tags.appendChild(mediaTag(activity.content_type));
+            const meta = metaLine(activity, date);
             if (activity.rating !== undefined && activity.rating !== null) {
-                tags.appendChild(ratingChip(activity.rating));
+                meta.appendChild(ratingChip(activity.rating));
             }
-            main.appendChild(tags);
+            main.appendChild(meta);
 
             if (activity.content) {
                 const quote = el('p', 'ca-quote', '“' + activity.content + '”');
@@ -1138,27 +415,25 @@
         function renderSimpleRow(activity, date) {
             const row = rowShell(activity, 'ca-row--' + (activity.kind || 'other'));
             const main = row.querySelector('.ca-main');
-            main.appendChild(rowHeader(activity, date));
-
-            const tags = el('div', 'ca-tags');
-            tags.appendChild(mediaTag(activity.content_type));
+            const meta = metaLine(activity, date);
 
             if (activity.kind === 'watchlist') {
                 const verb = activity.is_own ? 'want to ' : 'wants to ';
-                main.appendChild(sentence(verb + (WANT_VERBS[activity.content_type] || 'watch'), activity));
+                main.appendChild(sentence(activity, verb + (WANT_VERBS[activity.content_type] || 'watch')));
             } else if (activity.kind === 'episodes') {
                 const label = activity.episode_label || pluralize(activity.episode_count, 'episode');
-                main.appendChild(sentence('watched ' + label + ' of', activity));
+                main.appendChild(sentence(activity, 'watched ' + label + ' of'));
                 // Only when the ranges have gaps; "E1–E8" already says 8.
                 if (activity.episode_label && activity.episode_label.indexOf(',') !== -1) {
-                    tags.appendChild(el('span', 'ca-note', pluralize(activity.episode_count, 'episode')));
+                    meta.appendChild(el('span', '', pluralize(activity.episode_count, 'episode')));
                 }
+            } else if (activity.is_system) {
+                main.appendChild(sentence(activity, 'New on the site:'));
             } else {
-                main.appendChild(sentence('', activity));
-                tags.appendChild(el('span', 'ca-note', activity.action || 'updated'));
+                main.appendChild(sentence(activity, activity.action || 'updated'));
             }
 
-            main.appendChild(tags);
+            main.appendChild(meta);
             appendQuickAction(row, activity);
             return row;
         }
@@ -1178,8 +453,9 @@
             row.appendChild(stack);
 
             const main = el('div', 'ca-main');
-            main.appendChild(rowHeader(activity, date));
             const line = el('p', 'ca-line');
+            line.appendChild(userName(activity));
+            line.appendChild(document.createTextNode(' '));
             line.appendChild(el('span', 'ca-verb', activity.action));
             main.appendChild(line);
 
@@ -1194,6 +470,7 @@
                 strip.appendChild(renderStripItem(item, activity));
             });
 
+            const meta = metaLine(activity, date, true);
             const toggleLabel = function(expanded) {
                 if (expanded) return 'Hide titles';
                 return activity.count > items.length
@@ -1214,7 +491,9 @@
                 if (expanded) strip.scrollLeft = 0;
             };
             toggle.addEventListener('click', toggleBundle);
-            main.appendChild(toggle);
+            meta.appendChild(el('span', '', '·'));
+            meta.appendChild(toggle);
+            main.appendChild(meta);
             rowData.set(row, {
                 activity: activity,
                 toggleBundle: toggleBundle,
@@ -1253,14 +532,38 @@
             return row;
         }
 
-        function rowHeader(activity, date) {
-            const meta = el('div', 'ca-meta');
+        function userName(activity) {
             const name = activity.is_own ? 'You' : activity.username;
             const user = el(activity.profile_url ? 'a' : 'span', 'ca-user', name);
             if (activity.profile_url) user.href = activity.profile_url;
-            meta.appendChild(user);
-            meta.appendChild(el('span', '', '·'));
+            return user;
+        }
 
+        // "djanton wants to watch Monster": who, what they did, the title (the title link
+        // stretches over the whole row).
+        function sentence(activity, verb) {
+            const line = el('p', 'ca-line');
+            if (!activity.is_system) {
+                line.appendChild(userName(activity));
+                line.appendChild(document.createTextNode(' '));
+            }
+            if (verb) {
+                line.appendChild(el('span', 'ca-verb', verb));
+                line.appendChild(document.createTextNode(' '));
+            }
+            const title = el(activity.detail_url ? 'a' : 'span', 'ca-title ca-stretch', activity.title);
+            if (activity.detail_url) title.href = activity.detail_url;
+            line.appendChild(title);
+            return line;
+        }
+
+        // "Movie · 2 days ago" (+ rating chip on reviews)
+        function metaLine(activity, date, noType) {
+            const meta = el('div', 'ca-meta');
+            if (!noType) {
+                meta.appendChild(el('span', '', MEDIA_TAGS[activity.content_type] || activity.content_type || ''));
+                meta.appendChild(el('span', '', '·'));
+            }
             const time = el('time', '');
             if (date) {
                 time.dateTime = date.toISOString();
@@ -1273,27 +576,11 @@
             return meta;
         }
 
-        function sentence(verb, activity) {
-            const line = el('p', 'ca-line');
-            if (verb) {
-                line.appendChild(el('span', 'ca-verb', verb));
-                line.appendChild(document.createTextNode(' '));
-            }
-            const title = el(activity.detail_url ? 'a' : 'span', 'ca-title ca-stretch', activity.title);
-            if (activity.detail_url) title.href = activity.detail_url;
-            line.appendChild(title);
-            return line;
-        }
-
-        function mediaTag(contentType) {
-            return el('span', 'ca-tag', MEDIA_TAGS[contentType] || contentType || '');
-        }
-
         function ratingChip(rating) {
             const value = Number(rating);
             const shown = Number.isInteger(value) ? String(value) : value.toFixed(1);
-            const tone = value >= 7 ? 'good' : value >= 5 ? 'mid' : 'bad';
-            const chip = el('span', 'ca-rating ca-rating--' + tone, '★ ' + shown + '/10');
+            const tone = value >= 7 ? 'is-good' : value >= 5 ? 'is-mid' : 'is-bad';
+            const chip = el('span', 'el-chip el-chip-score ' + tone, '★ ' + shown + '/10');
             chip.setAttribute('aria-label', 'Rated ' + shown + ' out of 10');
             return chip;
         }
@@ -1305,8 +592,8 @@
             img.alt = '';
             img.loading = 'lazy';
             img.decoding = 'async';
-            img.width = 60;
-            img.height = 90;
+            img.width = 32;
+            img.height = 48;
             img.addEventListener('error', function onError() {
                 img.removeEventListener('error', onError);
                 img.src = FALLBACK_POSTER;

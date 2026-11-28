@@ -124,7 +124,7 @@ html body .title-bar-text {
    way (outset borders, 10-14px text, 24-44px tall). Tabs, filter chips, tiles,
    the bottom bar and title-bar controls are separate components. */
 html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn:not(.btn-group), .nf-btn, .btn-watchlist,
-              .ca-show-more, .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick) {
+              .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick) {
   font-size: 13px !important;
   font-weight: 400 !important;
   line-height: 1.2 !important;
@@ -160,13 +160,13 @@ html body .settings-btn {
   height: 40px !important;
 }
 @media (hover: hover) {
-  html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+  html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist,
                 .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick):hover {
     background: var(--el-face-light) !important;
   }
 }
 /* pressed, and toggles that are on (Compact/Detailed, active filters) */
-html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist,
               .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick):is(:active, .active, [aria-pressed="true"]) {
   background: var(--el-face-light) !important;
   box-shadow:
@@ -175,18 +175,18 @@ html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-
     inset 2px 2px 0 0 var(--el-shadow),
     inset -2px -2px 0 0 var(--el-face-light) !important;
 }
-html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist,
               .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick):is(:disabled, [disabled], .disabled) {
   color: var(--el-muted) !important;
   cursor: default;
 }
-html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist,
               .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick):focus-visible {
   outline: 2px solid var(--el-focus) !important;
   outline-offset: 2px !important;
 }
 @media (max-width: 767px) {
-  html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist, .ca-show-more,
+  html body :is(.retro-btn:not(.movie-card-btn), button.btn, a.btn, .nf-btn, .btn-watchlist,
                 .win98-btn-link .win98-btn, .explorer-toolbar .tb-btn, .settings-btn, .ca-quick) {
     min-height: 40px !important;
   }
