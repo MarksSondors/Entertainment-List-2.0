@@ -101,14 +101,44 @@ def discover_page(request):
     
     return render(request, 'discover_page.html', context)
 
+DISCOVER_SEARCH_TYPES = ('movies', 'tvshows', 'games', 'books', 'people', 'users')
+
+
 @login_required
 def search_bar_discover(request):
-    #  i wil get type of search - currently only movies, tvshows, people or users
+    """Discover search. `type` is one of DISCOVER_SEARCH_TYPES, or `all`: every type in one
+    response, as `groups` {type: results} plus `counts` {type: n}."""
     search_query = request.GET.get('search', '').strip()
     search_type = request.GET.get('type', 'movies')  # Default to movies if not specified
     if not search_query:
         return JsonResponse({'error': 'Search query cannot be empty'}, status=400)
-    
+
+    if search_type == 'all':
+        groups = {t: _discover_search_results(request, search_query, t) for t in DISCOVER_SEARCH_TYPES}
+        counts = {t: len(r) for t, r in groups.items()}
+        return JsonResponse({
+            'success': True,
+            'search_type': 'all',
+            'query': search_query,
+            'groups': groups,
+            'counts': counts,
+            'count': sum(counts.values()),
+        })
+
+    results = _discover_search_results(request, search_query, search_type)
+    if results is None:
+        return JsonResponse({'error': 'Invalid search type'}, status=400)
+    return JsonResponse({
+        'success': True,
+        'results': results,
+        'search_type': search_type,
+        'query': search_query,
+        'count': len(results)
+    })
+
+
+def _discover_search_results(request, search_query, search_type):
+    """Up to 10 results of one type for the Discover search, or None for an unknown type."""
     if search_type == 'movies':
         search_query_obj = SearchQuery(search_query, config='english')
         
@@ -490,15 +520,9 @@ def search_bar_discover(request):
                 'authors': book.author_names,
             })
     else:
-        return JsonResponse({'error': 'Invalid search type'}, status=400)
-    
-    return JsonResponse({
-        'success': True,
-        'results': results,
-        'search_type': search_type,
-        'query': search_query,
-        'count': len(results)
-    })
+        return None
+
+    return results
 
 @login_required
 def discover_genres(request):

@@ -1,16 +1,18 @@
 {% load static %}
 {% comment %}
-Discover search: field, "Look in:" type picker, results list. Styles: el-search, el-combo,
-el-listbox, el-result in static/css/el/components.css. Keeps the globals the add-content
-modals call after a successful add: performSearch(query, type), clearSearch(),
-getCurrentQuery(), getCurrentEndpoint().
+Discover search: field, "Look in:" picker (All types, or one type), results.
+One request per search (?type=all) returns every type. The picker shows each type's count, and
+switching type redraws from the same response. Styles: el-search*, el-combo, el-listbox,
+el-result, el-chip in static/css/el/components.css. Keeps the globals the add-content modals
+call after a successful add: performSearch(query, type), clearSearch(), getCurrentQuery(),
+getCurrentEndpoint().
 {% endcomment %}
 <div class="el-search" id="elSearch" data-search-url="{% url 'discover_search' %}" data-icons="{% static 'images/win98/' %}">
     <div class="el-search-bar" role="search">
         <div class="el-field-row">
             <label class="el-visually-hidden" for="searchInput">Search</label>
             <input class="el-input" type="search" id="searchInput" name="search"
-                   placeholder="Search movies…" value="{{ request.GET.search }}"
+                   placeholder="Search movies, shows, games, books, people…" value="{{ request.GET.search }}"
                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                    enterkeyhint="search" aria-controls="searchResults">
             <button type="button" class="el-btn el-btn-secondary" id="cancelButton" hidden>Cancel</button>
@@ -22,8 +24,9 @@ getCurrentQuery(), getCurrentEndpoint().
                 <button type="button" class="el-combo" id="elScope"
                         aria-haspopup="listbox" aria-expanded="false" aria-controls="elScopeList"
                         aria-labelledby="elScopeLabel elScopeValue">
-                    <img class="el-type-icon" id="elScopeIcon" src="{% static 'images/win98/camera_vid.png' %}" alt="" width="16" height="16">
-                    <span class="el-combo-value" id="elScopeValue">Movies</span>
+                    <img class="el-type-icon" id="elScopeIcon" src="{% static 'images/win98/world.png' %}" alt="" width="16" height="16">
+                    <span class="el-combo-value" id="elScopeValue">All types</span>
+                    <span class="el-combo-count" id="elScopeCount" hidden></span>
                     <span class="el-combo-arrow" aria-hidden="true"></span>
                 </button>
                 <div class="el-listbox" id="elScopeList" role="listbox" tabindex="-1" aria-labelledby="elScopeLabel" hidden></div>
@@ -34,10 +37,10 @@ getCurrentQuery(), getCurrentEndpoint().
     <div class="el-search-results" id="searchResults" hidden>
         <div class="el-search-panel">
             <div class="el-search-list" id="elResultsList" aria-live="polite" aria-busy="false"></div>
-            <button type="button" class="el-btn el-search-add" id="elAddButton" hidden></button>
+            <div class="el-search-add" id="elAdd" hidden></div>
             <div class="el-status-bar">
                 <div class="el-status-bar-field" id="resultsCount" role="status">Ready</div>
-                <div class="el-status-bar-field" id="resultsScope">Movies</div>
+                <div class="el-status-bar-field" id="resultsScope">All types</div>
             </div>
         </div>
     </div>
@@ -65,41 +68,50 @@ document.addEventListener('DOMContentLoaded', function () {
     const combo = document.getElementById('elScope');
     const comboIcon = document.getElementById('elScopeIcon');
     const comboValue = document.getElementById('elScopeValue');
+    const comboCount = document.getElementById('elScopeCount');
     const listbox = document.getElementById('elScopeList');
     const results = document.getElementById('searchResults');
     const list = document.getElementById('elResultsList');
-    const addButton = document.getElementById('elAddButton');
+    const addBox = document.getElementById('elAdd');
     const status = document.getElementById('resultsCount');
     const statusScope = document.getElementById('resultsScope');
     const defaultContent = document.getElementById('defaultContent');
     const me = document.body.dataset.username || '';
 
-    // type key -> label, icon, placeholder, noun for "Add", modal opener
+    // 'all' + type key -> label, icon, placeholder, nouns (for "Add" / "Show all"), add-dialog opener
+    const ALL = { label: 'All types', icon: 'world.png', ph: 'Search movies, shows, games, books, people…' };
     const TYPES = {
-        movies:  { label: 'Movies',   icon: 'camera_vid.png',         ph: 'Search movies…',           add: 'movie',   open: () => window.openModal },
-        tvshows: { label: 'TV Shows', icon: 'network_television.png', ph: 'Search TV shows…',         add: 'TV show', open: () => window.openTVShowModal },
-        games:   { label: 'Games',    icon: 'solitaire.png',          ph: 'Search games…',            add: 'game',    open: () => window.openGameModal },
-        books:   { label: 'Books',    icon: 'document.png',           ph: 'Search books or authors…', add: 'book',    open: () => window.openBookModal },
-        people:  { label: 'People',   icon: 'user_card.png',          ph: 'Search actors, directors…' },
-        users:   { label: 'Users',    icon: 'users.png',              ph: 'Search friends…' },
+        movies:  { label: 'Movies',   icon: 'camera_vid.png',         ph: 'Search movies…',            noun: 'movie',   nouns: 'movies',   open: () => window.openModal },
+        tvshows: { label: 'TV Shows', icon: 'network_television.png', ph: 'Search TV shows…',          noun: 'TV show', nouns: 'TV shows', open: () => window.openTVShowModal },
+        games:   { label: 'Games',    icon: 'solitaire.png',          ph: 'Search games…',             noun: 'game',    nouns: 'games',    open: () => window.openGameModal },
+        books:   { label: 'Books',    icon: 'document.png',           ph: 'Search books or authors…',  noun: 'book',    nouns: 'books',    open: () => window.openBookModal },
+        people:  { label: 'People',   icon: 'user_card.png',          ph: 'Search actors, directors…', noun: 'person',  nouns: 'people' },
+        users:   { label: 'Users',    icon: 'users.png',              ph: 'Search friends…',           noun: 'user',    nouns: 'users' },
     };
     const KEYS = Object.keys(TYPES);
+    const OPTS = ['all', ...KEYS];
+    const ADDABLE = KEYS.filter(k => TYPES[k].open);
+    const info = k => k === 'all' ? ALL : TYPES[k];
     const STORE = 'el-search-type';
+    const PER_GROUP = 3;          // rows per type under "All types"; the rest behind "Show all"
     const DEBOUNCE_MS = 300;
 
     let type = new URLSearchParams(location.search).get('type');
-    if (!TYPES[type]) { try { type = localStorage.getItem(STORE); } catch (e) { type = null; } }
-    if (!TYPES[type]) type = 'movies';
+    if (!OPTS.includes(type)) { try { type = localStorage.getItem(STORE); } catch (e) { type = null; } }
+    if (!OPTS.includes(type)) type = 'all';
+    let last = null;              // last response: {query, groups, counts, count}
     let timer = null, controller = null, seq = 0, active = -1;
 
     const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-    const icon = (t, size) => { const i = el('img', 'el-type-icon'); i.src = ICONS + TYPES[t].icon; i.alt = ''; i.width = i.height = size; return i; };
+    const icon = (t, size) => { const i = el('img', 'el-type-icon'); i.src = ICONS + info(t).icon; i.alt = ''; i.width = i.height = size; return i; };
+    const score = v => v >= 7 ? 'is-good' : v >= 5 ? 'is-mid' : 'is-bad';
+    const countOf = k => !last ? null : k === 'all' ? last.count : last.counts[k];
 
     // ---------- Look in: combobox ----------
-    KEYS.forEach((k, i) => {
+    OPTS.forEach((k, i) => {
         const o = el('div', 'el-listbox-option'); o.id = 'elScope-' + k; o.dataset.type = k;
         o.setAttribute('role', 'option');
-        o.append(icon(k, 32), el('span', null, TYPES[k].label));
+        o.append(icon(k, 32), el('span', 'el-listbox-label', info(k).label), el('span', 'el-listbox-count'));
         o.addEventListener('click', () => { closeList(); choose(k); });
         o.addEventListener('mousemove', () => setActive(i));
         listbox.append(o);
@@ -113,25 +125,38 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     function openList() {
         listbox.hidden = false; combo.setAttribute('aria-expanded', 'true');
-        setActive(KEYS.indexOf(type)); listbox.focus({ preventScroll: true });
+        setActive(OPTS.indexOf(type)); listbox.focus({ preventScroll: true });
     }
     function closeList(refocus) {
         if (listbox.hidden) return;
         listbox.hidden = true; combo.setAttribute('aria-expanded', 'false');
         if (refocus) combo.focus();
     }
+    // each type's count, in the list and in the box; blank until a search has answered
+    function showCounts(on) {
+        options.forEach(o => {
+            const n = on ? countOf(o.dataset.type) : null;
+            o.querySelector('.el-listbox-count').textContent = n == null ? '' : String(n);
+            o.classList.toggle('is-zero', n === 0);
+        });
+        const n = on ? countOf(type) : null;
+        comboCount.hidden = n == null;
+        comboCount.textContent = n == null ? '' : String(n);
+    }
     function showType() {
-        const t = TYPES[type];
+        const t = info(type);
         comboIcon.src = ICONS + t.icon; comboValue.textContent = t.label;
         statusScope.textContent = t.label; input.placeholder = t.ph;
         options.forEach(o => o.setAttribute('aria-selected', String(o.dataset.type === type)));
+        showCounts(!!last);
     }
-    function choose(k) {
-        if (!TYPES[k]) return;
-        const changed = k !== type;
+    function choose(k, remember = true) {
+        if (!OPTS.includes(k)) return;
         type = k; showType();
-        try { localStorage.setItem(STORE, k); } catch (e) { /* private mode */ }
-        if (input.value.trim()) { if (changed) performSearch(input.value, type); }
+        // only a pick in Look in is remembered; "Show all" and "Found in" links are one-offs
+        if (remember) { try { localStorage.setItem(STORE, k); } catch (e) { /* private mode */ } }
+        const q = input.value.trim();
+        if (q) performSearch(q, type);      // same query: redraws from the last response
         else input.focus();
     }
     combo.addEventListener('click', () => listbox.hidden ? openList() : closeList(true));
@@ -143,12 +168,12 @@ document.addEventListener('DOMContentLoaded', function () {
         else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
         else if (e.key === 'Home') { e.preventDefault(); setActive(0); }
         else if (e.key === 'End') { e.preventDefault(); setActive(options.length - 1); }
-        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const k = KEYS[active]; closeList(true); choose(k); }
+        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const k = OPTS[active]; closeList(true); choose(k); }
         else if (e.key === 'Escape') { e.preventDefault(); closeList(true); }
         else if (e.key === 'Tab') { closeList(); }
         else if (e.key.length === 1) {           // type-ahead on the first letter
-            const c = e.key.toLowerCase(), hit = j => TYPES[KEYS[j]].label[0].toLowerCase() === c;
-            for (let n = 1; n <= KEYS.length; n++) { const j = (active + n) % KEYS.length; if (hit(j)) { setActive(j); break; } }
+            const c = e.key.toLowerCase(), hit = j => info(OPTS[j]).label[0].toLowerCase() === c;
+            for (let n = 1; n <= OPTS.length; n++) { const j = (active + n) % OPTS.length; if (hit(j)) { setActive(j); break; } }
         }
     });
     listbox.addEventListener('blur', e => { if (!root.contains(e.relatedTarget)) closeList(); });
@@ -156,19 +181,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ---------- results ----------
     function fitResults() {
-        // keep the list above the bottom bar (phones) and inside the screen
+        // phones: the panel reaches down to the bottom bar (or the on-screen keyboard);
+        // larger screens: a drop-down no taller than the space left
         const top = root.getBoundingClientRect().bottom;
         const nav = document.querySelector('.win98-navbar');
-        const navTop = nav && getComputedStyle(nav).display !== 'none' ? nav.getBoundingClientRect().top : innerHeight;
-        document.documentElement.style.setProperty('--el-search-room', Math.max(160, Math.round(navTop - top - 8)) + 'px');
+        let bottom = nav && getComputedStyle(nav).display !== 'none' ? nav.getBoundingClientRect().top : innerHeight;
+        const vv = window.visualViewport;
+        if (vv) bottom = Math.min(bottom, vv.offsetTop + vv.height);
+        const phone = matchMedia('(max-width: 767px)').matches;
+        document.documentElement.style.setProperty('--el-search-room', Math.max(160, Math.round(bottom - top - (phone ? 0 : 8))) + 'px');
     }
     function openResults() {
         results.hidden = false; cancel.hidden = false;
         if (defaultContent) defaultContent.style.display = 'none';
         fitResults();
     }
-    const score = v => v >= 7 ? 'is-good' : v >= 5 ? 'is-mid' : 'is-bad';
-    function row(it) {
+    function row(it, t) {
         const a = el('a', 'el-result'); a.href = it.url;
         const pic = it.poster || it.profile_picture;
         if (pic) { const im = el('img', 'el-result-pic'); im.src = pic; im.alt = ''; im.loading = 'lazy'; im.width = 40; im.height = 60; a.append(im); }
@@ -179,15 +207,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const body = el('span', 'el-result-body');
         body.append(el('span', 'el-result-title', it.title || it.name || it.username));
         const meta = [];
-        if (type === 'books' && it.authors) meta.push(it.authors);
+        if (t === 'books' && it.authors) meta.push(it.authors);
         if (it.year) meta.push(it.end_year && it.end_year !== it.year ? `${it.year}–${it.end_year}` : String(it.year));
         if (it.metacritic) meta.push(`Metacritic ${it.metacritic}`);
-        if (type === 'people') {
+        if (t === 'people') {
             if (it.avg_rating) meta.push(`their titles ★ ${Number(it.avg_rating).toFixed(1)} (${it.rating_count})`);
         } else if (it.avg_rating) {
             meta.push(`friends ★ ${Number(it.avg_rating).toFixed(1)}` + (it.rating_count ? ` (${it.rating_count})` : ''));
         } else if (it.rating_count === 0) meta.push('no ratings yet');
-        if (type === 'users') meta.push('profile');
+        if (t === 'users') meta.push('profile');
         if (meta.length) body.append(el('span', 'el-result-meta', meta.join(' · ')));
         const chips = el('span', 'el-result-chips');
         if (it.user_rating != null) chips.append(el('span', 'el-chip el-chip-score ' + score(it.user_rating), `you ★ ${it.user_rating}`));
@@ -198,63 +226,111 @@ document.addEventListener('DOMContentLoaded', function () {
         a.append(body);
         return a;
     }
-    function header(query) {
-        const h = el('div', 'el-search-head');
-        h.append(icon(type, 16), el('span', null, `${TYPES[type].label} matching “${query}”`));
-        return h;
+    function head(k, text) {
+        const h = el('div', 'el-search-head'); h.append(icon(k, 16), el('span', null, text)); return h;
     }
-    function render(data, query) {
-        list.replaceChildren(header(query));
-        const rs = data.results || [];
-        rs.forEach(it => list.append(row(it)));
-        if (!rs.length) {
-            const empty = el('div', 'el-search-empty');
-            empty.append(el('p', null, `No ${TYPES[type].label.toLowerCase()} match “${query}”.`));
-            const other = el('div', 'el-search-other');
-            other.append(el('span', null, 'Look in:'));
-            KEYS.filter(k => k !== type).forEach(k => {
-                const b = el('button', 'el-link-button', TYPES[k].label); b.type = 'button';
-                b.addEventListener('click', () => choose(k)); other.append(b);
-            });
-            empty.append(other); list.append(empty);
+    function draw() {
+        const { query, groups, counts, count } = last;
+        const hit = KEYS.filter(k => counts[k]);
+        list.replaceChildren();
+        if (type === 'all') {
+            for (const k of hit) {
+                list.append(head(k, `${TYPES[k].label} · ${counts[k]}`));
+                groups[k].slice(0, PER_GROUP).forEach(it => list.append(row(it, k)));
+                if (counts[k] > PER_GROUP) {
+                    const more = el('button', 'el-link-button el-search-more', `Show all ${counts[k]} ${TYPES[k].nouns}`);
+                    more.type = 'button';
+                    more.addEventListener('click', () => choose(k, false));
+                    list.append(more);
+                }
+            }
+            if (!hit.length) list.append(el('div', 'el-search-empty', `Nothing matches “${query}”.`));
+        } else {
+            list.append(head(type, `${TYPES[type].label} matching “${query}”`));
+            groups[type].forEach(it => list.append(row(it, type)));
+            if (!counts[type]) {
+                const empty = el('div', 'el-search-empty');
+                empty.append(el('p', null, `No ${TYPES[type].nouns} match “${query}”.`));
+                if (hit.length) {
+                    const other = el('div', 'el-search-other');
+                    other.append(el('span', null, 'Found in:'));
+                    hit.forEach(k => {
+                        const b = el('button', 'el-link-button', `${TYPES[k].label} (${counts[k]})`); b.type = 'button';
+                        b.addEventListener('click', () => choose(k, false)); other.append(b);
+                    });
+                    empty.append(other);
+                } else empty.append(el('p', null, 'Nothing in the other types either.'));
+                list.append(empty);
+            }
         }
-        const t = TYPES[type];
-        addButton.hidden = !t.add;
-        if (t.add) addButton.textContent = `+ Not here? Add “${query}” as a new ${t.add}`;
-        status.textContent = `${data.count ?? rs.length} found`;
+
+        // add: one button for the chosen type, or a choice of type under "All types"
+        addBox.replaceChildren();
+        const addable = type === 'all' ? ADDABLE : ADDABLE.filter(k => k === type);
+        addBox.hidden = !addable.length;
+        if (addable.length === 1) {
+            const k = addable[0];
+            const b = el('button', 'el-btn el-search-add-one', `+ Not here? Add “${query}” as a new ${TYPES[k].noun}`); b.type = 'button';
+            b.addEventListener('click', () => openAdd(k, query));
+            addBox.append(b);
+        } else if (addable.length) {
+            addBox.append(el('span', 'el-search-add-label', 'Not here? Add it as a:'));
+            const g = el('div', 'el-search-add-choices');
+            addable.forEach(k => {
+                const b = el('button', 'el-btn', '+ ' + TYPES[k].noun); b.type = 'button';
+                b.addEventListener('click', () => openAdd(k, query)); g.append(b);
+            });
+            addBox.append(g);
+        }
+
+        status.textContent = type !== 'all' ? `${counts[type]} found`
+            : count ? `${count} found in ${hit.length} type${hit.length === 1 ? '' : 's'}` : 'Nothing found';
         list.setAttribute('aria-busy', 'false');
         list.scrollTop = 0;
+        showCounts(true);
+        fitResults();
+    }
+    function openAdd(k, query) {
+        const open = TYPES[k].open && TYPES[k].open();
+        if (typeof open === 'function') open(query);
     }
     function fail(msg) {
+        addBox.hidden = true;
         list.replaceChildren(el('div', 'el-search-empty', msg));
         status.textContent = 'Failed'; list.setAttribute('aria-busy', 'false');
     }
 
     function performSearch(query, t) {
         query = (query || '').trim();
-        if (TYPES[t] && t !== type) { type = t; showType(); }
+        if (OPTS.includes(t) && t !== type) { type = t; showType(); }
         if (!query) { clearSearch(); return; }
         openResults();
+        if (last && last.query === query) { draw(); return; }
         status.textContent = 'Searching…'; list.setAttribute('aria-busy', 'true');
+        showCounts(false);
         if (!list.childElementCount) list.append(el('div', 'el-search-empty', 'Searching…'));
         if (controller) controller.abort();
         controller = new AbortController();
-        const mine = ++seq, forType = type;
-        fetch(`${URL_}?search=${encodeURIComponent(query)}&type=${forType}`, { signal: controller.signal })
+        const mine = ++seq;
+        fetch(`${URL_}?search=${encodeURIComponent(query)}&type=all`, { signal: controller.signal })
             .then(r => r.json())
             .then(data => {
-                if (mine !== seq || forType !== type) return;
-                if (data.success) render(data, query); else fail(data.error || 'Search failed.');
+                if (mine !== seq) return;
+                if (!data.success) { fail(data.error || 'Search failed.'); return; }
+                last = { query, groups: data.groups, counts: data.counts, count: data.count };
+                draw();
             })
             .catch(err => { if (err.name !== 'AbortError' && mine === seq) fail('Search failed. Check your connection and try again.'); });
     }
+    function refresh(query, t) { last = null; performSearch(query, t); }   // after an add: fetch again
     function clearSearch() {
         clearTimeout(timer);
         if (controller) controller.abort();
-        seq++;
+        seq++; last = null;
         input.value = '';
-        results.hidden = true; cancel.hidden = true; addButton.hidden = true;
-        list.replaceChildren(); status.textContent = 'Ready';
+        results.hidden = true; cancel.hidden = true;
+        list.replaceChildren(); addBox.replaceChildren(); status.textContent = 'Ready';
+        showCounts(false);
         if (defaultContent) defaultContent.style.display = '';
         input.blur();
     }
@@ -282,11 +358,8 @@ document.addEventListener('DOMContentLoaded', function () {
         else if (e.key === 'ArrowUp') { e.preventDefault(); (rows[i - 1] || input).focus(); }
         else if (e.key === 'Escape') { e.preventDefault(); input.focus(); }
     });
-    addButton.addEventListener('click', () => {
-        const open = TYPES[type].open && TYPES[type].open();
-        if (typeof open === 'function') open(input.value.trim());
-    });
     addEventListener('resize', () => { if (!results.hidden) fitResults(); });
+    if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (!results.hidden) fitResults(); });
 
     // the page reserves room under the pinned bar; tell it how tall the bar is
     const bar = root.closest('.pinned-search-wrapper') || root;
@@ -295,7 +368,7 @@ document.addEventListener('DOMContentLoaded', function () {
     setHeight();
 
     showType();
-    window.performSearch = performSearch;
+    window.performSearch = refresh;
     window.clearSearch = clearSearch;
     window.getCurrentQuery = () => input.value.trim();
     window.getCurrentEndpoint = () => type;

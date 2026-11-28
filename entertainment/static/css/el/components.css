@@ -465,6 +465,36 @@
   background-color: var(--el-selection);
 }
 
+.el-listbox-label { flex: 1 1 auto; }
+
+/* how many results each type has, once a search has answered */
+.el-listbox-count {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--el-muted);
+}
+
+.el-listbox-option.is-zero .el-listbox-label { font-weight: 400; color: var(--el-muted); }
+.el-listbox-option.is-active .el-listbox-count,
+.el-listbox-option.is-active.is-zero .el-listbox-label { color: #ffffff; }
+
+/* the same count on the closed box */
+.el-combo-count {
+  flex: 0 0 auto;
+  min-width: 20px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  text-align: center;
+  color: var(--el-text);
+  background-color: var(--el-face-light);
+  border: 1px solid var(--el-shadow);
+}
+
+.el-combo-count[hidden] { display: none; }
+
 /* ---------- Search (Discover) ---------- */
 
 .el-search {
@@ -660,11 +690,30 @@
   cursor: pointer;
 }
 
-.el-search-add {
+/* "Show all 8 movies" under a group in All types */
+.el-search-more {
   display: block;
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
+  padding: 0 8px 0 58px;            /* lines up with the titles above */
+  text-align: left;
+  border-top: 1px solid var(--el-face-light);
+}
+
+.el-search-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 8px;
   margin-top: 3px;
+}
+
+.el-search-add[hidden] { display: none; }
+
+.el-search-add-one {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
   padding: 0 10px;
   text-align: left;
   white-space: nowrap;
@@ -672,9 +721,35 @@
   text-overflow: ellipsis;
 }
 
-.el-search-add[hidden] { display: none; }
+.el-search-add-label {
+  flex: 1 0 100%;                   /* own line: the four choices need the full width on phones */
+  padding: 2px 0 0 4px;
+  font-size: 12px;
+  color: var(--el-text);
+}
+
+.el-search-add-choices {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 3px;
+}
+
+.el-search-add-choices .el-btn {
+  flex: 1 1 0;
+  min-height: 36px;
+  padding: 0 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
 
 .el-search-panel .el-status-bar { padding: 3px 0 0; }
+
+/* Phones: the results fill the screen down to the bottom bar, edge to edge,
+   however few there are (a list box, not a drop-down). */
+@media (max-width: 767px) {
+  .el-search-results { left: 0; right: 0; filter: none; }
+  .el-search-panel { height: var(--el-search-room, 60vh); }
+}
 
 @media (min-width: 841px) {
   .el-search-results { left: 10px; right: 10px; }
@@ -760,5 +835,8 @@ button:is(.el-btn, .el-combo, .el-link-button):focus:not(:focus-visible) { outli
   .el-combo { min-height: 44px; font-size: 16px; }
   .el-listbox-option { min-height: 48px; font-size: 16px; }
   .el-search-scope-label { font-size: 14px; }
-  .el-search-add { min-height: 44px; font-size: 13px; }
+  .el-search-add-one { min-height: 44px; font-size: 13px; }
+  .el-search-add-choices .el-btn { min-height: 44px; font-size: 13px; }
+  .el-search-more { min-height: 44px; }
+  .el-listbox-count { font-size: 15px; }
 }
