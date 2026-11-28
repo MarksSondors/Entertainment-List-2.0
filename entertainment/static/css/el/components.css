@@ -797,6 +797,124 @@
   .el-search-results { left: 10px; right: 10px; }
 }
 
+/* ---------- Continue Watching (Discover) ----------
+   One side-scrolling row of posters. Phones see three and a bit (the cut-off card says
+   "scroll"); cards never shrink below 84px or grow past 160px (the old desktop size). */
+
+.el-cw[hidden],
+.el-cw-body[hidden] { display: none; }
+
+.el-cw-body {
+  padding: 6px 6px 2px;
+  container-type: inline-size;
+}
+
+.el-cw-row {
+  --el-cw-w: clamp(84px, calc((100cqi - 24px) / 3.3), 160px);
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
+  padding: 2px 2px 8px;
+  scrollbar-width: thin;
+}
+
+.el-cw-card,
+.el-cw-more {
+  flex: 0 0 auto;
+  width: var(--el-cw-w);
+  scroll-snap-align: start;
+}
+
+.el-cw-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: var(--el-text);
+  text-decoration: none;
+}
+
+.el-cw-card:focus-visible { outline: 1px dotted var(--el-focus); outline-offset: 2px; }
+
+.el-cw-poster {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  background: var(--el-well);
+  box-shadow: 0 0 0 1px var(--el-shadow);
+}
+
+.el-cw-poster.is-empty {
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--el-muted);
+}
+
+.el-cw-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  height: 28px;                 /* two lines, so every bar lines up */
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 14px;
+}
+
+.el-cw-next {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--el-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Win98 progress bar: a sunken well filled with blocks */
+.el-cw-bar {
+  position: relative;
+  display: block;
+  height: 10px;
+  background: var(--el-well);
+  box-shadow: inset 1px 1px 0 var(--el-shadow), inset -1px -1px 0 var(--el-highlight);
+}
+
+.el-cw-bar > i {
+  position: absolute;
+  inset: 2px auto 2px 2px;
+  max-width: calc(100% - 4px);
+  background: repeating-linear-gradient(90deg, var(--el-selection) 0 5px, transparent 5px 7px);
+}
+
+.el-cw-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  aspect-ratio: 2 / 3;
+  padding: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: center;
+  color: var(--el-text);
+  background: var(--el-face);
+  border: 0;
+  box-shadow: inset -1px -1px 0 var(--el-edge), inset 1px 1px 0 var(--el-highlight),
+              inset -2px -2px 0 var(--el-shadow), inset 2px 2px 0 var(--el-face-light);
+  cursor: pointer;
+}
+
+.el-cw-more b { font-size: 20px; line-height: 1; }
+
 /* ---------- 98.css guard ----------
    Inner pages still load 98.css. Its bare `button` and `input[type=…]` rules (up to
    0,2,1) would restyle these components: button text drawn transparent with a
@@ -838,6 +956,9 @@ button.el-combo:not(:disabled):is(:hover, :active) { box-shadow: inset 1px 1px 0
 button.el-link-button:not(:disabled):is(:hover, :active) { box-shadow: none; text-shadow: none; }
 button.el-search-jump { min-width: 0; text-shadow: none; box-shadow: none; color: var(--el-well-text); }
 button.el-search-jump:not(:disabled):is(:hover, :active) { box-shadow: none; text-shadow: none; color: #ffffff; }
+button.el-cw-more { min-width: 0; min-height: 0; text-shadow: none; color: var(--el-text); }
+button.el-cw-more:not(:disabled):active { box-shadow: inset 1px 1px 0 var(--el-edge), inset -1px -1px 0 var(--el-highlight); text-shadow: none; }
+button.el-cw-more:not(:disabled):hover { text-shadow: none; }
 button:is(.el-btn, .el-combo, .el-link-button, .el-search-jump):focus:not(:focus-visible) { outline: none; }
 
 /* ---------- Small screens ---------- */
@@ -882,4 +1003,13 @@ button:is(.el-btn, .el-combo, .el-link-button, .el-search-jump):focus:not(:focus
   .el-search-add-choice { min-height: 52px; font-size: 13px; }
   .el-search-more { min-height: 44px; }
   .el-listbox-count { font-size: 15px; }
+
+  /* Continue Watching minimise: 16x14 drawn, ~27x32 tappable (grows left, up and down,
+     not into the Maximize button beside it) */
+  .el-cw .title-bar-controls #continueWatchingToggle { position: relative; }
+  .el-cw .title-bar-controls #continueWatchingToggle::after {
+    content: '';
+    position: absolute;
+    inset: -9px -1px -9px -10px;
+  }
 }

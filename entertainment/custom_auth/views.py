@@ -1408,6 +1408,56 @@ def add_review_data_to_items(items, current_user):
             item.avg_rating = avg_rating
             item.rating_count = rating_count
 
+
+def _continue_watching_up_next(user, show_ids):
+    """Next episode, episodes left and minutes left for each in-progress show, in 2 queries.
+
+    Aired regular episodes only (no season 0). The next episode is the first unwatched one
+    after the furthest watched episode; if everything after it is watched (a later season
+    watched first), it is the first unwatched episode overall.
+    """
+    from tvshows.models import Episode, WatchedEpisode
+
+    if not show_ids:
+        return {}
+    episodes = Episode.objects.filter(
+        season__show_id__in=show_ids,
+        season__season_number__gt=0,
+        air_date__isnull=False,
+        air_date__lte=timezone.now(),
+    ).order_by('season__show_id', 'season__season_number', 'episode_number').values(
+        'id', 'title', 'runtime', 'episode_number', 'season__season_number', 'season__show_id'
+    )
+    watched = set(WatchedEpisode.objects.filter(
+        user=user, episode__season__show_id__in=show_ids,
+    ).values_list('episode_id', flat=True))
+
+    by_show = {}
+    for ep in episodes:
+        by_show.setdefault(ep['season__show_id'], []).append(ep)
+
+    result = {}
+    for show_id, eps in by_show.items():
+        unwatched = [e for e in eps if e['id'] not in watched]
+        if not unwatched:
+            continue
+        seen_idx = [i for i, e in enumerate(eps) if e['id'] in watched]
+        after = [e for e in eps[seen_idx[-1] + 1:] if e['id'] not in watched] if seen_idx else []
+        nxt = (after or unwatched)[0]
+        result[show_id] = {
+            'next': {
+                'id': nxt['id'],
+                'season': nxt['season__season_number'],
+                'episode': nxt['episode_number'],
+                'title': nxt['title'],
+                'runtime': nxt['runtime'],
+            },
+            'left': len(unwatched),
+            'minutes': sum(e['runtime'] or 0 for e in unwatched),
+        }
+    return result
+
+
 def _api_watchlist_continue_only(user, tv_ct):
     """Fast path for the discover page: returns only in-progress TV shows.
 
@@ -1440,14 +1490,17 @@ def _api_watchlist_continue_only(user, tv_ct):
             air_date__lte=timezone.now(),
         ).values('season__show_id').annotate(count=models.Count('id'))
     }
-    watched_episodes_map = {
-        row['episode__season__show_id']: row['count']
+    watched_rows = {
+        row['episode__season__show_id']: row
         for row in WatchedEpisode.objects.filter(
             user=user,
             episode__season__show_id__in=tv_show_ids,
             episode__season__season_number__gt=0,
-        ).values('episode__season__show_id').annotate(count=models.Count('id'))
+        ).values('episode__season__show_id').annotate(
+            count=models.Count('id'), last_watched=models.Max('watched_date')
+        )
     }
+    watched_episodes_map = {show_id: row['count'] for show_id, row in watched_rows.items()}
 
     in_progress_show_ids = []
     progress_map = {}
@@ -1488,6 +1541,8 @@ def _api_watchlist_continue_only(user, tv_ct):
         bucket[0] += 1
         bucket[1] += r['rating']
 
+    up_next = _continue_watching_up_next(user, in_progress_show_ids)
+
     tv_model_label = tv_ct.model
     continue_watching = []
     for entry in tv_watchlist:
@@ -1499,6 +1554,8 @@ def _api_watchlist_continue_only(user, tv_ct):
             continue
         count, total_rating = rating_agg.get(show_id, (0, 0.0))
         avg_rating = round(total_rating / count, 1) if count else None
+        last_watched = watched_rows[show_id]['last_watched']
+        nxt = up_next.get(show_id, {})
         continue_watching.append({
             'item': {
                 'id': entry['id'],
@@ -1513,9 +1570,14 @@ def _api_watchlist_continue_only(user, tv_ct):
                 'rating_count': count,
             },
             'progress': progress_map[show_id],
+            'last_watched': last_watched.isoformat() if last_watched else None,
+            'next_episode': nxt.get('next'),
+            'episodes_left': nxt.get('left', 0),
+            'minutes_left': nxt.get('minutes', 0),
         })
 
-    continue_watching.sort(key=lambda x: x['progress'], reverse=True)
+    # most recently watched first, as in the Stremio catalog
+    continue_watching.sort(key=lambda x: x['last_watched'] or '', reverse=True)
 
     return JsonResponse({
         'continue_watching': continue_watching,
